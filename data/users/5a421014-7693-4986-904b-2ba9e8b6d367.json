@@ -1,0 +1,17 @@
+{
+  "id": "5a421014-7693-4986-904b-2ba9e8b6d367",
+  "email": "dconsonni@gmail.com",
+  "hashed_password": "$2b$12$fH.wZ6KNQCAPgHhA/zjfCO6BRXVLTuUKyUxE4CK.4NptNofnsnEX6",
+  "is_active": true,
+  "is_invited": true,
+  "created_at": "2025-10-02T22:50:27.031498",
+  "updated_at": "2025-10-02T22:56:17.378863",
+  "last_login": "2025-10-02T22:56:17.378838",
+  "first_name": "Davide",
+  "last_name": "Consonni",
+  "scopes": [
+    "read",
+    "write",
+    "admin"
+  ]
+}

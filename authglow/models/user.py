@@ -1,0 +1,73 @@
+"""User data models."""
+
+from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel, EmailStr, Field
+from uuid import uuid4
+
+
+class User(BaseModel):
+    """User model."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    email: EmailStr
+    hashed_password: str
+    is_active: bool = True
+    is_invited: bool = True  # Users can only be created via invitation
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login: Optional[datetime] = None
+
+    # Additional profile fields
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+    # OAuth2 related
+    scopes: List[str] = Field(default_factory=list)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "is_active": True,
+                "scopes": ["read", "write"]
+            }
+        }
+
+
+class UserCreate(BaseModel):
+    """Schema for creating a new user (admin only)."""
+
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    scopes: List[str] = Field(default_factory=lambda: ["read"])
+
+
+class UserLogin(BaseModel):
+    """Schema for user login."""
+
+    email: EmailStr
+    password: str
+
+
+class UserResponse(BaseModel):
+    """Public user response (without sensitive data)."""
+
+    id: str
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    scopes: List[str]
+
+
+class InviteUser(BaseModel):
+    """Schema for inviting a new user."""
+
+    email: EmailStr
+    scopes: List[str] = Field(default_factory=lambda: ["read"])
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None

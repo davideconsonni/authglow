@@ -13,7 +13,7 @@ Altre funzioni da implementare solo dopo aver creato una implementazione di base
 Per ogni funzionalità fammi domande per meglio definirla, prima di implementarla, una volta implementate la dobbiamo testare per assicurarci che funzioni.
 
 ## Funzionalità base:
-- MFA con TOTP (Google Authenticator, Authy)
+- MFA con TOTP (Google Authenticator)
 - SSO con OpenID Connect
 - Passwordless Authentication con Passkeys (WebAuthn)
 - Admin portal per vedere statistiche e fare azioni sugli utenti
