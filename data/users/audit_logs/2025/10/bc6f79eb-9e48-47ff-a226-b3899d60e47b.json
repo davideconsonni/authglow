@@ -1,0 +1,14 @@
+{
+  "id": "bc6f79eb-9e48-47ff-a226-b3899d60e47b",
+  "user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+  "email": "io@io.io",
+  "event_type": "user_deleted",
+  "ip_address": null,
+  "user_agent": null,
+  "timestamp": "2025-10-03T18:59:13.999034",
+  "metadata": {
+    "target_user_id": "1e8fbbbb-68bf-4f7e-bc2d-12a11702d8f3",
+    "target_user_email": "dconsonni@gmail.com"
+  },
+  "severity": "warning"
+}

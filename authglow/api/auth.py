@@ -387,7 +387,7 @@ async def token_endpoint(
 
 
 # Traditional token endpoint (for testing)
-@router.post("/api/token", response_model=Token)
+@router.post("/api/token")
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login_for_access_token(
     request: Request,
@@ -447,6 +447,25 @@ async def login_for_access_token(
 
     # Reset failed login attempts on successful login
     await storage.reset_failed_login_attempts(user.id)
+
+    # Check if MFA is required
+    if user.mfa_enabled and user.mfa_verified:
+        # Create temporary session token for MFA verification
+        session_token = jwt_service.create_mfa_session_token(user.id, user.email)
+
+        await audit_service.log_event(
+            event_type="login_mfa_required",
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+
+        return {
+            "mfa_required": True,
+            "session_token": session_token,
+            "message": "MFA verification required"
+        }
 
     # Update last login
     await storage.update_last_login(user.id)

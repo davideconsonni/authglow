@@ -1,0 +1,14 @@
+{
+  "id": "81e2da3f-327c-42ce-ab1b-1f13023be7a0",
+  "user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+  "email": "io@io.io",
+  "event_type": "user_invited",
+  "ip_address": null,
+  "user_agent": null,
+  "timestamp": "2025-10-03T18:57:24.572844",
+  "metadata": {
+    "invited_user_id": "1e8fbbbb-68bf-4f7e-bc2d-12a11702d8f3",
+    "invited_email": "dconsonni@gmail.com"
+  },
+  "severity": "info"
+}

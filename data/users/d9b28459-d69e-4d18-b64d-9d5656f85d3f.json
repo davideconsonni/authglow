@@ -5,8 +5,8 @@
   "is_active": true,
   "is_invited": false,
   "created_at": "2025-10-03T18:28:08.036670",
-  "updated_at": "2025-10-03T18:53:12.251792",
-  "last_login": "2025-10-03T18:52:00.554580",
+  "updated_at": "2025-10-03T19:16:09.771206",
+  "last_login": "2025-10-03T19:16:09.771186",
   "first_name": "Davide",
   "last_name": "Consonni",
   "scopes": [
@@ -15,9 +15,9 @@
     "admin",
     "test"
   ],
-  "mfa_enabled": false,
-  "mfa_secret": null,
-  "mfa_verified": false,
+  "mfa_enabled": true,
+  "mfa_secret": "IVQ4PQ6IAD5UCGTERZJLU4Z5JO2UDEON",
+  "mfa_verified": true,
   "failed_login_attempts": 0,
   "locked_until": null,
   "email_verified": true,

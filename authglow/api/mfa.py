@@ -12,6 +12,7 @@ from authglow.models.mfa import (
 )
 from authglow.services.storage import UserStorage
 from authglow.services.mfa import MFAService
+from authglow.services.jwt import JWTService
 from authglow.services.audit import AuditService
 from authglow.api.auth import get_current_user
 
@@ -34,6 +35,11 @@ def get_audit_service():
     return AuditService()
 
 
+def get_jwt_service():
+    """Get JWT service instance."""
+    return JWTService()
+
+
 @router.post("/api/mfa/enroll", response_model=MFAEnrollResponse)
 async def enroll_mfa(
     current_user: User = Depends(get_current_user),
@@ -44,7 +50,7 @@ async def enroll_mfa(
     Start MFA enrollment process.
     Generates TOTP secret, QR code, and backup codes.
     """
-    if current_user.mfa_enabled:
+    if current_user.mfa_enabled and current_user.mfa_verified:
         raise HTTPException(
             status_code=400,
             detail="MFA is already enabled. Disable it first to re-enroll."
@@ -206,3 +212,79 @@ async def regenerate_backup_codes(
         "message": "Backup codes regenerated successfully",
         "backup_codes": backup_codes
     }
+
+
+@router.post("/api/mfa/verify-login")
+async def verify_mfa_login(
+    verify_request: MFAVerifyRequest,
+    storage: UserStorage = Depends(get_user_storage),
+    mfa_service: MFAService = Depends(get_mfa_service),
+    jwt_service: JWTService = Depends(get_jwt_service),
+    audit_service: AuditService = Depends(get_audit_service),
+    request: Request = None
+):
+    """Verify MFA code during login and return access token."""
+    # Decode session token (should be in Authorization header or in body)
+    from fastapi import Header
+    from typing import Optional as Opt
+
+    # Try to get session token from request
+    session_token = request.headers.get("Authorization", "").replace("Bearer ", "") if request else None
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Session token required")
+
+    # Decode session token
+    token_data = jwt_service.decode_token(session_token)
+    if not token_data or token_data.token_type != "mfa_session":
+        raise HTTPException(status_code=401, detail="Invalid session token")
+
+    # Get user
+    user = await storage.get_user(token_data.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.mfa_enabled or not user.mfa_verified:
+        raise HTTPException(status_code=400, detail="MFA is not enabled")
+
+    # Verify TOTP code or backup code
+    is_valid = False
+    is_backup_code = False
+
+    if len(verify_request.code) == 6 and verify_request.code.isdigit():
+        # Try TOTP
+        is_valid = mfa_service.verify_totp(user.mfa_secret, verify_request.code)
+    else:
+        # Try backup code
+        backup_codes = await mfa_service.get_backup_codes(user.id)
+        if backup_codes and verify_request.code in backup_codes.codes:
+            is_valid = True
+            is_backup_code = True
+            # Remove used backup code
+            backup_codes.codes.remove(verify_request.code)
+            await mfa_service.save_backup_codes(user.id, backup_codes.codes)
+
+    if not is_valid:
+        await audit_service.log_event(
+            event_type="mfa_verification_failed",
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host if request and request.client else None,
+            severity="warning"
+        )
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+    # Update last login
+    await storage.update_last_login(user.id)
+
+    # Log successful login with MFA
+    await audit_service.log_event(
+        event_type="login_success_with_mfa",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+        metadata={"backup_code_used": is_backup_code}
+    )
+
+    # Return full access token
+    return jwt_service.create_token_response(user.id, user.email, user.scopes)

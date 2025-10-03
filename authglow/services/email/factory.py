@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from authglow.services.email.base import EmailService, EmailProvider, EmailTemplateRenderer
 from authglow.services.email.console import ConsoleEmailProvider
+from authglow.services.email.file_storage import FileStorageEmailProvider
 from authglow.core.config import get_settings
 
 
@@ -25,6 +26,9 @@ def create_email_provider(provider_name: str = None) -> EmailProvider:
     if provider == "console":
         return ConsoleEmailProvider(colorize=True)
 
+    elif provider == "file" or provider == "file_storage":
+        return FileStorageEmailProvider(storage_path=f"{settings.storage_path}/emails")
+
     elif provider == "smtp":
         # TODO: Implement SMTP provider
         raise NotImplementedError("SMTP provider not yet implemented. Use 'console' for now.")
@@ -40,7 +44,7 @@ def create_email_provider(provider_name: str = None) -> EmailProvider:
     else:
         raise ValueError(
             f"Unknown email provider: {provider}. "
-            f"Supported providers: console, smtp, sendgrid, mailgun"
+            f"Supported providers: console, file, file_storage, smtp, sendgrid, mailgun"
         )
 
 

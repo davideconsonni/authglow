@@ -1,0 +1,19 @@
+{
+  "id": "6b0021e7-c260-408c-8fb9-dd1f908f2769",
+  "user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+  "email": "io@io.io",
+  "event_type": "api_key_created",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-03T19:16:48.545628",
+  "metadata": {
+    "key_id": "42762778-3d4b-48af-b46c-cab46d1e79e6",
+    "key_name": "my-api-key",
+    "scopes": [
+      "read",
+      "write",
+      "admin"
+    ]
+  },
+  "severity": "info"
+}

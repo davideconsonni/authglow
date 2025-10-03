@@ -148,9 +148,35 @@
             <button type="submit" class="btn" id="submit-btn">Sign In</button>
         </form>
 
+        <div style="text-align: center; margin: 20px 0; color: var(--text-secondary);">
+            <span>or</span>
+        </div>
+
+        <button type="button" class="btn" style="background: var(--surface-elevated); color: var(--text-primary);" onclick="loginWithPasskey()">
+            🔐 Sign in with Passkey
+        </button>
+
         <div class="footer">
             <p>Don't have an account? Contact your administrator</p>
             <p><a href="/password-reset">Forgot password?</a></p>
+        </div>
+    </div>
+
+    <!-- MFA Verification Modal -->
+    <div id="mfa-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000;">
+        <div class="card" style="max-width: 400px; width: 90%; padding: 30px;">
+            <h2 style="text-align: center; margin-bottom: 10px;">Two-Factor Authentication</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 25px;">Enter the 6-digit code from your authenticator app</p>
+
+            <div class="form-group">
+                <input type="text" id="mfa-code" maxlength="6" placeholder="000000" style="text-align: center; font-size: 20px; letter-spacing: 8px; font-family: monospace;">
+            </div>
+
+            <button class="btn" id="verify-mfa-btn" onclick="verifyMFA()">Verify</button>
+
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="#" onclick="cancelMFA()" style="color: var(--text-secondary); font-size: 14px;">Cancel</a>
+            </div>
         </div>
     </div>
 
@@ -188,6 +214,8 @@
             alert.style.display = 'none';
         }
 
+        let currentSessionToken = null;
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             hideAlert();
@@ -214,6 +242,16 @@
 
                 const data = await response.json();
 
+                // Check if MFA is required
+                if (data.mfa_required) {
+                    currentSessionToken = data.session_token;
+                    document.getElementById('mfa-modal').style.display = 'flex';
+                    document.getElementById('mfa-code').focus();
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Sign In';
+                    return;
+                }
+
                 // Store token
                 localStorage.setItem('access_token', data.access_token);
                 if (data.refresh_token) {
@@ -236,6 +274,144 @@
                 submitBtn.textContent = 'Sign In';
             }
         });
+
+        // Verify MFA
+        async function verifyMFA() {
+            const code = document.getElementById('mfa-code').value;
+            const verifyBtn = document.getElementById('verify-mfa-btn');
+
+            if (!code || code.length < 6) {
+                showAlert('Please enter a valid code');
+                return;
+            }
+
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verifying...';
+
+            try {
+                const response = await fetch('/api/mfa/verify-login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + currentSessionToken
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Invalid code');
+                }
+
+                const data = await response.json();
+
+                // Store token
+                localStorage.setItem('access_token', data.access_token);
+                if (data.refresh_token) {
+                    localStorage.setItem('refresh_token', data.refresh_token);
+                }
+
+                showAlert('Login successful! Redirecting...', 'success');
+
+                // Check if user is admin
+                if (data.scope && data.scope.includes('admin')) {
+                    localStorage.setItem('admin_token', data.access_token);
+                }
+
+                setTimeout(() => window.location.href = '/dashboard', 1000);
+
+            } catch (error) {
+                showAlert(error.message);
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Verify';
+            }
+        }
+
+        // Cancel MFA
+        function cancelMFA() {
+            document.getElementById('mfa-modal').style.display = 'none';
+            document.getElementById('mfa-code').value = '';
+            currentSessionToken = null;
+        }
+
+        // Login with Passkey
+        async function loginWithPasskey() {
+            const email = document.getElementById('email').value;
+
+            if (!email) {
+                showAlert('Please enter your email first');
+                return;
+            }
+
+            try {
+                // Begin passkey authentication
+                const beginResponse = await fetch('/api/passkey/auth/begin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                if (!beginResponse.ok) {
+                    const error = await beginResponse.json();
+                    throw new Error(error.detail || 'Failed to start passkey authentication');
+                }
+
+                const options = await beginResponse.json();
+
+                // Convert base64url to Uint8Array
+                options.challenge = Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+                if (options.allowCredentials) {
+                    options.allowCredentials = options.allowCredentials.map(cred => ({
+                        ...cred,
+                        id: Uint8Array.from(atob(cred.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
+                    }));
+                }
+
+                // Get credential from authenticator
+                const credential = await navigator.credentials.get({ publicKey: options });
+
+                // Prepare verification data
+                const verification = {
+                    credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    client_data_json: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    authenticator_data: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    signature: btoa(String.fromCharCode(...new Uint8Array(credential.response.signature))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+                };
+
+                // Complete authentication
+                const completeResponse = await fetch('/api/passkey/auth/complete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(verification)
+                });
+
+                if (!completeResponse.ok) {
+                    const error = await completeResponse.json();
+                    throw new Error(error.detail || 'Passkey authentication failed');
+                }
+
+                const data = await completeResponse.json();
+
+                // Store token
+                localStorage.setItem('access_token', data.access_token);
+
+                showAlert('Login successful! Redirecting...', 'success');
+
+                // Check if user is admin
+                if (data.user && data.user.scopes && data.user.scopes.includes('admin')) {
+                    localStorage.setItem('admin_token', data.access_token);
+                }
+
+                setTimeout(() => window.location.href = '/dashboard', 1000);
+
+            } catch (error) {
+                showAlert('Passkey login failed: ' + error.message);
+            }
+        }
 
         // Check if already logged in
         if (localStorage.getItem('access_token')) {

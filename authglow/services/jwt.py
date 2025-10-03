@@ -73,6 +73,32 @@ class JWTService:
         )
         return encoded_jwt
 
+    def create_mfa_session_token(
+        self,
+        user_id: str,
+        email: str
+    ) -> str:
+        """Create a temporary session token for MFA verification.
+
+        This token is valid for 5 minutes and only for MFA verification.
+        """
+        expire = datetime.utcnow() + timedelta(minutes=5)
+
+        token_data = {
+            "sub": user_id,
+            "email": email,
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "token_type": "mfa_session"
+        }
+
+        encoded_jwt = jwt.encode(
+            token_data,
+            self.settings.jwt_secret_key,
+            algorithm=self.settings.jwt_algorithm
+        )
+        return encoded_jwt
+
     def decode_token(self, token: str) -> Optional[TokenData]:
         """Decode and validate a JWT token."""
         try:

@@ -401,6 +401,14 @@
                 </div>
                 <button class="btn btn-secondary" onclick="showPasskeySection()">Manage Passkeys</button>
             </div>
+
+            <div class="info-row">
+                <div>
+                    <div class="info-label">Two-Factor Authentication (MFA)</div>
+                    <div id="mfa-status" style="color: var(--text-tertiary); font-size: 13px; margin-top: 4px;">Loading...</div>
+                </div>
+                <button class="btn btn-secondary" id="mfa-toggle-btn" onclick="showMFASection()">Manage MFA</button>
+            </div>
         </div>
 
         <!-- Passkey Management Section (hidden by default) -->
@@ -412,6 +420,45 @@
 
             <div id="passkey-list">
                 <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading passkeys...</p>
+            </div>
+        </div>
+
+        <!-- MFA Management Section (hidden by default) -->
+        <div id="mfa-section" class="content-section" style="display: none;">
+            <h2>Two-Factor Authentication</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Add an extra layer of security to your account using time-based one-time passwords (TOTP).</p>
+
+            <!-- MFA Not Enabled State -->
+            <div id="mfa-disabled-state">
+                <div class="alert alert-warning" style="margin-bottom: 20px;">
+                    MFA is currently disabled. Enable it to protect your account with an authenticator app.
+                </div>
+                <button class="btn btn-primary" onclick="enrollMFA()">Enable MFA</button>
+            </div>
+
+            <!-- MFA Enabled State -->
+            <div id="mfa-enabled-state" style="display: none;">
+                <div class="alert alert-success" style="margin-bottom: 20px;">
+                    ✓ MFA is enabled and protecting your account.
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px;">Backup Codes</h3>
+                    <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 10px;">
+                        You have <strong id="backup-codes-count">0</strong> backup codes remaining.
+                    </p>
+                    <button class="btn btn-secondary" onclick="regenerateBackupCodes()">Regenerate Backup Codes</button>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px;">Trusted Devices</h3>
+                    <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 10px;">
+                        You have <strong id="trusted-devices-count">0</strong> trusted devices.
+                    </p>
+                    <button class="btn btn-secondary" onclick="manageTrustedDevices()">Manage Devices</button>
+                </div>
+
+                <button class="btn btn-danger" onclick="disableMFA()">Disable MFA</button>
             </div>
         </div>
     </div>
@@ -441,6 +488,81 @@
                     <button type="button" class="btn btn-outline" onclick="closeModal('change-password-modal')">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MFA Enrollment Modal -->
+    <div id="mfa-enroll-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Enable Two-Factor Authentication</h3>
+                <button class="close-modal" onclick="closeModal('mfa-enroll-modal')">&times;</button>
+            </div>
+            <div id="mfa-step-1">
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                    Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                </p>
+                <div style="text-align: center; margin: 20px 0;">
+                    <img id="mfa-qr-code" src="" alt="QR Code" style="max-width: 250px; border: 1px solid var(--border); padding: 10px; border-radius: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>Or enter this secret key manually:</label>
+                    <input type="text" id="mfa-secret" readonly style="font-family: monospace; text-align: center; letter-spacing: 2px;">
+                </div>
+                <div class="form-group">
+                    <label>Enter the 6-digit code from your app:</label>
+                    <input type="text" id="mfa-verify-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" style="text-align: center; font-size: 18px; letter-spacing: 4px;">
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="verifyMFAEnrollment()">Verify & Enable</button>
+                    <button class="btn btn-outline" onclick="closeModal('mfa-enroll-modal')">Cancel</button>
+                </div>
+            </div>
+            <div id="mfa-step-2" style="display: none;">
+                <div class="alert alert-success" style="margin-bottom: 20px;">
+                    ✓ MFA has been enabled successfully!
+                </div>
+                <h4 style="margin-bottom: 15px;">Save Your Backup Codes</h4>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">
+                    Store these codes in a safe place. Each code can only be used once if you lose access to your authenticator app.
+                </p>
+                <div id="backup-codes-list" style="background: var(--surface-elevated); padding: 15px; border-radius: 8px; font-family: monospace; margin-bottom: 20px;"></div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" onclick="copyBackupCodes()">Copy Codes</button>
+                    <button class="btn btn-primary" onclick="closeModal('mfa-enroll-modal'); loadMFAStatus();">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Codes Modal -->
+    <div id="backup-codes-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Backup Codes</h3>
+                <button class="close-modal" onclick="closeModal('backup-codes-modal')">&times;</button>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">
+                These are your new backup codes. Each code can only be used once.
+            </p>
+            <div id="regenerated-backup-codes" style="background: var(--surface-elevated); padding: 15px; border-radius: 8px; font-family: monospace; margin-bottom: 20px;"></div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="copyRegeneratedCodes()">Copy Codes</button>
+                <button class="btn btn-primary" onclick="closeModal('backup-codes-modal')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trusted Devices Modal -->
+    <div id="trusted-devices-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Trusted Devices</h3>
+                <button class="close-modal" onclick="closeModal('trusted-devices-modal')">&times;</button>
+            </div>
+            <div id="trusted-devices-list">
+                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading devices...</p>
+            </div>
         </div>
     </div>
 
@@ -722,6 +844,257 @@
             }
         });
 
+        // MFA Functions
+        let currentBackupCodes = [];
+
+        // Show MFA Section
+        function showMFASection() {
+            const section = document.getElementById('mfa-section');
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                section.scrollIntoView({ behavior: 'smooth' });
+                loadMFAStatus();
+            } else {
+                section.style.display = 'none';
+            }
+        }
+
+        // Load MFA Status
+        async function loadMFAStatus() {
+            try {
+                const response = await fetch('/api/mfa/status', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load MFA status');
+
+                const status = await response.json();
+
+                // Update main status display
+                const mfaStatusEl = document.getElementById('mfa-status');
+                if (status.enabled && status.verified) {
+                    mfaStatusEl.innerHTML = '<span style="color: var(--success);">✓ Enabled</span>';
+                } else {
+                    mfaStatusEl.textContent = 'Not enabled';
+                }
+
+                // Update section states
+                if (status.enabled && status.verified) {
+                    document.getElementById('mfa-disabled-state').style.display = 'none';
+                    document.getElementById('mfa-enabled-state').style.display = 'block';
+                    document.getElementById('backup-codes-count').textContent = status.backup_codes_remaining;
+                    document.getElementById('trusted-devices-count').textContent = status.trusted_devices_count;
+                } else {
+                    document.getElementById('mfa-disabled-state').style.display = 'block';
+                    document.getElementById('mfa-enabled-state').style.display = 'none';
+                }
+
+            } catch (error) {
+                document.getElementById('mfa-status').textContent = 'Error loading status';
+            }
+        }
+
+        // Enroll MFA
+        async function enrollMFA() {
+            try {
+                const response = await fetch('/api/mfa/enroll', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to start MFA enrollment');
+                }
+
+                const data = await response.json();
+
+                // Store backup codes for later
+                currentBackupCodes = data.backup_codes;
+
+                // Show enrollment modal
+                document.getElementById('mfa-qr-code').src = data.qr_code;
+                document.getElementById('mfa-secret').value = data.secret;
+                document.getElementById('mfa-step-1').style.display = 'block';
+                document.getElementById('mfa-step-2').style.display = 'none';
+                openModal('mfa-enroll-modal');
+
+            } catch (error) {
+                showAlert('Failed to start MFA enrollment: ' + error.message, 'error');
+            }
+        }
+
+        // Verify MFA Enrollment
+        async function verifyMFAEnrollment() {
+            const code = document.getElementById('mfa-verify-code').value;
+
+            if (!code || code.length !== 6) {
+                showAlert('Please enter a valid 6-digit code', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/mfa/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Invalid code');
+                }
+
+                // Show backup codes
+                const codesList = document.getElementById('backup-codes-list');
+                codesList.innerHTML = currentBackupCodes.map(code =>
+                    `<div style="padding: 4px 0;">${code}</div>`
+                ).join('');
+
+                // Switch to step 2
+                document.getElementById('mfa-step-1').style.display = 'none';
+                document.getElementById('mfa-step-2').style.display = 'block';
+
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        }
+
+        // Copy Backup Codes
+        function copyBackupCodes() {
+            const codes = currentBackupCodes.join('\n');
+            navigator.clipboard.writeText(codes).then(() => {
+                showAlert('Backup codes copied to clipboard', 'success');
+            });
+        }
+
+        // Disable MFA
+        async function disableMFA() {
+            if (!confirm('Are you sure you want to disable MFA? This will make your account less secure.')) return;
+
+            try {
+                const response = await fetch('/api/mfa/disable', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to disable MFA');
+
+                showAlert('MFA has been disabled', 'success');
+                loadMFAStatus();
+
+            } catch (error) {
+                showAlert('Failed to disable MFA: ' + error.message, 'error');
+            }
+        }
+
+        // Regenerate Backup Codes
+        async function regenerateBackupCodes() {
+            if (!confirm('Are you sure? This will invalidate all existing backup codes.')) return;
+
+            try {
+                const response = await fetch('/api/mfa/regenerate-backup-codes', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to regenerate codes');
+
+                const data = await response.json();
+
+                // Show new codes in modal
+                const codesList = document.getElementById('regenerated-backup-codes');
+                codesList.innerHTML = data.backup_codes.map(code =>
+                    `<div style="padding: 4px 0;">${code}</div>`
+                ).join('');
+
+                currentBackupCodes = data.backup_codes;
+                openModal('backup-codes-modal');
+                loadMFAStatus();
+
+            } catch (error) {
+                showAlert('Failed to regenerate backup codes: ' + error.message, 'error');
+            }
+        }
+
+        // Copy Regenerated Codes
+        function copyRegeneratedCodes() {
+            const codes = currentBackupCodes.join('\n');
+            navigator.clipboard.writeText(codes).then(() => {
+                showAlert('Backup codes copied to clipboard', 'success');
+            });
+        }
+
+        // Manage Trusted Devices
+        async function manageTrustedDevices() {
+            try {
+                const response = await fetch('/api/mfa/trusted-devices', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load devices');
+
+                const devices = await response.json();
+                const list = document.getElementById('trusted-devices-list');
+
+                if (devices.length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No trusted devices</p>';
+                } else {
+                    list.innerHTML = devices.map(device => `
+                        <div class="passkey-item">
+                            <div>
+                                <div class="passkey-name">${device.device_name || 'Unknown Device'}</div>
+                                <div class="passkey-created">Added: ${new Date(device.created_at).toLocaleDateString()}</div>
+                                <div class="passkey-created">Expires: ${new Date(device.expires_at).toLocaleDateString()}</div>
+                            </div>
+                            <button class="btn btn-danger" onclick="removeTrustedDevice('${device.id}')">Remove</button>
+                        </div>
+                    `).join('');
+                }
+
+                openModal('trusted-devices-modal');
+
+            } catch (error) {
+                showAlert('Failed to load trusted devices: ' + error.message, 'error');
+            }
+        }
+
+        // Remove Trusted Device
+        async function removeTrustedDevice(deviceId) {
+            if (!confirm('Remove this trusted device?')) return;
+
+            try {
+                const response = await fetch(`/api/mfa/trusted-devices/${deviceId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to remove device');
+
+                showAlert('Device removed', 'success');
+                manageTrustedDevices();
+                loadMFAStatus();
+
+            } catch (error) {
+                showAlert('Failed to remove device: ' + error.message, 'error');
+            }
+        }
+
         // Logout
         function logout() {
             localStorage.removeItem('access_token');
@@ -737,6 +1110,7 @@
             }
 
             loadProfile();
+            loadMFAStatus();
         });
     </script>
 </body>
