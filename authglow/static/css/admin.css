@@ -16,6 +16,23 @@ body {
 .logo-container img {
     max-height: 40px;
     width: auto;
+    mix-blend-mode: multiply;
+}
+
+/* In dark mode, use screen blend mode instead */
+@media (prefers-color-scheme: dark) {
+    .logo-container img {
+        mix-blend-mode: screen;
+    }
+}
+
+/* Support for manual theme toggle */
+[data-theme="dark"] .logo-container img {
+    mix-blend-mode: screen;
+}
+
+[data-theme="light"] .logo-container img {
+    mix-blend-mode: multiply;
 }
 
 .user-info {
