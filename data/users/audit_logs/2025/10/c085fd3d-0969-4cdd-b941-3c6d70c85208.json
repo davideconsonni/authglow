@@ -1,0 +1,17 @@
+{
+  "id": "c085fd3d-0969-4cdd-b941-3c6d70c85208",
+  "user_id": "5a421014-7693-4986-904b-2ba9e8b6d367",
+  "email": "dconsonni@gmail.com",
+  "event_type": "user_updated",
+  "ip_address": null,
+  "user_agent": null,
+  "timestamp": "2025-10-03T05:46:17.983162",
+  "metadata": {
+    "target_user_id": "5a421014-7693-4986-904b-2ba9e8b6d367",
+    "target_user_email": "dconsonni@gmail.com",
+    "changes": {
+      "is_active": false
+    }
+  },
+  "severity": "info"
+}

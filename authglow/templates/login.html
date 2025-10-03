@@ -162,15 +162,19 @@
 
                 const result = await verifyResponse.json();
 
-                // Store token and redirect
+                // Store token
                 localStorage.setItem('access_token', result.access_token);
 
-                // Redirect based on OAuth2 params or default callback
-                const redirectUri = '{{ redirect_uri }}';
-                if (redirectUri) {
-                    window.location.href = redirectUri;
+                // Check if user is admin
+                if (result.user.scopes && result.user.scopes.includes('admin')) {
+                    // Store admin token too for admin portal
+                    localStorage.setItem('admin_token', result.access_token);
+                    localStorage.setItem('admin_user', JSON.stringify(result.user));
+                    alert('Passkey authentication successful!');
+                    window.location.href = '/admin';
                 } else {
-                    window.location.href = '/callback';
+                    alert('Passkey authentication successful!');
+                    window.location.href = '/passkeys';  // Redirect to passkey management page
                 }
             } catch (error) {
                 console.error('Passkey authentication error:', error);

@@ -365,6 +365,66 @@ async def get_user_passkey_count(
     return {"count": len(passkeys)}
 
 
+@router.get("/api/admin/users/{user_id}/passkeys/list")
+async def get_user_passkeys_list(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    passkey_service: PasskeyService = Depends(get_passkey_service)
+):
+    """Get full list of passkeys for a user."""
+    from authglow.models.passkey import PasskeyResponse
+
+    passkeys = await passkey_service.get_user_passkeys(user_id)
+    return [
+        PasskeyResponse(
+            credential_id=pk.credential_id,
+            name=pk.name,
+            created_at=pk.created_at,
+            last_used_at=pk.last_used_at,
+            device_type=pk.device_type,
+            transports=pk.transports,
+            backup_eligible=pk.backup_eligible,
+            backup_state=pk.backup_state,
+        )
+        for pk in passkeys
+    ]
+
+
+@router.delete("/api/admin/users/{user_id}/passkeys/{credential_id}")
+async def delete_user_passkey(
+    user_id: str,
+    credential_id: str,
+    current_user: User = Depends(require_admin),
+    passkey_service: PasskeyService = Depends(get_passkey_service),
+    audit_service: AuditService = Depends(get_audit_service),
+    storage: UserStorage = Depends(get_user_storage)
+):
+    """Delete a user's passkey (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    success = await passkey_service.delete_passkey(user_id, credential_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Passkey not found")
+
+    # Log action
+    await audit_service.log_event(
+        event_type="admin_deleted_passkey",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_user_email": user.email,
+            "credential_id": credential_id
+        },
+        severity="warning"
+    )
+
+    return {"message": "Passkey deleted successfully"}
+
+
 @router.post("/api/admin/users/{user_id}/reset-mfa")
 async def reset_user_mfa(
     user_id: str,

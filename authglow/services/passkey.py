@@ -194,11 +194,13 @@ class PasskeyService:
         Returns:
             Tuple of (options_dict, challenge_string)
         """
+        from webauthn.helpers import base64url_to_bytes
+
         options = generate_authentication_options(
             rp_id=self.rp_id,
             allow_credentials=[
                 PublicKeyCredentialDescriptor(
-                    id=bytes.fromhex(pk.credential_id),
+                    id=base64url_to_bytes(pk.credential_id),
                     transports=[AuthenticatorTransport(t) for t in pk.transports if t in ["usb", "nfc", "ble", "internal"]],
                 )
                 for pk in user_passkeys
@@ -311,12 +313,8 @@ class PasskeyService:
             raise ValueError("Invalid or expired challenge")
 
         # Find the passkey by credential_id
-        # We need to search across users since we only have credential_id
-        credential_id_hex = base64url_to_bytes(credential_id).hex()
-
-        # For now, we'll use the user_id from the challenge
-        # In a real implementation, you might need to search all users
-        passkey = await self.get_passkey(challenge.user_id, credential_id_hex)
+        # credential_id is in base64url format, same as we stored it
+        passkey = await self.get_passkey(challenge.user_id, credential_id)
         if not passkey:
             raise ValueError("Passkey not found")
 
@@ -342,7 +340,7 @@ class PasskeyService:
         # Update passkey usage
         await self.update_passkey_usage(
             passkey.user_id,
-            credential_id_hex,
+            credential_id,
             verification.new_sign_count,
         )
 

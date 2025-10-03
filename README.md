@@ -10,6 +10,14 @@ Serverless Customer Identity and Access Management (CIAM) system with OAuth2 sup
   - Client Credentials Flow (for service-to-service)
   - Refresh Token Flow
 - **JWT Tokens**: Secure, stateless authentication with JWT
+- **WebAuthn/Passkeys**: Passwordless authentication with biometrics or security keys
+  - FIDO2 compliant
+  - Cross-platform and platform authenticators
+  - Synced passkeys support
+- **Multi-Factor Authentication (MFA)**: TOTP-based 2FA
+  - QR code generation
+  - Backup codes
+  - Recovery options
 - **Invitation-Only Registration**: Users can only be created via admin invitation
 - **Configurable Password Policy**: Dynamic password validation rules
 
@@ -22,11 +30,18 @@ Serverless Customer Identity and Access Management (CIAM) system with OAuth2 sup
   - Azure Blob Storage
 - **Portable**: Deploy on AWS Lambda, Google Cloud Run, Azure Functions without code changes
 
+### Admin Portal
+- **User Management**: Create, edit, deactivate users
+- **Dashboard**: User statistics and activity metrics
+- **Audit Logs**: Complete security event logging
+- **MFA Management**: Reset user MFA settings
+- **Passkey Overview**: View user passkey registrations
+
 ### Customizable UI
-- Responsive login interface
+- Responsive login interface with dark/light mode
 - Fully customizable via environment variables:
   - Colors (primary, secondary, background, text)
-  - Logo
+  - Logo (light and dark variants)
   - Company name
   - Support email
   - Privacy policy & Terms of Service links
@@ -166,6 +181,98 @@ curl -X POST http://localhost:8000/api/users/invite \
   }'
 ```
 
+### Using Passkeys (WebAuthn)
+
+#### Requirements
+- **HTTPS required in production** (localhost works for development)
+- Modern browser with WebAuthn support (Chrome, Firefox, Safari, Edge)
+- Compatible authenticator:
+  - Built-in (Touch ID, Face ID, Windows Hello)
+  - External security key (YubiKey, etc.)
+  - Phone/tablet with passkey sync
+
+#### Registering a Passkey
+
+1. Login to your account
+2. Visit the passkey management page: `http://localhost:8000/passkeys`
+3. Click "Add New Passkey"
+4. Follow your browser/device prompts to create the passkey
+5. Give it a friendly name (e.g., "My iPhone", "YubiKey")
+
+#### Authenticating with Passkey
+
+1. Go to login page: `http://localhost:8000/login`
+2. Enter your email address
+3. Click "Sign in with Passkey" instead of entering password
+4. Authenticate using your fingerprint, face, or security key
+
+#### API Endpoints
+
+**Start Registration:**
+```bash
+curl -X POST http://localhost:8000/api/passkey/register/begin \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+**Complete Registration:**
+```bash
+curl -X POST http://localhost:8000/api/passkey/register/complete \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{...}'  # WebAuthn credential data
+```
+
+**Start Authentication:**
+```bash
+curl -X POST http://localhost:8000/api/passkey/auth/begin \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com"}'
+```
+
+**Complete Authentication:**
+```bash
+curl -X POST http://localhost:8000/api/passkey/auth/complete \
+  -H "Content-Type: application/json" \
+  -d '{...}'  # WebAuthn assertion data
+```
+
+**List User Passkeys:**
+```bash
+curl -X GET http://localhost:8000/api/passkey/list \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+**Delete Passkey:**
+```bash
+curl -X DELETE http://localhost:8000/api/passkey/{credential_id} \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Using Multi-Factor Authentication (MFA)
+
+#### Enable MFA
+
+1. Login to your account
+2. Get your MFA secret and QR code:
+```bash
+curl -X POST http://localhost:8000/api/mfa/setup \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+3. Scan the QR code with an authenticator app (Google Authenticator, Authy, etc.)
+
+4. Verify and enable MFA:
+```bash
+curl -X POST http://localhost:8000/api/mfa/verify \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "123456"}'
+```
+
+#### Login with MFA
+
+After entering your password, you'll be prompted for your MFA code.
+
 ## Configuration
 
 ### Environment Variables
@@ -192,12 +299,33 @@ For cloud storage, set appropriate credentials (see `.env.example`)
 - `PASSWORD_REQUIRE_DIGITS`: Require numbers (default: true)
 - `PASSWORD_REQUIRE_SPECIAL`: Require special characters (default: true)
 
+#### WebAuthn/Passkeys
+- `PASSKEY_RP_ID`: Relying Party ID - your domain (default: "localhost")
+- `PASSKEY_RP_NAME`: Relying Party name (default: "AuthGlow")
+- `PASSKEY_ORIGIN`: Full origin URL (default: "http://localhost:8000")
+
+**Production Example:**
+```env
+PASSKEY_RP_ID=example.com
+PASSKEY_RP_NAME=My Company
+PASSKEY_ORIGIN=https://auth.example.com
+```
+
+**Important:** In production, `PASSKEY_ORIGIN` must be HTTPS. Only localhost can use HTTP.
+
 #### UI Customization
-- `UI_LOGO_URL`: Custom logo URL
-- `UI_PRIMARY_COLOR`: Primary color (default: #4F46E5)
-- `UI_SECONDARY_COLOR`: Secondary color (default: #06B6D4)
+- `UI_LOGO_URL`: Custom logo URL (light theme)
+- `UI_LOGO_DARK_URL`: Custom logo URL (dark theme)
+- `UI_PRIMARY_COLOR`: Primary color (default: #3498DB)
+- `UI_SECONDARY_COLOR`: Secondary color (default: #FF3366)
+- `UI_BACKGROUND_COLOR`: Background color light mode (default: #F8F8F8)
+- `UI_BACKGROUND_DARK`: Background color dark mode (default: #1A1A1A)
+- `UI_TEXT_COLOR`: Text color light mode (default: #2C3E50)
+- `UI_TEXT_DARK`: Text color dark mode (default: #F0F0F0)
 - `UI_COMPANY_NAME`: Company name displayed in UI
 - `UI_SUPPORT_EMAIL`: Support contact email
+- `UI_PRIVACY_POLICY_URL`: Privacy policy link
+- `UI_TERMS_OF_SERVICE_URL`: Terms of service link
 
 ## Project Structure
 
@@ -205,21 +333,38 @@ For cloud storage, set appropriate credentials (see `.env.example`)
 authglow/
 ├── authglow/
 │   ├── api/              # API endpoints
-│   │   └── auth.py       # Authentication routes
+│   │   ├── auth.py       # Authentication routes
+│   │   ├── mfa.py        # MFA endpoints
+│   │   ├── admin.py      # Admin portal endpoints
+│   │   └── passkey.py    # WebAuthn/Passkey endpoints
 │   ├── core/             # Core functionality
 │   │   └── config.py     # Configuration management
 │   ├── models/           # Data models
 │   │   ├── user.py       # User models
-│   │   └── token.py      # Token models
+│   │   ├── token.py      # Token models
+│   │   ├── mfa.py        # MFA models
+│   │   ├── passkey.py    # Passkey models
+│   │   └── admin.py      # Admin models
 │   ├── services/         # Business logic
 │   │   ├── storage.py    # User storage (fsspec)
 │   │   ├── password.py   # Password validation
 │   │   ├── jwt.py        # JWT token service
-│   │   └── oauth2.py     # OAuth2 service
+│   │   ├── oauth2.py     # OAuth2 service
+│   │   ├── mfa.py        # MFA service
+│   │   ├── passkey.py    # Passkey service
+│   │   ├── session.py    # Session management
+│   │   └── audit.py      # Audit logging
 │   ├── templates/        # HTML templates
-│   │   └── login.html    # Login page
+│   │   ├── login.html    # Login page
+│   │   ├── admin_*.html  # Admin portal pages
+│   │   ├── mfa_*.html    # MFA pages
+│   │   └── passkey_*.html # Passkey management
 │   └── static/           # Static files
-│       └── css/
+│       ├── css/
+│       │   └── theme.css # Theme with dark/light mode
+│       ├── js/
+│       │   └── theme.js  # Theme switcher
+│       └── images/       # Logos
 ├── tests/                # Test files
 ├── main.py               # Application entry point
 ├── requirements.txt      # Dependencies
@@ -300,21 +445,43 @@ pytest
 
 - **Change default secrets**: Always set unique `SECRET_KEY` and `JWT_SECRET_KEY` in production
 - **Change OAuth2 credentials**: Set unique `OAUTH2_CLIENT_ID` and `OAUTH2_CLIENT_SECRET`
-- **Use HTTPS**: Always use HTTPS in production
+- **Use HTTPS**: Always use HTTPS in production (required for WebAuthn/Passkeys)
 - **Secure storage**: Use cloud storage with proper IAM roles/permissions
 - **Password policy**: Adjust password requirements based on your security needs
 - **Token expiry**: Configure appropriate token lifetimes for your use case
+- **WebAuthn domain**: Ensure `PASSKEY_RP_ID` matches your domain exactly
+- **Passkey phishing resistance**: Passkeys are bound to your domain and cannot be phished
+- **MFA backup codes**: Store backup codes securely when enabling MFA
+- **Audit logs**: Review audit logs regularly for suspicious activity
+
+## Admin Portal
+
+Access the admin portal at `http://localhost:8000/admin`
+
+Features:
+- **Dashboard**: View user statistics, recent activity, and security events
+- **User Management**: Create, edit, and deactivate user accounts
+- **Audit Logs**: Complete history of authentication events and admin actions
+- **MFA Management**: Reset user MFA settings when needed
+- **Passkey Overview**: See which users have passkeys registered
+
+Default admin user must be created manually (see "Creating the First Admin User" section).
 
 ## Roadmap
 
-See `CREATE.md` for planned features:
-- MFA with TOTP
+Completed features:
+- ✅ MFA with TOTP
+- ✅ Passwordless authentication (WebAuthn/Passkeys)
+- ✅ Admin dashboard
+- ✅ Audit logging
+
+Planned features:
 - SSO with OpenID Connect
-- Passwordless authentication (WebAuthn)
-- Admin dashboard
 - Security features (brute force protection, anomaly detection)
-- Audit logging
 - Webhook system
+- Email notifications
+- Session management
+- Advanced role-based access control (RBAC)
 
 ## License
 
@@ -324,7 +491,21 @@ See LICENSE file.
 
 For issues or questions, open an issue on the repository.
 
+## FAQ
 
-curl -X POST http://localhost:8000/api/users/invite -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1YTQyMTAxNC03NjkzLTQ5ODYtOTA0Yi0yYmE5ZThiNmQzNjciLCJlbWFpbCI6ImRjb25zb25uaUBnbWFpbC5jb20iLCJzY29wZXMiOlsicmVhZCIsIndyaXRlIiwiYWRtaW4iXSwiZXhwIjoxNzU5NDQ3NjE1LCJpYXQiOjE3NTk0NDU4MTUsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.jGzZ1g39ijAGbigQLGp3DXdDmiveSCXrLJXub80AaSU" -H "Content-Type: application/json" -d"{\"email\":\"newuser@example.com\",\"scopes\":[\"read\"],\"first_name\":\"Test\",\"last_name\":\"User\"}"
+### Can I use passkeys on mobile devices?
+Yes! Passkeys work on iOS 16+, Android 9+, and modern browsers. They can sync across your devices via iCloud Keychain (Apple) or Google Password Manager (Android).
 
-curl -X POST http://localhost:8000/api/mfa/verify -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1YTQyMTAxNC03NjkzLTQ5ODYtOTA0Yi0yYmE5ZThiNmQzNjciLCJlbWFpbCI6ImRjb25zb25uaUBnbWFpbC5jb20iLCJzY29wZXMiOlsicmVhZCIsIndyaXRlIiwiYWRtaW4iXSwiZXhwIjoxNzU5NDQ3NjE1LCJpYXQiOjE3NTk0NDU4MTUsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.jGzZ1g39ijAGbigQLGp3DXdDmiveSCXrLJXub80AaSU" -H "Content-Type: application/json" -d "{\"code\":\"276321\"}"
+### What happens if I lose my passkey device?
+- If using synced passkeys (iCloud/Google): Your passkeys are automatically available on your other devices
+- If using a security key: Register multiple passkeys as backup, or use password + MFA as fallback
+- Admin can reset your passkeys from the admin portal
+
+### Can I use both password and passkey?
+Yes! Passkeys are an additional authentication method. You can use either password or passkey to login.
+
+### Is WebAuthn secure?
+Yes! WebAuthn is a W3C standard that provides strong, phishing-resistant authentication. Private keys never leave your device, and passkeys are bound to your specific domain.
+
+### Do I need special hardware?
+No! Most modern devices support passkeys with built-in biometrics (fingerprint, face recognition). External security keys (YubiKey) are optional.
