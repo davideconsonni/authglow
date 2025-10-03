@@ -157,16 +157,12 @@ class APIKeyService:
 
         return keys[offset:offset + limit]
 
-    async def verify_key(self, provided_key: str) -> Optional[APIKey]:
-        """Verify an API key and return the key object if valid."""
+    async def validate_key(self, provided_key: str) -> Optional[APIKey]:
+        """Validate an API key by checking it against all stored key hashes."""
+        if not provided_key or not provided_key.startswith("ak_"):
+            return None
+
         try:
-            # Extract prefix from provided key
-            if not provided_key.startswith("ak_"):
-                return None
-
-            prefix = provided_key[:12]
-
-            # Find keys with matching prefix
             pattern = f"{self.storage_path}/*.json"
             files = self.fs.glob(pattern)
 
@@ -176,40 +172,43 @@ class APIKeyService:
                         data = json.load(f)
                         api_key = APIKey(**data)
 
-                        # Check prefix match first (fast)
-                        if api_key.key_prefix != prefix:
-                            continue
-
-                        # Check if active
-                        if not api_key.is_active:
-                            continue
-
-                        # Check expiration
-                        if api_key.expires_at and api_key.expires_at < datetime.utcnow():
-                            continue
-
-                        # Verify full key (slow)
+                        # Check if the provided key matches the stored hash
                         if self._verify_api_key(api_key.key_hash, provided_key):
-                            return api_key
+                            # Key is valid, now check its status
+                            if not api_key.is_active:
+                                return None  # Key is revoked
 
+                            if api_key.expires_at and api_key.expires_at < datetime.utcnow():
+                                return None  # Key is expired
+
+                            return api_key
                 except Exception:
                     continue
+            
+            # No key matched
+            return None
 
         except Exception:
-            pass
+            return None
 
-        return None
-
-    async def update_key(self, key_id: str, updates: dict) -> Optional[APIKey]:
-        """Update an API key."""
+    async def record_usage(
+        self, 
+        key_id: str, 
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> Optional[APIKey]:
+        """Update an API key's usage statistics."""
         api_key = await self.get_key(key_id)
         if not api_key:
             return None
 
-        # Update fields
-        for field, value in updates.items():
-            if hasattr(api_key, field) and value is not None:
-                setattr(api_key, field, value)
+        # Update usage stats
+        api_key.last_used_at = datetime.utcnow()
+        api_key.total_requests += 1
+        if ip_address:
+            api_key.last_used_ip = ip_address
+        if user_agent:
+            api_key.last_used_ua = user_agent
 
         # Save
         file_path = f"{self.storage_path}/{key_id}.json"

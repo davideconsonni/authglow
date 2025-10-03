@@ -25,6 +25,8 @@ class APIKey(BaseModel):
     # Usage tracking
     last_used_at: Optional[datetime] = None
     total_requests: int = 0
+    last_used_ip: Optional[str] = None
+    last_used_ua: Optional[str] = None
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -69,6 +71,8 @@ class APIKeyResponse(BaseModel):
     total_requests: int
     created_at: datetime
     allowed_ips: List[str]
+    last_used_ip: Optional[str] = None
+    last_used_ua: Optional[str] = None
 
     @property
     def usage_count(self) -> int:

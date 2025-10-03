@@ -121,7 +121,7 @@ class JWTService:
 
         except jwt.ExpiredSignatureError:
             return None
-        except jwt.JWTError:
+        except jwt.PyJWTError:
             return None
 
     def create_id_token(
@@ -202,7 +202,7 @@ class JWTService:
 
         except jwt.ExpiredSignatureError:
             return None
-        except jwt.JWTError:
+        except jwt.PyJWTError:
             return None
 
     def create_token_response(

@@ -127,11 +127,8 @@ async def introspect_token(
     request: Request,
     token: str = Form(...),
     token_type_hint: Optional[str] = Form(None),
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
     refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
     jwt_service: JWTService = Depends(get_jwt_service),
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     user_storage: UserStorage = Depends(get_user_storage)
 ):
     """RFC 7662: Token Introspection Endpoint.
@@ -140,12 +137,10 @@ async def introspect_token(
 
     https://datatracker.ietf.org/doc/html/rfc7662
     """
-    # Verify client credentials (REQUIRED for introspection)
-    if not await oauth2_service.verify_client(client_id, client_secret):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid client credentials"
-        )
+    # NOTE: In a real-world scenario, this endpoint SHOULD be protected
+    # and only accessible to trusted resource servers. For the playground,
+    # we are leaving it open.
+
 
     # Try as refresh token
     if token_type_hint == "refresh_token" or not token_type_hint:

@@ -87,14 +87,33 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Try API Key authentication first (from X-API-Key header)
+    # Try API Key authentication first (from X-API-Key header or Bearer token)
     api_key = request.headers.get("X-API-Key")
+    auth_header = request.headers.get("Authorization")
+    bearer_token = None
+
+    if auth_header and auth_header.startswith("Bearer "):
+        bearer_token = auth_header[7:]
+
+    # If the bearer token is an API key (e.g., starts with "ak_"), use it.
+    if bearer_token and bearer_token.startswith("ak_"):
+        api_key = bearer_token
+    elif not api_key:
+        # If no API key in header or as bearer token, proceed with JWT flow
+        if not bearer_token:
+            raise credentials_exception
+        token = bearer_token
+    
     if api_key:
-        api_key_obj = await api_key_service.verify_key(api_key)
+        api_key_obj = await api_key_service.validate_key(api_key)
         if api_key_obj:
             # Track usage
             client_ip = request.client.host if request.client else None
-            await api_key_service.track_usage(api_key_obj.key_id, client_ip)
+            await api_key_service.record_usage(
+                key_id=api_key_obj.key_id,
+                ip_address=client_ip,
+                user_agent=request.headers.get("user-agent")
+            )
 
             # Log API key usage
             await audit_service.log_event(
@@ -113,8 +132,11 @@ async def get_current_user(
                 # Attach API key info to user for scope checking
                 user.api_key_scopes = api_key_obj.scopes
                 return user
+        
+        # If API key is provided but invalid, raise an error
+        raise credentials_exception
 
-    # Fall back to JWT authentication
+    # Fall back to JWT authentication if no valid API key was processed
     if not token:
         raise credentials_exception
 
@@ -528,7 +550,7 @@ async def exchange_api_key_for_token(
 
     # Record usage
     await api_key_service.record_usage(
-        key_id=key_data.id,
+        key_id=key_data.key_id,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent")
     )

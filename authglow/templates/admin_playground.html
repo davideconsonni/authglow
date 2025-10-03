@@ -47,12 +47,19 @@
             margin: 0 0 20px 0;
             font-size: 0.95rem;
             line-height: 1.6;
+            flex-grow: 1;
         }
 
         .flow-form {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px; /* Increased gap */
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .flow-form input, .flow-form select, .flow-form textarea {
@@ -62,6 +69,8 @@
             background: var(--input-bg);
             color: var(--text-primary);
             font-size: 0.9rem;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .flow-form textarea {
@@ -79,6 +88,7 @@
             cursor: pointer;
             font-weight: 600;
             transition: opacity 0.2s;
+            margin-top: 8px; /* Added margin */
         }
 
         .flow-form button:hover {
@@ -217,7 +227,29 @@
         .hint {
             font-size: 0.8rem;
             color: var(--text-tertiary);
-            margin-top: 4px;
+            margin-top: 0; /* Adjusted */
+        }
+
+        .curl-example {
+            margin-top: 16px;
+        }
+
+        .curl-example summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .curl-example pre {
+            background: var(--surface-elevated);
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            overflow-x: auto;
+            font-size: 0.8rem;
+            color: var(--text-code);
         }
     </style>
 </head>
@@ -231,13 +263,17 @@
             <div class="playground-container">
                 <div class="page-header">
                     <h1>🧪 API Playground</h1>
-                    <p>Test OAuth2, OpenID Connect, and API flows interactively</p>
+                    <p>
+                        Benvenuto nel playground dell'API! Quest'area è progettata per aiutarti a comprendere e testare in modo interattivo i flussi di autenticazione e autorizzazione di base supportati da AuthGlow.
+                        <br>
+                        Qui puoi simulare diversi scenari OAuth2, esplorare gli endpoint di OpenID Connect ed eseguire chiamate API autenticate per vedere come tutto si integra.
+                    </p>
                 </div>
 
                 <div class="tabs">
-                    <button class="tab active" onclick="switchTab('oauth2')">OAuth2 Flows</button>
+                    <button class="tab active" onclick="switchTab('oauth2')">Flussi OAuth2</button>
                     <button class="tab" onclick="switchTab('oidc')">OpenID Connect</button>
-                    <button class="tab" onclick="switchTab('api')">API Testing</button>
+                    <button class="tab" onclick="switchTab('api')">Test API</button>
                 </div>
 
                 <!-- OAuth2 Tab -->
@@ -247,16 +283,32 @@
                         <div class="flow-card">
                             <h3>
                                 <span>🔐</span>
-                                Authorization Code
+                                Codice di autorizzazione
                                 <span class="info-badge">STANDARD</span>
                             </h3>
-                            <p>Most secure flow for web applications. Exchanges authorization code for tokens.</p>
+                            <p>Il flusso più sicuro per le applicazioni web. Scambia un codice di autorizzazione con i token. <a href="https://tools.ietf.org/html/rfc6749#section-4.1" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <input type="text" id="auth-client-id" placeholder="Client ID" value="default-client-id">
-                                <input type="text" id="auth-redirect-uri" placeholder="Redirect URI" value="http://localhost:8000/callback">
-                                <input type="text" id="auth-scope" placeholder="Scopes (space-separated)" value="openid profile email">
-                                <input type="text" id="auth-state" placeholder="State (optional)" value="">
-                                <button onclick="startAuthFlow()">Start Authorization Flow</button>
+                                <div class="form-group">
+                                    <label for="auth-client-id">Client ID</label>
+                                    <input type="text" id="auth-client-id" placeholder="ID cliente" value="default-client-id">
+                                    <div class="hint">L'identificatore univoco per il tuo client OAuth2.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="auth-redirect-uri">Redirect URI</label>
+                                    <input type="text" id="auth-redirect-uri" placeholder="URI di reindirizzamento" value="http://localhost:8000/callback">
+                                    <div class="hint">L'URL a cui l'utente viene reindirizzato dopo l'autorizzazione.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="auth-scope">Scope</label>
+                                    <input type="text" id="auth-scope" placeholder="Ambiti (separati da spazio)" value="openid profile email">
+                                    <div class="hint">Gli ambiti di autorizzazione che stai richiedendo.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="auth-state">State</label>
+                                    <input type="text" id="auth-state" placeholder="Stato (opzionale)" value="">
+                                    <div class="hint">Un valore opaco per mantenere lo stato e prevenire attacchi CSRF.</div>
+                                </div>
+                                <button onclick="startAuthFlow()">Avvia flusso di autorizzazione</button>
                             </div>
                         </div>
 
@@ -264,66 +316,116 @@
                         <div class="flow-card">
                             <h3>
                                 <span>🤖</span>
-                                Client Credentials
+                                Credenziali client
                                 <span class="info-badge">M2M</span>
                             </h3>
-                            <p>For machine-to-machine authentication. No user interaction required.</p>
+                            <p>Per l'autenticazione da macchina a macchina. Nessuna interazione dell'utente richiesta. <a href="https://tools.ietf.org/html/rfc6749#section-4.4" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <input type="text" id="cc-client-id" placeholder="Client ID" value="default-client-id">
-                                <input type="password" id="cc-client-secret" placeholder="Client Secret" value="default-client-secret">
-                                <input type="text" id="cc-scope" placeholder="Scopes" value="read write">
-                                <button onclick="clientCredentialsFlow()">Get Access Token</button>
+                                <div class="form-group">
+                                    <label for="cc-client-id">Client ID</label>
+                                    <input type="text" id="cc-client-id" placeholder="ID cliente" value="default-client-id">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cc-client-secret">Client Secret</label>
+                                    <input type="password" id="cc-client-secret" placeholder="Segreto client" value="default-client-secret">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cc-scope">Scope</label>
+                                    <input type="text" id="cc-scope" placeholder="Ambiti" value="read write">
+                                </div>
+                                <button onclick="clientCredentialsFlow()">Ottieni token di accesso</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/oauth2/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=TUO_ID_CLIENTE" \
+  -d "client_secret=TUO_SEGRETO_CLIENTE" \
+  -d "scope=read write"</pre>
+                            </details>
                         </div>
 
                         <!-- Password Grant (Testing Only) -->
                         <div class="flow-card">
                             <h3>
                                 <span>🔑</span>
-                                Password Grant
-                                <span class="info-badge">TESTING</span>
+                                Concessione password
+                                <span class="info-badge">TEST</span>
                             </h3>
-                            <p>Direct username/password authentication. Only for testing/trusted apps.</p>
+                            <p>Autenticazione diretta con nome utente/password. <strong>Fortemente sconsigliato</strong> in produzione. <a href="https://tools.ietf.org/html/rfc6749#section-4.3" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <input type="email" id="pwd-email" placeholder="Email" value="">
-                                <input type="password" id="pwd-password" placeholder="Password" value="">
-                                <input type="text" id="pwd-scope" placeholder="Scopes" value="openid profile email">
-                                <button onclick="passwordFlow()">Login</button>
+                                <div class="form-group">
+                                    <label for="pwd-email">Email</label>
+                                    <input type="email" id="pwd-email" placeholder="Email" value="">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pwd-password">Password</label>
+                                    <input type="password" id="pwd-password" placeholder="Password" value="">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pwd-scope">Scope</label>
+                                    <input type="text" id="pwd-scope" placeholder="Ambiti" value="openid profile email">
+                                </div>
+                                <button onclick="passwordFlow()">Accedi</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/api/token \
+  -d "grant_type=password" \
+  -d "username=TUA_EMAIL" \
+  -d "password=TUA_PASSWORD" \
+  -d "scope=openid profile"</pre>
+                            </details>
                         </div>
 
                         <!-- API Key Authentication -->
                         <div class="flow-card">
                             <h3>
                                 <span>🔐</span>
-                                API Key Authentication
+                                Autenticazione con chiave API
                                 <span class="info-badge">M2M</span>
                             </h3>
-                            <p>Exchange an API key for an access token. Create API keys from Settings → API Keys.</p>
+                            <p>Scambia una chiave API con un token di accesso. Crea chiavi API da Impostazioni → Chiavi API.</p>
                             <div class="flow-form">
-                                <textarea id="apikey-key" placeholder="Paste your API Key here (sk_...)" rows="3"></textarea>
-                                <button onclick="apiKeyFlow()">Get Access Token</button>
+                                <div class="form-group">
+                                    <label for="apikey-key">API Key</label>
+                                    <textarea id="apikey-key" placeholder="Incolla qui la tua chiave API (sk_...)" rows="3"></textarea>
+                                </div>
+                                <button onclick="apiKeyFlow()">Ottieni token di accesso</button>
                             </div>
-                            <div class="hint" style="margin-top: 12px;">
-                                <strong>cURL Example:</strong>
-                                <pre style="background: var(--surface-elevated); padding: 10px; border-radius: 4px; margin-top: 8px; overflow-x: auto;">curl -X POST http://localhost:8000/api/token/api-key \
-  -H "Authorization: Bearer YOUR_API_KEY"</pre>
-                            </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/api/token/api-key \
+  -H "Authorization: Bearer TUA_CHIAVE_API"</pre>
+                            </details>
                         </div>
 
                         <!-- Refresh Token -->
                         <div class="flow-card">
                             <h3>
                                 <span>🔄</span>
-                                Refresh Token
-                                <span class="info-badge">ROTATION</span>
+                                Token di aggiornamento
+                                <span class="info-badge">ROTAZIONE</span>
                             </h3>
-                            <p>Exchange refresh token for new access token. Includes automatic rotation.</p>
+                            <p>Scambia il token di aggiornamento con un nuovo token di accesso. Include la rotazione automatica per una maggiore sicurezza. <a href="https://tools.ietf.org/html/rfc6749#section-6" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <textarea id="refresh-token" placeholder="Refresh Token" rows="3"></textarea>
-                                <input type="text" id="refresh-client-id" placeholder="Client ID" value="default-client-id">
-                                <button onclick="refreshTokenFlow()">Refresh Access Token</button>
+                                <div class="form-group">
+                                    <label for="refresh-token">Refresh Token</label>
+                                    <textarea id="refresh-token" placeholder="Token di aggiornamento" rows="3"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="refresh-client-id">Client ID</label>
+                                    <input type="text" id="refresh-client-id" placeholder="ID cliente" value="default-client-id">
+                                </div>
+                                <button onclick="refreshTokenFlow()">Aggiorna token di accesso</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/oauth2/token \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=TUO_TOKEN_DI_AGGIORNAMENTO" \
+  -d "client_id=TUO_ID_CLIENTE"</pre>
+                            </details>
                         </div>
                     </div>
                 </div>
@@ -333,40 +435,59 @@
                     <div class="flow-grid">
                         <!-- Discovery -->
                         <div class="flow-card">
-                            <h3><span>🔍</span> OpenID Discovery</h3>
-                            <p>Retrieve OpenID Connect provider configuration.</p>
+                            <h3><span>🔍</span> Individuazione OpenID</h3>
+                            <p>Recupera la configurazione del provider OpenID Connect. Questo è il primo passo per la maggior parte delle integrazioni OIDC. <a href="https://openid.net/specs/openid-connect-discovery-1_0.html" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <button onclick="getOIDCDiscovery()">Get Discovery Document</button>
+                                <button onclick="getOIDCDiscovery()">Ottieni documento di individuazione</button>
                             </div>
+                             <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl http://localhost:8000/.well-known/openid-configuration</pre>
+                            </details>
                         </div>
 
                         <!-- UserInfo -->
                         <div class="flow-card">
-                            <h3><span>👤</span> UserInfo Endpoint</h3>
-                            <p>Get user information using access token with 'openid' scope.</p>
+                            <h3><span>👤</span> Endpoint UserInfo</h3>
+                            <p>Ottieni informazioni sull'utente utilizzando un token di accesso con l'ambito 'openid'. <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfo" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <textarea id="userinfo-token" placeholder="Access Token" rows="3"></textarea>
-                                <button onclick="getUserInfo()">Get User Info</button>
+                                <div class="form-group">
+                                    <label for="userinfo-token">Access Token</label>
+                                    <textarea id="userinfo-token" placeholder="Token di accesso" rows="3"></textarea>
+                                </div>
+                                <button onclick="getUserInfo()">Ottieni informazioni utente</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl http://localhost:8000/oauth2/userinfo \
+  -H "Authorization: Bearer TUO_TOKEN_DI_ACCESSO"</pre>
+                            </details>
                         </div>
 
                         <!-- ID Token Decoder -->
                         <div class="flow-card">
-                            <h3><span>🔓</span> ID Token Decoder</h3>
-                            <p>Decode and inspect OpenID Connect ID Token (JWT).</p>
+                            <h3><span>🔓</span> Decodificatore token ID</h3>
+                            <p>Decodifica e ispeziona il token ID di OpenID Connect (JWT). Questo non verifica la firma. <a href="https://openid.net/specs/openid-connect-core-1_0.html#IDToken" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <textarea id="id-token" placeholder="ID Token (JWT)" rows="4"></textarea>
-                                <button onclick="decodeIDToken()">Decode Token</button>
+                                <div class="form-group">
+                                    <label for="id-token">ID Token</label>
+                                    <textarea id="id-token" placeholder="Token ID (JWT)" rows="4"></textarea>
+                                </div>
+                                <button onclick="decodeIDToken()">Decodifica token</button>
                             </div>
                         </div>
 
                         <!-- JWKS -->
                         <div class="flow-card">
-                            <h3><span>🔐</span> JSON Web Keys</h3>
-                            <p>Get public keys used for JWT signature verification.</p>
+                            <h3><span>🔐</span> Chiavi web JSON</h3>
+                            <p>Ottieni le chiavi pubbliche utilizzate per la verifica della firma JWT. I client utilizzano questo endpoint per convalidare i token ID. <a href="https://tools.ietf.org/html/rfc7517" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <button onclick="getJWKS()">Get JWKS</button>
+                                <button onclick="getJWKS()">Ottieni JWKS</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl http://localhost:8000/.well-known/jwks.json</pre>
+                            </details>
                         </div>
                     </div>
                 </div>
@@ -376,59 +497,137 @@
                     <div class="flow-grid">
                         <!-- Introspect Token -->
                         <div class="flow-card">
-                            <h3><span>🔬</span> Token Introspection</h3>
-                            <p>Introspect token to check validity and metadata (RFC 7662).</p>
+                            <h3><span>🔬</span> Introspezione token</h3>
+                            <p>Esegui l'introspezione di un token per verificarne la validità e i metadati (RFC 7662). Utile per i server di risorse. <a href="https://tools.ietf.org/html/rfc7662" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <textarea id="introspect-token" placeholder="Access or Refresh Token" rows="3"></textarea>
-                                <button onclick="introspectToken()">Introspect</button>
+                                <div class="form-group">
+                                    <label for="introspect-token">Token</label>
+                                    <textarea id="introspect-token" placeholder="Token di accesso o di aggiornamento" rows="3"></textarea>
+                                </div>
+                                <button onclick="introspectToken()">Esegui introspezione</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/oauth2/introspect \
+  -d "token=TUO_TOKEN"</pre>
+                            </details>
                         </div>
 
                         <!-- Revoke Token -->
                         <div class="flow-card">
-                            <h3><span>🚫</span> Token Revocation</h3>
-                            <p>Revoke access or refresh token (RFC 7009).</p>
+                            <h3><span>🚫</span> Revoca token</h3>
+                            <p>Revoca un token di accesso o di aggiornamento (RFC 7009). Essenziale per i logout e la sicurezza. <a href="https://tools.ietf.org/html/rfc7009" target="_blank">Ulteriori informazioni</a></p>
                             <div class="flow-form">
-                                <textarea id="revoke-token" placeholder="Token to Revoke" rows="3"></textarea>
-                                <select id="revoke-token-type">
-                                    <option value="access_token">Access Token</option>
-                                    <option value="refresh_token">Refresh Token</option>
-                                </select>
-                                <button onclick="revokeToken()">Revoke Token</button>
+                                <div class="form-group">
+                                    <label for="revoke-token">Token</label>
+                                    <textarea id="revoke-token" placeholder="Token da revocare" rows="3"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="revoke-token-type">Tipo di token</label>
+                                    <select id="revoke-token-type">
+                                        <option value="access_token">Token di accesso</option>
+                                        <option value="refresh_token">Token di aggiornamento</option>
+                                    </select>
+                                </div>
+                                <button onclick="revokeToken()">Revoca token</button>
                             </div>
+                            <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl -X POST http://localhost:8000/oauth2/revoke \
+  -d "token=TUO_TOKEN" \
+  -d "token_type_hint=access_token"</pre>
+                            </details>
                         </div>
 
                         <!-- API Call with Token -->
                         <div class="flow-card">
-                            <h3><span>📡</span> Protected API Call</h3>
-                            <p>Make authenticated API request with Bearer token.</p>
+                            <h3><span>📡</span> Chiamata API protetta con Token</h3>
+                            <p>Effettua una richiesta API autenticata con un token Bearer (Access Token) nell'intestazione di autorizzazione.</p>
                             <div class="flow-form">
-                                <select id="api-method">
-                                    <option value="GET">GET</option>
-                                    <option value="POST">POST</option>
-                                    <option value="PATCH">PATCH</option>
-                                    <option value="DELETE">DELETE</option>
-                                </select>
-                                <input type="text" id="api-endpoint" placeholder="API Endpoint" value="/api/profile/me">
-                                <textarea id="api-token" placeholder="Access Token" rows="2"></textarea>
-                                <textarea id="api-body" placeholder="Request Body (JSON, optional)" rows="3"></textarea>
-                                <button onclick="callProtectedAPI()">Send Request</button>
+                                <div class="form-group">
+                                    <label for="api-method">Metodo</label>
+                                    <select id="api-method">
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                        <option value="PATCH">PATCH</option>
+                                        <option value="DELETE">DELETE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="api-endpoint">Endpoint</label>
+                                    <input type="text" id="api-endpoint" placeholder="Endpoint API" value="/api/profile/me">
+                                </div>
+                                <div class="form-group">
+                                    <label for="api-token">Access Token</label>
+                                    <textarea id="api-token" placeholder="Token di accesso" rows="2"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="api-body">Corpo (JSON)</label>
+                                    <textarea id="api-body" placeholder="Corpo della richiesta (JSON, opzionale)" rows="3"></textarea>
+                                </div>
+                                <button onclick="callProtectedAPI()">Invia richiesta</button>
                             </div>
+                             <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl http://localhost:8000/api/profile/me \
+  -H "Authorization: Bearer TUO_TOKEN_DI_ACCESSO"</pre>
+                            </details>
+                        </div>
+
+                        <!-- API Call with API Key -->
+                        <div class="flow-card">
+                            <h3><span>🔑</span> Chiamata API protetta con Chiave API</h3>
+                            <p>Effettua una richiesta API M2M (machine-to-machine) autenticata direttamente con una Chiave API.</p>
+                            <div class="flow-form">
+                                <div class="form-group">
+                                    <label for="apikey-api-method">Metodo</label>
+                                    <select id="apikey-api-method">
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                        <option value="PATCH">PATCH</option>
+                                        <option value="DELETE">DELETE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="apikey-api-endpoint">Endpoint</label>
+                                    <input type="text" id="apikey-api-endpoint" placeholder="Endpoint API" value="/api/admin/stats">
+                                </div>
+                                <div class="form-group">
+                                    <label for="apikey-api-key">Chiave API</label>
+                                    <textarea id="apikey-api-key" placeholder="Incolla qui la tua chiave API (sk_...)" rows="2"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="apikey-api-body">Corpo (JSON)</label>
+                                    <textarea id="apikey-api-body" placeholder="Corpo della richiesta (JSON, opzionale)" rows="3"></textarea>
+                                </div>
+                                <button onclick="callApiWithApiKey()">Invia richiesta</button>
+                            </div>
+                             <details class="curl-example">
+                                <summary>Mostra esempio cURL</summary>
+                                <pre>curl http://localhost:8000/api/admin/stats \
+  -H "Authorization: Bearer TUA_CHIAVE_API"</pre>
+                            </details>
                         </div>
 
                         <!-- Profile Management -->
                         <div class="flow-card">
-                            <h3><span>⚙️</span> Profile & RBAC</h3>
-                            <p>Test user profile and RBAC endpoints.</p>
+                            <h3><span>⚙️</span> Profilo e RBAC</h3>
+                            <p>Testa gli endpoint del profilo utente e del controllo degli accessi basato sui ruoli (RBAC).</p>
                             <div class="flow-form">
-                                <textarea id="profile-token" placeholder="Access Token" rows="2"></textarea>
-                                <select id="profile-endpoint">
-                                    <option value="/api/profile/me">Get Profile</option>
-                                    <option value="/api/profile/me/preferences">Get Preferences</option>
-                                    <option value="/api/rbac/roles">List Roles</option>
-                                    <option value="/api/rbac/permissions">List Permissions</option>
-                                </select>
-                                <button onclick="testProfileEndpoint()">Test Endpoint</button>
+                                <div class="form-group">
+                                    <label for="profile-token">Access Token</label>
+                                    <textarea id="profile-token" placeholder="Token di accesso" rows="2"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profile-endpoint">Endpoint</label>
+                                    <select id="profile-endpoint">
+                                        <option value="/api/profile/me">Ottieni profilo</option>
+                                        <option value="/api/profile/me/preferences">Ottieni preferenze</option>
+                                        <option value="/api/rbac/roles">Elenca ruoli</option>
+                                        <option value="/api/rbac/permissions">Elenca autorizzazioni</option>
+                                    </select>
+                                </div>
+                                <button onclick="testProfileEndpoint()">Testa endpoint</button>
                             </div>
                         </div>
                     </div>
@@ -436,10 +635,10 @@
 
                 <!-- Response Section -->
                 <div class="response-section" id="response-section" style="display: none;">
-                    <h3>📨 Response</h3>
+                    <h3>📨 Risposta</h3>
                     <div class="response-box" id="response-box"></div>
                     <div id="token-section" style="display: none; margin-top: 16px;">
-                        <h4>Tokens</h4>
+                        <h4>Token</h4>
                         <div id="access-token-display"></div>
                         <div id="refresh-token-display"></div>
                         <div id="id-token-display"></div>
@@ -509,27 +708,27 @@
             if (tokens.access_token) {
                 tokenSection.style.display = 'block';
                 accessDiv.innerHTML = `
-                    <strong>Access Token:</strong>
+                    <strong>Token di accesso:</strong>
                     <div class="token-display">${tokens.access_token.substring(0, 50)}...
-                        <button class="copy-btn" onclick="copyToken('access')">Copy</button>
+                        <button class="copy-btn" onclick="copyToken('access')">Copia</button>
                     </div>
                 `;
             }
 
             if (tokens.refresh_token) {
                 refreshDiv.innerHTML = `
-                    <strong>Refresh Token:</strong>
+                    <strong>Token di aggiornamento:</strong>
                     <div class="token-display">${tokens.refresh_token.substring(0, 50)}...
-                        <button class="copy-btn" onclick="copyToken('refresh')">Copy</button>
+                        <button class="copy-btn" onclick="copyToken('refresh')">Copia</button>
                     </div>
                 `;
             }
 
             if (tokens.id_token) {
                 idDiv.innerHTML = `
-                    <strong>ID Token:</strong>
+                    <strong>Token ID:</strong>
                     <div class="token-display">${tokens.id_token.substring(0, 50)}...
-                        <button class="copy-btn" onclick="copyToken('id')">Copy</button>
+                        <button class="copy-btn" onclick="copyToken('id')">Copia</button>
                     </div>
                 `;
             }
@@ -542,7 +741,7 @@
             if (type === 'id') token = currentTokens.id_token;
 
             navigator.clipboard.writeText(token).then(() => {
-                alert('Token copied to clipboard!');
+                alert('Token copiato negli appunti!');
             });
         }
 
@@ -618,7 +817,7 @@
             const apiKey = document.getElementById('apikey-key').value.trim();
 
             if (!apiKey) {
-                showResponse({ error: 'Please enter an API key' }, false);
+                showResponse({ error: 'Inserisci una chiave API' }, false);
                 return;
             }
 
@@ -637,13 +836,13 @@
                     showTokens(data);
 
                     // Add curl example to response
-                    const curlExample = `# Exchange API Key for Access Token
+                    const curlExample = `# Scambia la chiave API con un token di accesso
 curl -X POST ${window.location.origin}/api/token/api-key \\
   -H "Authorization: Bearer ${apiKey.substring(0, 20)}..."
 
-# Use the access token for API calls
+# Usa il token di accesso per le chiamate API
 curl ${window.location.origin}/api/profile/me \\
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"`;
+  -H "Authorization: Bearer TUO_TOKEN_DI_ACCESSO"`;
 
                     showResponse({
                         ...data,
@@ -712,7 +911,7 @@ curl ${window.location.origin}/api/profile/me \\
                 const payload = JSON.parse(atob(parts[1]));
                 showResponse(payload, true);
             } catch (error) {
-                showResponse({ error: 'Invalid JWT format' }, false);
+                showResponse({ error: 'Formato JWT non valido' }, false);
             }
         }
 
@@ -758,7 +957,7 @@ curl ${window.location.origin}/api/profile/me \\
                     })
                 });
 
-                const data = response.ok ? { message: 'Token revoked successfully' } : await response.json();
+                const data = response.ok ? { message: 'Token revocato con successo' } : await response.json();
                 showResponse(data, response.ok);
             } catch (error) {
                 showResponse({ error: error.message }, false);
@@ -775,6 +974,36 @@ curl ${window.location.origin}/api/profile/me \\
                 const options = {
                     method: method,
                     headers: { 'Authorization': `Bearer ${token}` }
+                };
+
+                if (body && (method === 'POST' || method === 'PATCH')) {
+                    options.headers['Content-Type'] = 'application/json';
+                    options.body = body;
+                }
+
+                const response = await fetch(endpoint, options);
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function callApiWithApiKey() {
+            const method = document.getElementById('apikey-api-method').value;
+            const endpoint = document.getElementById('apikey-api-endpoint').value;
+            const apiKey = document.getElementById('apikey-api-key').value;
+            const body = document.getElementById('apikey-api-body').value;
+
+            if (!apiKey.trim()) {
+                showResponse({ error: "La chiave API è richiesta" }, false);
+                return;
+            }
+
+            try {
+                const options = {
+                    method: method,
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
                 };
 
                 if (body && (method === 'POST' || method === 'PATCH')) {

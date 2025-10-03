@@ -109,7 +109,7 @@ class AuditService:
                         if filters:
                             if filters.user_id and log_entry.user_id != filters.user_id:
                                 continue
-                            if filters.event_type and log_entry.event_type != filters.event_type:
+                            if filters.event_type and filters.event_type.lower() not in log_entry.event_type.lower():
                                 continue
                             if filters.severity and log_entry.severity != filters.severity:
                                 continue
