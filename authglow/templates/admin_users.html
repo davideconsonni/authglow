@@ -400,6 +400,35 @@
         </div>
     </div>
 
+    <!-- Invite User Modal -->
+    <div id="inviteModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Invite User</h2>
+            <form id="inviteForm">
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" id="inviteEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" id="inviteFirstName">
+                </div>
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" id="inviteLastName">
+                </div>
+                <div class="form-group">
+                    <label>Scopes (comma separated)</label>
+                    <input type="text" id="inviteScopes" placeholder="user, admin">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline btn-secondary" onclick="closeInviteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send Invite</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         let users = [];
         let currentFilter = 'all';
@@ -564,6 +593,50 @@
             if (response.ok) {
                 closeModal();
                 loadUsers();
+            }
+        });
+
+        // Invite User Modal functions
+        function showInviteModal() {
+            document.getElementById('inviteModal').style.display = 'flex';
+            document.getElementById('inviteForm').reset();
+        }
+
+        function closeInviteModal() {
+            document.getElementById('inviteModal').style.display = 'none';
+        }
+
+        document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = localStorage.getItem('admin_token');
+
+            const scopes = document.getElementById('inviteScopes').value
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s);
+
+            const response = await fetch('/api/users/invite', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: document.getElementById('inviteEmail').value,
+                    first_name: document.getElementById('inviteFirstName').value || null,
+                    last_name: document.getElementById('inviteLastName').value || null,
+                    scopes: scopes.length > 0 ? scopes : ['user']
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(`User invited successfully! Temporary password: ${result.temp_password || 'N/A'}`);
+                closeInviteModal();
+                loadUsers();
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail || 'Failed to invite user'}`);
             }
         });
 
