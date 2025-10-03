@@ -159,8 +159,8 @@ class EmailRequest(BaseModel):
 @router.post("/auth/begin")
 @limiter.limit("10/minute")  # Max 10 passkey auth attempts per minute per IP
 async def begin_authentication(
-    request_obj: Request,
-    request: EmailRequest,
+    request: Request,
+    email_request: EmailRequest,
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     storage: Annotated[UserStorage, Depends(get_user_storage)],
 ):
@@ -170,7 +170,7 @@ async def begin_authentication(
     Returns WebAuthn credential request options for the user.
     """
     # Get user by email
-    user = await storage.get_user_by_email(request.email)
+    user = await storage.get_user_by_email(email_request.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

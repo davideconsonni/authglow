@@ -1,0 +1,11 @@
+{
+  "id": "cf8d8dca-940b-47bb-ba4e-5b96467a73b1",
+  "user_id": null,
+  "email": "test@test.com",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "python-requests/2.32.5",
+  "timestamp": "2025-10-03T06:47:44.210363",
+  "metadata": {},
+  "severity": "warning"
+}

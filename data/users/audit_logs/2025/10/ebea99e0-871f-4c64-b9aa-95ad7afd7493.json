@@ -1,0 +1,11 @@
+{
+  "id": "ebea99e0-871f-4c64-b9aa-95ad7afd7493",
+  "user_id": null,
+  "email": "rate@test.com",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "python-requests/2.32.5",
+  "timestamp": "2025-10-03T06:47:44.225918",
+  "metadata": {},
+  "severity": "warning"
+}

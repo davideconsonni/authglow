@@ -1,40 +1,40 @@
 # Core framework
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-python-multipart==0.0.9
-jinja2==3.1.4
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.20
+jinja2==3.1.6
 
 # Authentication & Security
-pyjwt[crypto]==2.9.0
-bcrypt==4.1.2
+pyjwt[crypto]==2.10.1
+bcrypt==5.0.0
 passlib==1.7.4
-python-jose[cryptography]==3.3.0
-cryptography==43.0.1
+python-jose[cryptography]==3.5.0
+cryptography==46.0.2
 
 # Password validation
 password-strength==0.0.3.post2
 
 # MFA / TOTP
 pyotp==2.9.0
-qrcode[pil]==7.4.2
+qrcode[pil]==8.2
 
 # WebAuthn / Passkeys
-webauthn==2.2.0
+webauthn==2.7.0
 
 # Rate Limiting
 slowapi==0.1.9
 
 # Storage - fsspec with cloud providers
-fsspec==2024.9.0
-s3fs==2024.9.0  # AWS S3
-gcsfs==2024.9.0post1  # Google Cloud Storage
-adlfs==2024.7.0  # Azure Blob Storage
+fsspec==2025.9.0
+s3fs==2025.9.0  # AWS S3
+gcsfs==2025.9.0  # Google Cloud Storage
+adlfs==2025.8.0  # Azure Blob Storage
 
 # Configuration
-pydantic==2.9.2
-pydantic-settings==2.5.2
-python-dotenv==1.0.1
+pydantic==2.11.9
+pydantic-settings==2.11.0
+python-dotenv==1.1.1
 
 # Utilities
-email-validator==2.2.0
+email-validator==2.3.0
 python-dateutil==2.9.0.post0
