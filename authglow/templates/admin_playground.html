@@ -292,6 +292,25 @@
                             </div>
                         </div>
 
+                        <!-- API Key Authentication -->
+                        <div class="flow-card">
+                            <h3>
+                                <span>🔐</span>
+                                API Key Authentication
+                                <span class="info-badge">M2M</span>
+                            </h3>
+                            <p>Exchange an API key for an access token. Create API keys from Settings → API Keys.</p>
+                            <div class="flow-form">
+                                <textarea id="apikey-key" placeholder="Paste your API Key here (sk_...)" rows="3"></textarea>
+                                <button onclick="apiKeyFlow()">Get Access Token</button>
+                            </div>
+                            <div class="hint" style="margin-top: 12px;">
+                                <strong>cURL Example:</strong>
+                                <pre style="background: var(--surface-elevated); padding: 10px; border-radius: 4px; margin-top: 8px; overflow-x: auto;">curl -X POST http://localhost:8000/api/token/api-key \
+  -H "Authorization: Bearer YOUR_API_KEY"</pre>
+                            </div>
+                        </div>
+
                         <!-- Refresh Token -->
                         <div class="flow-card">
                             <h3>
@@ -590,6 +609,47 @@
                 const data = await response.json();
                 showResponse(data, response.ok);
                 if (response.ok) showTokens(data);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function apiKeyFlow() {
+            const apiKey = document.getElementById('apikey-key').value.trim();
+
+            if (!apiKey) {
+                showResponse({ error: 'Please enter an API key' }, false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/token/api-key', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+
+                if (response.ok) {
+                    showTokens(data);
+
+                    // Add curl example to response
+                    const curlExample = `# Exchange API Key for Access Token
+curl -X POST ${window.location.origin}/api/token/api-key \\
+  -H "Authorization: Bearer ${apiKey.substring(0, 20)}..."
+
+# Use the access token for API calls
+curl ${window.location.origin}/api/profile/me \\
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"`;
+
+                    showResponse({
+                        ...data,
+                        curl_example: curlExample
+                    }, true);
+                }
             } catch (error) {
                 showResponse({ error: error.message }, false);
             }

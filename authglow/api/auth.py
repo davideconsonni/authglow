@@ -482,6 +482,70 @@ async def login_for_access_token(
     return jwt_service.create_token_response(user.id, user.email, user.scopes)
 
 
+@router.post("/api/token/api-key")
+@limiter.limit("20/minute")
+async def exchange_api_key_for_token(
+    request: Request,
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    storage: UserStorage = Depends(get_user_storage),
+    jwt_service: JWTService = Depends(get_jwt_service),
+    audit_service: AuditService = Depends(get_audit_service)
+):
+    """Exchange an API key for an access token.
+
+    Send the API key in the Authorization header as: Authorization: Bearer <api_key>
+    """
+    # Get API key from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header. Use: Authorization: Bearer <api_key>"
+        )
+
+    api_key = auth_header.replace("Bearer ", "")
+
+    # Validate and get API key data
+    key_data = await api_key_service.validate_key(api_key)
+    if not key_data:
+        await audit_service.log_event(
+            event_type="api_key_invalid",
+            ip_address=request.client.host if request.client else None,
+            severity="warning"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired API key"
+        )
+
+    # Get user
+    user = await storage.get_user(key_data.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+
+    # Record usage
+    await api_key_service.record_usage(
+        key_id=key_data.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+
+    # Log successful authentication
+    await audit_service.log_event(
+        event_type="api_key_auth_success",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host if request.client else None,
+        metadata={"api_key_name": key_data.name}
+    )
+
+    # Return access token with API key scopes
+    return jwt_service.create_token_response(user.id, user.email, key_data.scopes)
+
+
 # User management endpoints
 @router.post("/api/users/invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def invite_user(
