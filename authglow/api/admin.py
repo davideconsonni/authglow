@@ -348,6 +348,8 @@ async def update_user(
     # Update fields
     if update_data.is_active is not None:
         user.is_active = update_data.is_active
+    if update_data.email_verified is not None:
+        user.email_verified = update_data.email_verified
     if update_data.scopes is not None:
         user.scopes = update_data.scopes
     if update_data.first_name is not None:

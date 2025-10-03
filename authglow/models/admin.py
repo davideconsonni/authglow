@@ -38,6 +38,7 @@ class AdminUserDetail(BaseModel):
     email: EmailStr
     is_active: bool
     is_invited: bool
+    email_verified: bool
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime]
@@ -67,6 +68,7 @@ class UserUpdate(BaseModel):
     """Update user details (admin)."""
 
     is_active: Optional[bool] = None
+    email_verified: Optional[bool] = None
     scopes: Optional[List[str]] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None

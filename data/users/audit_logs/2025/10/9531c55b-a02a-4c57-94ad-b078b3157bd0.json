@@ -1,0 +1,26 @@
+{
+  "id": "9531c55b-a02a-4c57-94ad-b078b3157bd0",
+  "user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+  "email": "io@io.io",
+  "event_type": "user_updated",
+  "ip_address": null,
+  "user_agent": null,
+  "timestamp": "2025-10-03T18:53:08.866499",
+  "metadata": {
+    "target_user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+    "target_user_email": "io@io.io",
+    "changes": {
+      "is_active": true,
+      "email_verified": false,
+      "scopes": [
+        "read",
+        "write",
+        "admin",
+        "test"
+      ],
+      "first_name": "Davide",
+      "last_name": "Consonni"
+    }
+  },
+  "severity": "info"
+}
