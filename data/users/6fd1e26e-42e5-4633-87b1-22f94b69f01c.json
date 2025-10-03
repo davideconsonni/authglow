@@ -1,0 +1,22 @@
+{
+  "id": "6fd1e26e-42e5-4633-87b1-22f94b69f01c",
+  "email": "dconsonni@gmail.com",
+  "hashed_password": "$2b$12$s/HXANfyzRD/Ov9JmpUNv.JdKOQVnzPf6KvFt/Ei/Fr1VXhmek17m",
+  "is_active": true,
+  "is_invited": true,
+  "created_at": "2025-10-03T21:17:31.455497",
+  "updated_at": "2025-10-03T21:19:01.695407",
+  "last_login": null,
+  "first_name": "Davide",
+  "last_name": "Consonni",
+  "scopes": [
+    "user"
+  ],
+  "mfa_enabled": false,
+  "mfa_secret": null,
+  "mfa_verified": false,
+  "failed_login_attempts": 0,
+  "locked_until": null,
+  "email_verified": true,
+  "email_verified_at": "2025-10-03T21:19:01.695398"
+}

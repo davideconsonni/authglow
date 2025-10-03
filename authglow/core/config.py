@@ -97,6 +97,11 @@ class Settings(BaseSettings):
 
     # Base URL for links in emails
     base_url: str = "http://localhost:8000"
+    company_name: str = "AuthGlow"
+
+    # UI Customization
+    logo_url: Optional[str] = None
+    favicon_url: Optional[str] = None
 
     @field_validator("secret_key", "jwt_secret_key")
     @classmethod
