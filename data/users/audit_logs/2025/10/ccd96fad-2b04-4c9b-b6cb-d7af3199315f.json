@@ -1,0 +1,11 @@
+{
+  "id": "ccd96fad-2b04-4c9b-b6cb-d7af3199315f",
+  "user_id": null,
+  "email": "dconsonni@gmai.com",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  "timestamp": "2025-10-03T17:08:37.587371",
+  "metadata": {},
+  "severity": "warning"
+}

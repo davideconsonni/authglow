@@ -25,6 +25,10 @@ class PasswordValidator:
         """
         errors = []
 
+        # Check bcrypt maximum length (72 bytes)
+        if len(password.encode('utf-8')) > 72:
+            errors.append("Password cannot exceed 72 bytes")
+
         # Check minimum length
         if len(password) < self.settings.password_min_length:
             errors.append(

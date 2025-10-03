@@ -231,28 +231,25 @@ label {
     max-width: 200px;
     height: auto;
     transition: opacity 0.3s ease;
+    background: transparent !important;
 }
 
-/* Light mode shows dark logo (dark on light bg), dark mode shows light logo (light on dark bg) */
+/* Light mode shows dark logo (dark text on light bg) */
 .logo-light {
     display: none;
 }
 
 .logo-dark {
     display: block;
-    mix-blend-mode: multiply;
-    background: transparent;
 }
 
+/* Dark mode shows light logo (light text on dark bg) */
 [data-theme="dark"] .logo-light {
-    display: none;
+    display: block;
 }
 
 [data-theme="dark"] .logo-dark {
-    display: block;
-    filter: invert(1);
-    mix-blend-mode: lighten;
-    background: transparent;
+    display: none;
 }
 
 /* Animations */
