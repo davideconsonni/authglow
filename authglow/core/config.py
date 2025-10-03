@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     oauth2_client_id: str = "default-client-id"
     oauth2_client_secret: str = "default-client-secret"
 
+    # Passkey/WebAuthn Settings
+    passkey_rp_id: str = "localhost"
+    passkey_rp_name: str = "AuthGlow"
+    passkey_origin: str = "http://localhost:8000"
+
     @field_validator("secret_key", "jwt_secret_key")
     @classmethod
     def validate_keys(cls, v: str) -> str:

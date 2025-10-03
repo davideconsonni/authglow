@@ -83,6 +83,14 @@
             <button type="submit" class="btn btn-primary">Sign In</button>
         </form>
 
+        <div style="text-align: center; margin: 20px 0; color: var(--text-secondary);">
+            or
+        </div>
+
+        <button type="button" class="btn btn-outline" onclick="signInWithPasskey()" style="width: 100%;">
+            🔐 Sign in with Passkey
+        </button>
+
         <div class="footer">
             {% if support_email %}
             Need help? <a href="mailto:{{ support_email }}">Contact support</a><br>
@@ -97,5 +105,98 @@
         </div>
     </div>
     <script src="/static/js/theme.js"></script>
+    <script>
+        async function signInWithPasskey() {
+            try {
+                // Get email first
+                const email = document.getElementById('email').value;
+                if (!email) {
+                    alert('Please enter your email address first');
+                    document.getElementById('email').focus();
+                    return;
+                }
+
+                // Get authentication options from server
+                const optionsResponse = await fetch('/api/passkey/auth/begin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                if (!optionsResponse.ok) {
+                    const error = await optionsResponse.json();
+                    throw new Error(error.detail || 'Failed to start authentication');
+                }
+
+                const options = await optionsResponse.json();
+
+                // Convert base64url strings to ArrayBuffers for WebAuthn API
+                options.challenge = base64urlToBuffer(options.challenge);
+                if (options.allowCredentials) {
+                    options.allowCredentials = options.allowCredentials.map(cred => ({
+                        ...cred,
+                        id: base64urlToBuffer(cred.id)
+                    }));
+                }
+
+                // Call WebAuthn API
+                const credential = await navigator.credentials.get({ publicKey: options });
+
+                // Send credential to server for verification
+                const verifyResponse = await fetch('/api/passkey/auth/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        credential_id: bufferToBase64url(credential.rawId),
+                        client_data_json: bufferToBase64url(credential.response.clientDataJSON),
+                        authenticator_data: bufferToBase64url(credential.response.authenticatorData),
+                        signature: bufferToBase64url(credential.response.signature),
+                        user_handle: credential.response.userHandle ? bufferToBase64url(credential.response.userHandle) : null
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const error = await verifyResponse.json();
+                    throw new Error(error.detail || 'Authentication failed');
+                }
+
+                const result = await verifyResponse.json();
+
+                // Store token and redirect
+                localStorage.setItem('access_token', result.access_token);
+
+                // Redirect based on OAuth2 params or default callback
+                const redirectUri = '{{ redirect_uri }}';
+                if (redirectUri) {
+                    window.location.href = redirectUri;
+                } else {
+                    window.location.href = '/callback';
+                }
+            } catch (error) {
+                console.error('Passkey authentication error:', error);
+                alert('Passkey authentication failed: ' + error.message);
+            }
+        }
+
+        // Base64url encoding/decoding helpers
+        function base64urlToBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function bufferToBase64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+    </script>
 </body>
 </html>

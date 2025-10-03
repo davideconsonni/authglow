@@ -1,0 +1,352 @@
+"""Passkey/WebAuthn service for AuthGlow."""
+
+import json
+import secrets
+from datetime import datetime, timedelta
+from typing import Optional
+
+import fsspec
+from webauthn import (
+    generate_registration_options,
+    verify_registration_response,
+    generate_authentication_options,
+    verify_authentication_response,
+    options_to_json,
+)
+from webauthn.helpers.structs import (
+    PublicKeyCredentialDescriptor,
+    AuthenticatorSelectionCriteria,
+    UserVerificationRequirement,
+    ResidentKeyRequirement,
+    AttestationConveyancePreference,
+    AuthenticatorTransport,
+)
+from webauthn.helpers.cose import COSEAlgorithmIdentifier
+
+from authglow.models.passkey import (
+    Passkey,
+    PasskeyChallenge,
+    PasskeyRegistrationOptions,
+    PasskeyAuthenticationOptions,
+)
+from authglow.models.user import User
+
+
+class PasskeyService:
+    """Service for managing WebAuthn passkeys."""
+
+    def __init__(self, storage_path: str, rp_id: str, rp_name: str, origin: str):
+        """
+        Initialize passkey service.
+
+        Args:
+            storage_path: fsspec path for storing passkeys
+            rp_id: Relying Party ID (domain, e.g., "localhost" or "example.com")
+            rp_name: Relying Party name (e.g., "AuthGlow")
+            origin: Full origin URL (e.g., "http://localhost:8000")
+        """
+        self.storage_path = storage_path.rstrip("/")
+        self.rp_id = rp_id
+        self.rp_name = rp_name
+        self.origin = origin
+        self.fs = fsspec.core.url_to_fs(storage_path)[0]
+
+        # Ensure storage directories exist
+        self.fs.mkdirs(f"{self.storage_path}/passkeys", exist_ok=True)
+        self.fs.mkdirs(f"{self.storage_path}/challenges", exist_ok=True)
+
+    def _get_passkey_path(self, user_id: str, credential_id: str) -> str:
+        """Get storage path for a passkey."""
+        return f"{self.storage_path}/passkeys/{user_id}_{credential_id}.json"
+
+    def _get_challenge_path(self, challenge_id: str) -> str:
+        """Get storage path for a challenge."""
+        return f"{self.storage_path}/challenges/{challenge_id}.json"
+
+    async def get_user_passkeys(self, user_id: str) -> list[Passkey]:
+        """Get all passkeys for a user."""
+        try:
+            files = self.fs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
+            passkeys = []
+
+            for file_path in files:
+                with self.fs.open(file_path, "r") as f:
+                    data = json.load(f)
+                    passkeys.append(Passkey(**data))
+
+            return sorted(passkeys, key=lambda p: p.created_at, reverse=True)
+        except Exception:
+            return []
+
+    async def save_passkey(self, passkey: Passkey) -> Passkey:
+        """Save a passkey."""
+        path = self._get_passkey_path(passkey.user_id, passkey.credential_id)
+
+        with self.fs.open(path, "w") as f:
+            json.dump(passkey.model_dump(mode="json"), f, default=str)
+
+        return passkey
+
+    async def get_passkey(self, user_id: str, credential_id: str) -> Optional[Passkey]:
+        """Get a specific passkey."""
+        path = self._get_passkey_path(user_id, credential_id)
+
+        try:
+            with self.fs.open(path, "r") as f:
+                data = json.load(f)
+                return Passkey(**data)
+        except Exception:
+            return None
+
+    async def delete_passkey(self, user_id: str, credential_id: str) -> bool:
+        """Delete a passkey."""
+        path = self._get_passkey_path(user_id, credential_id)
+
+        try:
+            self.fs.rm(path)
+            return True
+        except Exception:
+            return False
+
+    async def update_passkey_usage(self, user_id: str, credential_id: str, sign_count: int):
+        """Update passkey last used time and sign count."""
+        passkey = await self.get_passkey(user_id, credential_id)
+        if passkey:
+            passkey.last_used_at = datetime.utcnow()
+            passkey.sign_count = sign_count
+            await self.save_passkey(passkey)
+
+    async def save_challenge(self, challenge: PasskeyChallenge) -> PasskeyChallenge:
+        """Save a WebAuthn challenge."""
+        path = self._get_challenge_path(challenge.challenge)
+
+        with self.fs.open(path, "w") as f:
+            json.dump(challenge.model_dump(mode="json"), f, default=str)
+
+        return challenge
+
+    async def get_challenge(self, challenge_str: str) -> Optional[PasskeyChallenge]:
+        """Get and validate a challenge."""
+        path = self._get_challenge_path(challenge_str)
+
+        try:
+            with self.fs.open(path, "r") as f:
+                data = json.load(f)
+                challenge = PasskeyChallenge(**data)
+
+                # Check if expired
+                if challenge.expires_at < datetime.utcnow():
+                    self.fs.rm(path)  # Clean up expired challenge
+                    return None
+
+                return challenge
+        except Exception:
+            return None
+
+    async def delete_challenge(self, challenge_str: str):
+        """Delete a challenge after use."""
+        path = self._get_challenge_path(challenge_str)
+        try:
+            self.fs.rm(path)
+        except Exception:
+            pass
+
+    def generate_registration_options_dict(self, user: User) -> tuple[dict, str]:
+        """
+        Generate WebAuthn registration options.
+
+        Returns:
+            Tuple of (options_dict, challenge_string)
+        """
+        # Get existing passkeys to exclude
+        user_passkeys = []  # We'll fetch this in the endpoint
+
+        options = generate_registration_options(
+            rp_id=self.rp_id,
+            rp_name=self.rp_name,
+            user_id=user.id.encode('utf-8'),
+            user_name=user.email,
+            user_display_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email,
+            exclude_credentials=[
+                PublicKeyCredentialDescriptor(id=bytes.fromhex(pk.credential_id))
+                for pk in user_passkeys
+            ],
+            authenticator_selection=AuthenticatorSelectionCriteria(
+                resident_key=ResidentKeyRequirement.REQUIRED,
+                user_verification=UserVerificationRequirement.PREFERRED,
+            ),
+            attestation=AttestationConveyancePreference.NONE,
+            supported_pub_key_algs=[
+                COSEAlgorithmIdentifier.ECDSA_SHA_256,
+                COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
+            ],
+        )
+
+        options_dict = json.loads(options_to_json(options))
+        challenge_str = options_dict["challenge"]
+
+        return options_dict, challenge_str
+
+    def generate_authentication_options_dict(self, user_passkeys: list[Passkey]) -> tuple[dict, str]:
+        """
+        Generate WebAuthn authentication options.
+
+        Returns:
+            Tuple of (options_dict, challenge_string)
+        """
+        options = generate_authentication_options(
+            rp_id=self.rp_id,
+            allow_credentials=[
+                PublicKeyCredentialDescriptor(
+                    id=bytes.fromhex(pk.credential_id),
+                    transports=[AuthenticatorTransport(t) for t in pk.transports if t in ["usb", "nfc", "ble", "internal"]],
+                )
+                for pk in user_passkeys
+            ],
+            user_verification=UserVerificationRequirement.PREFERRED,
+        )
+
+        options_dict = json.loads(options_to_json(options))
+        challenge_str = options_dict["challenge"]
+
+        return options_dict, challenge_str
+
+    async def verify_registration(
+        self,
+        credential_id: str,
+        client_data_json: str,
+        attestation_object: str,
+        challenge_str: str,
+        transports: list[str],
+        name: str,
+    ) -> Passkey:
+        """
+        Verify registration response and create passkey.
+
+        Args:
+            credential_id: Base64url credential ID from client
+            client_data_json: Base64url client data JSON
+            attestation_object: Base64url attestation object
+            challenge_str: Expected challenge string
+            transports: List of transports
+            name: User-friendly name for the passkey
+
+        Returns:
+            Created Passkey object
+
+        Raises:
+            Exception if verification fails
+        """
+        from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
+
+        # Get and validate challenge
+        challenge = await self.get_challenge(challenge_str)
+        if not challenge or challenge.type != "registration":
+            raise ValueError("Invalid or expired challenge")
+
+        # Verify the registration response
+        verification = verify_registration_response(
+            credential=json.dumps({
+                "id": credential_id,
+                "rawId": credential_id,
+                "response": {
+                    "clientDataJSON": client_data_json,
+                    "attestationObject": attestation_object,
+                },
+                "type": "public-key",
+            }),
+            expected_challenge=base64url_to_bytes(challenge_str),
+            expected_origin=self.origin,
+            expected_rp_id=self.rp_id,
+        )
+
+        # Create passkey from verification
+        passkey = Passkey(
+            credential_id=bytes_to_base64url(verification.credential_id),
+            public_key=bytes_to_base64url(verification.credential_public_key),
+            sign_count=verification.sign_count,
+            transports=transports,
+            aaguid=str(verification.aaguid),
+            user_id=challenge.user_id,
+            name=name,
+            backup_eligible=verification.credential_backed_up,
+            backup_state=verification.credential_backed_up,
+        )
+
+        # Save passkey and delete challenge
+        await self.save_passkey(passkey)
+        await self.delete_challenge(challenge_str)
+
+        return passkey
+
+    async def verify_authentication(
+        self,
+        credential_id: str,
+        client_data_json: str,
+        authenticator_data: str,
+        signature: str,
+        challenge_str: str,
+    ) -> tuple[str, int]:
+        """
+        Verify authentication response.
+
+        Args:
+            credential_id: Base64url credential ID
+            client_data_json: Base64url client data JSON
+            authenticator_data: Base64url authenticator data
+            signature: Base64url signature
+            challenge_str: Expected challenge string
+
+        Returns:
+            Tuple of (user_id, new_sign_count)
+
+        Raises:
+            Exception if verification fails
+        """
+        from webauthn.helpers import base64url_to_bytes
+
+        # Get and validate challenge
+        challenge = await self.get_challenge(challenge_str)
+        if not challenge or challenge.type != "authentication":
+            raise ValueError("Invalid or expired challenge")
+
+        # Find the passkey by credential_id
+        # We need to search across users since we only have credential_id
+        credential_id_hex = base64url_to_bytes(credential_id).hex()
+
+        # For now, we'll use the user_id from the challenge
+        # In a real implementation, you might need to search all users
+        passkey = await self.get_passkey(challenge.user_id, credential_id_hex)
+        if not passkey:
+            raise ValueError("Passkey not found")
+
+        # Verify the authentication response
+        verification = verify_authentication_response(
+            credential=json.dumps({
+                "id": credential_id,
+                "rawId": credential_id,
+                "response": {
+                    "clientDataJSON": client_data_json,
+                    "authenticatorData": authenticator_data,
+                    "signature": signature,
+                },
+                "type": "public-key",
+            }),
+            expected_challenge=base64url_to_bytes(challenge_str),
+            expected_origin=self.origin,
+            expected_rp_id=self.rp_id,
+            credential_public_key=base64url_to_bytes(passkey.public_key),
+            credential_current_sign_count=passkey.sign_count,
+        )
+
+        # Update passkey usage
+        await self.update_passkey_usage(
+            passkey.user_id,
+            credential_id_hex,
+            verification.new_sign_count,
+        )
+
+        # Delete challenge
+        await self.delete_challenge(challenge_str)
+
+        return passkey.user_id, verification.new_sign_count

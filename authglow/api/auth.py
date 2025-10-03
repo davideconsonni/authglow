@@ -428,6 +428,30 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return UserResponse(**current_user.model_dump())
 
 
+@router.get("/login", response_class=HTMLResponse)
+async def login_redirect(request: Request):
+    """Redirect to OAuth2 authorize endpoint."""
+    settings = get_settings()
+    return RedirectResponse(
+        url=f"/oauth2/authorize?response_type=code&client_id={settings.oauth2_client_id}&redirect_uri=http://localhost:8000/callback&scope=read",
+        status_code=302
+    )
+
+
+@router.get("/passkeys", response_class=HTMLResponse)
+async def passkey_management_page(request: Request):
+    """Passkey management page."""
+    settings = get_settings()
+    ui_context = settings.get_ui_context()
+    return templates.TemplateResponse(
+        "passkey_manage.html",
+        {
+            "request": request,
+            **ui_context,
+        }
+    )
+
+
 @router.get("/api/users", response_model=list[UserResponse])
 async def list_users(
     limit: int = 100,

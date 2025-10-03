@@ -21,6 +21,7 @@ from authglow.models.admin import (
 from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
 from authglow.services.mfa import MFAService
+from authglow.services.passkey import PasskeyService
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 
@@ -41,6 +42,17 @@ def get_audit_service():
 def get_mfa_service():
     """Get MFA service instance."""
     return MFAService()
+
+
+def get_passkey_service():
+    """Get passkey service instance."""
+    settings = get_settings()
+    return PasskeyService(
+        storage_path=settings.storage_path,
+        rp_id=settings.passkey_rp_id,
+        rp_name=settings.passkey_rp_name,
+        origin=settings.passkey_origin,
+    )
 
 
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -340,6 +352,17 @@ async def delete_user(
     )
 
     return {"message": "User deleted successfully"}
+
+
+@router.get("/api/admin/users/{user_id}/passkeys")
+async def get_user_passkey_count(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    passkey_service: PasskeyService = Depends(get_passkey_service)
+):
+    """Get passkey count for a user."""
+    passkeys = await passkey_service.get_user_passkeys(user_id)
+    return {"count": len(passkeys)}
 
 
 @router.post("/api/admin/users/{user_id}/reset-mfa")

@@ -361,6 +361,7 @@
                         <th>Name</th>
                         <th>Status</th>
                         <th>MFA</th>
+                        <th>Passkeys</th>
                         <th>Scopes</th>
                         <th>Last Login</th>
                         <th>Actions</th>
@@ -486,6 +487,7 @@
                     <td>${user.first_name || ''} ${user.last_name || ''}</td>
                     <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>${user.mfa_enabled ? '<span class="badge badge-mfa">✓ Enabled</span>' : '-'}</td>
+                    <td id="passkeys-${user.id}">Loading...</td>
                     <td>${user.scopes.join(', ')}</td>
                     <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
                     <td class="actions">
@@ -496,6 +498,9 @@
                     </td>
                 </tr>
             `).join('');
+
+            // Load passkey counts for each user
+            filtered.forEach(user => loadPasskeyCount(user.id));
         }
 
         function editUser(userId) {
@@ -595,6 +600,30 @@
                 loadUsers();
             }
         });
+
+        // Load passkey count for a user
+        async function loadPasskeyCount(userId) {
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(`/api/admin/users/${userId}/passkeys`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const cell = document.getElementById(`passkeys-${userId}`);
+                if (!cell) return;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const count = data.count || 0;
+                    cell.innerHTML = count > 0 ? `<span class="badge badge-mfa">🔐 ${count}</span>` : '-';
+                } else {
+                    cell.innerHTML = '-';
+                }
+            } catch (error) {
+                const cell = document.getElementById(`passkeys-${userId}`);
+                if (cell) cell.innerHTML = '-';
+            }
+        }
 
         // Invite User Modal functions
         function showInviteModal() {

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
