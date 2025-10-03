@@ -2,7 +2,7 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -276,6 +276,12 @@ async def change_password(
 
 
 # UI endpoints
+
+@router.get("/password-reset", include_in_schema=False)
+async def redirect_to_forgot():
+    """Redirect /password-reset to /password/forgot for user convenience."""
+    return RedirectResponse(url="/password/forgot", status_code=status.HTTP_301_MOVED_PERMANENTLY)
+
 
 @router.get("/password/forgot", response_class=HTMLResponse)
 async def forgot_password_page(request: Request):

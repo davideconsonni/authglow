@@ -76,10 +76,12 @@ class Settings(BaseSettings):
     passkey_rp_name: str = "AuthGlow"
     passkey_origin: str = "http://localhost:8000"
 
-    # Email Settings
-    email_provider: str = "file"  # file, console, smtp, sendgrid, mailgun
-    email_from_address: str = "noreply@authglow.local"
+    # Email settings
+    email_backend: str = "console"  # console, file_storage
+    email_provider: Optional[str] = None # For future use with real email services
+    email_from_address: str = "noreply@authglow.example.com"
     email_from_name: str = "AuthGlow"
+    email_storage_path: str = "data/users/emails"
 
     # SMTP Settings (if email_provider = "smtp")
     smtp_host: Optional[str] = None

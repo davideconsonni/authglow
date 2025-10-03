@@ -1,0 +1,13 @@
+{
+  "id": "9b28bd41-bbaf-4342-8f6e-0a508f990ff6",
+  "user_id": "12a1032c-cde2-47c6-b280-51ff06ae441f",
+  "email": "dconsonni@gmail.com",
+  "event_type": "password_reset_completed",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-03T22:01:06.189420",
+  "metadata": {
+    "token_id": "63974df5-43b4-4661-86bb-065c82b128a1"
+  },
+  "severity": "info"
+}
