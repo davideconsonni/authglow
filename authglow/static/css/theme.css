@@ -240,14 +240,19 @@ label {
 
 .logo-dark {
     display: block;
+    mix-blend-mode: multiply;
+    background: transparent;
 }
 
 [data-theme="dark"] .logo-light {
-    display: block;
+    display: none;
 }
 
 [data-theme="dark"] .logo-dark {
-    display: none;
+    display: block;
+    filter: invert(1);
+    mix-blend-mode: lighten;
+    background: transparent;
 }
 
 /* Animations */
