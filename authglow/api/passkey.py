@@ -27,13 +27,21 @@ settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
 
 
-def get_passkey_service() -> PasskeyService:
-    """Get passkey service instance."""
+def get_passkey_service(request: Request) -> PasskeyService:
+    """Get passkey service instance with dynamic origin detection."""
+    # Detect origin from request
+    host = request.headers.get("host", "localhost:8000")
+    scheme = "https" if request.url.scheme == "https" else "http"
+    origin = f"{scheme}://{host}"
+
+    # Extract RP ID from host (remove port)
+    rp_id = host.split(":")[0]
+
     return PasskeyService(
         storage_path=settings.storage_path,
-        rp_id=settings.passkey_rp_id,
+        rp_id=rp_id,
         rp_name=settings.passkey_rp_name,
-        origin=settings.passkey_origin,
+        origin=origin,
     )
 
 
@@ -80,6 +88,7 @@ async def get_current_user(
 
 @router.post("/register/begin")
 async def begin_registration(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
 ):
@@ -105,6 +114,7 @@ async def begin_registration(
 
 @router.post("/register/complete")
 async def complete_registration(
+    request: Request,
     verification: PasskeyRegistrationVerification,
     current_user: Annotated[User, Depends(get_current_user)],
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
@@ -265,6 +275,7 @@ async def complete_authentication(
 
 @router.get("/list")
 async def list_passkeys(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
 ):
@@ -288,6 +299,7 @@ async def list_passkeys(
 
 @router.delete("/{credential_id}")
 async def delete_passkey(
+    request: Request,
     credential_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],

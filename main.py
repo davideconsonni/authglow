@@ -20,6 +20,7 @@ from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 from authglow.api.rbac import router as rbac_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.api.oidc import router as oidc_router
+from authglow.api.setup import router as setup_router
 from authglow.core.config import get_settings
 
 # Create FastAPI app
@@ -52,6 +53,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="authglow/static"), name="static")
 
 # Include routers
+app.include_router(setup_router, tags=["Setup"])  # Setup first for priority
 app.include_router(auth_router, tags=["Authentication"])
 app.include_router(mfa_router, tags=["MFA"])
 app.include_router(admin_router, tags=["Admin"])

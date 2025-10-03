@@ -1,11 +1,11 @@
 {
-  "id": "d7786a61-c36e-43e7-9c1e-a17f59f70750",
-  "user_id": "8ffa0dbe-a378-40fd-8a22-1f1932e0fbda",
-  "email": "root@example.com",
+  "id": "bd40be1b-1c8a-4e57-bf06-a6551f6e7a19",
+  "user_id": "d9b28459-d69e-4d18-b64d-9d5656f85d3f",
+  "email": "io@io.io",
   "event_type": "login_success",
   "ip_address": "127.0.0.1",
   "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-  "timestamp": "2025-10-03T18:00:59.793210",
+  "timestamp": "2025-10-03T18:28:19.525314",
   "metadata": {},
   "severity": "info"
 }
