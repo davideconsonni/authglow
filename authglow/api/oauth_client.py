@@ -18,7 +18,7 @@ from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.audit import AuditService
 from authglow.api.auth import get_current_user
 
-router = APIRouter(prefix="/api/oauth-clients", tags=["OAuth2 Clients"])
+router = APIRouter(prefix="/api/oauth-clients")
 limiter = Limiter(key_func=get_remote_address)
 
 

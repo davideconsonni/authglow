@@ -12,7 +12,11 @@
       "Bash(uv pip show:*)",
       "Bash(curl -X POST http://127.0.0.1:8000/api/passkey/auth/begin -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"test@example.com\"\"}\")",
       "Bash(curl -X POST http://127.0.0.1:8000/api/passkey/auth/begin -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"admin@authglow.local\"\"}\")",
-      "Bash(curl -s http://127.0.0.1:8000/openapi.json)"
+      "Bash(curl -s http://127.0.0.1:8000/openapi.json)",
+      "Bash(curl -s http://127.0.0.1:8000/admin/api-keys)",
+      "Bash(dir:*)",
+      "Bash(curl -s -X POST \"http://127.0.0.1:8000/api/password/reset/request\" -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"admin@authglow.local\"\"}\")",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

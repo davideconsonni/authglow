@@ -1,0 +1,13 @@
+{
+  "id": "e5841ff9-82ce-423a-b614-abf915eb80da",
+  "user_id": null,
+  "email": "admin@example.com",
+  "event_type": "password_reset_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-03T09:32:20.819577",
+  "metadata": {
+    "reason": "user_not_found"
+  },
+  "severity": "warning"
+}

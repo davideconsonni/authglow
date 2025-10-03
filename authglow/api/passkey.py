@@ -21,7 +21,7 @@ from authglow.services.passkey import PasskeyService
 from authglow.services.jwt import JWTService
 from authglow.core.config import get_settings
 
-router = APIRouter(prefix="/api/passkey", tags=["passkey"])
+router = APIRouter(prefix="/api/passkey")
 security = HTTPBearer()
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)

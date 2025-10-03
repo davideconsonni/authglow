@@ -158,6 +158,21 @@ async def admin_api_keys_page(request: Request):
     )
 
 
+@router.get("/admin/password-resets", response_class=HTMLResponse)
+async def admin_password_resets_page(request: Request):
+    """Password resets management page (auth handled by JS)."""
+    settings = get_settings()
+    ui_context = settings.get_ui_context()
+
+    return templates.TemplateResponse(
+        "admin_password_resets.html",
+        {
+            "request": request,
+            **ui_context
+        }
+    )
+
+
 # API Endpoints
 
 @router.get("/api/admin/stats", response_model=DashboardStats)
