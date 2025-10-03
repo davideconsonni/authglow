@@ -20,6 +20,8 @@ from authglow.services.mfa import MFAService
 from authglow.services.session import SessionService
 from authglow.services.audit import AuditService
 from authglow.services.api_key import APIKeyService
+from authglow.services.email_verification import EmailVerificationService
+from authglow.services.email.factory import get_email_service
 from authglow.core.config import get_settings
 
 router = APIRouter()
@@ -413,9 +415,12 @@ async def invite_user(
     invite: InviteUser,
     current_user: User = Depends(get_current_user),
     storage: UserStorage = Depends(get_user_storage),
-    password_validator: PasswordValidator = Depends(get_password_validator)
+    password_validator: PasswordValidator = Depends(get_password_validator),
+    audit_service: AuditService = Depends(get_audit_service)
 ):
     """Invite a new user (admin only - requires 'admin' scope)."""
+    settings = get_settings()
+
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -435,13 +440,53 @@ async def invite_user(
         first_name=invite.first_name,
         last_name=invite.last_name,
         scopes=invite.scopes,
-        is_invited=True
+        is_invited=True,
+        email_verified=False  # Require email verification
     )
 
     user = await storage.create_user(user)
 
-    # In production, send email with temp_password
-    # For now, just return it (this is insecure - implement email service)
+    # Create verification token
+    verification_service = EmailVerificationService()
+    token = await verification_service.create_verification_token(user)
+
+    # Send welcome email with verification link and temporary password
+    email_service = get_email_service()
+    try:
+        context = {
+            "user_name": user.first_name or user.email.split("@")[0],
+            "email": user.email,
+            "created_at": user.created_at.strftime("%Y-%m-%d %H:%M"),
+            "login_url": f"{settings.base_url}/login",
+            "docs_url": f"{settings.base_url}/docs",
+            "company_name": settings.company_name,
+            "temp_password": temp_password,
+            "verification_url": f"{settings.base_url}/verify-email?token={token.token}"
+        }
+
+        await email_service.send_template(
+            to=[user.email],
+            subject=f"Welcome to {settings.company_name} - Verify your email",
+            template_name="welcome",
+            context=context
+        )
+
+        # Also send verification email
+        await verification_service.send_verification_email(user, token.token)
+
+    except Exception as e:
+        print(f"Failed to send welcome email: {e}")
+
+    # Log user creation
+    await audit_service.log_event(
+        event_type="user_invited",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "invited_user_id": user.id,
+            "invited_email": user.email
+        }
+    )
 
     return UserResponse(**user.model_dump())
 

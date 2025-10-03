@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {{ company_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to {{ company_name }}!</h1>
+    </div>
+
+    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hello{% if user_name %} {{ user_name }}{% endif %},
+        </p>
+
+        <p style="font-size: 14px; color: #666; margin-bottom: 25px;">
+            Your account has been successfully created! We're excited to have you on board.
+        </p>
+
+        <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e; margin-bottom: 25px;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
+                <strong>Your Account Details:</strong>
+            </p>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">
+                📧 Email: <strong>{{ email }}</strong>
+            </p>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">
+                📅 Created: <strong>{{ created_at }}</strong>
+            </p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ login_url }}"
+               style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                Go to Dashboard
+            </a>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+            <strong>Getting Started:</strong>
+        </p>
+
+        <ul style="font-size: 13px; color: #666; padding-left: 20px;">
+            <li>Complete your profile with additional information</li>
+            <li>Enable Two-Factor Authentication (MFA) for extra security</li>
+            <li>Set up Passkeys for passwordless login</li>
+            <li>Explore the API documentation at <a href="{{ docs_url }}" style="color: #667eea;">{{ docs_url }}</a></li>
+        </ul>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+            <strong>Need Help?</strong>
+        </p>
+
+        <p style="font-size: 13px; color: #666;">
+            If you have any questions or need assistance, don't hesitate to reach out to your administrator.
+        </p>
+
+        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center;">
+            This email was sent from <strong>{{ company_name }}</strong><br>
+            If you have questions, please contact your administrator.
+        </p>
+    </div>
+</body>
+</html>

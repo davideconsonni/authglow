@@ -34,6 +34,10 @@ class User(BaseModel):
     failed_login_attempts: int = 0
     locked_until: Optional[datetime] = None
 
+    # Email verification
+    email_verified: bool = False
+    email_verified_at: Optional[datetime] = None
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -73,6 +77,7 @@ class UserResponse(BaseModel):
     scopes: List[str]
     mfa_enabled: bool = False
     mfa_verified: bool = False
+    email_verified: bool = False
 
 
 class InviteUser(BaseModel):

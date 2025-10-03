@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resend Verification Email - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <style>
+        body {
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .form-container {
+            background: var(--surface);
+            padding: 3rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px var(--shadow);
+            max-width: 450px;
+            width: 100%;
+        }
+
+        .logo {
+            display: block;
+            margin: 0 auto 2rem;
+            max-width: 200px;
+        }
+
+        h1 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            text-align: center;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--background);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .message.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            border: 1px solid #22c55e;
+        }
+
+        .message.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="logo-container">
+            <img src="/static/images/authglow_full_dark.png" alt="{{ company_name }}" class="logo logo-light">
+            <img src="/static/images/authglow_full_light.png" alt="{{ company_name }}" class="logo logo-dark">
+        </div>
+
+        <h1>Resend Verification</h1>
+        <p class="subtitle">
+            Enter your email address and we'll send you a new verification link.
+        </p>
+
+        <div id="message" class="message"></div>
+
+        <form id="resendForm">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    required
+                    placeholder="your@email.com"
+                    autocomplete="email"
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                Send Verification Email
+            </button>
+        </form>
+
+        <a href="/login" class="back-link">← Back to Login</a>
+    </div>
+
+    <script>
+        const form = document.getElementById('resendForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const messageDiv = document.getElementById('message');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+
+            // Disable form
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            messageDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/email/resend-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                if (response.ok) {
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = 'Verification email sent! Please check your inbox.';
+                    messageDiv.style.display = 'block';
+                    form.reset();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to send email');
+                }
+            } catch (error) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = error.message;
+                messageDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Verification Email';
+            }
+        });
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

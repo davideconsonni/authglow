@@ -1,0 +1,24 @@
+Welcome to {{ company_name }}!
+
+Hello{% if user_name %} {{ user_name }}{% endif %},
+
+Your account has been successfully created! We're excited to have you on board.
+
+Your Account Details:
+- Email: {{ email }}
+- Created: {{ created_at }}
+
+Go to Dashboard: {{ login_url }}
+
+Getting Started:
+- Complete your profile with additional information
+- Enable Two-Factor Authentication (MFA) for extra security
+- Set up Passkeys for passwordless login
+- Explore the API documentation at {{ docs_url }}
+
+Need Help?
+If you have any questions or need assistance, don't hesitate to reach out to your administrator.
+
+---
+This email was sent from {{ company_name }}.
+If you have questions, please contact your administrator.
