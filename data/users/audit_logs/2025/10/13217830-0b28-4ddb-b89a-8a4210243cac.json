@@ -1,0 +1,14 @@
+{
+  "id": "13217830-0b28-4ddb-b89a-8a4210243cac",
+  "user_id": "default-client-id",
+  "email": "default-client-id@client.local",
+  "event_type": "access_token_revoke_requested",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-03T17:15:12.425584",
+  "metadata": {
+    "token_type": "access_token",
+    "note": "Access tokens cannot be revoked (stateless JWTs)"
+  },
+  "severity": "info"
+}

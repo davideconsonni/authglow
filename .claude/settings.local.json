@@ -18,7 +18,11 @@
       "Bash(curl -s -X POST \"http://127.0.0.1:8000/api/password/reset/request\" -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"admin@authglow.local\"\"}\")",
       "Bash(curl:*)",
       "Bash(taskkill:*)",
-      "Read(//c/**)"
+      "Read(//c/**)",
+      "WebSearch",
+      "WebFetch(domain:cheatsheetseries.owasp.org)",
+      "WebFetch(domain:passlib.readthedocs.io)",
+      "WebFetch(domain:security.stackexchange.com)"
     ],
     "deny": [],
     "ask": []
