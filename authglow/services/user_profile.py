@@ -44,7 +44,7 @@ class UserProfileService:
     # Profile Management
 
     async def get_user_profile(self, user_id: str) -> Optional[UserProfileResponse]:
-        """Get complete user profile."""
+        """Get a complete user profile."""
         user = await self.user_storage.get_user(user_id)
         if not user:
             return None
