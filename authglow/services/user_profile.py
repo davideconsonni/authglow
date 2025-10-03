@@ -7,14 +7,14 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
-from authglow.core.security import verify_password, hash_password
+from authglow.services.password import verify_password, hash_password
 from authglow.models.user_profile import (
     UserProfileUpdate,
     UserPreferences,
     UserPreferencesUpdate,
     UserProfileResponse
 )
-from authglow.services.user_storage import UserStorage
+from authglow.services.storage import UserStorage
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.security_notifications import SecurityNotificationService
 

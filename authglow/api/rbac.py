@@ -16,7 +16,7 @@ from authglow.models.rbac import (
     UserPermissions
 )
 from authglow.services.rbac import RBACService
-from authglow.services.user_storage import UserStorage
+from authglow.services.storage import UserStorage
 from authglow.core.permissions import require_permission, require_admin, get_current_user
 
 router = APIRouter(prefix="/api/rbac", tags=["RBAC"])
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/rbac", tags=["RBAC"])
 @router.post("/permissions", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
 async def create_permission(
     permission: PermissionCreate,
-    _: str = Depends(require_admin())
+    _: str = require_admin()
 ):
     """Create a new permission (admin only)."""
     rbac_service = RBACService()
@@ -49,7 +49,7 @@ async def create_permission(
 
 @router.get("/permissions", response_model=List[PermissionResponse])
 async def list_permissions(
-    _: str = Depends(require_permission("roles.read"))
+    _: str = require_permission("roles.read")
 ):
     """List all permissions."""
     rbac_service = RBACService()
@@ -61,7 +61,7 @@ async def list_permissions(
 @router.get("/permissions/{permission_id}", response_model=PermissionResponse)
 async def get_permission(
     permission_id: str,
-    _: str = Depends(require_permission("roles.read"))
+    _: str = require_permission("roles.read")
 ):
     """Get permission by ID."""
     rbac_service = RBACService()
@@ -79,7 +79,7 @@ async def get_permission(
 @router.delete("/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_permission(
     permission_id: str,
-    _: str = Depends(require_admin())
+    _: str = require_admin()
 ):
     """Delete a permission (admin only)."""
     rbac_service = RBACService()
@@ -97,7 +97,7 @@ async def delete_permission(
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: RoleCreate,
-    _: str = Depends(require_permission("roles.write"))
+    _: str = require_permission("roles.write")
 ):
     """Create a new role."""
     rbac_service = RBACService()
@@ -128,7 +128,7 @@ async def create_role(
 
 @router.get("/roles", response_model=List[RoleResponse])
 async def list_roles(
-    _: str = Depends(require_permission("roles.read"))
+    _: str = require_permission("roles.read")
 ):
     """List all roles."""
     rbac_service = RBACService()
@@ -140,7 +140,7 @@ async def list_roles(
 @router.get("/roles/{role_id}", response_model=RoleWithPermissions)
 async def get_role(
     role_id: str,
-    _: str = Depends(require_permission("roles.read"))
+    _: str = require_permission("roles.read")
 ):
     """Get role by ID with full permission details."""
     rbac_service = RBACService()
@@ -169,7 +169,7 @@ async def get_role(
 async def update_role(
     role_id: str,
     role_update: RoleUpdate,
-    _: str = Depends(require_permission("roles.write"))
+    _: str = require_permission("roles.write")
 ):
     """Update a role."""
     rbac_service = RBACService()
@@ -220,7 +220,7 @@ async def update_role(
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_id: str,
-    _: str = Depends(require_permission("roles.write"))
+    _: str = require_permission("roles.write")
 ):
     """Delete a role (cannot delete system roles)."""
     rbac_service = RBACService()
@@ -238,7 +238,7 @@ async def delete_role(
 @router.post("/user-roles", response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role_to_user(
     assignment: AssignRoleRequest,
-    current_user_id: str = Depends(require_permission("roles.write"))
+    current_user_id: str = require_permission("roles.write")
 ):
     """Assign a role to a user."""
     rbac_service = RBACService()
@@ -294,7 +294,7 @@ async def assign_role_to_user(
 async def remove_role_from_user(
     user_id: str,
     role_id: str,
-    _: str = Depends(require_permission("roles.write"))
+    _: str = require_permission("roles.write")
 ):
     """Remove a role from a user."""
     rbac_service = RBACService()

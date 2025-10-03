@@ -5,10 +5,11 @@ from typing import List, Optional, Union
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from authglow.core.security import decode_token
+from authglow.services.jwt import JWTService
 from authglow.services.rbac import RBACService
 
 security = HTTPBearer()
+jwt_service = JWTService()
 
 
 class PermissionChecker:
@@ -49,14 +50,14 @@ class PermissionChecker:
         token = credentials.credentials
 
         # Decode token to get user_id
-        payload = decode_token(token)
-        if not payload:
+        token_data = jwt_service.decode_token(token)
+        if not token_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token"
             )
 
-        user_id = payload.get("sub")
+        user_id = token_data.sub
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -64,7 +65,7 @@ class PermissionChecker:
             )
 
         # Check if admin scope (admins bypass permission checks)
-        scopes = payload.get("scope", "").split()
+        scopes = token_data.scopes or []
         if "admin" in scopes:
             return user_id
 
@@ -178,15 +179,15 @@ async def get_current_user(
         HTTPException: If unauthorized
     """
     token = credentials.credentials
-    payload = decode_token(token)
+    token_data = jwt_service.decode_token(token)
 
-    if not payload:
+    if not token_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"
         )
 
-    user_id = payload.get("sub")
+    user_id = token_data.sub
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
