@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from authglow.core.config import get_settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 
 class PasswordValidator:
@@ -25,9 +25,6 @@ class PasswordValidator:
         """
         errors = []
 
-        # Check bcrypt maximum length (72 bytes)
-        if len(password.encode('utf-8')) > 72:
-            errors.append("Password cannot exceed 72 bytes")
 
         # Check minimum length
         if len(password) < self.settings.password_min_length:
