@@ -10,7 +10,7 @@
         .toolbar {
             display: flex;
             gap: 1rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
             flex-wrap: wrap;
             align-items: flex-end;
         }
@@ -36,6 +36,51 @@
             color: var(--text-primary);
             font-size: 0.875rem;
             min-width: 160px;
+        }
+        
+        .date-filter-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--surface-light);
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        .date-filter-toolbar .filter-btn {
+            padding: 0.5rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+        
+        .date-filter-toolbar .filter-btn:hover {
+            background: var(--surface-elevated);
+            border-color: var(--primary);
+        }
+
+        .date-filter-toolbar .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .date-custom-range {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+        
+        .date-custom-range label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
         }
 
         .content-table {
