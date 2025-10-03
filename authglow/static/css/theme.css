@@ -6,23 +6,33 @@
     box-sizing: border-box;
 }
 
-/* Light Mode (Default) */
 :root {
-    --primary: #3498DB;
-    --secondary: #FF3366;
-    --background: #F8F8F8;
-    --surface: #FFFFFF;
-    --surface-elevated: #FFFFFF;
-    --text-primary: #2C3E50;
-    --text-secondary: #7F8C8D;
-    --text-tertiary: #95A5A6;
-    --border: #E5E7EB;
-    --success: #27AE60;
-    --warning: #F39C12;
-    --error: #E74C3C;
-    --shadow: rgba(0, 0, 0, 0.1);
-    --glow-primary: rgba(52, 152, 219, 0.3);
-    --glow-secondary: rgba(255, 51, 102, 0.3);
+    /* Light Theme - Beige Palette */
+    --background: #fdfbf6;       /* Very light, warm beige background */
+    --surface: #ffffff;          /* Keep cards white for a clean, crisp look */
+    --surface-light: #f7f5f2;    /* A slightly darker beige for hovers */
+    --surface-elevated: #ffffff;
+    --border: #e6e2d9;           /* Soft, beige-toned border */
+    --glow: rgba(0, 123, 255, 0.1);
+
+    --text-primary: #343a40;      /* Dark charcoal for high contrast, softer than pure black */
+    --text-secondary: #6c757d;    /* Muted gray for secondary text */
+    --text-tertiary: #adb5bd;     /* Lighter gray for hints */
+    --text-code: #495057;
+
+    --primary: #007bff;
+    --primary-hover: #0069d9;
+    --primary-glow: rgba(0, 123, 255, 0.25);
+
+    --secondary: #6c757d;
+    --secondary-hover: #5a6268;
+
+    --success: #28a745;
+    --error: #dc3545;
+    --warning: #ffc107;
+
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
 }
 
 /* Dark Mode */

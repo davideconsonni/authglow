@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Playground - {{ company_name }}</title>
-    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/theme.css?v=1.2">
     <link rel="stylesheet" href="/static/css/admin.css">
     <style>
         .playground-container {
@@ -649,32 +649,12 @@
     </div>
 
     <!-- Theme Toggle Button -->
-    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">
+    <button class="theme-toggle" id="theme-toggle">
         <span id="theme-icon">🌙</span>
     </button>
 
     <script>
         let currentTokens = {};
-
-        // Theme Management
-        function toggleTheme() {
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-
-            // Update icon
-            document.getElementById('theme-icon').textContent = newTheme === 'dark' ? '☀️' : '🌙';
-        }
-
-        // Initialize theme on load
-        function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            document.getElementById('theme-icon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-        }
 
         function switchTab(tab) {
             // Update tabs
@@ -713,6 +693,8 @@
                         <button class="copy-btn" onclick="copyToken('access')">Copia</button>
                     </div>
                 `;
+            } else {
+                accessDiv.innerHTML = '';
             }
 
             if (tokens.refresh_token) {
@@ -722,6 +704,8 @@
                         <button class="copy-btn" onclick="copyToken('refresh')">Copia</button>
                     </div>
                 `;
+            } else {
+                refreshDiv.innerHTML = '';
             }
 
             if (tokens.id_token) {
@@ -731,6 +715,8 @@
                         <button class="copy-btn" onclick="copyToken('id')">Copia</button>
                     </div>
                 `;
+            } else {
+                idDiv.innerHTML = '';
             }
         }
 
@@ -834,20 +820,6 @@
 
                 if (response.ok) {
                     showTokens(data);
-
-                    // Add curl example to response
-                    const curlExample = `# Scambia la chiave API con un token di accesso
-curl -X POST ${window.location.origin}/api/token/api-key \\
-  -H "Authorization: Bearer ${apiKey.substring(0, 20)}..."
-
-# Usa il token di accesso per le chiamate API
-curl ${window.location.origin}/api/profile/me \\
-  -H "Authorization: Bearer TUO_TOKEN_DI_ACCESSO"`;
-
-                    showResponse({
-                        ...data,
-                        curl_example: curlExample
-                    }, true);
                 }
             } catch (error) {
                 showResponse({ error: error.message }, false);
@@ -908,10 +880,11 @@ curl ${window.location.origin}/api/profile/me \\
 
             try {
                 const parts = token.split('.');
-                const payload = JSON.parse(atob(parts[1]));
+                if (parts.length !== 3) throw new Error('Invalid JWT format');
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
                 showResponse(payload, true);
             } catch (error) {
-                showResponse({ error: 'Formato JWT non valido' }, false);
+                showResponse({ error: 'Invalid JWT format or decoding error' }, false);
             }
         }
 
@@ -976,7 +949,7 @@ curl ${window.location.origin}/api/profile/me \\
                     headers: { 'Authorization': `Bearer ${token}` }
                 };
 
-                if (body && (method === 'POST' || method === 'PATCH')) {
+                if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
                     options.headers['Content-Type'] = 'application/json';
                     options.body = body;
                 }
@@ -1006,7 +979,7 @@ curl ${window.location.origin}/api/profile/me \\
                     headers: { 'Authorization': `Bearer ${apiKey}` }
                 };
 
-                if (body && (method === 'POST' || method === 'PATCH')) {
+                if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
                     options.headers['Content-Type'] = 'application/json';
                     options.body = body;
                 }
@@ -1037,12 +1010,12 @@ curl ${window.location.origin}/api/profile/me \\
 
         // Check auth on load
         window.addEventListener('DOMContentLoaded', () => {
-            initTheme();
             const token = localStorage.getItem('admin_token');
             if (!token) {
                 window.location.href = '/admin/login';
             }
         });
     </script>
+    <script src="/static/js/theme.js"></script>
 </body>
 </html>
