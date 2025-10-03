@@ -96,6 +96,10 @@ class UserProfileResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
 
+    # Roles and scopes
+    roles: list[str] = []
+    scopes: list[str] = []
+
     # Preferences
     preferences: Optional[UserPreferences] = None
 

@@ -58,16 +58,18 @@ class UserProfileService:
             email_verified=user.email_verified,
             first_name=user.first_name,
             last_name=user.last_name,
-            avatar_url=user.avatar_url,
-            phone=user.phone,
-            timezone=user.timezone,
-            language=user.language,
+            avatar_url=getattr(user, 'avatar_url', None),
+            phone=getattr(user, 'phone', None),
+            timezone=getattr(user, 'timezone', None) or "UTC",
+            language=getattr(user, 'language', None) or "en",
             is_active=user.is_active,
             mfa_enabled=user.mfa_enabled,
             created_at=user.created_at,
             last_login=user.last_login,
+            roles=user.scopes or [],  # Using scopes as roles for now
+            scopes=user.scopes or [],
             preferences=preferences,
-            total_logins=user.total_logins,
+            total_logins=getattr(user, 'total_logins', 0),
             failed_login_attempts=user.failed_login_attempts
         )
 

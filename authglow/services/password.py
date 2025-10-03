@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from authglow.core.config import get_settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=True)
 
 
 class PasswordValidator:
@@ -74,10 +74,16 @@ class PasswordValidator:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt with pre-hashing for long passwords."""
+    import hashlib
+    # Use SHA256 pre-hash for passwords to handle any length
+    password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    return pwd_context.hash(password_hash)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a password against its hash with pre-hashing."""
+    import hashlib
+    # Use SHA256 pre-hash to match hashing behavior
+    password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    return pwd_context.verify(password_hash, hashed_password)

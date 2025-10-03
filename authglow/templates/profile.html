@@ -584,6 +584,7 @@
         <div class="navbar-menu">
             <a href="/dashboard" class="navbar-link">Dashboard</a>
             <a href="/profile" class="navbar-link active">Profile</a>
+            <a href="/passkeys" class="navbar-link">Passkeys</a>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
     </nav>
@@ -690,6 +691,15 @@
                         <div class="preference-description" id="mfa-status">Loading...</div>
                     </div>
                     <button class="btn btn-secondary" id="mfa-toggle-btn" onclick="toggleMFA()">Enable MFA</button>
+                </div>
+
+                <h3>Passkeys (WebAuthn)</h3>
+                <div class="preference-item">
+                    <div>
+                        <div class="preference-label">Passwordless Authentication</div>
+                        <div class="preference-description" id="passkey-status">Loading...</div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="window.location.href='/passkeys'">Manage Passkeys</button>
                 </div>
 
                 <h3>Active Sessions</h3>
@@ -1020,6 +1030,7 @@
                 loadPreferences();
                 loadPermissions();
                 loadSessions();
+                loadPasskeyStatus();
 
             } catch (error) {
                 showAlert('Failed to load profile: ' + error.message, 'error');
@@ -1296,6 +1307,32 @@
 
             } catch (error) {
                 showAlert('Failed to resend verification: ' + error.message, 'error');
+            }
+        }
+
+        // Load Passkey Status
+        async function loadPasskeyStatus() {
+            try {
+                const response = await fetch('/api/passkey/list', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load passkey status');
+
+                const passkeys = await response.json();
+                const passkeyStatus = document.getElementById('passkey-status');
+
+                if (passkeys && passkeys.length > 0) {
+                    passkeyStatus.textContent = `${passkeys.length} passkey(s) registered`;
+                } else {
+                    passkeyStatus.textContent = 'No passkeys registered';
+                }
+
+            } catch (error) {
+                document.getElementById('passkey-status').textContent = 'Unable to load status';
+                console.error('Failed to load passkey status:', error);
             }
         }
 

@@ -1,0 +1,9 @@
+{
+  "session_token": "2b8934ea-7d94-4410-9144-7a84a251a5ad",
+  "user_id": "8ffa0dbe-a378-40fd-8a22-1f1932e0fbda",
+  "client_id": "default-client-id",
+  "redirect_uri": "http://localhost:8000/callback",
+  "scope": "read",
+  "state": null,
+  "expires_at": "2025-10-03T18:18:21.843008"
+}

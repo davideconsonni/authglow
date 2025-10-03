@@ -24,6 +24,19 @@ templates = Jinja2Templates(directory="authglow/templates")
 
 # Profile Page
 
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    """User dashboard page."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            **settings.get_ui_context()
+        }
+    )
+
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_page(request: Request):
     """User profile management page."""

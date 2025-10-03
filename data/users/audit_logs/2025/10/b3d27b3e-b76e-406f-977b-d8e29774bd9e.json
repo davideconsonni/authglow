@@ -1,0 +1,11 @@
+{
+  "id": "b3d27b3e-b76e-406f-977b-d8e29774bd9e",
+  "user_id": "8ffa0dbe-a378-40fd-8a22-1f1932e0fbda",
+  "email": "root@example.com",
+  "event_type": "login_success",
+  "ip_address": "127.0.0.1",
+  "user_agent": "python-requests/2.32.5",
+  "timestamp": "2025-10-03T18:09:48.932358",
+  "metadata": {},
+  "severity": "info"
+}

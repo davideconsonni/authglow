@@ -22,7 +22,10 @@
       "WebSearch",
       "WebFetch(domain:cheatsheetseries.owasp.org)",
       "WebFetch(domain:passlib.readthedocs.io)",
-      "WebFetch(domain:security.stackexchange.com)"
+      "WebFetch(domain:security.stackexchange.com)",
+      "Bash(ADMIN_EMAIL=admin@authglow.local ADMIN_PASSWORD=Admin123! python create_admin.py)",
+      "Bash(ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=Admin123! python create_admin.py)",
+      "Bash(ADMIN_EMAIL=root@example.com ADMIN_PASSWORD=Admin123! python create_admin.py)"
     ],
     "deny": [],
     "ask": []
