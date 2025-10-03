@@ -315,6 +315,20 @@
                         <option value="false">Inactive</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Email Verified</label>
+                    <select id="editEmailVerified">
+                        <option value="true">Verified</option>
+                        <option value="false">Not Verified</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Scopes (comma separated)</label>
+                    <input type="text" id="editScopes" placeholder="read, write, admin">
+                    <small style="color: var(--text-tertiary); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                        Common scopes: read, write, admin
+                    </small>
+                </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-outline btn-secondary" onclick="closeModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -466,6 +480,8 @@
             document.getElementById('editFirstName').value = user.first_name || '';
             document.getElementById('editLastName').value = user.last_name || '';
             document.getElementById('editStatus').value = user.is_active;
+            document.getElementById('editEmailVerified').value = user.email_verified;
+            document.getElementById('editScopes').value = user.scopes ? user.scopes.join(', ') : '';
 
             document.getElementById('editModal').classList.add('show');
         }
@@ -564,6 +580,12 @@
             const token = localStorage.getItem('admin_token');
             const userId = document.getElementById('editUserId').value;
 
+            const scopesInput = document.getElementById('editScopes').value;
+            const scopes = scopesInput
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
             const response = await fetch(`/api/admin/users/${userId}`, {
                 method: 'PUT',
                 headers: {
@@ -573,13 +595,18 @@
                 body: JSON.stringify({
                     first_name: document.getElementById('editFirstName').value,
                     last_name: document.getElementById('editLastName').value,
-                    is_active: document.getElementById('editStatus').value === 'true'
+                    is_active: document.getElementById('editStatus').value === 'true',
+                    email_verified: document.getElementById('editEmailVerified').value === 'true',
+                    scopes: scopes.length > 0 ? scopes : ['read']
                 })
             });
 
             if (response.ok) {
                 closeModal();
                 loadUsers();
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail || 'Failed to update user'}`);
             }
         });
 

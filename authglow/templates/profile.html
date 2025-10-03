@@ -4,39 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Profile - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
 
         .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             padding: 15px 30px;
             border-radius: 12px;
             margin-bottom: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px var(--shadow);
         }
 
         .navbar-brand {
             font-size: 24px;
             font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--primary);
         }
 
         .navbar-menu {
@@ -47,7 +36,7 @@
 
         .navbar-link {
             text-decoration: none;
-            color: #4a5568;
+            color: var(--text-secondary);
             font-weight: 500;
             padding: 8px 16px;
             border-radius: 8px;
@@ -55,17 +44,17 @@
         }
 
         .navbar-link:hover {
-            background: rgba(102, 126, 234, 0.1);
-            color: #667eea;
+            background: var(--surface-elevated);
+            color: var(--primary);
         }
 
         .navbar-link.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             color: white;
         }
 
         .logout-btn {
-            background: #ef4444;
+            background: var(--error);
             color: white;
             border: none;
             padding: 8px 20px;
@@ -76,9 +65,8 @@
         }
 
         .logout-btn:hover {
-            background: #dc2626;
+            opacity: 0.9;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
 
         .container {
@@ -87,62 +75,49 @@
         }
 
         .profile-header {
-            background: white;
+            background: var(--surface);
             padding: 30px;
             border-radius: 12px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px var(--shadow);
             display: flex;
             align-items: center;
             gap: 30px;
         }
 
-        .avatar-container {
-            position: relative;
-        }
-
-        .avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 4px solid #667eea;
-        }
-
         .avatar-placeholder {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 48px;
+            font-size: 40px;
             color: white;
             font-weight: 700;
         }
 
         .profile-info h1 {
-            font-size: 32px;
-            color: #1a202c;
-            margin-bottom: 10px;
-        }
-
-        .profile-info .email {
-            color: #718096;
-            font-size: 16px;
+            font-size: 28px;
+            color: var(--text-primary);
             margin-bottom: 5px;
         }
 
-        .profile-info .roles {
+        .profile-info .email {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .roles {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            margin-top: 10px;
         }
 
         .role-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             color: white;
             padding: 4px 12px;
             border-radius: 20px;
@@ -150,41 +125,20 @@
             font-weight: 600;
         }
 
-        .content-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 30px;
-        }
-
-        .card {
-            background: white;
+        .content-section {
+            background: var(--surface);
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px var(--shadow);
+            margin-bottom: 30px;
         }
 
-        .card h2 {
-            font-size: 24px;
-            color: #1a202c;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .card h3 {
-            font-size: 18px;
-            color: #2d3748;
-            margin-top: 25px;
-            margin-bottom: 15px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .card h3:first-of-type {
-            margin-top: 0;
-            padding-top: 0;
-            border-top: none;
+        .content-section h2 {
+            font-size: 20px;
+            color: var(--text-primary);
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border);
         }
 
         .form-group {
@@ -194,172 +148,21 @@
         .form-group label {
             display: block;
             font-weight: 600;
-            color: #4a5568;
+            color: var(--text-secondary);
             margin-bottom: 8px;
             font-size: 14px;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .form-group input:disabled {
-            background: #f7fafc;
-            color: #a0aec0;
-            cursor: not-allowed;
         }
 
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-secondary {
-            background: #e2e8f0;
-            color: #4a5568;
-        }
-
-        .btn-secondary:hover {
-            background: #cbd5e0;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+            gap: 20px;
         }
 
         .btn-group {
             display: flex;
             gap: 10px;
-            margin-top: 20px;
-        }
-
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 26px;
-        }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #cbd5e0;
-            transition: 0.3s;
-            border-radius: 26px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 20px;
-            width: 20px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: 0.3s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(24px);
-        }
-
-        .preference-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .preference-item:last-child {
-            border-bottom: none;
-        }
-
-        .preference-label {
-            font-weight: 500;
-            color: #2d3748;
-        }
-
-        .preference-description {
-            font-size: 13px;
-            color: #718096;
-            margin-top: 4px;
-        }
-
-        .danger-zone {
-            border: 2px solid #ef4444;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-
-        .danger-zone h3 {
-            color: #ef4444;
-            margin: 0 0 15px 0;
-            padding: 0;
-            border: none;
-        }
-
-        .danger-zone p {
-            color: #718096;
-            margin-bottom: 15px;
-            font-size: 14px;
+            margin-top: 25px;
         }
 
         .modal {
@@ -369,8 +172,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
+            background: rgba(0, 0, 0, 0.6);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -381,50 +183,38 @@
         }
 
         .modal-content {
-            background: white;
+            background: var(--surface);
             padding: 30px;
             border-radius: 12px;
             max-width: 500px;
             width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
 
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         .modal-header h3 {
-            font-size: 24px;
-            color: #1a202c;
+            font-size: 22px;
+            color: var(--text-primary);
             margin: 0;
-            padding: 0;
-            border: none;
         }
 
         .close-modal {
             background: none;
             border: none;
             font-size: 28px;
-            color: #a0aec0;
+            color: var(--text-secondary);
             cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            transition: all 0.3s ease;
+            transition: color 0.3s;
         }
 
         .close-modal:hover {
-            background: #f7fafc;
-            color: #4a5568;
+            color: var(--text-primary);
         }
 
         .alert {
@@ -435,88 +225,27 @@
         }
 
         .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #6ee7b7;
+            background: rgba(39, 174, 96, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
         }
 
         .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fca5a5;
+            background: rgba(231, 76, 60, 0.2);
+            color: var(--error);
+            border: 1px solid var(--error);
         }
 
         .alert-warning {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fcd34d;
-        }
-
-        .alert-info {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #93c5fd;
-        }
-
-        .session-item {
-            padding: 15px;
-            background: #f7fafc;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-
-        .session-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .session-device {
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        .session-current {
-            background: #10b981;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .session-details {
-            font-size: 13px;
-            color: #718096;
-        }
-
-        .permissions-list {
-            max-height: 300px;
-            overflow-y: auto;
-            background: #f7fafc;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .permission-item {
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #2d3748;
-        }
-
-        .permission-item:last-child {
-            margin-bottom: 0;
+            background: rgba(243, 156, 18, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
         }
 
         .verified-badge {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            background: #10b981;
+            background: var(--success);
             color: white;
             padding: 4px 10px;
             border-radius: 20px;
@@ -527,8 +256,7 @@
         .unverified-badge {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            background: #ef4444;
+            background: var(--error);
             color: white;
             padding: 4px 10px;
             border-radius: 20px;
@@ -536,19 +264,56 @@
             font-weight: 600;
         }
 
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #e2e8f0;
-            border-top: 2px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border);
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .passkey-item {
+            padding: 15px;
+            background: var(--surface-elevated);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .passkey-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .passkey-created {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            opacity: 0.9;
         }
 
         @media (max-width: 768px) {
@@ -557,18 +322,9 @@
                 gap: 15px;
             }
 
-            .navbar-menu {
-                width: 100%;
-                justify-content: space-around;
-            }
-
             .profile-header {
                 flex-direction: column;
                 text-align: center;
-            }
-
-            .content-grid {
-                grid-template-columns: 1fr;
             }
 
             .form-row {
@@ -584,7 +340,6 @@
         <div class="navbar-menu">
             <a href="/dashboard" class="navbar-link">Dashboard</a>
             <a href="/profile" class="navbar-link active">Profile</a>
-            <a href="/passkeys" class="navbar-link">Passkeys</a>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
     </nav>
@@ -595,10 +350,7 @@
 
         <!-- Profile Header -->
         <div class="profile-header">
-            <div class="avatar-container">
-                <img id="avatar-img" class="avatar" style="display: none;" alt="Profile Avatar">
-                <div id="avatar-placeholder" class="avatar-placeholder"></div>
-            </div>
+            <div id="avatar-placeholder" class="avatar-placeholder"></div>
             <div class="profile-info">
                 <h1 id="profile-name">Loading...</h1>
                 <div class="email" id="profile-email"></div>
@@ -606,203 +358,60 @@
             </div>
         </div>
 
-        <!-- Content Grid -->
-        <div class="content-grid">
-            <!-- Profile Information -->
-            <div class="card">
-                <h2>
-                    Profile Information
-                    <button id="edit-profile-btn" class="btn btn-secondary" onclick="toggleEditMode()">Edit</button>
-                </h2>
-                <form id="profile-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>First Name</label>
-                            <input type="text" id="first_name" name="first_name" disabled>
-                        </div>
-                        <div class="form-group">
-                            <label>Last Name</label>
-                            <input type="text" id="last_name" name="last_name" disabled>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Avatar URL</label>
-                        <input type="url" id="avatar_url" name="avatar_url" placeholder="https://example.com/avatar.jpg" disabled>
-                    </div>
-                    <div class="form-group">
-                        <label>Phone Number</label>
-                        <input type="tel" id="phone" name="phone" placeholder="+1234567890" disabled>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Timezone</label>
-                            <select id="timezone" name="timezone" disabled>
-                                <option value="UTC">UTC</option>
-                                <option value="America/New_York">Eastern Time</option>
-                                <option value="America/Chicago">Central Time</option>
-                                <option value="America/Denver">Mountain Time</option>
-                                <option value="America/Los_Angeles">Pacific Time</option>
-                                <option value="Europe/London">London</option>
-                                <option value="Europe/Paris">Paris</option>
-                                <option value="Asia/Tokyo">Tokyo</option>
-                                <option value="Asia/Shanghai">Shanghai</option>
-                                <option value="Australia/Sydney">Sydney</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Language</label>
-                            <select id="language" name="language" disabled>
-                                <option value="en">English</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                                <option value="de">German</option>
-                                <option value="zh">Chinese</option>
-                                <option value="ja">Japanese</option>
-                                <option value="ko">Korean</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="profile-actions" style="display: none;" class="btn-group">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                        <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
-                    </div>
-                </form>
-
-                <h3>Roles & Permissions</h3>
-                <div id="permissions-container" class="permissions-list">
-                    <p style="text-align: center; color: #718096;">Loading permissions...</p>
+        <!-- Profile Information -->
+        <div class="content-section">
+            <h2>Profile Information</h2>
+            <div class="info-row">
+                <span class="info-label">Email</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="current-email" class="info-value"></span>
+                    <span id="email-verification-badge"></span>
                 </div>
             </div>
+            <div class="info-row">
+                <span class="info-label">First Name</span>
+                <span id="first-name-display" class="info-value"></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Last Name</span>
+                <span id="last-name-display" class="info-value"></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Roles</span>
+                <span id="roles-display" class="info-value"></span>
+            </div>
+        </div>
 
-            <!-- Account Security -->
-            <div class="card">
-                <h2>Account Security</h2>
+        <!-- Account Security -->
+        <div class="content-section">
+            <h2>Account Security</h2>
 
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" value="••••••••••••" disabled>
-                    <button class="btn btn-secondary" style="margin-top: 10px;" onclick="openChangePasswordModal()">Change Password</button>
+            <div class="info-row">
+                <div>
+                    <div class="info-label">Password</div>
+                    <div style="color: var(--text-tertiary); font-size: 13px; margin-top: 4px;">••••••••••••</div>
                 </div>
-
-                <h3>Multi-Factor Authentication</h3>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">MFA Status</div>
-                        <div class="preference-description" id="mfa-status">Loading...</div>
-                    </div>
-                    <button class="btn btn-secondary" id="mfa-toggle-btn" onclick="toggleMFA()">Enable MFA</button>
-                </div>
-
-                <h3>Passkeys (WebAuthn)</h3>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Passwordless Authentication</div>
-                        <div class="preference-description" id="passkey-status">Loading...</div>
-                    </div>
-                    <button class="btn btn-secondary" onclick="window.location.href='/passkeys'">Manage Passkeys</button>
-                </div>
-
-                <h3>Active Sessions</h3>
-                <div id="sessions-container">
-                    <p style="text-align: center; color: #718096;">Loading sessions...</p>
-                </div>
+                <button class="btn btn-secondary" onclick="openChangePasswordModal()">Change Password</button>
             </div>
 
-            <!-- Email Management -->
-            <div class="card">
-                <h2>Email Management</h2>
-
-                <div class="form-group">
-                    <label>Current Email</label>
-                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
-                        <span id="current-email" style="font-weight: 600; color: #2d3748;"></span>
-                        <span id="email-verification-badge"></span>
-                    </div>
+            <div class="info-row">
+                <div>
+                    <div class="info-label">Passkeys</div>
+                    <div id="passkey-count" style="color: var(--text-tertiary); font-size: 13px; margin-top: 4px;">Loading...</div>
                 </div>
-
-                <button class="btn btn-secondary" style="margin-top: 15px;" onclick="openChangeEmailModal()">Change Email</button>
-
-                <div id="verification-notice" style="display: none; margin-top: 15px;" class="alert alert-warning">
-                    Your email is not verified. <a href="#" onclick="resendVerification()" style="color: #92400e; font-weight: 600;">Resend verification email</a>
-                </div>
+                <button class="btn btn-secondary" onclick="showPasskeySection()">Manage Passkeys</button>
             </div>
+        </div>
 
-            <!-- Preferences -->
-            <div class="card">
-                <h2>Preferences</h2>
+        <!-- Passkey Management Section (hidden by default) -->
+        <div id="passkey-section" class="content-section" style="display: none;">
+            <h2>Manage Passkeys</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Passkeys allow you to sign in without a password using biometrics, PIN, or security keys.</p>
 
-                <h3>Notifications</h3>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Email Notifications</div>
-                        <div class="preference-description">Receive updates via email</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="pref-email-notifications" onchange="updatePreference('email_notifications', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Security Alerts</div>
-                        <div class="preference-description">Get notified of security events</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="pref-security-alerts" onchange="updatePreference('security_alerts', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
+            <button class="btn btn-primary" onclick="registerPasskey()" style="margin-bottom: 20px;">Add New Passkey</button>
 
-                <h3>Display</h3>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Dark Mode</div>
-                        <div class="preference-description">Use dark theme</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="pref-dark-mode" onchange="updatePreference('dark_mode', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <h3>Privacy</h3>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Profile Visibility</div>
-                        <div class="preference-description">Make profile visible to other users</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="pref-profile-visible" onchange="updatePreference('profile_visible', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="preference-item">
-                    <div>
-                        <div class="preference-label">Activity Status</div>
-                        <div class="preference-description">Show when you're online</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="pref-show-activity" onchange="updatePreference('show_activity', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Danger Zone -->
-            <div class="card">
-                <h2>Danger Zone</h2>
-
-                <div class="danger-zone">
-                    <h3>Deactivate Account</h3>
-                    <p>Temporarily disable your account. You can reactivate it anytime by logging in.</p>
-                    <button class="btn btn-danger" onclick="deactivateAccount()">Deactivate Account</button>
-                </div>
-
-                <div class="danger-zone">
-                    <h3>Delete Account</h3>
-                    <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
-                    <button class="btn btn-danger" onclick="openDeleteAccountModal()">Delete Account</button>
-                </div>
+            <div id="passkey-list">
+                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading passkeys...</p>
             </div>
         </div>
     </div>
@@ -829,72 +438,18 @@
                 </div>
                 <div class="btn-group">
                     <button type="submit" class="btn btn-primary">Change Password</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('change-password-modal')">Cancel</button>
+                    <button type="button" class="btn btn-outline" onclick="closeModal('change-password-modal')">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Change Email Modal -->
-    <div id="change-email-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Change Email</h3>
-                <button class="close-modal" onclick="closeModal('change-email-modal')">&times;</button>
-            </div>
-            <div class="alert alert-info">
-                A verification email will be sent to your new email address. You'll need to verify it before the change takes effect.
-            </div>
-            <form id="change-email-form">
-                <div class="form-group">
-                    <label>New Email Address</label>
-                    <input type="email" id="new-email" required>
-                </div>
-                <div class="form-group">
-                    <label>Password (for verification)</label>
-                    <input type="password" id="email-password" required>
-                </div>
-                <div class="btn-group">
-                    <button type="submit" class="btn btn-primary">Change Email</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('change-email-modal')">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Delete Account Modal -->
-    <div id="delete-account-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Delete Account</h3>
-                <button class="close-modal" onclick="closeModal('delete-account-modal')">&times;</button>
-            </div>
-            <div class="alert alert-error">
-                <strong>Warning:</strong> This action is permanent and cannot be undone. All your data will be permanently deleted.
-            </div>
-            <form id="delete-account-form">
-                <div class="form-group">
-                    <label>Type "DELETE" to confirm</label>
-                    <input type="text" id="delete-confirmation" required pattern="DELETE" placeholder="DELETE">
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="delete-password" required>
-                </div>
-                <div class="btn-group">
-                    <button type="submit" class="btn btn-danger">Delete My Account</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('delete-account-modal')">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
+    <script src="/static/js/theme.js"></script>
     <script>
         let userData = null;
-        let isEditing = false;
 
         // Show alert message
-        function showAlert(message, type = 'info') {
+        function showAlert(message, type = 'error') {
             const alertContainer = document.getElementById('alert-container');
             const alert = document.createElement('div');
             alert.className = `alert alert-${type}`;
@@ -906,7 +461,7 @@
             }, 5000);
         }
 
-        // Open/Close Modal
+        // Modal functions
         function openModal(modalId) {
             document.getElementById(modalId).classList.add('active');
         }
@@ -917,39 +472,6 @@
 
         function openChangePasswordModal() {
             openModal('change-password-modal');
-        }
-
-        function openChangeEmailModal() {
-            openModal('change-email-modal');
-        }
-
-        function openDeleteAccountModal() {
-            openModal('delete-account-modal');
-        }
-
-        // Toggle Edit Mode
-        function toggleEditMode() {
-            isEditing = !isEditing;
-            const inputs = document.querySelectorAll('#profile-form input, #profile-form select');
-            const editBtn = document.getElementById('edit-profile-btn');
-            const actions = document.getElementById('profile-actions');
-
-            inputs.forEach(input => {
-                input.disabled = !isEditing;
-            });
-
-            if (isEditing) {
-                editBtn.style.display = 'none';
-                actions.style.display = 'flex';
-            } else {
-                editBtn.style.display = 'block';
-                actions.style.display = 'none';
-            }
-        }
-
-        function cancelEdit() {
-            toggleEditMode();
-            loadProfile(); // Reload original data
         }
 
         // Load Profile Data
@@ -972,14 +494,8 @@
                 document.getElementById('current-email').textContent = userData.email;
 
                 // Update avatar
-                if (userData.avatar_url) {
-                    document.getElementById('avatar-img').src = userData.avatar_url;
-                    document.getElementById('avatar-img').style.display = 'block';
-                    document.getElementById('avatar-placeholder').style.display = 'none';
-                } else {
-                    const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-                    document.getElementById('avatar-placeholder').textContent = initials;
-                }
+                const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                document.getElementById('avatar-placeholder').textContent = initials;
 
                 // Update roles
                 const rolesContainer = document.getElementById('profile-roles');
@@ -993,43 +509,20 @@
                     });
                 }
 
-                // Update form fields
-                document.getElementById('first_name').value = userData.first_name || '';
-                document.getElementById('last_name').value = userData.last_name || '';
-                document.getElementById('avatar_url').value = userData.avatar_url || '';
-                document.getElementById('phone').value = userData.phone || '';
-                document.getElementById('timezone').value = userData.timezone || 'UTC';
-                document.getElementById('language').value = userData.language || 'en';
+                // Update info displays
+                document.getElementById('first-name-display').textContent = userData.first_name || '-';
+                document.getElementById('last-name-display').textContent = userData.last_name || '-';
+                document.getElementById('roles-display').textContent = userData.roles?.join(', ') || '-';
 
                 // Update email verification status
                 const verificationBadge = document.getElementById('email-verification-badge');
                 if (userData.email_verified) {
                     verificationBadge.innerHTML = '<span class="verified-badge">Verified</span>';
-                    document.getElementById('verification-notice').style.display = 'none';
                 } else {
                     verificationBadge.innerHTML = '<span class="unverified-badge">Not Verified</span>';
-                    document.getElementById('verification-notice').style.display = 'block';
                 }
 
-                // Update MFA status
-                const mfaStatus = document.getElementById('mfa-status');
-                const mfaBtn = document.getElementById('mfa-toggle-btn');
-                if (userData.mfa_enabled) {
-                    mfaStatus.textContent = 'Enabled';
-                    mfaBtn.textContent = 'Disable MFA';
-                    mfaBtn.classList.remove('btn-secondary');
-                    mfaBtn.classList.add('btn-danger');
-                } else {
-                    mfaStatus.textContent = 'Disabled';
-                    mfaBtn.textContent = 'Enable MFA';
-                    mfaBtn.classList.remove('btn-danger');
-                    mfaBtn.classList.add('btn-secondary');
-                }
-
-                // Load preferences and permissions
-                loadPreferences();
-                loadPermissions();
-                loadSessions();
+                // Load passkey info
                 loadPasskeyStatus();
 
             } catch (error) {
@@ -1037,133 +530,157 @@
             }
         }
 
-        // Load User Preferences
-        async function loadPreferences() {
+        // Load Passkey Status
+        async function loadPasskeyStatus() {
             try {
-                const response = await fetch('/api/profile/me/preferences', {
+                const response = await fetch('/api/passkey/list', {
                     headers: {
                         'Authorization': 'Bearer ' + localStorage.getItem('access_token')
                     }
                 });
 
-                if (!response.ok) throw new Error('Failed to load preferences');
+                if (!response.ok) throw new Error('Failed to load passkeys');
 
-                const preferences = await response.json();
+                const passkeys = await response.json();
+                const passkeyCount = document.getElementById('passkey-count');
 
-                document.getElementById('pref-email-notifications').checked = preferences.email_notifications || false;
-                document.getElementById('pref-security-alerts').checked = preferences.security_alerts || false;
-                document.getElementById('pref-dark-mode').checked = preferences.dark_mode || false;
-                document.getElementById('pref-profile-visible').checked = preferences.profile_visible !== false;
-                document.getElementById('pref-show-activity').checked = preferences.show_activity !== false;
-
-            } catch (error) {
-                console.error('Failed to load preferences:', error);
-            }
-        }
-
-        // Update Single Preference
-        async function updatePreference(key, value) {
-            try {
-                const response = await fetch('/api/profile/me/preferences', {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    },
-                    body: JSON.stringify({ [key]: value })
-                });
-
-                if (!response.ok) throw new Error('Failed to update preference');
-
-                showAlert('Preference updated successfully', 'success');
-
-            } catch (error) {
-                showAlert('Failed to update preference: ' + error.message, 'error');
-            }
-        }
-
-        // Load User Permissions
-        async function loadPermissions() {
-            try {
-                const response = await fetch(`/api/rbac/users/${userData.id}/permissions`, {
-                    headers: {
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    }
-                });
-
-                if (!response.ok) throw new Error('Failed to load permissions');
-
-                const permissions = await response.json();
-                const container = document.getElementById('permissions-container');
-                container.innerHTML = '';
-
-                if (permissions && permissions.length > 0) {
-                    permissions.forEach(permission => {
-                        const item = document.createElement('div');
-                        item.className = 'permission-item';
-                        item.textContent = permission;
-                        container.appendChild(item);
-                    });
+                if (passkeys && passkeys.length > 0) {
+                    passkeyCount.textContent = `${passkeys.length} passkey(s) registered`;
                 } else {
-                    container.innerHTML = '<p style="text-align: center; color: #718096;">No permissions assigned</p>';
+                    passkeyCount.textContent = 'No passkeys registered';
                 }
 
             } catch (error) {
-                document.getElementById('permissions-container').innerHTML =
-                    '<p style="text-align: center; color: #718096;">Unable to load permissions</p>';
+                document.getElementById('passkey-count').textContent = 'Unable to load';
             }
         }
 
-        // Load Active Sessions (mock implementation)
-        async function loadSessions() {
-            const container = document.getElementById('sessions-container');
-            // Mock session data - replace with actual API call
-            container.innerHTML = `
-                <div class="session-item">
-                    <div class="session-header">
-                        <span class="session-device">Windows - Chrome</span>
-                        <span class="session-current">CURRENT</span>
-                    </div>
-                    <div class="session-details">
-                        Last active: Just now • IP: 192.168.1.1
-                    </div>
-                </div>
-            `;
+        // Show Passkey Section
+        function showPasskeySection() {
+            const section = document.getElementById('passkey-section');
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                section.scrollIntoView({ behavior: 'smooth' });
+                loadPasskeys();
+            } else {
+                section.style.display = 'none';
+            }
         }
 
-        // Profile Form Submit
-        document.getElementById('profile-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = {
-                first_name: document.getElementById('first_name').value,
-                last_name: document.getElementById('last_name').value,
-                avatar_url: document.getElementById('avatar_url').value,
-                phone: document.getElementById('phone').value,
-                timezone: document.getElementById('timezone').value,
-                language: document.getElementById('language').value
-            };
-
+        // Load Passkeys
+        async function loadPasskeys() {
             try {
-                const response = await fetch('/api/profile/me', {
-                    method: 'PATCH',
+                const response = await fetch('/api/passkey/list', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load passkeys');
+
+                const passkeys = await response.json();
+                const list = document.getElementById('passkey-list');
+
+                if (passkeys && passkeys.length > 0) {
+                    list.innerHTML = '';
+                    passkeys.forEach(pk => {
+                        const item = document.createElement('div');
+                        item.className = 'passkey-item';
+                        item.innerHTML = `
+                            <div>
+                                <div class="passkey-name">${pk.name || 'Unnamed Passkey'}</div>
+                                <div class="passkey-created">Created: ${new Date(pk.created_at).toLocaleDateString()}</div>
+                            </div>
+                            <button class="btn btn-danger" onclick="deletePasskey('${pk.credential_id}')">Delete</button>
+                        `;
+                        list.appendChild(item);
+                    });
+                } else {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No passkeys registered yet.</p>';
+                }
+
+            } catch (error) {
+                document.getElementById('passkey-list').innerHTML = '<p style="text-align: center; color: var(--error); padding: 20px;">Failed to load passkeys</p>';
+            }
+        }
+
+        // Register Passkey
+        async function registerPasskey() {
+            try {
+                // Begin registration
+                const beginResponse = await fetch('/api/passkey/register/begin', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!beginResponse.ok) throw new Error('Failed to begin registration');
+
+                const options = await beginResponse.json();
+
+                // Convert base64url to Uint8Array
+                options.challenge = Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+                options.user.id = Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+
+                // Create credential
+                const credential = await navigator.credentials.create({ publicKey: options });
+
+                // Prepare verification data
+                const verification = {
+                    credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    client_data_json: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    attestation_object: btoa(String.fromCharCode(...new Uint8Array(credential.response.attestationObject))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+                    transports: credential.response.getTransports ? credential.response.getTransports() : [],
+                    name: prompt('Enter a name for this passkey:') || 'My Passkey'
+                };
+
+                // Complete registration
+                const completeResponse = await fetch('/api/passkey/register/complete', {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + localStorage.getItem('access_token')
                     },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify(verification)
                 });
 
-                if (!response.ok) throw new Error('Failed to update profile');
+                if (!completeResponse.ok) {
+                    const error = await completeResponse.json();
+                    throw new Error(error.detail || 'Failed to complete registration');
+                }
 
-                showAlert('Profile updated successfully', 'success');
-                toggleEditMode();
-                loadProfile();
+                showAlert('Passkey registered successfully!', 'success');
+                loadPasskeys();
+                loadPasskeyStatus();
 
             } catch (error) {
-                showAlert('Failed to update profile: ' + error.message, 'error');
+                showAlert('Failed to register passkey: ' + error.message, 'error');
             }
-        });
+        }
+
+        // Delete Passkey
+        async function deletePasskey(credentialId) {
+            if (!confirm('Are you sure you want to delete this passkey?')) return;
+
+            try {
+                const response = await fetch(`/api/passkey/${credentialId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to delete passkey');
+
+                showAlert('Passkey deleted successfully', 'success');
+                loadPasskeys();
+                loadPasskeyStatus();
+
+            } catch (error) {
+                showAlert('Failed to delete passkey: ' + error.message, 'error');
+            }
+        }
 
         // Change Password Form Submit
         document.getElementById('change-password-form').addEventListener('submit', async (e) => {
@@ -1201,140 +718,9 @@
                 document.getElementById('change-password-form').reset();
 
             } catch (error) {
-                showAlert('Failed to change password: ' + error.message, 'error');
+                showAlert(error.message, 'error');
             }
         });
-
-        // Change Email Form Submit
-        document.getElementById('change-email-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const newEmail = document.getElementById('new-email').value;
-            const password = document.getElementById('email-password').value;
-
-            try {
-                const response = await fetch('/api/profile/me/change-email', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    },
-                    body: JSON.stringify({
-                        new_email: newEmail,
-                        password: password
-                    })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to change email');
-                }
-
-                showAlert('Verification email sent. Please check your new email address.', 'success');
-                closeModal('change-email-modal');
-                document.getElementById('change-email-form').reset();
-
-            } catch (error) {
-                showAlert('Failed to change email: ' + error.message, 'error');
-            }
-        });
-
-        // Delete Account Form Submit
-        document.getElementById('delete-account-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const confirmation = document.getElementById('delete-confirmation').value;
-            const password = document.getElementById('delete-password').value;
-
-            if (confirmation !== 'DELETE') {
-                showAlert('Please type DELETE to confirm', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/profile/me', {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    },
-                    body: JSON.stringify({ password: password })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to delete account');
-                }
-
-                showAlert('Account deleted successfully. Redirecting...', 'success');
-                localStorage.removeItem('access_token');
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 2000);
-
-            } catch (error) {
-                showAlert('Failed to delete account: ' + error.message, 'error');
-            }
-        });
-
-        // Toggle MFA
-        async function toggleMFA() {
-            showAlert('MFA toggle functionality will be implemented with MFA feature', 'info');
-            // TODO: Implement MFA toggle when MFA feature is added
-        }
-
-        // Deactivate Account
-        async function deactivateAccount() {
-            if (!confirm('Are you sure you want to deactivate your account?')) return;
-
-            showAlert('Account deactivation functionality will be implemented', 'info');
-            // TODO: Implement account deactivation
-        }
-
-        // Resend Verification Email
-        async function resendVerification() {
-            try {
-                const response = await fetch('/api/profile/me/resend-verification', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    }
-                });
-
-                if (!response.ok) throw new Error('Failed to resend verification email');
-
-                showAlert('Verification email sent successfully', 'success');
-
-            } catch (error) {
-                showAlert('Failed to resend verification: ' + error.message, 'error');
-            }
-        }
-
-        // Load Passkey Status
-        async function loadPasskeyStatus() {
-            try {
-                const response = await fetch('/api/passkey/list', {
-                    headers: {
-                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                    }
-                });
-
-                if (!response.ok) throw new Error('Failed to load passkey status');
-
-                const passkeys = await response.json();
-                const passkeyStatus = document.getElementById('passkey-status');
-
-                if (passkeys && passkeys.length > 0) {
-                    passkeyStatus.textContent = `${passkeys.length} passkey(s) registered`;
-                } else {
-                    passkeyStatus.textContent = 'No passkeys registered';
-                }
-
-            } catch (error) {
-                document.getElementById('passkey-status').textContent = 'Unable to load status';
-                console.error('Failed to load passkey status:', error);
-            }
-        }
 
         // Logout
         function logout() {
