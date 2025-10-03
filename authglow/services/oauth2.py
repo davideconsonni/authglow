@@ -115,13 +115,13 @@ class OAuth2Service:
         """
         Verify client credentials using dynamic client storage.
 
-        Falls back to settings-based client for backwards compatibility.
+        Falls back to the settings-based client for backwards compatibility.
         """
         # Try dynamic client storage first
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            # Check if client is active
+            # Check if the client is active
             if not client.is_active:
                 return False
 
