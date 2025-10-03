@@ -9,10 +9,14 @@ from fastapi.templating import Jinja2Templates
 
 from authglow.models.user import User, UserCreate, UserLogin, InviteUser, UserResponse
 from authglow.models.token import Token, OAuth2AuthorizationRequest, OAuth2TokenRequest
+from authglow.models.mfa import MFALoginRequest
 from authglow.services.storage import UserStorage
 from authglow.services.password import hash_password, verify_password, PasswordValidator
 from authglow.services.jwt import JWTService
 from authglow.services.oauth2 import OAuth2Service
+from authglow.services.mfa import MFAService
+from authglow.services.session import SessionService
+from authglow.services.audit import AuditService
 from authglow.core.config import get_settings
 
 router = APIRouter()
@@ -39,6 +43,21 @@ def get_oauth2_service():
 def get_password_validator():
     """Get password validator instance."""
     return PasswordValidator()
+
+
+def get_mfa_service():
+    """Get MFA service instance."""
+    return MFAService()
+
+
+def get_session_service():
+    """Get session service instance."""
+    return SessionService()
+
+
+def get_audit_service():
+    """Get audit service instance."""
+    return AuditService()
 
 
 async def get_current_user(
@@ -107,6 +126,7 @@ async def authorize(
 
 @router.post("/oauth2/authorize")
 async def authorize_post(
+    request: Request,
     email: str = Form(...),
     password: str = Form(...),
     client_id: str = Form(...),
@@ -114,9 +134,11 @@ async def authorize_post(
     scope: str = Form("read"),
     state: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service)
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+    mfa_service: MFAService = Depends(get_mfa_service),
+    session_service: SessionService = Depends(get_session_service)
 ):
-    """Process login and create authorization code."""
+    """Process login and create authorization code (or MFA challenge)."""
     # Authenticate user
     user = await storage.get_user_by_email(email)
     if not user or not verify_password(password, user.hashed_password):
@@ -125,7 +147,38 @@ async def authorize_post(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
-    # Update last login
+    # Check if MFA is required
+    if user.mfa_enabled and user.mfa_verified:
+        # Check if device is trusted
+        user_agent = request.headers.get("user-agent", "")
+        client_host = request.client.host if request.client else ""
+        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
+
+        is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
+
+        if not is_trusted:
+            # Require MFA - create temporary session
+            mfa_session = await session_service.create_mfa_session(
+                user_id=user.id,
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                scope=scope,
+                state=state
+            )
+
+            # Show MFA verification page
+            settings = get_settings()
+            ui_context = settings.get_ui_context()
+            return templates.TemplateResponse(
+                "mfa_verify.html",
+                {
+                    "request": request,
+                    **ui_context,
+                    "session_token": mfa_session.session_token
+                }
+            )
+
+    # No MFA required or device trusted - proceed with authorization
     await storage.update_last_login(user.id)
 
     # Create authorization code
@@ -223,13 +276,24 @@ async def token_endpoint(
 # Traditional token endpoint (for testing)
 @router.post("/api/token", response_model=Token)
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     storage: UserStorage = Depends(get_user_storage),
-    jwt_service: JWTService = Depends(get_jwt_service)
+    jwt_service: JWTService = Depends(get_jwt_service),
+    audit_service: AuditService = Depends(get_audit_service)
 ):
     """Direct token endpoint (username/password)."""
     user = await storage.get_user_by_email(form_data.username)
+
+    # Log failed login
     if not user or not verify_password(form_data.password, user.hashed_password):
+        await audit_service.log_event(
+            event_type="login_failed",
+            email=form_data.username,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            severity="warning"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -241,6 +305,15 @@ async def login_for_access_token(
 
     # Update last login
     await storage.update_last_login(user.id)
+
+    # Log successful login
+    await audit_service.log_event(
+        event_type="login_success",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
 
     return jwt_service.create_token_response(user.id, user.email, user.scopes)
 
@@ -282,6 +355,71 @@ async def invite_user(
     # For now, just return it (this is insecure - implement email service)
 
     return UserResponse(**user.model_dump())
+
+
+@router.post("/oauth2/mfa-verify")
+async def oauth2_mfa_verify(
+    request: Request,
+    session_token: str = Form(...),
+    code: str = Form(...),
+    trust_device: bool = Form(False),
+    storage: UserStorage = Depends(get_user_storage),
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+    mfa_service: MFAService = Depends(get_mfa_service),
+    session_service: SessionService = Depends(get_session_service)
+):
+    """Verify MFA code and complete OAuth2 authorization."""
+    # Get MFA session
+    mfa_session = await session_service.get_mfa_session(session_token)
+    if not mfa_session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Get user
+    user = await storage.get_user(mfa_session.user_id)
+    if not user or not user.mfa_enabled or not user.mfa_verified:
+        raise HTTPException(status_code=400, detail="MFA not properly configured")
+
+    # Verify code (try TOTP first, then backup code)
+    is_valid = False
+
+    # Try TOTP
+    if user.mfa_secret and len(code) == 6:
+        is_valid = mfa_service.verify_totp(user.mfa_secret, code)
+
+    # Try backup code if TOTP failed
+    if not is_valid and len(code) >= 8:
+        is_valid = await mfa_service.verify_user_backup_code(user.id, code)
+
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+    # MFA verified successfully
+    await storage.update_last_login(user.id)
+
+    # Trust device if requested
+    if trust_device:
+        user_agent = request.headers.get("user-agent", "")
+        client_host = request.client.host if request.client else ""
+        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
+        await mfa_service.add_trusted_device(user.id, device_fingerprint, "Browser")
+
+    # Delete MFA session
+    await session_service.delete_mfa_session(session_token)
+
+    # Create authorization code
+    auth_code = await oauth2_service.create_authorization_code(
+        client_id=mfa_session.client_id,
+        user_id=user.id,
+        redirect_uri=mfa_session.redirect_uri,
+        scope=mfa_session.scope
+    )
+
+    # Redirect with authorization code
+    redirect_url = f"{mfa_session.redirect_uri}?code={auth_code.code}"
+    if mfa_session.state:
+        redirect_url += f"&state={mfa_session.state}"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.get("/api/users/me", response_model=UserResponse)

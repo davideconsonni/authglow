@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <style>
+        body {
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .logo-container img {
+            max-height: 40px;
+            width: auto;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-email {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .nav {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            width: 250px;
+            padding: 2rem 0;
+            position: fixed;
+            top: 73px;
+            bottom: 0;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            padding: 0.75rem 2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border-left-color: var(--primary);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+            min-height: calc(100vh - 73px);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+
+        .log-entry {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s;
+        }
+
+        .log-entry:hover {
+            background: var(--surface-elevated);
+            border-color: var(--primary);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .log-event {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .log-time {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .log-details {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-container">
+            <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
+            <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
+        </div>
+        <div class="user-info">
+            <span class="user-email" id="userEmail"></span>
+        </div>
+    </div>
+
+    <nav class="nav">
+        <a href="/admin" class="nav-item">📊 Dashboard</a>
+        <a href="/admin/users" class="nav-item">👥 Users</a>
+        <a href="/admin/audit" class="nav-item active">📝 Audit Logs</a>
+    </nav>
+
+    <div class="main-content">
+        <h1 class="page-title">Audit Logs</h1>
+        <div id="logs" class="loading">Loading...</div>
+    </div>
+
+    <script>
+        async function loadLogs() {
+            const token = localStorage.getItem('admin_token');
+            if (!token) {
+                window.location.href = '/admin/login';
+                return;
+            }
+
+            // Get current user info
+            const userResponse = await fetch('/api/users/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const currentUser = await userResponse.json();
+            document.getElementById('userEmail').textContent = currentUser.email;
+
+            const response = await fetch('/api/admin/audit/logs?limit=50', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const logs = await response.json();
+
+            document.getElementById('logs').innerHTML = logs.map(log => `
+                <div class="log-entry">
+                    <div class="log-header">
+                        <span class="log-event">${log.event_type}</span>
+                        <span class="log-time">${new Date(log.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div class="log-details">
+                        User: ${log.email || 'System'} | IP: ${log.ip_address || 'N/A'} | Severity: ${log.severity}
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadLogs();
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

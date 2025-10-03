@@ -1,0 +1,10 @@
+{
+  "code": "c414d0d5-3fcf-421f-b59c-6361e05a06d2",
+  "client_id": "default-client-id",
+  "user_id": "5a421014-7693-4986-904b-2ba9e8b6d367",
+  "redirect_uri": "http://localhost:8000/callback",
+  "scope": "read",
+  "created_at": "2025-10-02T23:21:15.332233",
+  "expires_at": "2025-10-02T23:31:15.332192",
+  "used": false
+}

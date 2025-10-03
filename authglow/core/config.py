@@ -50,11 +50,14 @@ class Settings(BaseSettings):
     password_require_special: bool = True
 
     # UI Customization
-    ui_logo_url: Optional[str] = None
-    ui_primary_color: str = "#4F46E5"
-    ui_secondary_color: str = "#06B6D4"
-    ui_background_color: str = "#FFFFFF"
-    ui_text_color: str = "#1F2937"
+    ui_logo_url: Optional[str] = "/static/images/authglow_full_light.png"
+    ui_logo_dark_url: Optional[str] = "/static/images/authglow_full_dark.png"
+    ui_primary_color: str = "#3498DB"
+    ui_secondary_color: str = "#FF3366"
+    ui_background_color: str = "#F8F8F8"
+    ui_background_dark: str = "#1A1A1A"
+    ui_text_color: str = "#2C3E50"
+    ui_text_dark: str = "#F0F0F0"
     ui_company_name: str = "AuthGlow"
     ui_support_email: str = "support@example.com"
     ui_privacy_policy_url: Optional[str] = None
@@ -104,10 +107,13 @@ class Settings(BaseSettings):
         return {
             "app_name": self.app_name,
             "logo_url": self.ui_logo_url,
+            "logo_dark_url": self.ui_logo_dark_url,
             "primary_color": self.ui_primary_color,
             "secondary_color": self.ui_secondary_color,
             "background_color": self.ui_background_color,
+            "background_dark": self.ui_background_dark,
             "text_color": self.ui_text_color,
+            "text_dark": self.ui_text_dark,
             "company_name": self.ui_company_name,
             "support_email": self.ui_support_email,
             "privacy_policy_url": self.ui_privacy_policy_url,

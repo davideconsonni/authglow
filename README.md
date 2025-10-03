@@ -326,3 +326,5 @@ For issues or questions, open an issue on the repository.
 
 
 curl -X POST http://localhost:8000/api/users/invite -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1YTQyMTAxNC03NjkzLTQ5ODYtOTA0Yi0yYmE5ZThiNmQzNjciLCJlbWFpbCI6ImRjb25zb25uaUBnbWFpbC5jb20iLCJzY29wZXMiOlsicmVhZCIsIndyaXRlIiwiYWRtaW4iXSwiZXhwIjoxNzU5NDQ3NjE1LCJpYXQiOjE3NTk0NDU4MTUsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.jGzZ1g39ijAGbigQLGp3DXdDmiveSCXrLJXub80AaSU" -H "Content-Type: application/json" -d"{\"email\":\"newuser@example.com\",\"scopes\":[\"read\"],\"first_name\":\"Test\",\"last_name\":\"User\"}"
+
+curl -X POST http://localhost:8000/api/mfa/verify -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1YTQyMTAxNC03NjkzLTQ5ODYtOTA0Yi0yYmE5ZThiNmQzNjciLCJlbWFpbCI6ImRjb25zb25uaUBnbWFpbC5jb20iLCJzY29wZXMiOlsicmVhZCIsIndyaXRlIiwiYWRtaW4iXSwiZXhwIjoxNzU5NDQ3NjE1LCJpYXQiOjE3NTk0NDU4MTUsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.jGzZ1g39ijAGbigQLGp3DXdDmiveSCXrLJXub80AaSU" -H "Content-Type: application/json" -d "{\"code\":\"276321\"}"

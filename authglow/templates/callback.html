@@ -4,24 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OAuth2 Callback - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary-color: {{ primary_color }};
-            --secondary-color: {{ secondary_color }};
-            --background-color: {{ background_color }};
-            --text-color: {{ text_color }};
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -30,47 +15,44 @@
         }
 
         .callback-container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 40px;
             width: 100%;
             max-width: 600px;
+            padding: 40px;
         }
 
-        .logo {
+        .logo-container {
             text-align: center;
             margin-bottom: 30px;
         }
 
-        .logo h1 {
-            color: var(--primary-color);
-            font-size: 28px;
+        .logo-container img {
+            max-width: 200px;
+            height: auto;
         }
+
 
         .success-icon {
             text-align: center;
             font-size: 48px;
-            color: #10b981;
+            color: var(--success);
             margin-bottom: 20px;
         }
 
         .error-icon {
             text-align: center;
             font-size: 48px;
-            color: #ef4444;
+            color: var(--error);
             margin-bottom: 20px;
         }
 
         h2 {
             text-align: center;
-            color: var(--text-color);
             margin-bottom: 30px;
         }
 
         .code-container {
-            background: #f3f4f6;
-            border: 1px solid #e5e7eb;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
@@ -78,8 +60,8 @@
 
         .code-label {
             font-weight: 600;
-            color: #6b7280;
-            font-size: 12px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 8px;
@@ -87,65 +69,57 @@
 
         .code-value {
             font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 0.875rem;
             word-break: break-all;
-            color: var(--text-color);
-            background: white;
+            color: var(--text-primary);
+            background: var(--surface);
             padding: 12px;
             border-radius: 4px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
         }
 
         .info-box {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.3);
             border-radius: 8px;
             padding: 16px;
             margin-top: 20px;
         }
 
         .info-box h3 {
-            color: #1e40af;
-            font-size: 14px;
+            color: var(--primary);
+            font-size: 0.875rem;
             margin-bottom: 10px;
         }
 
         .info-box p {
-            color: #1e3a8a;
-            font-size: 13px;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
             line-height: 1.6;
         }
 
         .curl-example {
-            background: #1f2937;
-            color: #f3f4f6;
+            background: var(--surface-elevated);
+            color: var(--text-primary);
             padding: 16px;
             border-radius: 6px;
             font-family: 'Courier New', monospace;
-            font-size: 12px;
+            font-size: 0.75rem;
             overflow-x: auto;
             margin-top: 10px;
+            border: 1px solid var(--border);
         }
 
         .copy-button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
+            font-size: 0.75rem;
             padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
             margin-top: 10px;
         }
 
-        .copy-button:hover {
-            opacity: 0.9;
-        }
-
         .error-message {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c33;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
             padding: 16px;
             border-radius: 8px;
             text-align: center;
@@ -159,9 +133,10 @@
     </style>
 </head>
 <body>
-    <div class="callback-container">
-        <div class="logo">
-            <h1>{{ company_name }}</h1>
+    <div class="callback-container card">
+        <div class="logo-container">
+            <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
+            <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
         </div>
 
         {% if error %}
@@ -177,7 +152,7 @@
         <div class="code-container">
             <div class="code-label">Authorization Code</div>
             <div class="code-value" id="authCode">{{ code }}</div>
-            <button class="copy-button" onclick="copyCode()">Copy Code</button>
+            <button class="btn btn-primary copy-button" onclick="copyCode()">Copy Code</button>
         </div>
 
         {% if state %}
@@ -195,7 +170,7 @@
   -d "grant_type=authorization_code" \
   -d "code={{ code }}" \
   -d "redirect_uri=http://localhost:8000/callback"</div>
-            <button class="copy-button" onclick="copyCurl()">Copy Command</button>
+            <button class="btn btn-primary copy-button" onclick="copyCurl()">Copy Command</button>
         </div>
         {% else %}
         <div class="error-icon">✗</div>
@@ -206,6 +181,7 @@
         {% endif %}
     </div>
 
+    <script src="/static/js/theme.js"></script>
     <script>
         function copyCode() {
             const code = document.getElementById('authCode').textContent;

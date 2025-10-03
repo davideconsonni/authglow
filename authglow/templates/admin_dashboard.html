@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .logo-container img {
+            max-height: 40px;
+            width: auto;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-email {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .nav {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            width: 250px;
+            padding: 2rem 0;
+            position: fixed;
+            top: 73px;
+            bottom: 0;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            padding: 0.75rem 2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border-left-color: var(--primary);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+            min-height: calc(100vh - 73px);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-change {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            color: var(--success);
+        }
+
+        .stat-change.negative {
+            color: var(--error);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .chart-title {
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        /* Recent Activity */
+        .activity-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .activity-title {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .activity-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .activity-item:hover {
+            background: var(--surface-light);
+            padding-left: 1.5rem;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-event {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .activity-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .badge-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--surface);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-container">
+            <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
+            <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
+        </div>
+        <div class="user-info">
+            <span class="user-email" id="userEmail"></span>
+            <button class="btn btn-outline logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="/admin" class="nav-item active">
+            <span>📊</span> Dashboard
+        </a>
+        <a href="/admin/users" class="nav-item">
+            <span>👥</span> Users
+        </a>
+        <a href="/admin/audit" class="nav-item">
+            <span>📝</span> Audit Logs
+        </a>
+        <a href="/docs" class="nav-item">
+            <span>📖</span> API Docs
+        </a>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <h1 class="page-title">Dashboard</h1>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+
+        <!-- Stats Grid -->
+        <div id="stats-container" class="stats-grid" style="display: none;"></div>
+
+        <!-- Charts Grid -->
+        <div id="charts-container" class="charts-grid" style="display: none;">
+            <div class="chart-card card">
+                <h3 class="chart-title">User Growth (30 Days)</h3>
+                <div class="chart-container">
+                    <canvas id="userGrowthChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card card">
+                <h3 class="chart-title">Login Activity (30 Days)</h3>
+                <div class="chart-container">
+                    <canvas id="loginActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div id="activity-container" class="activity-card" style="display: none;">
+            <h3 class="activity-title">
+                <span>🔔</span> Recent Security Events
+            </h3>
+            <div id="activity-list" class="activity-list"></div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and display dashboard data
+        async function loadDashboard() {
+            try {
+                // Get access token from storage
+                const token = localStorage.getItem('admin_token');
+                if (!token) {
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                // Verify token and get user info
+                const userResponse = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!userResponse.ok) {
+                    localStorage.removeItem('admin_token');
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                const user = await userResponse.json();
+
+                // Check admin scope
+                if (!user.scopes.includes('admin')) {
+                    alert('Admin access required');
+                    localStorage.removeItem('admin_token');
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                // Display user email in header
+                document.getElementById('userEmail').textContent = user.email;
+
+                // Fetch stats
+                const statsResponse = await fetch('/api/admin/stats', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const stats = await statsResponse.json();
+
+                // Fetch time series data
+                const timeSeriesResponse = await fetch('/api/admin/stats/timeseries?days=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const timeSeries = await timeSeriesResponse.json();
+
+                // Fetch security events
+                const eventsResponse = await fetch('/api/admin/security/events?limit=10', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const events = await eventsResponse.json();
+
+                // Display stats
+                displayStats(stats);
+                displayCharts(timeSeries);
+                displayActivity(events);
+
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stats-container').style.display = 'grid';
+                document.getElementById('charts-container').style.display = 'grid';
+                document.getElementById('activity-container').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                // If unauthorized, redirect to login
+                if (error.message.includes('401') || error.message.includes('403')) {
+                    localStorage.removeItem('admin_token');
+                    window.location.href = '/admin/login';
+                } else {
+                    document.getElementById('loading').innerHTML = '<p>Error loading dashboard. Please try again.</p>';
+                }
+            }
+        }
+
+        function displayStats(stats) {
+            const container = document.getElementById('stats-container');
+            container.innerHTML = `
+                <div class="stat-card card">
+                    <div class="stat-label">Total Users</div>
+                    <div class="stat-value">${stats.total_users}</div>
+                    <div class="stat-change">+${stats.new_users_this_week} this week</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="stat-label">Active Users</div>
+                    <div class="stat-value">${stats.active_users}</div>
+                    <div class="stat-change">${Math.round(stats.active_users / stats.total_users * 100)}% of total</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="stat-label">MFA Enabled</div>
+                    <div class="stat-value">${stats.users_with_mfa}</div>
+                    <div class="stat-change">${stats.mfa_percentage}% adoption</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="stat-label">Logins Today</div>
+                    <div class="stat-value">${stats.total_logins_today}</div>
+                    <div class="stat-change ${stats.failed_logins_today > 0 ? 'negative' : ''}">${stats.failed_logins_today} failed</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="stat-label">New Users Today</div>
+                    <div class="stat-value">${stats.new_users_today}</div>
+                    <div class="stat-change">+${stats.new_users_this_month} this month</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="stat-label">Logins This Week</div>
+                    <div class="stat-value">${stats.total_logins_this_week}</div>
+                    <div class="stat-change">Weekly activity</div>
+                </div>
+            `;
+        }
+
+        function displayCharts(timeSeries) {
+            // User Growth Chart
+            const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
+            new Chart(userGrowthCtx, {
+                type: 'line',
+                data: {
+                    labels: timeSeries.map(d => d.date),
+                    datasets: [{
+                        label: 'New Users',
+                        data: timeSeries.map(d => d.new_users),
+                        borderColor: '{{ primary_color }}',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#2d3748' } },
+                        x: { grid: { color: '#2d3748' } }
+                    }
+                }
+            });
+
+            // Login Activity Chart
+            const loginActivityCtx = document.getElementById('loginActivityChart').getContext('2d');
+            new Chart(loginActivityCtx, {
+                type: 'bar',
+                data: {
+                    labels: timeSeries.map(d => d.date),
+                    datasets: [{
+                        label: 'Successful Logins',
+                        data: timeSeries.map(d => d.success),
+                        backgroundColor: '{{ secondary_color }}',
+                    }, {
+                        label: 'Failed Logins',
+                        data: timeSeries.map(d => d.failed),
+                        backgroundColor: '#ef4444',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#2d3748' } },
+                        x: { grid: { color: '#2d3748' } }
+                    }
+                }
+            });
+        }
+
+        function displayActivity(events) {
+            const container = document.getElementById('activity-list');
+            if (events.length === 0) {
+                container.innerHTML = '<div class="activity-item"><p>No recent security events</p></div>';
+                return;
+            }
+
+            container.innerHTML = events.map(event => `
+                <div class="activity-item">
+                    <div class="activity-content">
+                        <div class="activity-event">${event.description}</div>
+                        <div class="activity-meta">
+                            ${event.user_email || 'System'} • ${new Date(event.timestamp).toLocaleString()}
+                            ${event.ip_address ? ' • ' + event.ip_address : ''}
+                        </div>
+                    </div>
+                    <span class="activity-badge badge-${event.severity === 'critical' ? 'error' : event.severity === 'warning' ? 'warning' : 'success'}">
+                        ${event.severity}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/admin/login';
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

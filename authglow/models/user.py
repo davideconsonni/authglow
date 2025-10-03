@@ -25,6 +25,11 @@ class User(BaseModel):
     # OAuth2 related
     scopes: List[str] = Field(default_factory=list)
 
+    # MFA related
+    mfa_enabled: bool = False
+    mfa_secret: Optional[str] = None  # Encrypted TOTP secret
+    mfa_verified: bool = False  # True after first successful MFA verification
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -62,6 +67,8 @@ class UserResponse(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     scopes: List[str]
+    mfa_enabled: bool = False
+    mfa_verified: bool = False
 
 
 class InviteUser(BaseModel):

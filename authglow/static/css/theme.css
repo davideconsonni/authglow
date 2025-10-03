@@ -1,0 +1,309 @@
+/* AuthGlow Theme - Light & Dark Mode */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Light Mode (Default) */
+:root {
+    --primary: #3498DB;
+    --secondary: #FF3366;
+    --background: #F8F8F8;
+    --surface: #FFFFFF;
+    --surface-elevated: #FFFFFF;
+    --text-primary: #2C3E50;
+    --text-secondary: #7F8C8D;
+    --text-tertiary: #95A5A6;
+    --border: #E5E7EB;
+    --success: #27AE60;
+    --warning: #F39C12;
+    --error: #E74C3C;
+    --shadow: rgba(0, 0, 0, 0.1);
+    --glow-primary: rgba(52, 152, 219, 0.3);
+    --glow-secondary: rgba(255, 51, 102, 0.3);
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+    --primary: #3498DB;
+    --secondary: #FF3366;
+    --background: #1A1A1A;
+    --surface: #2A2A2A;
+    --surface-elevated: #333333;
+    --text-primary: #F0F0F0;
+    --text-secondary: #B0B0B0;
+    --text-tertiary: #808080;
+    --border: #404040;
+    --success: #2ECC71;
+    --warning: #F1C40F;
+    --error: #E74C3C;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --glow-primary: rgba(52, 152, 219, 0.5);
+    --glow-secondary: rgba(255, 51, 102, 0.5);
+}
+
+body {
+    font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: var(--background);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    line-height: 1.6;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem; }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1rem; }
+
+p {
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: var(--secondary);
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px var(--glow-primary);
+}
+
+.btn-secondary {
+    background: var(--secondary);
+    color: white;
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px var(--glow-secondary);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.btn-outline:hover {
+    background: var(--surface-elevated);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Forms */
+input, select, textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--glow-primary);
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Cards */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px var(--shadow);
+}
+
+/* Badges */
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-block;
+}
+
+.badge-success {
+    background: rgba(39, 174, 96, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.badge-warning {
+    background: rgba(243, 156, 18, 0.2);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+}
+
+.badge-error {
+    background: rgba(231, 76, 60, 0.2);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.badge-primary {
+    background: rgba(52, 152, 219, 0.2);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+/* Dark Mode Toggle */
+.theme-toggle {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 56px;
+    height: 56px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 4px 12px var(--shadow);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px var(--shadow);
+}
+
+/* Logo */
+.logo-container img {
+    max-width: 200px;
+    height: auto;
+    transition: opacity 0.3s ease;
+}
+
+/* Light mode shows dark logo (dark on light bg), dark mode shows light logo (light on dark bg) */
+.logo-light {
+    display: none;
+}
+
+.logo-dark {
+    display: block;
+}
+
+[data-theme="dark"] .logo-light {
+    display: block;
+}
+
+[data-theme="dark"] .logo-dark {
+    display: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spinner {
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.75rem; }
+    h3 { font-size: 1.5rem; }
+
+    .theme-toggle {
+        bottom: 1rem;
+        right: 1rem;
+        width: 48px;
+        height: 48px;
+    }
+}

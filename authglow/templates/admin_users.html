@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <style>
+        body {
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .logo-container img {
+            max-height: 40px;
+            width: auto;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-email {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .nav {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            width: 250px;
+            padding: 2rem 0;
+            position: fixed;
+            top: 73px;
+            bottom: 0;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            padding: 0.75rem 2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border-left-color: var(--primary);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+            min-height: calc(100vh - 73px);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--glow-primary);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .filter-btn {
+            padding: 0.75rem 1.25rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+        }
+
+        .filter-btn:hover {
+            background: var(--surface-elevated);
+            border-color: var(--primary);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-primary {
+            padding: 0.75rem 1.5rem;
+        }
+
+        .users-table {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--surface-light);
+            border-bottom: 2px solid var(--border);
+        }
+
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:hover {
+            background: var(--surface-light);
+        }
+
+        .user-email {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .badge-inactive {
+            background: rgba(107, 114, 128, 0.2);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .badge-mfa {
+            background: rgba(79, 70, 229, 0.2);
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-icon {
+            padding: 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-icon:hover {
+            background: var(--surface-light);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .btn-secondary {
+            padding: 0.75rem 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-container">
+            <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
+            <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
+        </div>
+        <div class="user-info">
+            <span class="user-email" id="userEmail"></span>
+        </div>
+    </div>
+
+    <nav class="nav">
+        <a href="/admin" class="nav-item">
+            <span>📊</span> Dashboard
+        </a>
+        <a href="/admin/users" class="nav-item active">
+            <span>👥</span> Users
+        </a>
+        <a href="/admin/audit" class="nav-item">
+            <span>📝</span> Audit Logs
+        </a>
+        <a href="/docs" class="nav-item">
+            <span>📖</span> API Docs
+        </a>
+    </nav>
+
+    <div class="main-content">
+        <h1 class="page-title">User Management</h1>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search users by email or name...">
+            </div>
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="active">Active</button>
+                <button class="filter-btn" data-filter="mfa">MFA Enabled</button>
+            </div>
+            <button class="btn btn-primary" onclick="showInviteModal()">+ Invite User</button>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading users...</p>
+        </div>
+
+        <div id="usersTable" class="users-table" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>MFA</th>
+                        <th>Scopes</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Edit User</h2>
+            <form id="editForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" id="editFirstName">
+                </div>
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" id="editLastName">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="editStatus">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let users = [];
+        let currentFilter = 'all';
+
+        async function loadUsers() {
+            try {
+                const token = localStorage.getItem('admin_token');
+                if (!token) {
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                // Get current user info
+                const userResponse = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const currentUser = await userResponse.json();
+                document.getElementById('userEmail').textContent = currentUser.email;
+
+                const response = await fetch('/api/admin/users/search?limit=100', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                users = await response.json();
+
+                displayUsers();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('usersTable').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading users:', error);
+                document.getElementById('loading').innerHTML = '<p>Error loading users. Please try again.</p>';
+            }
+        }
+
+        function displayUsers() {
+            const tbody = document.getElementById('usersBody');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+
+            let filtered = users.filter(user => {
+                const matchSearch = !search || user.email.toLowerCase().includes(search) ||
+                                    (user.first_name && user.first_name.toLowerCase().includes(search)) ||
+                                    (user.last_name && user.last_name.toLowerCase().includes(search));
+
+                const matchFilter = currentFilter === 'all' ||
+                                    (currentFilter === 'active' && user.is_active) ||
+                                    (currentFilter === 'mfa' && user.mfa_enabled);
+
+                return matchSearch && matchFilter;
+            });
+
+            tbody.innerHTML = filtered.map(user => `
+                <tr>
+                    <td class="user-email">${user.email}</td>
+                    <td>${user.first_name || ''} ${user.last_name || ''}</td>
+                    <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td>${user.mfa_enabled ? '<span class="badge badge-mfa">✓ Enabled</span>' : '-'}</td>
+                    <td>${user.scopes.join(', ')}</td>
+                    <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
+                    <td class="actions">
+                        <button class="btn-icon" onclick="editUser('${user.id}')" title="Edit">✏️</button>
+                        <button class="btn-icon" onclick="toggleUserStatus('${user.id}', ${user.is_active})" title="${user.is_active ? 'Deactivate' : 'Activate'}">${user.is_active ? '🚫' : '✅'}</button>
+                        ${user.mfa_enabled ? `<button class="btn-icon" onclick="resetMFA('${user.id}')" title="Reset MFA">🔓</button>` : ''}
+                        <button class="btn-icon" onclick="deleteUser('${user.id}')" title="Delete">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editUser(userId) {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+
+            document.getElementById('editUserId').value = user.id;
+            document.getElementById('editFirstName').value = user.first_name || '';
+            document.getElementById('editLastName').value = user.last_name || '';
+            document.getElementById('editStatus').value = user.is_active;
+
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('show');
+        }
+
+        async function toggleUserStatus(userId, isActive) {
+            if (!confirm(`Are you sure you want to ${isActive ? 'deactivate' : 'activate'} this user?`)) return;
+
+            const token = localStorage.getItem('admin_token');
+            const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ is_active: !isActive })
+            });
+
+            if (response.ok) {
+                loadUsers();
+            }
+        }
+
+        async function resetMFA(userId) {
+            if (!confirm('Are you sure you want to reset MFA for this user?')) return;
+
+            const token = localStorage.getItem('admin_token');
+            const response = await fetch(`/api/admin/users/${userId}/reset-mfa`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                alert('MFA reset successfully');
+                loadUsers();
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+
+            const token = localStorage.getItem('admin_token');
+            const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                loadUsers();
+            }
+        }
+
+        document.getElementById('searchInput').addEventListener('input', displayUsers);
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                displayUsers();
+            });
+        });
+
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = localStorage.getItem('admin_token');
+            const userId = document.getElementById('editUserId').value;
+
+            const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    first_name: document.getElementById('editFirstName').value,
+                    last_name: document.getElementById('editLastName').value,
+                    is_active: document.getElementById('editStatus').value === 'true'
+                })
+            });
+
+            if (response.ok) {
+                closeModal();
+                loadUsers();
+            }
+        });
+
+        loadUsers();
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

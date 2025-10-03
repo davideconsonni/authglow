@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 3rem;
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-container img {
+            max-width: 200px;
+            height: auto;
+        }
+
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: 0.875rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+        }
+
+        .error-message {
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 0.875rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container card">
+        <div class="logo-container">
+            <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
+            <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
+        </div>
+        <p class="subtitle">Admin Portal Login</p>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary submit-btn" id="submitBtn">Sign In</button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/theme.js"></script>
+    <script>
+        const form = document.getElementById('loginForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            // Hide error
+            errorMessage.classList.remove('show');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+
+            try {
+                // Login
+                const response = await fetch('/api/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+                });
+
+                if (!response.ok) {
+                    throw new Error('Invalid credentials');
+                }
+
+                const data = await response.json();
+
+                // Verify user has admin scope
+                const userResponse = await fetch('/api/users/me', {
+                    headers: {
+                        'Authorization': `Bearer ${data.access_token}`
+                    }
+                });
+
+                const user = await userResponse.json();
+
+                if (!user.scopes.includes('admin')) {
+                    throw new Error('Admin access required');
+                }
+
+                // Save token
+                localStorage.setItem('admin_token', data.access_token);
+                localStorage.setItem('admin_user', JSON.stringify(user));
+
+                // Redirect to admin dashboard
+                window.location.href = '/admin';
+
+            } catch (error) {
+                errorMessage.textContent = error.message || 'Login failed. Please try again.';
+                errorMessage.classList.add('show');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>
