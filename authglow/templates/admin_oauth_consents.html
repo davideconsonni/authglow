@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Consents - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <style>
+        .table-container {
+            background: var(--surface);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--surface-elevated);
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        tr:hover {
+            background: var(--surface-elevated);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+
+        .status-revoked {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .scope-tag {
+            display: inline-block;
+            background: var(--surface-elevated);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .action-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .filter-bar {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .filter-bar input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--background);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    {% include 'components/admin_header.html' %}
+    {% set active_page = 'oauth-consents' %}
+    {% include 'components/admin_nav.html' %}
+
+    <div class="main-content">
+        <h1 class="page-title">OAuth2 User Consents</h1>
+
+        <div class="filter-bar">
+            <input type="text" id="searchEmail" placeholder="Search by user email...">
+            <button class="btn btn-primary" onclick="loadConsents()">Search</button>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <h2 style="margin: 0;">All Consents</h2>
+            </div>
+
+            <table id="consentsTable">
+                <thead>
+                    <tr>
+                        <th>User Email</th>
+                        <th>Client</th>
+                        <th>Scopes</th>
+                        <th>Status</th>
+                        <th>Granted</th>
+                        <th>Expires</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="consentsBody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            Loading...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('admin_token');
+        if (!token) {
+            window.location.href = '/admin/login';
+        }
+
+        async function loadConsents() {
+            try {
+                const searchEmail = document.getElementById('searchEmail').value;
+                const response = await fetch(`/api/admin/oauth-consents?email=${searchEmail}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load consents');
+
+                const consents = await response.json();
+                const tbody = document.getElementById('consentsBody');
+
+                if (consents.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">No consents found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = consents.map(consent => `
+                    <tr>
+                        <td><strong>${consent.user_email}</strong></td>
+                        <td>${consent.client_name || consent.client_id}</td>
+                        <td>
+                            ${consent.scopes.map(scope => `<span class="scope-tag">${scope}</span>`).join('')}
+                        </td>
+                        <td>
+                            <span class="status-badge status-${consent.revoked ? 'revoked' : 'active'}">
+                                ${consent.revoked ? 'Revoked' : 'Active'}
+                            </span>
+                        </td>
+                        <td>${formatDate(consent.granted_at)}</td>
+                        <td>${consent.expires_at ? formatDate(consent.expires_at) : 'Never'}</td>
+                        <td>
+                            ${!consent.revoked ?
+                                `<button class="btn btn-danger action-btn" onclick="revokeConsent('${consent.consent_id}')">Revoke</button>` :
+                                '-'
+                            }
+                        </td>
+                    </tr>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading consents:', error);
+                alert('Error loading consents: ' + error.message);
+            }
+        }
+
+        async function revokeConsent(consentId) {
+            if (!confirm('Revoke this consent? The user will need to re-authorize the application.')) return;
+
+            try {
+                const response = await fetch(`/api/admin/oauth-consents/${consentId}/revoke`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to revoke consent');
+
+                alert('Consent revoked successfully');
+                loadConsents();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        }
+
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/admin/login';
+        }
+
+        // Load consents on page load
+        loadConsents();
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

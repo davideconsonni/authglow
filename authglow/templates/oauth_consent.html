@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorize {{ client_name }} - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <style>
+        body {
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .consent-container {
+            background: var(--surface);
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px var(--shadow);
+            max-width: 550px;
+            width: 100%;
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            max-width: 180px;
+            margin-bottom: 1rem;
+        }
+
+        .client-info {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .client-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 12px;
+            margin: 0 auto 1rem;
+            display: block;
+            background: var(--surface-elevated);
+            padding: 10px;
+        }
+
+        .client-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .client-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .consent-message {
+            background: var(--surface-elevated);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .consent-message h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .consent-message p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .user-email {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .scopes-section {
+            margin-bottom: 2rem;
+        }
+
+        .scopes-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .scope-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 0.75rem;
+            background: var(--background);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border);
+        }
+
+        .scope-icon {
+            font-size: 1.25rem;
+            margin-right: 0.75rem;
+            color: var(--primary);
+        }
+
+        .scope-details {
+            flex: 1;
+        }
+
+        .scope-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .scope-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .remember-choice {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: var(--surface-elevated);
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .remember-choice input[type="checkbox"] {
+            margin-right: 0.75rem;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .remember-choice label {
+            flex: 1;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.875rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-approve {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-approve:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn-deny {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-deny:hover {
+            background: var(--border);
+        }
+
+        .security-notice {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(239, 68, 68, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .security-notice p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .security-notice strong {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="consent-container">
+        <div class="logo-container">
+            <img src="/static/images/authglow_full_dark.png" alt="{{ company_name }}" class="logo logo-light">
+            <img src="/static/images/authglow_full_light.png" alt="{{ company_name }}" class="logo logo-dark">
+        </div>
+
+        <div class="client-info">
+            {% if client_logo_url %}
+            <img src="{{ client_logo_url }}" alt="{{ client_name }}" class="client-logo">
+            {% endif %}
+            <div class="client-name">{{ client_name }}</div>
+            {% if client_description %}
+            <div class="client-description">{{ client_description }}</div>
+            {% endif %}
+        </div>
+
+        <div class="consent-message">
+            <h2>🔐 Authorization Request</h2>
+            <p>
+                <strong>{{ client_name }}</strong> is requesting access to your
+                <span class="user-email">{{ user_email }}</span> account.
+            </p>
+        </div>
+
+        <div class="scopes-section">
+            <div class="scopes-title">This application will be able to:</div>
+            {% for scope in requested_scopes %}
+            <div class="scope-item">
+                <div class="scope-icon">✓</div>
+                <div class="scope-details">
+                    <div class="scope-name">{{ scope }}</div>
+                    <div class="scope-description">
+                        {{ scope_descriptions.get(scope, 'Access ' + scope + ' resources') }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="remember-choice">
+            <input type="checkbox" id="remember" name="remember">
+            <label for="remember">
+                Remember this choice and don't ask again for this application
+            </label>
+        </div>
+
+        <form id="consentForm" method="POST" action="/oauth2/consent">
+            <input type="hidden" name="client_id" value="{{ client_id }}">
+            <input type="hidden" name="scopes" value="{{ requested_scopes|join(',') }}">
+            <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+            <input type="hidden" name="state" value="{{ state }}">
+            <input type="hidden" name="approved" id="approvedInput" value="">
+            <input type="hidden" name="remember" id="rememberInput" value="false">
+
+            <div class="actions">
+                <button type="submit" class="btn btn-deny" onclick="setApproval(false)">
+                    Deny
+                </button>
+                <button type="submit" class="btn btn-approve" onclick="setApproval(true)">
+                    Authorize
+                </button>
+            </div>
+        </form>
+
+        <div class="security-notice">
+            <p>
+                <strong>⚠️ Security Notice:</strong>
+                Only authorize applications you trust. You can revoke access at any time from your account settings.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function setApproval(approved) {
+            document.getElementById('approvedInput').value = approved ? 'true' : 'false';
+            document.getElementById('rememberInput').value = document.getElementById('remember').checked ? 'true' : 'false';
+        }
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>

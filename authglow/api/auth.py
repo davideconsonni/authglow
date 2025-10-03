@@ -22,6 +22,7 @@ from authglow.services.audit import AuditService
 from authglow.services.api_key import APIKeyService
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.email.factory import get_email_service
+from authglow.services.refresh_token import RefreshTokenService
 from authglow.core.config import get_settings
 
 router = APIRouter()
@@ -237,27 +238,26 @@ async def authorize_post(
                 }
             )
 
-    # No MFA required or device trusted - proceed with authorization
+    # No MFA required or device trusted - proceed with consent
     await storage.update_last_login(user.id)
 
-    # Create authorization code
-    auth_code = await oauth2_service.create_authorization_code(
-        client_id=client_id,
+    # Create consent session and redirect to consent screen
+    consent_session = await session_service.create_consent_session(
         user_id=user.id,
+        client_id=client_id,
         redirect_uri=redirect_uri,
-        scope=scope
+        scope=scope,
+        state=state
     )
 
-    # Redirect with authorization code
-    redirect_url = f"{redirect_uri}?code={auth_code.code}"
-    if state:
-        redirect_url += f"&state={state}"
-
-    return RedirectResponse(url=redirect_url, status_code=303)
+    # Redirect to consent screen
+    consent_url = f"/oauth2/consent?session_token={consent_session['session_token']}"
+    return RedirectResponse(url=consent_url, status_code=303)
 
 
 @router.post("/oauth2/token", response_model=Token)
 async def token_endpoint(
+    request: Request,
     grant_type: str = Form(...),
     code: Optional[str] = Form(None),
     redirect_uri: Optional[str] = Form(None),
@@ -267,7 +267,8 @@ async def token_endpoint(
     scope: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service)
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService())
 ):
     """OAuth2 token endpoint - exchanges code for tokens."""
 
@@ -291,8 +292,27 @@ async def token_endpoint(
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
 
-        # Generate tokens
-        return jwt_service.create_token_response(user.id, user.email, user.scopes)
+        # Parse scopes
+        scopes = auth_code.scope.split() if auth_code.scope else user.scopes
+
+        # Generate JWT access token
+        access_token_response = jwt_service.create_token_response(
+            user.id, user.email, scopes, include_refresh=False
+        )
+
+        # Create persistent refresh token with rotation
+        rt = await refresh_token_service.create_refresh_token(
+            user_id=user.id,
+            client_id=auth_code.client_id,
+            scopes=scopes,
+            issued_ip=request.client.host if request.client else None,
+            expires_in_days=30
+        )
+
+        # Add refresh token to response
+        access_token_response.refresh_token = rt.token
+
+        return access_token_response
 
     elif grant_type == "client_credentials":
         # Client credentials flow
@@ -312,21 +332,34 @@ async def token_endpoint(
         )
 
     elif grant_type == "refresh_token":
-        # Refresh token flow
-        if not refresh_token:
-            raise HTTPException(status_code=400, detail="Missing refresh_token")
+        # Refresh token flow with rotation
+        if not refresh_token or not client_id:
+            raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
 
-        token_data = jwt_service.decode_token(refresh_token)
-        if not token_data or token_data.token_type != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        # Validate and rotate refresh token
+        new_rt, error = await refresh_token_service.validate_and_rotate(
+            token=refresh_token,
+            client_id=client_id,
+            ip_address=request.client.host if request.client else None
+        )
+
+        if error:
+            raise HTTPException(status_code=401, detail=error)
 
         # Get user
-        user = await storage.get_user(token_data.sub)
+        user = await storage.get_user(new_rt.user_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="Invalid user")
 
-        # Generate new tokens
-        return jwt_service.create_token_response(user.id, user.email, user.scopes)
+        # Generate new JWT access token
+        access_token_response = jwt_service.create_token_response(
+            user.id, user.email, new_rt.scopes, include_refresh=False
+        )
+
+        # Add new refresh token to response
+        access_token_response.refresh_token = new_rt.token
+
+        return access_token_response
 
     else:
         raise HTTPException(status_code=400, detail="Unsupported grant_type")

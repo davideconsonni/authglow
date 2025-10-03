@@ -5,6 +5,12 @@
     <a href="/admin/users" class="nav-item {% if active_page == 'users' %}active{% endif %}">
         <span>👥</span> Users
     </a>
+    <a href="/admin/sessions" class="nav-item {% if active_page == 'sessions' %}active{% endif %}">
+        <span>🔓</span> Active Sessions
+    </a>
+    <a href="/admin/oauth-consents" class="nav-item {% if active_page == 'oauth-consents' %}active{% endif %}">
+        <span>✓</span> OAuth2 Consents
+    </a>
     <a href="/admin/audit" class="nav-item {% if active_page == 'audit' %}active{% endif %}">
         <span>📝</span> Audit Logs
     </a>
@@ -13,6 +19,9 @@
     </a>
     <a href="/admin/api-keys" class="nav-item {% if active_page == 'api-keys' %}active{% endif %}">
         <span>🗝️</span> API Keys
+    </a>
+    <a href="/admin/rbac" class="nav-item {% if active_page == 'rbac' %}active{% endif %}">
+        <span>🛡️</span> Roles & Permissions
     </a>
     <a href="/admin/password-resets" class="nav-item {% if active_page == 'password-resets' %}active{% endif %}">
         <span>🔐</span> Password Resets

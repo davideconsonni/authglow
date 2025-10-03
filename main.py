@@ -15,6 +15,10 @@ from authglow.api.oauth_client import router as oauth_client_router
 from authglow.api.api_key import router as api_key_router
 from authglow.api.password_reset import router as password_reset_router
 from authglow.api.email_verification import router as email_verification_router
+from authglow.api.oauth_consent_handler import router as oauth_consent_router
+from authglow.api.oauth2_advanced import router as oauth2_advanced_router
+from authglow.api.rbac import router as rbac_router
+from authglow.api.user_profile import router as user_profile_router
 from authglow.core.config import get_settings
 
 # Create FastAPI app
@@ -55,6 +59,10 @@ app.include_router(oauth_client_router, tags=["OAuth2 Clients"])
 app.include_router(api_key_router, tags=["API Keys"])
 app.include_router(password_reset_router, tags=["Password Reset"])
 app.include_router(email_verification_router, tags=["Email Verification"])
+app.include_router(oauth_consent_router, tags=["OAuth2 Consent"])
+app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
+app.include_router(rbac_router, tags=["RBAC"])
+app.include_router(user_profile_router, tags=["User Profile"])
 
 
 @app.get("/")

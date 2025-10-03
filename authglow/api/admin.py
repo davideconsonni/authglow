@@ -24,6 +24,9 @@ from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
 from authglow.services.mfa import MFAService
 from authglow.services.passkey import PasskeyService
+from authglow.services.refresh_token import RefreshTokenService
+from authglow.services.oauth_consent import OAuth2ConsentService
+from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 
@@ -630,3 +633,277 @@ async def get_security_events(
         ))
 
     return events
+
+
+# New admin endpoints for OAuth2 features
+
+@router.get("/admin/sessions", response_class=HTMLResponse)
+async def admin_sessions_page(request: Request):
+    """Active sessions management page (auth handled by JS)."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "admin_sessions.html",
+        {
+            "request": request,
+            **settings.get_ui_context()
+        }
+    )
+
+
+@router.get("/admin/oauth-consents", response_class=HTMLResponse)
+async def admin_oauth_consents_page(request: Request):
+    """OAuth2 consents management page (auth handled by JS)."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "admin_oauth_consents.html",
+        {
+            "request": request,
+            **settings.get_ui_context()
+        }
+    )
+
+
+@router.get("/admin/rbac", response_class=HTMLResponse)
+async def admin_rbac_page(request: Request):
+    """RBAC management page (auth handled by JS)."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "admin_rbac.html",
+        {
+            "request": request,
+            **settings.get_ui_context()
+        }
+    )
+
+
+@router.get("/api/admin/sessions")
+async def get_active_sessions(
+    email: Optional[str] = Query(None),
+    type: str = Query("all"),
+    current_user: User = Depends(require_admin)
+):
+    """Get all active sessions and refresh tokens."""
+    refresh_token_service = RefreshTokenService()
+    user_storage = UserStorage()
+
+    sessions_list = []
+    total_sessions = 0
+    total_refresh_tokens = 0
+    unique_users = set()
+
+    # Get all refresh tokens
+    try:
+        import fsspec
+        settings = get_settings()
+        storage_path = f"{settings.storage_path}/refresh_tokens"
+
+        if settings.storage_backend == "file":
+            import os
+            os.makedirs(storage_path, exist_ok=True)
+            fs = fsspec.filesystem("file")
+        else:
+            fs = fsspec.filesystem(
+                settings.storage_backend,
+                **settings.get_storage_options()
+            )
+
+        pattern = f"{storage_path}/*.json"
+        files = fs.glob(pattern)
+
+        for file_path in files:
+            try:
+                import json
+                with fs.open(file_path, "r") as f:
+                    data = json.load(f)
+                    from authglow.models.refresh_token import RefreshToken
+                    rt = RefreshToken(**data)
+
+                    # Skip revoked or expired
+                    if rt.revoked or datetime.utcnow() > rt.expires_at:
+                        continue
+
+                    # Get user
+                    user = await user_storage.get_user(rt.user_id)
+                    if not user:
+                        continue
+
+                    # Filter by email if specified
+                    if email and email.lower() not in user.email.lower():
+                        continue
+
+                    # Filter by type
+                    if type != "all" and type != "refresh":
+                        continue
+
+                    unique_users.add(rt.user_id)
+                    total_refresh_tokens += 1
+
+                    sessions_list.append({
+                        "id": rt.token_id,
+                        "type": "refresh",
+                        "user_email": user.email,
+                        "client_id": rt.client_id,
+                        "created_at": rt.created_at.isoformat(),
+                        "expires_at": rt.expires_at.isoformat() if rt.expires_at else None,
+                        "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
+                        "ip_address": rt.issued_ip,
+                        "scopes": rt.scopes
+                    })
+
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    total_sessions = len(sessions_list)
+
+    return {
+        "sessions": sessions_list,
+        "total_sessions": total_sessions,
+        "total_refresh_tokens": total_refresh_tokens,
+        "unique_users": len(unique_users)
+    }
+
+
+@router.post("/api/admin/tokens/refresh/{token_id}/revoke")
+async def revoke_refresh_token_admin(
+    token_id: str,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service)
+):
+    """Revoke a refresh token (admin)."""
+    refresh_token_service = RefreshTokenService()
+
+    rt = await refresh_token_service.get_refresh_token_by_id(token_id)
+    if not rt:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    success = await refresh_token_service.revoke_token(
+        rt.token,
+        reason="Revoked by admin"
+    )
+
+    if success:
+        await audit_service.log_event(
+            event_type="refresh_token_revoked_by_admin",
+            user_id=current_user.id,
+            email=current_user.email,
+            metadata={"token_id": token_id, "target_user_id": rt.user_id},
+            severity="warning"
+        )
+
+    return {"message": "Token revoked successfully"}
+
+
+@router.post("/api/admin/sessions/cleanup")
+async def cleanup_expired_sessions(
+    current_user: User = Depends(require_admin)
+):
+    """Clean up expired sessions and tokens."""
+    refresh_token_service = RefreshTokenService()
+
+    deleted = await refresh_token_service.cleanup_expired_tokens()
+
+    return {"deleted": deleted, "message": f"Cleaned up {deleted} expired tokens"}
+
+
+@router.get("/api/admin/oauth-consents")
+async def get_oauth_consents_admin(
+    email: Optional[str] = Query(None),
+    current_user: User = Depends(require_admin)
+):
+    """Get all OAuth2 consents."""
+    consent_service = OAuth2ConsentService()
+    client_storage = OAuth2ClientStorage()
+    user_storage = UserStorage()
+
+    consents_list = []
+
+    # Get all consents
+    try:
+        import fsspec
+        settings = get_settings()
+        storage_path = f"{settings.storage_path}/oauth_consents"
+
+        if settings.storage_backend == "file":
+            import os
+            os.makedirs(storage_path, exist_ok=True)
+            fs = fsspec.filesystem("file")
+        else:
+            fs = fsspec.filesystem(
+                settings.storage_backend,
+                **settings.get_storage_options()
+            )
+
+        pattern = f"{storage_path}/*.json"
+        files = fs.glob(pattern)
+
+        for file_path in files:
+            try:
+                import json
+                with fs.open(file_path, "r") as f:
+                    data = json.load(f)
+                    from authglow.models.oauth_consent import OAuth2Consent
+                    consent = OAuth2Consent(**data)
+
+                    # Get user
+                    user = await user_storage.get_user(consent.user_id)
+                    if not user:
+                        continue
+
+                    # Filter by email if specified
+                    if email and email.lower() not in user.email.lower():
+                        continue
+
+                    # Get client info
+                    client = await client_storage.get_client(consent.client_id)
+                    client_name = client.name if client else consent.client_id
+
+                    consents_list.append({
+                        "consent_id": consent.consent_id,
+                        "user_email": user.email,
+                        "client_id": consent.client_id,
+                        "client_name": client_name,
+                        "scopes": consent.scopes,
+                        "granted_at": consent.granted_at.isoformat(),
+                        "expires_at": consent.expires_at.isoformat() if consent.expires_at else None,
+                        "revoked": consent.revoked,
+                        "revoked_at": consent.revoked_at.isoformat() if consent.revoked_at else None
+                    })
+
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    # Sort by granted_at descending
+    consents_list.sort(key=lambda x: x["granted_at"], reverse=True)
+
+    return consents_list
+
+
+@router.post("/api/admin/oauth-consents/{consent_id}/revoke")
+async def revoke_consent_admin(
+    consent_id: str,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service)
+):
+    """Revoke an OAuth2 consent (admin)."""
+    consent_service = OAuth2ConsentService()
+
+    success = await consent_service.revoke_consent(consent_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Consent not found")
+
+    await audit_service.log_event(
+        event_type="oauth_consent_revoked_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"consent_id": consent_id},
+        severity="info"
+    )
+
+    return {"message": "Consent revoked successfully"}
