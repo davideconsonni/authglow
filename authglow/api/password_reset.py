@@ -19,6 +19,8 @@ from authglow.models.password_reset import (
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
+from authglow.services.email import EmailService
+from authglow.services.email.factory import get_email_service
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.password import validate_password_strength
@@ -53,7 +55,8 @@ async def request_password_reset(
     reset_request: PasswordResetRequest,
     reset_service: PasswordResetService = Depends(get_reset_service),
     user_storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
+    email_service: EmailService = Depends(get_email_service)
 ):
     """Request a password reset token.
 
@@ -105,10 +108,21 @@ async def request_password_reset(
         expires_in_minutes=30
     )
 
-    # TODO: Send email with reset link containing plaintext_token
-    # For now, log it (in production, this should only send email)
+    # Send password reset email
     reset_url = f"{settings.base_url}/password/reset?token={plaintext_token}"
-    print(f"\n🔐 Password Reset Link: {reset_url}\n")
+
+    await email_service.send_template(
+        to=[user.email],
+        subject="Reset Your Password - AuthGlow",
+        template_name="password_reset",
+        context={
+            "user_name": user.first_name or user.email.split("@")[0],
+            "reset_url": reset_url,
+            "expires_in_minutes": 30
+        },
+        from_email=settings.email_from_address,
+        from_name=settings.email_from_name
+    )
 
     # Log successful request
     await audit_service.log_event(

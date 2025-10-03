@@ -73,6 +73,28 @@ class Settings(BaseSettings):
     passkey_rp_name: str = "AuthGlow"
     passkey_origin: str = "http://localhost:8000"
 
+    # Email Settings
+    email_provider: str = "console"  # console, smtp, sendgrid, mailgun
+    email_from_address: str = "noreply@authglow.local"
+    email_from_name: str = "AuthGlow"
+
+    # SMTP Settings (if email_provider = "smtp")
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: bool = True
+
+    # SendGrid Settings (if email_provider = "sendgrid")
+    sendgrid_api_key: Optional[str] = None
+
+    # Mailgun Settings (if email_provider = "mailgun")
+    mailgun_api_key: Optional[str] = None
+    mailgun_domain: Optional[str] = None
+
+    # Base URL for links in emails
+    base_url: str = "http://localhost:8000"
+
     @field_validator("secret_key", "jwt_secret_key")
     @classmethod
     def validate_keys(cls, v: str) -> str:
