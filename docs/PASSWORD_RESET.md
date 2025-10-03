@@ -344,7 +344,7 @@ Password reset settings in `authglow/core/config.py`:
 
 ```python
 # Storage path
-storage_path: str = "./data/users"  # Tokens in {storage_path}/password_resets/
+storage_path: str = "../data/users"  # Tokens in {storage_path}/password_resets/
 
 # Base URL per reset links
 base_url: str = "http://localhost:8000"

@@ -217,7 +217,7 @@ API key settings in `authglow/core/config.py`:
 
 ```python
 # Storage path
-storage_path: str = "./data/users"  # Keys stored in {storage_path}/api_keys/
+storage_path: str = "../data/users"  # Keys stored in {storage_path}/api_keys/
 
 # Rate limiting (via slowapi)
 # Create: 10/hour per IP

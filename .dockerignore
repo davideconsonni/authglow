@@ -13,7 +13,7 @@ env/
 .idea
 .vscode
 *.md
-!README.md
+!docs/README.md
 tests/
 data/
 .pytest_cache

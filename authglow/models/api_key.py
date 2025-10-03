@@ -57,6 +57,7 @@ class APIKeyResponse(BaseModel):
 
     key_id: str
     user_id: str
+    user_email: Optional[str] = None
     name: str
     description: Optional[str]
     key_prefix: str
@@ -68,6 +69,11 @@ class APIKeyResponse(BaseModel):
     total_requests: int
     created_at: datetime
     allowed_ips: List[str]
+
+    @property
+    def usage_count(self) -> int:
+        """Alias for total_requests for backward compatibility."""
+        return self.total_requests
 
 
 class APIKeyWithSecret(APIKeyResponse):

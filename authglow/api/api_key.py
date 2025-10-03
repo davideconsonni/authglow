@@ -16,6 +16,7 @@ from authglow.models.api_key import (
 from authglow.services.api_key import APIKeyService
 from authglow.services.audit import AuditService
 from authglow.api.auth import get_current_user, get_api_key_service, get_audit_service
+from authglow.services.storage import UserStorage
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -87,7 +88,13 @@ async def get_api_key(
     if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Not authorized to view this key")
 
-    return APIKeyResponse(**api_key.model_dump())
+    # Enrich with user email
+    user_storage = UserStorage()
+    key_data = api_key.model_dump()
+    user = await user_storage.get_user(api_key.user_id)
+    key_data['user_email'] = user.email if user else None
+
+    return APIKeyResponse(**key_data)
 
 
 @router.patch("/api/keys/{key_id}", response_model=APIKeyResponse)
@@ -232,7 +239,16 @@ async def list_all_api_keys(
         active_only=active_only
     )
 
-    return [APIKeyResponse(**key.model_dump()) for key in keys]
+    # Enrich with user email
+    user_storage = UserStorage()
+    responses = []
+    for key in keys:
+        key_data = key.model_dump()
+        user = await user_storage.get_user(key.user_id)
+        key_data['user_email'] = user.email if user else None
+        responses.append(APIKeyResponse(**key_data))
+
+    return responses
 
 
 @router.get("/api/admin/users/{user_id}/keys", response_model=List[APIKeyResponse])

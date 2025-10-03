@@ -378,19 +378,19 @@
                 tbody.innerHTML = keys.map(key => `
                     <tr>
                         <td><strong>${key.name}</strong></td>
-                        <td><span class="key-prefix">${key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...'}</span></td>
+                        <td><span class="key-prefix">${key.key_prefix || 'N/A'}</span></td>
                         <td>${key.user_email || 'N/A'}</td>
                         <td>${key.scopes ? key.scopes.join(', ') : 'default'}</td>
                         <td><span class="status-badge status-${key.is_active ? 'active' : 'inactive'}">${key.is_active ? 'Active' : 'Revoked'}</span></td>
                         <td>${key.expires_at ? formatDate(key.expires_at) : 'Never'}</td>
                         <td>${key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
                         <td>
-                            <button class="btn btn-secondary action-btn" onclick="viewKey('${key.id}')">View</button>
+                            <button class="btn btn-secondary action-btn" onclick="viewKey('${key.key_id}')">View</button>
                             ${key.is_active ?
-                                `<button class="btn btn-warning action-btn" onclick="revokeKey('${key.id}')">Revoke</button>` :
+                                `<button class="btn btn-warning action-btn" onclick="revokeKey('${key.key_id}')">Revoke</button>` :
                                 ''
                             }
-                            <button class="btn btn-danger action-btn" onclick="deleteKey('${key.id}')">Delete</button>
+                            <button class="btn btn-danger action-btn" onclick="deleteKey('${key.key_id}')">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -451,7 +451,7 @@
         }
 
         function showKeySecret(key) {
-            document.getElementById('newKeyPrefix').textContent = key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...';
+            document.getElementById('newKeyPrefix').textContent = key.key_prefix;
             document.getElementById('newKeySecret').textContent = key.api_key;
             document.getElementById('secretModal').style.display = 'block';
         }
@@ -487,7 +487,7 @@
                         <div class="detail-value">${key.description || 'N/A'}</div>
 
                         <div class="detail-label">Key Prefix:</div>
-                        <div class="detail-value"><span class="key-prefix">${key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...'}</span></div>
+                        <div class="detail-value"><span class="key-prefix">${key.key_prefix || 'N/A'}</span></div>
 
                         <div class="detail-label">User Email:</div>
                         <div class="detail-value">${key.user_email || 'N/A'}</div>

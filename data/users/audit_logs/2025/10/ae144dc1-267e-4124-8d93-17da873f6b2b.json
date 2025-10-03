@@ -1,0 +1,14 @@
+{
+  "id": "ae144dc1-267e-4124-8d93-17da873f6b2b",
+  "user_id": "5a421014-7693-4986-904b-2ba9e8b6d367",
+  "email": "dconsonni@gmail.com",
+  "event_type": "api_key_revoked",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-03T12:21:35.852825",
+  "metadata": {
+    "key_id": "f58283f4-3b3c-4b8d-af54-521ae1fb351d",
+    "key_name": "Test"
+  },
+  "severity": "warning"
+}
