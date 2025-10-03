@@ -143,6 +143,21 @@ async def admin_oauth_clients_page(request: Request):
     )
 
 
+@router.get("/admin/api-keys", response_class=HTMLResponse)
+async def admin_api_keys_page(request: Request):
+    """API keys management page (auth handled by JS)."""
+    settings = get_settings()
+    ui_context = settings.get_ui_context()
+
+    return templates.TemplateResponse(
+        "admin_api_keys.html",
+        {
+            "request": request,
+            **ui_context
+        }
+    )
+
+
 # API Endpoints
 
 @router.get("/api/admin/stats", response_model=DashboardStats)

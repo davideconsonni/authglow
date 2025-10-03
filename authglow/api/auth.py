@@ -19,10 +19,11 @@ from authglow.services.oauth2 import OAuth2Service
 from authglow.services.mfa import MFAService
 from authglow.services.session import SessionService
 from authglow.services.audit import AuditService
+from authglow.services.api_key import APIKeyService
 from authglow.core.config import get_settings
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
 templates = Jinja2Templates(directory="authglow/templates")
 limiter = Limiter(key_func=get_remote_address)
 
@@ -63,17 +64,56 @@ def get_audit_service():
     return AuditService()
 
 
+def get_api_key_service():
+    """Get API key service instance."""
+    return APIKeyService()
+
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
     storage: UserStorage = Depends(get_user_storage),
-    jwt_service: JWTService = Depends(get_jwt_service)
+    jwt_service: JWTService = Depends(get_jwt_service),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    audit_service: AuditService = Depends(get_audit_service)
 ) -> User:
-    """Get current authenticated user."""
+    """Get current authenticated user (supports both JWT and API Key)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Try API Key authentication first (from X-API-Key header)
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        api_key_obj = await api_key_service.verify_key(api_key)
+        if api_key_obj:
+            # Track usage
+            client_ip = request.client.host if request.client else None
+            await api_key_service.track_usage(api_key_obj.key_id, client_ip)
+
+            # Log API key usage
+            await audit_service.log_event(
+                event_type="api_key_used",
+                user_id=api_key_obj.user_id,
+                metadata={
+                    "key_id": api_key_obj.key_id,
+                    "key_name": api_key_obj.name
+                },
+                ip_address=client_ip
+            )
+
+            # Get user
+            user = await storage.get_user(api_key_obj.user_id)
+            if user and user.is_active:
+                # Attach API key info to user for scope checking
+                user.api_key_scopes = api_key_obj.scopes
+                return user
+
+    # Fall back to JWT authentication
+    if not token:
+        raise credentials_exception
 
     token_data = jwt_service.decode_token(token)
     if token_data is None or token_data.token_type != "access":

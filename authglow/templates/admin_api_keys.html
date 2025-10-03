@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Keys - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <style>
+
+        .table-container {
+            background: var(--surface);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--surface-elevated);
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        tr:hover {
+            background: var(--surface-elevated);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+
+        .status-inactive {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .key-prefix {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .action-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            margin: 5% auto;
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            border-radius: 8px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--background);
+            color: var(--text-primary);
+        }
+
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        .form-group small {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .secret-display {
+            background: var(--surface-elevated);
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            margin-top: 1rem;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .warning {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid #fbbf24;
+            color: #fbbf24;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .detail-value {
+            color: var(--text-primary);
+        }
+
+        .scope-tag {
+            display: inline-block;
+            background: var(--surface-elevated);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    {% include 'components/admin_header.html' %}
+    {% set active_page = 'api-keys' %}
+    {% include 'components/admin_nav.html' %}
+
+    <div class="main-content">
+        <h1 class="page-title">API Keys</h1>
+
+        <div class="table-container">
+            <div class="table-header">
+                <h2 style="margin: 0;">All API Keys</h2>
+                <button class="btn btn-primary" onclick="showCreateModal()">
+                    + New API Key
+                </button>
+            </div>
+
+            <table id="keysTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Key Prefix</th>
+                        <th>User Email</th>
+                        <th>Scopes</th>
+                        <th>Status</th>
+                        <th>Expires</th>
+                        <th>Last Used</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="keysBody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem;">
+                            Loading...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create API Key Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <h2>Create New API Key</h2>
+            <form id="createForm" onsubmit="createKey(event)">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" name="name" required placeholder="My API Key">
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="3" placeholder="Optional description for this key"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Scopes (comma separated)</label>
+                    <input type="text" name="scopes" placeholder="read, write, admin">
+                    <small>Leave empty for default scopes</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Expires in days</label>
+                    <input type="number" name="expires_in_days" min="1" placeholder="90" id="expiryDays">
+                    <small>Number of days until expiration</small>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="never_expires" id="neverExpires" onchange="toggleExpiry()">
+                        Never expires
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Allowed IPs (one per line, optional)</label>
+                    <textarea name="allowed_ips" rows="3" placeholder="192.168.1.1&#10;10.0.0.0/24"></textarea>
+                    <small>Leave empty to allow all IPs</small>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-primary">Create API Key</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Key Secret Modal -->
+    <div id="secretModal" class="modal">
+        <div class="modal-content">
+            <h2>API Key Created Successfully!</h2>
+            <div class="warning">
+                ⚠️ Save this key now! It will not be shown again.
+            </div>
+            <div class="form-group">
+                <label>Key Prefix</label>
+                <div class="secret-display" id="newKeyPrefix"></div>
+            </div>
+            <div class="form-group">
+                <label>Full API Key</label>
+                <div class="secret-display">
+                    <span id="newKeySecret"></span>
+                    <button class="btn btn-secondary copy-btn" onclick="copyToClipboard(document.getElementById('newKeySecret').textContent)">Copy</button>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="closeModal('secretModal'); loadKeys()">Close</button>
+        </div>
+    </div>
+
+    <!-- View Key Details Modal -->
+    <div id="viewModal" class="modal">
+        <div class="modal-content">
+            <h2>API Key Details</h2>
+            <div id="keyDetails"></div>
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('admin_token');
+        const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+
+        if (!token) {
+            window.location.href = '/admin/login';
+        }
+
+        document.getElementById('userEmail').textContent = adminUser.email || '';
+
+        function toggleExpiry() {
+            const checkbox = document.getElementById('neverExpires');
+            const daysInput = document.getElementById('expiryDays');
+            daysInput.disabled = checkbox.checked;
+            if (checkbox.checked) {
+                daysInput.value = '';
+            }
+        }
+
+        async function loadKeys() {
+            try {
+                const response = await fetch('/api/admin/keys', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load keys');
+
+                const keys = await response.json();
+                const tbody = document.getElementById('keysBody');
+
+                if (keys.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No API keys yet. Create one!</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = keys.map(key => `
+                    <tr>
+                        <td><strong>${key.name}</strong></td>
+                        <td><span class="key-prefix">${key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...'}</span></td>
+                        <td>${key.user_email || 'N/A'}</td>
+                        <td>${key.scopes ? key.scopes.join(', ') : 'default'}</td>
+                        <td><span class="status-badge status-${key.is_active ? 'active' : 'inactive'}">${key.is_active ? 'Active' : 'Revoked'}</span></td>
+                        <td>${key.expires_at ? formatDate(key.expires_at) : 'Never'}</td>
+                        <td>${key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
+                        <td>
+                            <button class="btn btn-secondary action-btn" onclick="viewKey('${key.id}')">View</button>
+                            ${key.is_active ?
+                                `<button class="btn btn-warning action-btn" onclick="revokeKey('${key.id}')">Revoke</button>` :
+                                ''
+                            }
+                            <button class="btn btn-danger action-btn" onclick="deleteKey('${key.id}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading keys:', error);
+                alert('Error loading keys: ' + error.message);
+            }
+        }
+
+        function showCreateModal() {
+            document.getElementById('createModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        async function createKey(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            const data = {
+                name: formData.get('name'),
+                description: formData.get('description') || undefined,
+                scopes: formData.get('scopes') ? formData.get('scopes').split(',').map(s => s.trim()).filter(s => s) : undefined,
+                allowed_ips: formData.get('allowed_ips') ? formData.get('allowed_ips').split('\n').map(s => s.trim()).filter(s => s) : undefined
+            };
+
+            // Handle expiration
+            const neverExpires = formData.get('never_expires') === 'on';
+            if (!neverExpires && formData.get('expires_in_days')) {
+                data.expires_in_days = parseInt(formData.get('expires_in_days'));
+            }
+
+            try {
+                const response = await fetch('/api/keys', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to create key');
+                }
+
+                const result = await response.json();
+                showKeySecret(result);
+                closeModal('createModal');
+                form.reset();
+            } catch (error) {
+                alert('Error creating key: ' + error.message);
+            }
+        }
+
+        function showKeySecret(key) {
+            document.getElementById('newKeyPrefix').textContent = key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...';
+            document.getElementById('newKeySecret').textContent = key.api_key;
+            document.getElementById('secretModal').style.display = 'block';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        async function viewKey(keyId) {
+            try {
+                const response = await fetch(`/api/keys/${keyId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load key details');
+
+                const key = await response.json();
+                const detailsDiv = document.getElementById('keyDetails');
+
+                const scopes = key.scopes || [];
+                const allowedIps = key.allowed_ips || [];
+
+                detailsDiv.innerHTML = `
+                    <div class="detail-grid">
+                        <div class="detail-label">Name:</div>
+                        <div class="detail-value">${key.name}</div>
+
+                        <div class="detail-label">Description:</div>
+                        <div class="detail-value">${key.description || 'N/A'}</div>
+
+                        <div class="detail-label">Key Prefix:</div>
+                        <div class="detail-value"><span class="key-prefix">${key.key_prefix || 'ak_' + key.api_key.substring(0, 10) + '...'}</span></div>
+
+                        <div class="detail-label">User Email:</div>
+                        <div class="detail-value">${key.user_email || 'N/A'}</div>
+
+                        <div class="detail-label">Status:</div>
+                        <div class="detail-value"><span class="status-badge status-${key.is_active ? 'active' : 'inactive'}">${key.is_active ? 'Active' : 'Revoked'}</span></div>
+
+                        <div class="detail-label">Scopes:</div>
+                        <div class="detail-value">
+                            ${scopes.length > 0 ? scopes.map(s => `<span class="scope-tag">${s}</span>`).join('') : 'Default'}
+                        </div>
+
+                        <div class="detail-label">Allowed IPs:</div>
+                        <div class="detail-value">${allowedIps.length > 0 ? allowedIps.join('<br>') : 'All IPs'}</div>
+
+                        <div class="detail-label">Created:</div>
+                        <div class="detail-value">${formatDate(key.created_at)}</div>
+
+                        <div class="detail-label">Expires:</div>
+                        <div class="detail-value">${key.expires_at ? formatDate(key.expires_at) : 'Never'}</div>
+
+                        <div class="detail-label">Last Used:</div>
+                        <div class="detail-value">${key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</div>
+
+                        <div class="detail-label">Usage Count:</div>
+                        <div class="detail-value">${key.usage_count || 0}</div>
+                    </div>
+                `;
+
+                document.getElementById('viewModal').style.display = 'block';
+            } catch (error) {
+                alert('Error loading key details: ' + error.message);
+            }
+        }
+
+        async function revokeKey(keyId) {
+            if (!confirm('Revoke this API key? It will stop working immediately!')) return;
+            try {
+                const response = await fetch(`/api/keys/${keyId}/revoke`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to revoke key');
+
+                alert('API key revoked successfully');
+                loadKeys();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteKey(keyId) {
+            if (!confirm('Delete this API key? This cannot be undone!')) return;
+            try {
+                const response = await fetch(`/api/keys/${keyId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to delete key');
+
+                alert('API key deleted successfully');
+                loadKeys();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        }
+
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            localStorage.removeItem('access_token');
+            window.location.href = '/admin/login';
+        }
+
+        loadKeys();
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>
