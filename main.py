@@ -19,6 +19,7 @@ from authglow.api.oauth_consent_handler import router as oauth_consent_router
 from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 from authglow.api.rbac import router as rbac_router
 from authglow.api.user_profile import router as user_profile_router
+from authglow.api.oidc import router as oidc_router
 from authglow.core.config import get_settings
 
 # Create FastAPI app
@@ -63,6 +64,7 @@ app.include_router(oauth_consent_router, tags=["OAuth2 Consent"])
 app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 app.include_router(rbac_router, tags=["RBAC"])
 app.include_router(user_profile_router, tags=["User Profile"])
+app.include_router(oidc_router, tags=["OpenID Connect"])
 
 
 @app.get("/")

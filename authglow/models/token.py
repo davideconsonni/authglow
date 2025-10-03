@@ -14,6 +14,7 @@ class Token(BaseModel):
     expires_in: int
     refresh_token: Optional[str] = None
     scope: Optional[str] = None
+    id_token: Optional[str] = None  # OpenID Connect ID token
 
 
 class TokenData(BaseModel):

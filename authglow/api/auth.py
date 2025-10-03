@@ -312,6 +312,27 @@ async def token_endpoint(
         # Add refresh token to response
         access_token_response.refresh_token = rt.token
 
+        # Add ID token if OpenID Connect flow (openid scope requested)
+        if "openid" in scopes:
+            from authglow.services.oidc import OIDCService
+            oidc_service = OIDCService()
+
+            # Build user claims for ID token
+            user_claims = oidc_service.build_user_claims(user, scopes)
+
+            # Create ID token
+            id_token = jwt_service.create_id_token(
+                user_id=user.id,
+                client_id=auth_code.client_id,
+                scopes=scopes,
+                user_claims=user_claims,
+                nonce=getattr(auth_code, 'nonce', None),  # If nonce was stored
+                auth_time=user.last_login
+            )
+
+            # Add to response
+            access_token_response.id_token = id_token
+
         return access_token_response
 
     elif grant_type == "client_credentials":

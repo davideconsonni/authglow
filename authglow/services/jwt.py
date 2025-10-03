@@ -1,10 +1,11 @@
 """JWT token service."""
 
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import jwt
 from authglow.core.config import get_settings
 from authglow.models.token import TokenData, Token
+from authglow.models.oidc import IDTokenClaims, SCOPE_TO_CLAIMS
 
 
 class JWTService:
@@ -91,6 +92,87 @@ class JWTService:
             )
 
             return token_data
+
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.JWTError:
+            return None
+
+    def create_id_token(
+        self,
+        user_id: str,
+        client_id: str,
+        scopes: List[str],
+        user_claims: Dict[str, Any],
+        nonce: Optional[str] = None,
+        auth_time: Optional[datetime] = None,
+        expires_delta: Optional[timedelta] = None
+    ) -> str:
+        """Create an OpenID Connect ID Token.
+
+        Args:
+            user_id: Subject identifier
+            client_id: Client ID (audience)
+            scopes: Requested scopes
+            user_claims: User information to include based on scopes
+            nonce: Nonce from authorization request
+            auth_time: Time when user authenticated
+            expires_delta: Token expiration time
+
+        Returns:
+            Encoded JWT ID token
+        """
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(
+                minutes=self.settings.access_token_expire_minutes
+            )
+
+        iat = datetime.utcnow()
+
+        # Build ID token claims
+        id_token_data = {
+            "iss": self.settings.issuer,
+            "sub": user_id,
+            "aud": client_id,
+            "exp": int(expire.timestamp()),
+            "iat": int(iat.timestamp()),
+        }
+
+        # Add optional claims
+        if nonce:
+            id_token_data["nonce"] = nonce
+
+        if auth_time:
+            id_token_data["auth_time"] = int(auth_time.timestamp())
+
+        # Add user claims based on requested scopes
+        for scope in scopes:
+            if scope in SCOPE_TO_CLAIMS:
+                for claim in SCOPE_TO_CLAIMS[scope]:
+                    if claim in user_claims and user_claims[claim] is not None:
+                        id_token_data[claim] = user_claims[claim]
+
+        # Encode ID token
+        encoded_jwt = jwt.encode(
+            id_token_data,
+            self.settings.jwt_secret_key,
+            algorithm=self.settings.jwt_algorithm
+        )
+
+        return encoded_jwt
+
+    def decode_id_token(self, token: str) -> Optional[IDTokenClaims]:
+        """Decode and validate an ID token."""
+        try:
+            payload = jwt.decode(
+                token,
+                self.settings.jwt_secret_key,
+                algorithms=[self.settings.jwt_algorithm]
+            )
+
+            return IDTokenClaims(**payload)
 
         except jwt.ExpiredSignatureError:
             return None

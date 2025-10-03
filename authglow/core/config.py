@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     oauth2_client_id: str = "default-client-id"
     oauth2_client_secret: str = "default-client-secret"
 
+    # OpenID Connect Settings
+    issuer: str = "http://localhost:8000"  # Must match the actual server URL
+
     # Passkey/WebAuthn Settings
     passkey_rp_id: str = "localhost"
     passkey_rp_name: str = "AuthGlow"
