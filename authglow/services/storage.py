@@ -142,3 +142,40 @@ class UserStorage:
         if user:
             user.last_login = datetime.utcnow()
             await self.update_user(user)
+
+    async def record_failed_login(self, user_id: str, max_attempts: int = 5, lockout_duration_minutes: int = 15):
+        """Record a failed login attempt and lock account if threshold exceeded."""
+        user = await self.get_user(user_id)
+        if user:
+            user.failed_login_attempts += 1
+
+            # Lock account if max attempts exceeded
+            if user.failed_login_attempts >= max_attempts:
+                user.locked_until = datetime.utcnow() + timedelta(minutes=lockout_duration_minutes)
+
+            await self.update_user(user)
+            return user.locked_until
+
+    async def reset_failed_login_attempts(self, user_id: str):
+        """Reset failed login attempts after successful login."""
+        user = await self.get_user(user_id)
+        if user:
+            user.failed_login_attempts = 0
+            user.locked_until = None
+            await self.update_user(user)
+
+    async def is_account_locked(self, user_id: str) -> bool:
+        """Check if account is currently locked."""
+        user = await self.get_user(user_id)
+        if not user or not user.locked_until:
+            return False
+
+        # Check if lockout period has expired
+        if datetime.utcnow() >= user.locked_until:
+            # Auto-unlock account
+            user.locked_until = None
+            user.failed_login_attempts = 0
+            await self.update_user(user)
+            return False
+
+        return True

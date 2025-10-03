@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from authglow.models.user import User, UserCreate, UserLogin, InviteUser, UserResponse
 from authglow.models.token import Token, OAuth2AuthorizationRequest, OAuth2TokenRequest
@@ -22,6 +24,7 @@ from authglow.core.config import get_settings
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 templates = Jinja2Templates(directory="authglow/templates")
+limiter = Limiter(key_func=get_remote_address)
 
 
 # Dependency injection
@@ -125,6 +128,7 @@ async def authorize(
 
 
 @router.post("/oauth2/authorize")
+@limiter.limit("10/minute")  # Max 10 authorization attempts per minute per IP
 async def authorize_post(
     request: Request,
     email: str = Form(...),
@@ -142,10 +146,23 @@ async def authorize_post(
     # Authenticate user
     user = await storage.get_user_by_email(email)
     if not user or not verify_password(password, user.hashed_password):
+        # Record failed login attempt if user exists
+        if user:
+            await storage.record_failed_login(user.id)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Check if account is locked
+    if await storage.is_account_locked(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+        )
 
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+
+    # Reset failed login attempts on successful authentication
+    await storage.reset_failed_login_attempts(user.id)
 
     # Check if MFA is required
     if user.mfa_enabled and user.mfa_verified:
@@ -275,6 +292,7 @@ async def token_endpoint(
 
 # Traditional token endpoint (for testing)
 @router.post("/api/token", response_model=Token)
+@limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login_for_access_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -285,8 +303,21 @@ async def login_for_access_token(
     """Direct token endpoint (username/password)."""
     user = await storage.get_user_by_email(form_data.username)
 
-    # Log failed login
+    # Check if user exists and verify password
     if not user or not verify_password(form_data.password, user.hashed_password):
+        # Record failed login attempt if user exists
+        if user:
+            locked_until = await storage.record_failed_login(user.id)
+            if locked_until:
+                await audit_service.log_event(
+                    event_type="account_locked",
+                    user_id=user.id,
+                    email=user.email,
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    severity="high"
+                )
+
         await audit_service.log_event(
             event_type="login_failed",
             email=form_data.username,
@@ -300,8 +331,26 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Check if account is locked
+    if await storage.is_account_locked(user.id):
+        await audit_service.log_event(
+            event_type="login_attempt_while_locked",
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            severity="high"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+        )
+
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+
+    # Reset failed login attempts on successful login
+    await storage.reset_failed_login_attempts(user.id)
 
     # Update last login
     await storage.update_last_login(user.id)

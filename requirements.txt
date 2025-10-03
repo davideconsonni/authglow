@@ -21,6 +21,9 @@ qrcode[pil]==7.4.2
 # WebAuthn / Passkeys
 webauthn==2.2.0
 
+# Rate Limiting
+slowapi==0.1.9
+
 # Storage - fsspec with cloud providers
 fsspec==2024.9.0
 s3fs==2024.9.0  # AWS S3

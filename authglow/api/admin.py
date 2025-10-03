@@ -5,6 +5,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from authglow.models.user import User, UserResponse
 from authglow.models.admin import (
@@ -27,6 +29,7 @@ from authglow.core.config import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
+limiter = Limiter(key_func=get_remote_address)
 
 
 def get_user_storage():
@@ -280,7 +283,9 @@ async def get_user_detail(
 
 
 @router.put("/api/admin/users/{user_id}", response_model=UserResponse)
+@limiter.limit("30/minute")  # Max 30 user updates per minute per IP
 async def update_user(
+    request: Request,
     user_id: str,
     update_data: UserUpdate,
     current_user: User = Depends(require_admin),
@@ -320,7 +325,9 @@ async def update_user(
 
 
 @router.delete("/api/admin/users/{user_id}")
+@limiter.limit("20/minute")  # Max 20 user deletions per minute per IP
 async def delete_user(
+    request: Request,
     user_id: str,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
@@ -391,7 +398,9 @@ async def get_user_passkeys_list(
 
 
 @router.delete("/api/admin/users/{user_id}/passkeys/{credential_id}")
+@limiter.limit("30/minute")  # Max 30 passkey deletions per minute per IP
 async def delete_user_passkey(
+    request: Request,
     user_id: str,
     credential_id: str,
     current_user: User = Depends(require_admin),
@@ -426,7 +435,9 @@ async def delete_user_passkey(
 
 
 @router.post("/api/admin/users/{user_id}/reset-mfa")
+@limiter.limit("20/minute")  # Max 20 MFA resets per minute per IP
 async def reset_user_mfa(
+    request: Request,
     user_id: str,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
@@ -461,7 +472,9 @@ async def reset_user_mfa(
 
 
 @router.post("/api/admin/users/bulk", response_model=dict)
+@limiter.limit("10/minute")  # Max 10 bulk operations per minute per IP
 async def bulk_user_operation(
+    request: Request,
     operation: BulkUserOperation,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),

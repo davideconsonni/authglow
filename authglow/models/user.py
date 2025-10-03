@@ -30,6 +30,10 @@ class User(BaseModel):
     mfa_secret: Optional[str] = None  # Encrypted TOTP secret
     mfa_verified: bool = False  # True after first successful MFA verification
 
+    # Account lockout related
+    failed_login_attempts: int = 0
+    locked_until: Optional[datetime] = None
+
     class Config:
         json_schema_extra = {
             "example": {

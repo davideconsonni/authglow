@@ -3,9 +3,11 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from authglow.models.passkey import (
     PasskeyResponse,
@@ -22,6 +24,7 @@ from authglow.core.config import get_settings
 router = APIRouter(prefix="/api/passkey", tags=["passkey"])
 security = HTTPBearer()
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
 
 
 def get_passkey_service() -> PasskeyService:
@@ -154,7 +157,9 @@ class EmailRequest(BaseModel):
 
 
 @router.post("/auth/begin")
+@limiter.limit("10/minute")  # Max 10 passkey auth attempts per minute per IP
 async def begin_authentication(
+    request_obj: Request,
     request: EmailRequest,
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     storage: Annotated[UserStorage, Depends(get_user_storage)],
@@ -196,7 +201,9 @@ async def begin_authentication(
 
 
 @router.post("/auth/complete")
+@limiter.limit("10/minute")  # Max 10 passkey verification attempts per minute per IP
 async def complete_authentication(
+    request: Request,
     verification: PasskeyAuthenticationVerification,
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
