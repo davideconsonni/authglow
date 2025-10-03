@@ -7,6 +7,7 @@ from uuid import uuid4
 import fsspec
 from authglow.core.config import get_settings
 from authglow.models.token import AuthorizationCode
+from authglow.services.oauth_client import OAuth2ClientStorage
 
 
 class OAuth2Service:
@@ -17,6 +18,7 @@ class OAuth2Service:
         self.settings = get_settings()
         self.storage_path = f"{self.settings.storage_path}/auth_codes"
         self.storage_options = self.settings.get_storage_options()
+        self.client_storage = OAuth2ClientStorage()
 
         # Initialize filesystem
         if self.settings.storage_backend == "file":
@@ -109,9 +111,30 @@ class OAuth2Service:
         except FileNotFoundError:
             pass
 
-    def verify_client(self, client_id: str, client_secret: Optional[str] = None) -> bool:
-        """Verify client credentials."""
-        # For now, use settings-based client verification
+    async def verify_client(self, client_id: str, client_secret: Optional[str] = None) -> bool:
+        """
+        Verify client credentials using dynamic client storage.
+
+        Falls back to settings-based client for backwards compatibility.
+        """
+        # Try dynamic client storage first
+        client = await self.client_storage.get_client(client_id)
+
+        if client:
+            # Check if client is active
+            if not client.is_active:
+                return False
+
+            # Update last used timestamp
+            await self.client_storage.update_last_used(client_id)
+
+            # If secret provided, verify it
+            if client_secret:
+                return await self.client_storage.verify_client_secret(client_id, client_secret)
+
+            return True
+
+        # Fallback to settings-based client (backwards compatibility)
         if client_id != self.settings.oauth2_client_id:
             return False
 
@@ -119,3 +142,37 @@ class OAuth2Service:
             return False
 
         return True
+
+    async def verify_redirect_uri(self, client_id: str, redirect_uri: str) -> bool:
+        """Verify if redirect_uri is allowed for the client."""
+        # Try dynamic client storage first
+        client = await self.client_storage.get_client(client_id)
+
+        if client:
+            return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
+
+        # Fallback: allow any redirect_uri for settings-based client
+        # (not recommended for production)
+        return client_id == self.settings.oauth2_client_id
+
+    async def verify_scopes(self, client_id: str, requested_scopes: list[str]) -> bool:
+        """Verify if client is allowed to request these scopes."""
+        # Try dynamic client storage first
+        client = await self.client_storage.get_client(client_id)
+
+        if client:
+            return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
+
+        # Fallback: allow all scopes for settings-based client
+        return client_id == self.settings.oauth2_client_id
+
+    async def verify_grant_type(self, client_id: str, grant_type: str) -> bool:
+        """Verify if client is allowed to use this grant type."""
+        # Try dynamic client storage first
+        client = await self.client_storage.get_client(client_id)
+
+        if client:
+            return await self.client_storage.is_grant_type_allowed(client_id, grant_type)
+
+        # Fallback: allow all grant types for settings-based client
+        return client_id == self.settings.oauth2_client_id

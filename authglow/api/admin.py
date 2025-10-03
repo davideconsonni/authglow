@@ -128,6 +128,21 @@ async def admin_audit_page(request: Request):
     )
 
 
+@router.get("/admin/oauth-clients", response_class=HTMLResponse)
+async def admin_oauth_clients_page(request: Request):
+    """OAuth2 clients management page (auth handled by JS)."""
+    settings = get_settings()
+    ui_context = settings.get_ui_context()
+
+    return templates.TemplateResponse(
+        "admin_oauth_clients.html",
+        {
+            "request": request,
+            **ui_context
+        }
+    )
+
+
 # API Endpoints
 
 @router.get("/api/admin/stats", response_model=DashboardStats)

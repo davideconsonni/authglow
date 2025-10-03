@@ -105,7 +105,7 @@ async def authorize(
     settings = get_settings()
 
     # Verify client
-    if not oauth2_service.verify_client(client_id):
+    if not await oauth2_service.verify_client(client_id):
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
     if response_type != "code":
@@ -257,7 +257,7 @@ async def token_endpoint(
         if not client_id or not client_secret:
             raise HTTPException(status_code=400, detail="Missing client credentials")
 
-        if not oauth2_service.verify_client(client_id, client_secret):
+        if not await oauth2_service.verify_client(client_id, client_secret):
             raise HTTPException(status_code=401, detail="Invalid client credentials")
 
         # Create token for client (no specific user)

@@ -11,6 +11,7 @@ from authglow.api.auth import router as auth_router
 from authglow.api.mfa import router as mfa_router
 from authglow.api.admin import router as admin_router
 from authglow.api.passkey import router as passkey_router
+from authglow.api.oauth_client import router as oauth_client_router
 from authglow.core.config import get_settings
 
 # Create FastAPI app
@@ -47,6 +48,7 @@ app.include_router(auth_router, tags=["Authentication"])
 app.include_router(mfa_router, tags=["MFA"])
 app.include_router(admin_router, tags=["Admin"])
 app.include_router(passkey_router, tags=["Passkeys"])
+app.include_router(oauth_client_router, tags=["OAuth2 Clients"])
 
 
 @app.get("/")

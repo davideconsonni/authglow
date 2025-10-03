@@ -1,0 +1,11 @@
+{
+  "id": "48c5998c-fd1e-432a-934f-2c4b2f3ad3bc",
+  "user_id": null,
+  "email": "admin@authglow.local",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "python-requests/2.32.5",
+  "timestamp": "2025-10-03T06:55:50.184456",
+  "metadata": {},
+  "severity": "warning"
+}
