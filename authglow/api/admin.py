@@ -676,6 +676,19 @@ async def admin_rbac_page(request: Request):
     )
 
 
+@router.get("/admin/playground", response_class=HTMLResponse)
+async def admin_playground_page(request: Request):
+    """API Playground page for testing OAuth2/OIDC flows (auth handled by JS)."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "admin_playground.html",
+        {
+            "request": request,
+            **settings.get_ui_context()
+        }
+    )
+
+
 @router.get("/api/admin/sessions")
 async def get_active_sessions(
     email: Optional[str] = Query(None),

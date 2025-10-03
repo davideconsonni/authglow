@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Playground - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <style>
+        .playground-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .flow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .flow-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .flow-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+
+        .flow-card h3 {
+            margin: 0 0 12px 0;
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .flow-card p {
+            color: var(--text-secondary);
+            margin: 0 0 20px 0;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .flow-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .flow-form input, .flow-form select, .flow-form textarea {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .flow-form textarea {
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .flow-form button {
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        .flow-form button:hover {
+            opacity: 0.9;
+        }
+
+        .flow-form button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .response-section {
+            margin-top: 30px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .response-section h3 {
+            margin: 0 0 16px 0;
+            color: var(--text-primary);
+        }
+
+        .response-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 400px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .response-box.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .response-box.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .token-display {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+        }
+
+        [data-theme="dark"] .token-display {
+            background: #2d2d2d;
+            border-color: #404040;
+            color: #d4d4d4;
+        }
+
+        .copy-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-left: 8px;
+        }
+
+        .copy-btn:hover {
+            background: #5a6268;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .info-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #667eea;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .scope-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .scope-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .scope-checkbox input {
+            width: auto;
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    {% include 'components/admin_header.html' %}
+
+    <div class="admin-container">
+        {% include 'components/admin_nav.html' %}
+
+        <main class="admin-content">
+            <div class="playground-container">
+                <div class="page-header">
+                    <h1>🧪 API Playground</h1>
+                    <p>Test OAuth2, OpenID Connect, and API flows interactively</p>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('oauth2')">OAuth2 Flows</button>
+                    <button class="tab" onclick="switchTab('oidc')">OpenID Connect</button>
+                    <button class="tab" onclick="switchTab('api')">API Testing</button>
+                </div>
+
+                <!-- OAuth2 Tab -->
+                <div id="oauth2-tab" class="tab-content active">
+                    <div class="flow-grid">
+                        <!-- Authorization Code Flow -->
+                        <div class="flow-card">
+                            <h3>
+                                <span>🔐</span>
+                                Authorization Code
+                                <span class="info-badge">STANDARD</span>
+                            </h3>
+                            <p>Most secure flow for web applications. Exchanges authorization code for tokens.</p>
+                            <div class="flow-form">
+                                <input type="text" id="auth-client-id" placeholder="Client ID" value="default-client-id">
+                                <input type="text" id="auth-redirect-uri" placeholder="Redirect URI" value="http://localhost:8000/callback">
+                                <input type="text" id="auth-scope" placeholder="Scopes (space-separated)" value="openid profile email">
+                                <input type="text" id="auth-state" placeholder="State (optional)" value="">
+                                <button onclick="startAuthFlow()">Start Authorization Flow</button>
+                            </div>
+                        </div>
+
+                        <!-- Client Credentials Flow -->
+                        <div class="flow-card">
+                            <h3>
+                                <span>🤖</span>
+                                Client Credentials
+                                <span class="info-badge">M2M</span>
+                            </h3>
+                            <p>For machine-to-machine authentication. No user interaction required.</p>
+                            <div class="flow-form">
+                                <input type="text" id="cc-client-id" placeholder="Client ID" value="default-client-id">
+                                <input type="password" id="cc-client-secret" placeholder="Client Secret" value="default-client-secret">
+                                <input type="text" id="cc-scope" placeholder="Scopes" value="read write">
+                                <button onclick="clientCredentialsFlow()">Get Access Token</button>
+                            </div>
+                        </div>
+
+                        <!-- Password Grant (Testing Only) -->
+                        <div class="flow-card">
+                            <h3>
+                                <span>🔑</span>
+                                Password Grant
+                                <span class="info-badge">TESTING</span>
+                            </h3>
+                            <p>Direct username/password authentication. Only for testing/trusted apps.</p>
+                            <div class="flow-form">
+                                <input type="email" id="pwd-email" placeholder="Email" value="">
+                                <input type="password" id="pwd-password" placeholder="Password" value="">
+                                <input type="text" id="pwd-scope" placeholder="Scopes" value="openid profile email">
+                                <button onclick="passwordFlow()">Login</button>
+                            </div>
+                        </div>
+
+                        <!-- Refresh Token -->
+                        <div class="flow-card">
+                            <h3>
+                                <span>🔄</span>
+                                Refresh Token
+                                <span class="info-badge">ROTATION</span>
+                            </h3>
+                            <p>Exchange refresh token for new access token. Includes automatic rotation.</p>
+                            <div class="flow-form">
+                                <textarea id="refresh-token" placeholder="Refresh Token" rows="3"></textarea>
+                                <input type="text" id="refresh-client-id" placeholder="Client ID" value="default-client-id">
+                                <button onclick="refreshTokenFlow()">Refresh Access Token</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OpenID Connect Tab -->
+                <div id="oidc-tab" class="tab-content">
+                    <div class="flow-grid">
+                        <!-- Discovery -->
+                        <div class="flow-card">
+                            <h3><span>🔍</span> OpenID Discovery</h3>
+                            <p>Retrieve OpenID Connect provider configuration.</p>
+                            <div class="flow-form">
+                                <button onclick="getOIDCDiscovery()">Get Discovery Document</button>
+                            </div>
+                        </div>
+
+                        <!-- UserInfo -->
+                        <div class="flow-card">
+                            <h3><span>👤</span> UserInfo Endpoint</h3>
+                            <p>Get user information using access token with 'openid' scope.</p>
+                            <div class="flow-form">
+                                <textarea id="userinfo-token" placeholder="Access Token" rows="3"></textarea>
+                                <button onclick="getUserInfo()">Get User Info</button>
+                            </div>
+                        </div>
+
+                        <!-- ID Token Decoder -->
+                        <div class="flow-card">
+                            <h3><span>🔓</span> ID Token Decoder</h3>
+                            <p>Decode and inspect OpenID Connect ID Token (JWT).</p>
+                            <div class="flow-form">
+                                <textarea id="id-token" placeholder="ID Token (JWT)" rows="4"></textarea>
+                                <button onclick="decodeIDToken()">Decode Token</button>
+                            </div>
+                        </div>
+
+                        <!-- JWKS -->
+                        <div class="flow-card">
+                            <h3><span>🔐</span> JSON Web Keys</h3>
+                            <p>Get public keys used for JWT signature verification.</p>
+                            <div class="flow-form">
+                                <button onclick="getJWKS()">Get JWKS</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Testing Tab -->
+                <div id="api-tab" class="tab-content">
+                    <div class="flow-grid">
+                        <!-- Introspect Token -->
+                        <div class="flow-card">
+                            <h3><span>🔬</span> Token Introspection</h3>
+                            <p>Introspect token to check validity and metadata (RFC 7662).</p>
+                            <div class="flow-form">
+                                <textarea id="introspect-token" placeholder="Access or Refresh Token" rows="3"></textarea>
+                                <button onclick="introspectToken()">Introspect</button>
+                            </div>
+                        </div>
+
+                        <!-- Revoke Token -->
+                        <div class="flow-card">
+                            <h3><span>🚫</span> Token Revocation</h3>
+                            <p>Revoke access or refresh token (RFC 7009).</p>
+                            <div class="flow-form">
+                                <textarea id="revoke-token" placeholder="Token to Revoke" rows="3"></textarea>
+                                <select id="revoke-token-type">
+                                    <option value="access_token">Access Token</option>
+                                    <option value="refresh_token">Refresh Token</option>
+                                </select>
+                                <button onclick="revokeToken()">Revoke Token</button>
+                            </div>
+                        </div>
+
+                        <!-- API Call with Token -->
+                        <div class="flow-card">
+                            <h3><span>📡</span> Protected API Call</h3>
+                            <p>Make authenticated API request with Bearer token.</p>
+                            <div class="flow-form">
+                                <select id="api-method">
+                                    <option value="GET">GET</option>
+                                    <option value="POST">POST</option>
+                                    <option value="PATCH">PATCH</option>
+                                    <option value="DELETE">DELETE</option>
+                                </select>
+                                <input type="text" id="api-endpoint" placeholder="API Endpoint" value="/api/profile/me">
+                                <textarea id="api-token" placeholder="Access Token" rows="2"></textarea>
+                                <textarea id="api-body" placeholder="Request Body (JSON, optional)" rows="3"></textarea>
+                                <button onclick="callProtectedAPI()">Send Request</button>
+                            </div>
+                        </div>
+
+                        <!-- Profile Management -->
+                        <div class="flow-card">
+                            <h3><span>⚙️</span> Profile & RBAC</h3>
+                            <p>Test user profile and RBAC endpoints.</p>
+                            <div class="flow-form">
+                                <textarea id="profile-token" placeholder="Access Token" rows="2"></textarea>
+                                <select id="profile-endpoint">
+                                    <option value="/api/profile/me">Get Profile</option>
+                                    <option value="/api/profile/me/preferences">Get Preferences</option>
+                                    <option value="/api/rbac/roles">List Roles</option>
+                                    <option value="/api/rbac/permissions">List Permissions</option>
+                                </select>
+                                <button onclick="testProfileEndpoint()">Test Endpoint</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Response Section -->
+                <div class="response-section" id="response-section" style="display: none;">
+                    <h3>📨 Response</h3>
+                    <div class="response-box" id="response-box"></div>
+                    <div id="token-section" style="display: none; margin-top: 16px;">
+                        <h4>Tokens</h4>
+                        <div id="access-token-display"></div>
+                        <div id="refresh-token-display"></div>
+                        <div id="id-token-display"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentTokens = {};
+
+        function switchTab(tab) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(`${tab}-tab`).classList.add('active');
+        }
+
+        function showResponse(data, success = true) {
+            const section = document.getElementById('response-section');
+            const box = document.getElementById('response-box');
+
+            section.style.display = 'block';
+            box.className = `response-box ${success ? 'success' : 'error'}`;
+            box.textContent = JSON.stringify(data, null, 2);
+
+            // Scroll to response
+            section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showTokens(tokens) {
+            const tokenSection = document.getElementById('token-section');
+            const accessDiv = document.getElementById('access-token-display');
+            const refreshDiv = document.getElementById('refresh-token-display');
+            const idDiv = document.getElementById('id-token-display');
+
+            currentTokens = tokens;
+
+            if (tokens.access_token) {
+                tokenSection.style.display = 'block';
+                accessDiv.innerHTML = `
+                    <strong>Access Token:</strong>
+                    <div class="token-display">${tokens.access_token.substring(0, 50)}...
+                        <button class="copy-btn" onclick="copyToken('access')">Copy</button>
+                    </div>
+                `;
+            }
+
+            if (tokens.refresh_token) {
+                refreshDiv.innerHTML = `
+                    <strong>Refresh Token:</strong>
+                    <div class="token-display">${tokens.refresh_token.substring(0, 50)}...
+                        <button class="copy-btn" onclick="copyToken('refresh')">Copy</button>
+                    </div>
+                `;
+            }
+
+            if (tokens.id_token) {
+                idDiv.innerHTML = `
+                    <strong>ID Token:</strong>
+                    <div class="token-display">${tokens.id_token.substring(0, 50)}...
+                        <button class="copy-btn" onclick="copyToken('id')">Copy</button>
+                    </div>
+                `;
+            }
+        }
+
+        function copyToken(type) {
+            let token = '';
+            if (type === 'access') token = currentTokens.access_token;
+            if (type === 'refresh') token = currentTokens.refresh_token;
+            if (type === 'id') token = currentTokens.id_token;
+
+            navigator.clipboard.writeText(token).then(() => {
+                alert('Token copied to clipboard!');
+            });
+        }
+
+        // OAuth2 Flows
+        function startAuthFlow() {
+            const clientId = document.getElementById('auth-client-id').value;
+            const redirectUri = document.getElementById('auth-redirect-uri').value;
+            const scope = document.getElementById('auth-scope').value;
+            const state = document.getElementById('auth-state').value;
+
+            const params = new URLSearchParams({
+                response_type: 'code',
+                client_id: clientId,
+                redirect_uri: redirectUri,
+                scope: scope,
+                state: state || Math.random().toString(36).substring(7)
+            });
+
+            window.open(`/oauth2/authorize?${params}`, '_blank');
+        }
+
+        async function clientCredentialsFlow() {
+            const clientId = document.getElementById('cc-client-id').value;
+            const clientSecret = document.getElementById('cc-client-secret').value;
+            const scope = document.getElementById('cc-scope').value;
+
+            try {
+                const response = await fetch('/oauth2/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grant_type: 'client_credentials',
+                        client_id: clientId,
+                        client_secret: clientSecret,
+                        scope: scope
+                    })
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+                if (response.ok) showTokens(data);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function passwordFlow() {
+            const email = document.getElementById('pwd-email').value;
+            const password = document.getElementById('pwd-password').value;
+            const scope = document.getElementById('pwd-scope').value;
+
+            try {
+                const response = await fetch('/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grant_type: 'password',
+                        username: email,
+                        password: password,
+                        scope: scope
+                    })
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+                if (response.ok) showTokens(data);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function refreshTokenFlow() {
+            const refreshToken = document.getElementById('refresh-token').value;
+            const clientId = document.getElementById('refresh-client-id').value;
+
+            try {
+                const response = await fetch('/oauth2/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grant_type: 'refresh_token',
+                        refresh_token: refreshToken,
+                        client_id: clientId
+                    })
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+                if (response.ok) showTokens(data);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        // OpenID Connect
+        async function getOIDCDiscovery() {
+            try {
+                const response = await fetch('/.well-known/openid-configuration');
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function getUserInfo() {
+            const token = document.getElementById('userinfo-token').value;
+
+            try {
+                const response = await fetch('/oauth2/userinfo', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        function decodeIDToken() {
+            const token = document.getElementById('id-token').value;
+
+            try {
+                const parts = token.split('.');
+                const payload = JSON.parse(atob(parts[1]));
+                showResponse(payload, true);
+            } catch (error) {
+                showResponse({ error: 'Invalid JWT format' }, false);
+            }
+        }
+
+        async function getJWKS() {
+            try {
+                const response = await fetch('/.well-known/jwks.json');
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        // API Testing
+        async function introspectToken() {
+            const token = document.getElementById('introspect-token').value;
+
+            try {
+                const response = await fetch('/oauth2/introspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ token: token })
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function revokeToken() {
+            const token = document.getElementById('revoke-token').value;
+            const tokenType = document.getElementById('revoke-token-type').value;
+
+            try {
+                const response = await fetch('/oauth2/revoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        token: token,
+                        token_type_hint: tokenType
+                    })
+                });
+
+                const data = response.ok ? { message: 'Token revoked successfully' } : await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function callProtectedAPI() {
+            const method = document.getElementById('api-method').value;
+            const endpoint = document.getElementById('api-endpoint').value;
+            const token = document.getElementById('api-token').value;
+            const body = document.getElementById('api-body').value;
+
+            try {
+                const options = {
+                    method: method,
+                    headers: { 'Authorization': `Bearer ${token}` }
+                };
+
+                if (body && (method === 'POST' || method === 'PATCH')) {
+                    options.headers['Content-Type'] = 'application/json';
+                    options.body = body;
+                }
+
+                const response = await fetch(endpoint, options);
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        async function testProfileEndpoint() {
+            const token = document.getElementById('profile-token').value;
+            const endpoint = document.getElementById('profile-endpoint').value;
+
+            try {
+                const response = await fetch(endpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                showResponse(data, response.ok);
+            } catch (error) {
+                showResponse({ error: error.message }, false);
+            }
+        }
+
+        // Check auth on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('admin_token');
+            if (!token) {
+                window.location.href = '/admin/login';
+            }
+        });
+    </script>
+</body>
+</html>

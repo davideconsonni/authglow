@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     password_require_special: bool = True
 
     # UI Customization
-    ui_logo_url: Optional[str] = "/static/images/authglow_full_light.png"
-    ui_logo_dark_url: Optional[str] = "/static/images/authglow_full_dark.png"
+    ui_logo_url: Optional[str] = "/static/images/authglow_full_dark.png"  # Dark logo for light backgrounds
+    ui_logo_dark_url: Optional[str] = "/static/images/authglow_full_light.png"  # Light logo for dark backgrounds
     ui_primary_color: str = "#3498DB"
     ui_secondary_color: str = "#FF3366"
     ui_background_color: str = "#F8F8F8"
