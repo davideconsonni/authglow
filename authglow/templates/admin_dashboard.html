@@ -327,12 +327,12 @@
             new Chart(userGrowthCtx, {
                 type: 'line',
                 data: {
-                    labels: timeSeries.map(d => d.date),
+                    labels: timeSeries.map(d => d.display_date || d.date),
                     datasets: [{
                         label: 'New Users',
                         data: timeSeries.map(d => d.new_users),
-                        borderColor: '{{ primary_color }}',
-                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         tension: 0.4,
                         fill: true
                     }]
@@ -355,11 +355,11 @@
             new Chart(loginActivityCtx, {
                 type: 'bar',
                 data: {
-                    labels: timeSeries.map(d => d.date),
+                    labels: timeSeries.map(d => d.display_date || d.date),
                     datasets: [{
                         label: 'Successful Logins',
                         data: timeSeries.map(d => d.success),
-                        backgroundColor: '{{ secondary_color }}',
+                        backgroundColor: '#10b981',
                     }, {
                         label: 'Failed Logins',
                         data: timeSeries.map(d => d.failed),

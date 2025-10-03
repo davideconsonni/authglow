@@ -178,17 +178,19 @@ class AuditService:
     ) -> List[dict]:
         """Get log counts grouped by date."""
         result = []
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days-1)
 
         # Initialize result with all dates
         for i in range(days):
             date = start_date + timedelta(days=i)
             result.append({
                 "date": date.strftime("%Y-%m-%d"),
+                "display_date": date.strftime("%m/%d"),  # For display
                 "total": 0,
                 "success": 0,
                 "failed": 0,
-                "security": 0
+                "security": 0,
+                "new_users": 0
             })
 
         try:
@@ -211,11 +213,19 @@ class AuditService:
                             if day_data["date"] == date_str:
                                 day_data["total"] += 1
 
-                                if "success" in log_entry.event_type:
+                                # Count success logins
+                                if log_entry.event_type == "login_success":
                                     day_data["success"] += 1
-                                elif "failed" in log_entry.event_type or "error" in log_entry.event_type:
+
+                                # Count failed logins (separate if, not elif)
+                                if log_entry.event_type == "login_failed":
                                     day_data["failed"] += 1
 
+                                # Count new users
+                                if log_entry.event_type == "user_created":
+                                    day_data["new_users"] += 1
+
+                                # Count security events
                                 if log_entry.severity in ["warning", "error", "critical"]:
                                     day_data["security"] += 1
 
