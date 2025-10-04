@@ -1,0 +1,21 @@
+{
+  "message_id": "file-69b2f21e-3c77-4a8c-8da8-2248f33202f0",
+  "timestamp": "2025-10-04T07:34:07.608249Z",
+  "provider": "file_storage",
+  "from": {
+    "email": "noreply@authglow.local",
+    "name": null
+  },
+  "to": [
+    "io@io.io"
+  ],
+  "cc": [],
+  "bcc": [],
+  "reply_to": null,
+  "subject": "Verify your email - AuthGlow",
+  "body_text": "Verify Your Email - AuthGlow\n\nHello io,\n\nWelcome to AuthGlow! Please verify your email address to complete your account setup.\n\nClick the link below to verify your email (expires in 24 hours):\nhttp://localhost:8000/verify-email?token=f9c3710d-3135-4ca6-b441-5113c3eed916\n\nWhy verify your email?\n- Secure your account and enable password recovery\n- Receive important notifications and updates\n- Access all features of AuthGlow\n\nIf you didn't create an account with AuthGlow, you can safely ignore this email.\n\n---\nThis email was sent from AuthGlow.\nIf you have questions, please contact your administrator.",
+  "body_html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Verify Your Email</title>\n</head>\n<body style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;\">\n    <div style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;\">\n        <h1 style=\"color: white; margin: 0; font-size: 28px;\">Verify Your Email</h1>\n    </div>\n\n    <div style=\"background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;\">\n        <p style=\"font-size: 16px; margin-bottom: 20px;\">\n            Hello io,\n        </p>\n\n        <p style=\"font-size: 14px; color: #666; margin-bottom: 25px;\">\n            Welcome to <strong>AuthGlow</strong>! Please verify your email address to complete your account setup.\n        </p>\n\n        <div style=\"background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 25px;\">\n            <p style=\"margin: 0; font-size: 14px; color: #666;\">\n                Click the button below to verify your email. This link will expire in <strong>24 hours</strong>.\n            </p>\n        </div>\n\n        <div style=\"text-align: center; margin: 30px 0;\">\n            <a href=\"http://localhost:8000/verify-email?token=f9c3710d-3135-4ca6-b441-5113c3eed916\"\n               style=\"display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;\">\n                Verify Email\n            </a>\n        </div>\n\n        <p style=\"font-size: 13px; color: #999; margin-bottom: 15px;\">\n            Or copy and paste this link into your browser:\n        </p>\n\n        <p style=\"background: #f5f5f5; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px; color: #667eea; word-break: break-all;\">\n            http://localhost:8000/verify-email?token=f9c3710d-3135-4ca6-b441-5113c3eed916\n        </p>\n\n        <hr style=\"border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;\">\n\n        <p style=\"font-size: 13px; color: #666; margin-bottom: 15px;\">\n            <strong>Why verify your email?</strong>\n        </p>\n\n        <ul style=\"font-size: 13px; color: #666; padding-left: 20px;\">\n            <li>Secure your account and enable password recovery</li>\n            <li>Receive important notifications and updates</li>\n            <li>Access all features of AuthGlow</li>\n        </ul>\n\n        <hr style=\"border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;\">\n\n        <p style=\"font-size: 13px; color: #666;\">\n            If you didn't create an account with AuthGlow, you can safely ignore this email.\n        </p>\n\n        <p style=\"font-size: 12px; color: #999; margin-top: 30px; text-align: center;\">\n            This email was sent from <strong>AuthGlow</strong><br>\n            If you have questions, please contact your administrator.\n        </p>\n    </div>\n</body>\n</html>",
+  "priority": "normal",
+  "headers": {},
+  "attachments": []
+}

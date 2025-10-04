@@ -11,6 +11,68 @@
             padding: 20px;
         }
 
+        .navbar {
+            background: var(--surface);
+            padding: 15px 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 20px var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+        }
+
+        .navbar-brand img {
+            max-height: 40px;
+            width: auto;
+        }
+
+        .navbar-menu {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .navbar-link {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .navbar-link:hover {
+            background: var(--surface-elevated);
+            color: var(--primary);
+        }
+
+        .navbar-link.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .logout-btn {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -19,11 +81,6 @@
         .header {
             text-align: center;
             margin-bottom: 40px;
-        }
-
-        .logo-container img {
-            max-width: 200px;
-            height: auto;
         }
 
         h1 {
@@ -133,12 +190,21 @@
     </style>
 </head>
 <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <img src="{{ logo_url }}" alt="{{ company_name }}">
+        </div>
+        <div class="navbar-menu">
+            <a href="/dashboard" class="navbar-link">Dashboard</a>
+            <a href="/profile" class="navbar-link">Profile</a>
+            <a href="/passkeys" class="navbar-link active">Passkeys</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
     <div class="container">
         <div class="header">
-            <div class="logo-container">
-                <img src="{{ logo_url }}" alt="{{ company_name }}" class="logo-dark">
-                <img src="{{ logo_dark_url }}" alt="{{ company_name }}" class="logo-light">
-            </div>
             <h1>Manage Passkeys</h1>
             <p class="subtitle">Secure, passwordless authentication with biometrics or security keys</p>
         </div>
@@ -156,7 +222,6 @@
 
         <div class="action-buttons">
             <button class="btn btn-primary" onclick="registerPasskey()">➕ Add New Passkey</button>
-            <button class="btn btn-outline" onclick="goBack()">← Back</button>
         </div>
     </div>
 
@@ -312,8 +377,10 @@
             }
         }
 
-        function goBack() {
-            window.history.back();
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('admin_token');
+            window.location.href = '/login';
         }
 
         // Base64url encoding/decoding helpers

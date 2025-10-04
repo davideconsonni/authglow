@@ -1,0 +1,22 @@
+{
+  "id": "120ad3ec-8b77-4000-af22-2ce25b6c30e8",
+  "email": "io@io.io",
+  "hashed_password": "$2b$12$1MgJUeNQQRSVjpRxpDb0jehEOs5stg8wYSI/qGTMGWCmwiWd6ZOq6",
+  "is_active": true,
+  "is_invited": true,
+  "created_at": "2025-10-04T07:34:07.598164",
+  "updated_at": "2025-10-04T07:36:13.671331",
+  "last_login": "2025-10-04T07:36:13.671327",
+  "first_name": "io",
+  "last_name": "io",
+  "scopes": [
+    "user"
+  ],
+  "mfa_enabled": false,
+  "mfa_secret": null,
+  "mfa_verified": false,
+  "failed_login_attempts": 0,
+  "locked_until": null,
+  "email_verified": false,
+  "email_verified_at": null
+}

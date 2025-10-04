@@ -23,9 +23,13 @@
         }
 
         .navbar-brand {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--primary);
+            display: flex;
+            align-items: center;
+        }
+
+        .navbar-brand img {
+            max-height: 40px;
+            width: auto;
         }
 
         .navbar-menu {
@@ -336,7 +340,9 @@
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar">
-        <div class="navbar-brand">{{ app_name }}</div>
+        <div class="navbar-brand">
+            <img src="{{ logo_url }}" alt="{{ company_name }}">
+        </div>
         <div class="navbar-menu">
             <a href="/dashboard" class="navbar-link">Dashboard</a>
             <a href="/profile" class="navbar-link active">Profile</a>

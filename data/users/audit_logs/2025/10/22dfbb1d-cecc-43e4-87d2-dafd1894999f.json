@@ -1,0 +1,13 @@
+{
+  "id": "22dfbb1d-cecc-43e4-87d2-dafd1894999f",
+  "user_id": "120ad3ec-8b77-4000-af22-2ce25b6c30e8",
+  "email": "io@io.io",
+  "event_type": "password_reset_requested",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-04T07:35:39.812757",
+  "metadata": {
+    "token_id": "7e550e01-8c5b-42a9-99ea-012d80e48e7a"
+  },
+  "severity": "info"
+}
