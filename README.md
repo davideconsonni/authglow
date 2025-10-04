@@ -235,7 +235,7 @@ AuthGlow showcases that modern AI can:
 
 This is not just "AI-assisted" development - this is **human-led, AI-implemented** development through **co-thinking**.
 
-### 🎵 Vibe Coding with LLMs
+### 🤖 Vibe Coding with LLMs
 
 Want to work on this project with AI assistance? We provide **[llms-full.txt](llms-full.txt)** - a comprehensive context file that combines the complete README and all documentation in a single file.
 
