@@ -88,7 +88,7 @@ Interactive testing environment for OAuth 2.0 flows, OpenID Connect endpoints, a
 *   🎛️ **Admin Dashboard**: A simple web interface to manage users, clients, consents, and view audit logs.
 *   ✍️ **Audit Trail**: Track important security events and account activities for monitoring and compliance.
 *   🔔 **Security Notifications**: Automatically notify users about sensitive actions like password changes or new logins.
-*   📄 **File-Based Storage**: No database required! AuthGlow runs on a simple, human-readable JSON file structure, making backups and migration a breeze.
+*   📄 **Flexible Storage with fsspec**: No database required! Uses fsspec for storage abstraction - store data locally as JSON files or seamlessly integrate with cloud storage (AWS S3, Google Cloud Storage, Azure Blob Storage). Human-readable format makes backups and migration a breeze.
 *   🐳 **Docker Ready**: Deploy quickly and consistently with the provided Dockerfile.
 *   ✉️ **Customizable Email Templates**: Easily modify email templates for verification, password resets, and security alerts.
 
