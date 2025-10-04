@@ -235,6 +235,25 @@ AuthGlow showcases that modern AI can:
 
 This is not just "AI-assisted" development - this is **human-led, AI-implemented** development through **co-thinking**.
 
+### 🎵 Vibe Coding with LLMs
+
+Want to work on this project with AI assistance? We provide a comprehensive context file that combines all documentation in a single file, making it easy to give LLMs full context about the project.
+
+**Quick Start:**
+1. Generate the full context file:
+   ```bash
+   python generate_llms_full.py
+   ```
+
+2. Use the generated `llms-full.txt` file to provide context to your AI coding assistant (Claude, ChatGPT, etc.)
+
+This file contains:
+- Complete README
+- All documentation from `/docs` (in natural order)
+- ~144KB of comprehensive project information
+
+Perfect for "vibe coding" sessions where you want the AI to understand the entire project architecture, features, and implementation details before making suggestions or writing code.
+
 ## ⚠️ Disclaimer
 
 **The author is not responsible for any use, misuse, or consequences arising from the deployment or operation of this software. Use at your own risk.**
