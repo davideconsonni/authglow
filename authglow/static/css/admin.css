@@ -10,7 +10,7 @@ body {
     padding: 1rem 2rem;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items-center;
 }
 
 .logo-container img {
@@ -37,7 +37,7 @@ body {
 
 .user-info {
     display: flex;
-    align-items: center;
+    align-items-center;
     gap: 1rem;
 }
 
@@ -83,11 +83,27 @@ body {
     min-height: calc(100vh - 73px);
 }
 
-.page-title {
-    font-size: 2rem;
-    margin-bottom: 2rem;
-    color: var(--text-primary);
+/* Typography Utilities */
+.section-title {
+    font-size: 1.5rem; /* h3 size */
+    margin: 0;
 }
+
+table th {
+    font-size: 0.75rem; /* h6 size */
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] table th {
+    color: var(--text-tertiary);
+}
+
+table td {
+    font-size: 0.875rem; /* h5 size */
+}
+
 
 /* Loading State */
 .loading {
@@ -128,9 +144,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary);
-}
-
-/* Dark Mode Table Header Contrast Fix */
-[data-theme="dark"] th {
-    color: var(--text-tertiary);
 }

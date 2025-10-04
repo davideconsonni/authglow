@@ -421,9 +421,16 @@ async def login_for_access_token(
     """Direct token endpoint (username/password)."""
     user = await storage.get_user_by_email(form_data.username)
 
-    # Check if user exists and verify password
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        # Record failed login attempt if user exists
+    # Unified failure handling to prevent user enumeration
+    async def handle_failed_login():
+        await audit_service.log_event(
+            event_type="login_failed",
+            email=form_data.username,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            severity="warning"
+        )
+        # For existing users, also record the failed attempt for account locking
         if user:
             locked_until = await storage.record_failed_login(user.id)
             if locked_until:
@@ -435,19 +442,15 @@ async def login_for_access_token(
                     user_agent=request.headers.get("user-agent"),
                     severity="high"
                 )
-
-        await audit_service.log_event(
-            event_type="login_failed",
-            email=form_data.username,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            severity="warning"
-        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check if user exists and verify password
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        await handle_failed_login()
 
     # Check if account is locked
     if await storage.is_account_locked(user.id):

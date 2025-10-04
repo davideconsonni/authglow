@@ -74,16 +74,10 @@ class PasswordValidator:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt with pre-hashing for long passwords."""
-    import hashlib
-    # Use SHA256 pre-hash for passwords to handle any length
-    password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-    return pwd_context.hash(password_hash)
+    """Hash a password using bcrypt."""
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash with pre-hashing."""
-    import hashlib
-    # Use SHA256 pre-hash to match hashing behavior
-    password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
-    return pwd_context.verify(password_hash, hashed_password)
+    """Verify a password against its hash."""
+    return pwd_context.verify(plain_password, hashed_password)

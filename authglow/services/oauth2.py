@@ -151,9 +151,11 @@ class OAuth2Service:
         if client:
             return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
 
-        # Fallback: allow any redirect_uri for settings-based client
-        # (not recommended for production)
-        return client_id == self.settings.oauth2_client_id
+        # Fallback: only allow specific callback for settings-based client
+        if client_id == self.settings.oauth2_client_id:
+            return redirect_uri == "http://localhost:8000/callback"
+        
+        return False
 
     async def verify_scopes(self, client_id: str, requested_scopes: list[str]) -> bool:
         """Verify if client is allowed to request these scopes."""

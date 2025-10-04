@@ -1,0 +1,11 @@
+{
+  "id": "08abe0db-94d4-4c21-9f79-6dd728db0b87",
+  "user_id": null,
+  "email": "invalid@email.com",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "curl/8.14.1",
+  "timestamp": "2025-10-04T06:48:12.809957",
+  "metadata": {},
+  "severity": "warning"
+}

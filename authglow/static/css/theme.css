@@ -7,22 +7,21 @@
 }
 
 :root {
-    /* Light Theme - Beige Palette */
-    --background: #fdfbf6;       /* Very light, warm beige background */
-    --surface: #ffffff;          /* Keep cards white for a clean, crisp look */
-    --surface-light: #f7f5f2;    /* A slightly darker beige for hovers */
-    --surface-elevated: #ffffff;
-    --border: #e6e2d9;           /* Soft, beige-toned border */
-    --glow: rgba(0, 123, 255, 0.1);
-
-    --text-primary: #343a40;      /* Dark charcoal for high contrast, softer than pure black */
-    --text-secondary: #6c757d;    /* Muted gray for secondary text */
-    --text-tertiary: #adb5bd;     /* Lighter gray for hints */
-    --text-code: #495057;
+    /* Light Theme - Modern Slate Palette */
+    --background: #F8F9FA;       /* Clean, off-white background */
+    --surface: #FFFFFF;          /* Pure white cards for crisp contrast */
+    --surface-light: #F1F3F5;    /* Slightly darker gray for hovers */
+    --surface-elevated: #FFFFFF;
+    --border: #DEE2E6;           /* Soft, neutral gray border */
+    
+    --text-primary: #2c3e50;      /* Sophisticated dark slate for text */
+    --text-secondary: #7f8c8d;    /* Muted gray for secondary text */
+    --text-tertiary: #95a5a6;     /* Lighter gray for hints */
+    --text-code: #34495e;
 
     --primary: #007bff;
     --primary-hover: #0069d9;
-    --primary-glow: rgba(0, 123, 255, 0.25);
+    --primary-glow: rgba(0, 123, 255, 0.3); /* Refined glow opacity */
 
     --secondary: #6c757d;
     --secondary-hover: #5a6268;
@@ -31,8 +30,9 @@
     --error: #dc3545;
     --warning: #ffc107;
 
-    --input-bg: #ffffff;
+    --input-bg: #FFFFFF;
     --input-border: #ced4da;
+    --shadow: rgba(44, 62, 80, 0.08); /* Soft shadow based on text color */
 }
 
 /* Dark Mode */
@@ -70,12 +70,12 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-primary);
 }
 
-h1 { font-size: 2.5rem; }
-h2 { font-size: 2rem; }
-h3 { font-size: 1.75rem; }
-h4 { font-size: 1.5rem; }
-h5 { font-size: 1.25rem; }
-h6 { font-size: 1rem; }
+h1 { font-size: 2.25rem; } /* 36px */
+h2 { font-size: 1.75rem; } /* 28px */
+h3 { font-size: 1.25rem; } /* 20px */
+h4 { font-size: 1.0rem; }  /* 16px */
+h5 { font-size: 0.875rem; }/* 14px */
+h6 { font-size: 0.75rem; } /* 12px */
 
 p {
     margin-bottom: 1rem;
@@ -153,7 +153,8 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--glow-primary);
+    /* A more prominent, softer glow effect */
+    box-shadow: 0 0 10px 3px var(--primary-glow);
 }
 
 label {
@@ -307,16 +308,3 @@ label {
     background: var(--primary);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    h1 { font-size: 2rem; }
-    h2 { font-size: 1.75rem; }
-    h3 { font-size: 1.5rem; }
-
-    .theme-toggle {
-        bottom: 1rem;
-        right: 1rem;
-        width: 48px;
-        height: 48px;
-    }
-}

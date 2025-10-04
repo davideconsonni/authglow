@@ -1,0 +1,11 @@
+{
+  "id": "dd51eac3-68f0-47cb-ae8a-8b99925b0d14",
+  "user_id": "12a1032c-cde2-47c6-b280-51ff06ae441f",
+  "email": "dconsonni@gmail.com",
+  "event_type": "account_locked",
+  "ip_address": "127.0.0.1",
+  "user_agent": "curl/8.14.1",
+  "timestamp": "2025-10-04T06:45:18.323451",
+  "metadata": {},
+  "severity": "high"
+}

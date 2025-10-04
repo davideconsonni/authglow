@@ -1,0 +1,11 @@
+{
+  "id": "86d8ab30-faff-4747-bbd1-b9cf78852c07",
+  "user_id": null,
+  "email": "dconsonni@gmail.com",
+  "event_type": "login_failed",
+  "ip_address": "127.0.0.1",
+  "user_agent": "curl/8.14.1",
+  "timestamp": "2025-10-04T06:45:16.945244",
+  "metadata": {},
+  "severity": "warning"
+}
