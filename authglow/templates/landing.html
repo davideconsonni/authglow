@@ -47,6 +47,7 @@
         .logo-section img {
             height: 40px;
             width: auto;
+            filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
         }
 
         .logo-section h1 {
@@ -74,25 +75,30 @@
             background: white;
             color: #667eea !important;
             font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
 
         .btn-primary:hover {
             background: rgba(255, 255, 255, 0.9);
             color: #667eea !important;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.4),
+                        0 0 30px rgba(255, 255, 255, 0.3);
         }
 
         .btn-outline {
             background: transparent;
             color: white !important;
             border: 2px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
         }
 
         .btn-outline:hover {
             background: rgba(255, 255, 255, 0.2);
             border-color: white;
             color: white !important;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4),
+                        0 4px 15px rgba(255, 255, 255, 0.2);
         }
 
         .hero {
@@ -105,6 +111,8 @@
             font-weight: 700;
             margin-bottom: 20px;
             line-height: 1.2;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3),
+                         0 0 40px rgba(255, 255, 255, 0.2);
         }
 
         .hero p {
@@ -142,16 +150,21 @@
             border-radius: 16px;
             padding: 30px;
             transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .feature-card:hover {
             background: rgba(255, 255, 255, 0.15);
             transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(255, 255, 255, 0.2),
+                        0 0 30px rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
         }
 
         .feature-icon {
             font-size: 40px;
             margin-bottom: 15px;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
         }
 
         .feature-card h3 {
@@ -172,11 +185,14 @@
             padding: 40px;
             margin-top: 40px;
             text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(255, 255, 255, 0.1);
         }
 
         .info-section h3 {
             font-size: 24px;
             margin-bottom: 15px;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
         }
 
         .info-section p {

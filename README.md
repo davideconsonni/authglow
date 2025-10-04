@@ -38,6 +38,24 @@ AuthGlow is designed for developers and small teams who need a robust identity s
 
 Its unique file-based storage system makes it incredibly portable, easy to back up, and simple to manage. Whether you're building a new application or need to centralize authentication for your existing services, AuthGlow offers a secure and flexible solution.
 
+---
+
+## 📸 Screenshots
+
+### Landing Page
+<img src="images/01-landing.png" alt="AuthGlow Landing Page" width="800">
+
+### Login Interface
+<img src="images/02-login.png" alt="AuthGlow Login" width="600">
+
+### Admin Dashboard
+<img src="images/03-dashboard.png" alt="AuthGlow Admin Dashboard" width="800">
+
+### Machine-to-Machine API
+<img src="images/04-machine-to-machine-api.png" alt="M2M API Authentication" width="800">
+
+---
+
 ## ✨ Key Features
 
 *   **Standard Authentication**: Full user lifecycle management: registration, login, profile updates, and password reset.
