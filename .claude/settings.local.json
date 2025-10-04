@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(do sed -i '/\\/\\/ Mobile Sidebar Toggle/,/^        }$/d' \"$file\")"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}
