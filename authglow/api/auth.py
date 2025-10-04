@@ -173,6 +173,10 @@ async def authorize(
     if not await oauth2_service.verify_client(client_id):
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
+    # Verify redirect_uri is registered for this client
+    if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
     if response_type != "code":
         raise HTTPException(status_code=400, detail="Unsupported response_type")
 
@@ -208,6 +212,13 @@ async def authorize_post(
     session_service: SessionService = Depends(get_session_service)
 ):
     """Process login and create authorization code (or MFA challenge)."""
+    # Verify client and redirect_uri before processing login
+    if not await oauth2_service.verify_client(client_id):
+        raise HTTPException(status_code=400, detail="Invalid client_id")
+
+    if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
     # Authenticate user
     user = await storage.get_user_by_email(email)
     if not user or not verify_password(password, user.hashed_password):

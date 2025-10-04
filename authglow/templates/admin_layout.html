@@ -12,19 +12,21 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - {{ company_name }}</title>
-    <link rel="stylesheet" href="/static/css/theme.css">
-    <link rel="stylesheet" href="/static/css/admin.css">
+    <title>{% block title %}Admin{% endblock %} - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css?v=1.3">
+    <link rel="stylesheet" href="/static/css/admin.css?v=1.3">
 </head>
-<body style="display: flex; align-items: center; justify-content: center;">
+<body>
+    <div class="admin-layout">
+        {% include 'components/admin_header.html' %}
+        {% include 'components/admin_nav.html' %}
 
-    <div class="login-container card" style="width: 100%; max-width: 400px; padding: 3rem;">
-        <!-- content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
     </div>
 
     <script src="/static/js/theme.js"></script>
-    <script>
-        // Login script
-    </script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -25,7 +25,10 @@
       "WebFetch(domain:security.stackexchange.com)",
       "Bash(ADMIN_EMAIL=admin@authglow.local ADMIN_PASSWORD=Admin123! python create_admin.py)",
       "Bash(ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=Admin123! python create_admin.py)",
-      "Bash(ADMIN_EMAIL=root@example.com ADMIN_PASSWORD=Admin123! python create_admin.py)"
+      "Bash(ADMIN_EMAIL=root@example.com ADMIN_PASSWORD=Admin123! python create_admin.py)",
+      "WebFetch(domain:localhost)",
+      "Bash(git checkout 0c977d5 -- authglow/templates/admin_sessions.html authglow/templates/admin_dashboard.html authglow/templates/admin_users.html)",
+      "Bash(git checkout 0c977d5 -- authglow/templates/admin_rbac.html authglow/templates/admin_oauth_clients.html authglow/templates/admin_oauth_consents.html authglow/templates/admin_api_keys.html authglow/templates/admin_audit.html authglow/templates/admin_password_resets.html authglow/templates/admin_playground.html)"
     ],
     "deny": [],
     "ask": []

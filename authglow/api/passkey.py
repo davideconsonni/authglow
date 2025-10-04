@@ -183,16 +183,16 @@ async def begin_authentication(
     user = await storage.get_user_by_email(email_request.email)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid credentials or no passkeys registered",
         )
 
     # Get user's passkeys
     passkeys = await passkey_service.get_user_passkeys(user.id)
     if not passkeys:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No passkeys registered for this user",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid credentials or no passkeys registered",
         )
 
     # Generate authentication options

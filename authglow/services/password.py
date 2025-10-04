@@ -6,7 +6,10 @@ from passlib.context import CryptContext
 from authglow.core.config import get_settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=True)
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
 
 
 class PasswordValidator:
@@ -74,10 +77,24 @@ class PasswordValidator:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt.
+
+    Bcrypt has a maximum password length of 72 bytes.
+    Passwords longer than 72 bytes are truncated.
+    """
+    # Truncate to 72 bytes to avoid bcrypt errors
+    password_bytes = password.encode('utf-8')[:72]
+    truncated_password = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.hash(truncated_password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a password against its hash.
+
+    Bcrypt has a maximum password length of 72 bytes.
+    Passwords longer than 72 bytes are truncated to match hashing behavior.
+    """
+    # Truncate to 72 bytes to match hash_password behavior
+    password_bytes = plain_password.encode('utf-8')[:72]
+    truncated_password = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.verify(truncated_password, hashed_password)

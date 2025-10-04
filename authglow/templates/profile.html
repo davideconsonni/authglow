@@ -622,7 +622,7 @@
                 // Update roles
                 const rolesContainer = document.getElementById('profile-roles');
                 rolesContainer.innerHTML = '';
-                if (userData.roles && userData.roles.length > 0) {
+                if (userData.roles && Array.isArray(userData.roles)) {
                     userData.roles.forEach(role => {
                         const badge = document.createElement('span');
                         badge.className = 'role-badge';
@@ -639,9 +639,17 @@
                 // Update email verification status
                 const verificationBadge = document.getElementById('email-verification-badge');
                 if (userData.email_verified) {
-                    verificationBadge.innerHTML = '<span class="verified-badge">Verified</span>';
+                    verificationBadge.textContent = '';
+                    const verifiedSpan = document.createElement('span');
+                    verifiedSpan.className = 'verified-badge';
+                    verifiedSpan.textContent = 'Verified';
+                    verificationBadge.appendChild(verifiedSpan);
                 } else {
-                    verificationBadge.innerHTML = '<span class="unverified-badge">Not Verified</span>';
+                    verificationBadge.textContent = '';
+                    const unverifiedSpan = document.createElement('span');
+                    unverifiedSpan.className = 'unverified-badge';
+                    unverifiedSpan.textContent = 'Not Verified';
+                    verificationBadge.appendChild(unverifiedSpan);
                 }
 
                 // Load passkey info
