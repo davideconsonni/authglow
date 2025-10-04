@@ -118,6 +118,19 @@ AuthGlow is configured via environment variables in your `.env` file. Here are a
 *   [Password Reset Flow](docs/PASSWORD_RESET.md)
 *   [Testing Guide](docs/TESTING.md)
 
+---
+
+## 🤖 Vibe Coding
+
+If you are developing with AI agents via vibe coding, AuthGlow provides dedicated LLM context files:
+
+*   **`llms.txt`** - A summarized context file containing essential information about the codebase structure, key endpoints, and architecture. Ideal for LLMs with limited context windows.
+*   **`llms-full.txt`** - A comprehensive context file with full implementation details, including code samples and in-depth documentation. Use this if your LLM has a large enough context window.
+
+These files can be used as context to help your LLM understand the AuthGlow codebase and assist with development tasks.
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
