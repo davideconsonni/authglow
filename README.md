@@ -208,12 +208,6 @@ This is not just "AI-assisted" development - this is **AI-led** development.
 
 While AuthGlow implements industry-standard security practices (OAuth 2.0, bcrypt, JWT, etc.), any authentication system handling sensitive user data requires rigorous human review before production deployment.
 
-## 🤝 Contributing
-
-We welcome contributions of all kinds, from bug reports and feature requests to code contributions and documentation improvements.
-
-Please read our `CONTRIBUTING.md` (coming soon) for guidelines on how to get started.
-
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
