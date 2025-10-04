@@ -1,123 +1,144 @@
-# AuthGlow ✨
+<!-- Aligning the logo to the center -->
+<p align="center">
+  <!-- GitHub's feature for light/dark mode image switching -->
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="authglow/static/images/authglow_full_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="authglow/static/images/authglow_full_light.png">
+    <img alt="AuthGlow Logo" src="authglow/static/images/authglow_full_light.png" width="400">
+  </picture>
+</p>
 
-AuthGlow is a modern, lightweight, and stateless Identity and Access Management (IAM) solution designed for developers. It provides a complete authentication and user management system that you can run anywhere, from a local machine to a serverless environment.
+<h1 align="center">AuthGlow</h1>
 
-Built with FastAPI and a flexible `fsspec` storage backend, it supports everything from local file storage for development to S3, Google Cloud Storage, and Azure Blob Storage for production.
+<p align="center">
+  A lightweight, self-hostable, file-based Customer Identity & Access Management (CIAM) solution and OAuth 2.0 / OIDC provider, written in Python.
+</p>
 
----
-
-## 🚀 Key Features
-
-*   **Modern Authentication:**
-    *   🔐 **OAuth2 & OpenID Connect:** Secure, standard-based flows for your applications.
-    *   🔑 **Passkeys (WebAuthn/FIDO2):** Phishing-resistant, passwordless authentication.
-    *   📱 **Multi-Factor Authentication (MFA):** TOTP-based 2FA with QR code setup and backup codes.
-*   **Complete User Management:**
-    *   👤 **Admin Portal:** A clean, intuitive UI to manage users, view audit logs, and monitor activity.
-    *   📧 **Email-Based Workflows:** User invitations, email verification, and password resets.
-*   **Developer-Friendly & Flexible:**
-    *   🎨 **Customizable Frontend:** Easily change the look and feel with a beige-based, light/dark theme.
-    *   ☁️ **Cloud-Native:** Stateless design ready for serverless deployment (AWS Lambda, Google Cloud Run, etc.).
-    *   🗄️ **Pluggable Storage:** Use the local filesystem, S3, GCS, or Azure Blob Storage.
-*   **Secure by Design:**
-    *   📜 **Comprehensive Audit Trails:** Log every important security event.
-    *   💪 **Configurable Password Policies:** Enforce strong password requirements.
-    *   🔑 **API Key Management:** Securely authenticate machine-to-machine (M2M) services.
+<p align="center">
+  <!-- Placeholder badges -->
+  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/status-development-orange.svg" alt="Project Status">
+</p>
 
 ---
 
-## 🏁 Getting Started (5 Minutes)
+AuthGlow is designed for developers and small teams who need a robust identity solution without the complexity and overhead of managing a traditional database. It provides a full suite of features including user authentication, multi-factor authentication, passkeys (WebAuthn), and a complete OAuth 2.0 / OpenID Connect provider.
 
-1.  **Clone the Repository**
+Its unique file-based storage system makes it incredibly portable, easy to back up, and simple to manage. Whether you're building a new application or need to centralize authentication for your existing services, AuthGlow offers a secure and flexible solution.
+
+## ✨ Key Features
+
+*   **Standard Authentication**: Full user lifecycle management: registration, login, profile updates, and password reset.
+*   🔐 **Multi-Factor Authentication (MFA)**: Enhance security with TOTP (Time-based One-Time Password) support.
+*   🔑 **Passkey Support**: Embrace the future of authentication with passwordless logins using FIDO2/WebAuthn standards.
+*   🌐 **OAuth 2.0 & OpenID Connect (OIDC) Provider**: Secure your APIs and applications with a fully compliant OIDC provider. Supports Authorization Code Flow with PKCE.
+*   📜 **Role-Based Access Control (RBAC)**: Fine-grained permission management with roles and permissions.
+*   🛡️ **API Key Management**: Issue and manage API keys for secure programmatic access to your services.
+*   🎛️ **Admin Dashboard**: A simple web interface to manage users, clients, consents, and view audit logs.
+*   ✍️ **Audit Trail**: Track important security events and account activities for monitoring and compliance.
+*   🔔 **Security Notifications**: Automatically notify users about sensitive actions like password changes or new logins.
+*   📄 **File-Based Storage**: No database required! AuthGlow runs on a simple, human-readable JSON file structure, making backups and migration a breeze.
+*   🐳 **Docker Ready**: Deploy quickly and consistently with the provided Dockerfile.
+*   ✉️ **Customizable Email Templates**: Easily modify email templates for verification, password resets, and security alerts.
+
+## 🚀 Quick Start
+
+Get your own AuthGlow instance running in minutes.
+
+### Method 1: Docker (Recommended)
+
+This is the easiest and recommended way to run AuthGlow, as it handles all dependencies for you.
+
+1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-repo/authglow.git
+    git clone https://github.com/your-username/authglow.git
     cd authglow
     ```
 
-2.  **Set Up a Virtual Environment**
+2.  **Create your configuration file:**
+    Copy the example `.env` file. No changes are needed for a basic local setup.
     ```bash
-    python -m venv .venv
-    # On Windows
-    .venv\Scripts\activate
-    # On macOS/Linux
-    source .venv/bin/activate
+    cp .env.example .env
     ```
 
-3.  **Install Dependencies**
+3.  **Build the Docker image:**
+    ```bash
+    docker build -t authglow .
+    ```
+
+4.  **Run the container:**
+    This command starts AuthGlow and maps the local `./data` directory to the container, ensuring your user data persists even if the container is removed.
+    ```bash
+    docker run -p 8000:8000 --name authglow-instance \
+      -v ./data:/app/data \
+      --env-file .env \
+      authglow
+    ```
+
+5.  **Done!**
+    AuthGlow is now running and accessible at `http://localhost:8000`.
+
+### Method 2: Local Python Environment
+
+If you prefer to run the application directly without Docker.
+
+1.  **Prerequisites:**
+    *   Python 3.10 or newer.
+    *   `pip` and `venv`.
+
+2.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/authglow.git
+    cd authglow
+    ```
+
+3.  **Create and activate a virtual environment:**
+    *   **Windows:**
+        ```bash
+        python -m venv .venv
+        .venv\Scripts\activate
+        ```
+    *   **macOS / Linux:**
+        ```bash
+        python3 -m venv .venv
+        source .venv/bin/activate
+        ```
+
+4.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Configure Your Environment**
-    Create a `.env` file in the root directory and add the following minimal configuration. **Please use your own secure keys.**
-
-    ```env
-    # .env
-    SECRET_KEY=generate-a-secure-random-string-32-chars
-    JWT_SECRET_KEY=generate-another-secure-random-string-32-chars
-    EMAIL_BACKEND=file_storage
+5.  **Configure your environment:**
+    Copy the example `.env` file. It's highly recommended to review the settings inside `.env` and change the `SECRET_KEY` for any serious use.
+    ```bash
+    cp .env.example .env
     ```
-    *Setting `EMAIL_BACKEND=file_storage` will save outgoing emails as `.eml` files in `data/users/emails` for easy development.*
 
-5.  **Run the Application**
+6.  **Run the application:**
     ```bash
     python main.py
     ```
-    Your AuthGlow instance is now running at `http://localhost:8000`.
 
-    - **API Docs:** `http://localhost:8000/docs`
-    - **Admin Portal:** `http://localhost:8000/admin`
+7.  **Done!**
+    AuthGlow is now running and accessible at `http://localhost:8000`.
 
----
+## 📚 Documentation
 
-## 📦 What's Inside?
+While this README provides a quick start, our comprehensive documentation in the `/docs` folder offers in-depth guides on:
 
-### The Admin Portal
+*   Advanced configuration and all available environment variables.
+*   Using AuthGlow as an OAuth 2.0 / OIDC provider for your applications.
+*   Managing users, roles, and permissions.
+*   Understanding the file-based storage system.
 
-AuthGlow comes with a built-in admin portal to manage your users and monitor your application's security.
+## 🤝 Contributing
 
-*   **Dashboard:** Get a quick overview of user sign-ups, login activity, and security events.
-*   **User Management:** View, edit, and manage all your users. Deactivate accounts, reset MFA, and more.
-*   **Audit Logs:** A detailed, searchable log of every important event that happens in the system.
-*   **API Playground:** An interactive tool to test OAuth2, OpenID Connect, and other API flows directly from the browser.
+We welcome contributions of all kinds, from bug reports and feature requests to code contributions and documentation improvements.
 
-*To access the admin portal, you'll first need to create an admin user. See the [User Management Documentation](docs/USER_MANAGEMENT.md) for instructions.*
+Please read our `CONTRIBUTING.md` (coming soon) for guidelines on how to get started.
 
-### Core Technologies
+## 📝 License
 
-*   **Backend:** FastAPI
-*   **Authentication:** OAuth2, OpenID Connect, Passkeys (WebAuthn)
-*   **Data Storage:** `fsspec` (File System, S3, GCS, Azure Blob)
-*   **Frontend:** Jinja2 templates with vanilla JavaScript.
-
----
-
-## ⚙️ Configuration
-
-AuthGlow is configured via environment variables in your `.env` file. Here are a few key settings:
-
-| Variable                      | Description                                                              | Default                               |
-| ----------------------------- | ------------------------------------------------------------------------ | ------------------------------------- |
-| `SECRET_KEY`                  | A long, random string for application security. **(Required)**           | `""`                                  |
-| `JWT_SECRET_KEY`              | A long, random string for signing JWTs. **(Required)**                   | `""`                                  |
-| `EMAIL_BACKEND`               | How to handle emails: `console` or `file_storage`.                       | `"console"`                           |
-| `STORAGE_BACKEND`             | Where to store data: `file`, `s3`, `gcs`, `abfs`.                        | `"file"`                              |
-| `STORAGE_PATH`                | The root directory or bucket for data storage.                           | `"data/users"`                        |
-| `PASSKEY_RP_ID`               | Your domain name for Passkey security.                                   | `"localhost"`                         |
-| `PASSKEY_ORIGIN`              | The full origin URL where the app is hosted.                             | `"http://localhost:8000"`             |
-
-*For a full list of configuration options, see the `.env.example` file.*
-
----
-
-## 📚 Deeper Dives
-
-*   [API Key Management](docs/API_KEYS.md)
-*   [User Invitation and Management](docs/USER_MANAGEMENT.md)
-*   [OAuth2 & OIDC Flows](docs/OAUTH_CLIENT_MANAGEMENT.md)
-*   [Password Reset Flow](docs/PASSWORD_RESET.md)
-*   [Testing Guide](docs/TESTING.md)
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
