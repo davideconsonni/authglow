@@ -237,22 +237,19 @@ This is not just "AI-assisted" development - this is **human-led, AI-implemented
 
 ### 🎵 Vibe Coding with LLMs
 
-Want to work on this project with AI assistance? We provide a comprehensive context file that combines all documentation in a single file, making it easy to give LLMs full context about the project.
+Want to work on this project with AI assistance? We provide **[llms-full.txt](llms-full.txt)** - a comprehensive context file that combines the complete README and all documentation in a single file.
 
-**Quick Start:**
-1. Generate the full context file:
-   ```bash
-   python generate_llms_full.py
-   ```
+**How to use it:**
+- Download or copy the content of [`llms-full.txt`](llms-full.txt)
+- Paste it into your AI coding assistant (Claude, ChatGPT, Gemini, etc.) at the start of your session
+- The AI will have full context about the project's architecture, features, and implementation details
 
-2. Use the generated `llms-full.txt` file to provide context to your AI coding assistant (Claude, ChatGPT, etc.)
-
-This file contains:
-- Complete README
-- All documentation from `/docs` (in natural order)
+**What's included:**
+- Complete README with project overview
+- All 12 documentation guides from `/docs`
 - ~144KB of comprehensive project information
 
-Perfect for "vibe coding" sessions where you want the AI to understand the entire project architecture, features, and implementation details before making suggestions or writing code.
+Perfect for "vibe coding" sessions where you want to add features, fix bugs, or refactor code with full AI understanding of the entire codebase.
 
 ## ⚠️ Disclaimer
 
