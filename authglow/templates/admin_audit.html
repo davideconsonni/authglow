@@ -248,7 +248,7 @@
 
             const token = localStorage.getItem('admin_token');
             if (!token) {
-                window.location.href = '/admin/login';
+                window.location.href = '/login';
                 return;
             }
 
@@ -258,7 +258,7 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) {
-                    if (response.status === 401) window.location.href = '/admin/login';
+                    if (response.status === 401) window.location.href = '/login';
                     throw new Error(`Failed to fetch logs: ${response.status}`);
                 }
                 allLogs = await response.json();

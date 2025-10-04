@@ -396,7 +396,7 @@
             try {
                 const token = localStorage.getItem('admin_token');
                 if (!token) {
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -409,7 +409,7 @@
                     console.error('Failed to get user info:', userResponse.status);
                     localStorage.removeItem('admin_token');
                     localStorage.removeItem('admin_user');
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -767,7 +767,7 @@
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_user');
             localStorage.removeItem('access_token');
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         loadUsers();

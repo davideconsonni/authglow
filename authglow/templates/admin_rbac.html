@@ -567,7 +567,7 @@
     <script>
         const token = localStorage.getItem('admin_token');
         if (!token) {
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         let currentEditingRoleId = null;
@@ -999,7 +999,7 @@
         function logout() {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_user');
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         // Load initial tab

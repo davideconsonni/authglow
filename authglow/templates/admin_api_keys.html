@@ -354,7 +354,7 @@
         const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
 
         if (!token) {
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         document.getElementById('userEmail').textContent = adminUser.email || '';
@@ -576,7 +576,7 @@
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_user');
             localStorage.removeItem('access_token');
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         loadKeys();

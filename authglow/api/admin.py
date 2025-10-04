@@ -70,21 +70,6 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 # Dashboard Pages
 
-@router.get("/admin/login", response_class=HTMLResponse)
-async def admin_login_page(request: Request):
-    """Admin login page."""
-    settings = get_settings()
-    ui_context = settings.get_ui_context()
-
-    return templates.TemplateResponse(
-        "admin_login.html",
-        {
-            "request": request,
-            **ui_context
-        }
-    )
-
-
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Admin dashboard page (auth handled by JS)."""

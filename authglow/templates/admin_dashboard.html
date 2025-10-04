@@ -225,7 +225,7 @@
                 // Get access token from storage
                 const token = localStorage.getItem('admin_token');
                 if (!token) {
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -236,7 +236,7 @@
 
                 if (!userResponse.ok) {
                     localStorage.removeItem('admin_token');
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -246,7 +246,7 @@
                 if (!user.scopes.includes('admin')) {
                     alert('Admin access required');
                     localStorage.removeItem('admin_token');
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -287,7 +287,7 @@
                 // If unauthorized, redirect to login
                 if (error.message.includes('401') || error.message.includes('403')) {
                     localStorage.removeItem('admin_token');
-                    window.location.href = '/admin/login';
+                    window.location.href = '/login';
                 } else {
                     document.getElementById('loading').innerHTML = '<p>Error loading dashboard. Please try again.</p>';
                 }
@@ -416,7 +416,7 @@
         function logout() {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_user');
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         }
 
         // Load dashboard on page load
