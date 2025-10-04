@@ -36,7 +36,7 @@
 
 AuthGlow is designed for developers and small teams who need a robust identity solution without the complexity and overhead of managing a traditional database. It provides a full suite of features including user authentication, multi-factor authentication, passkeys (WebAuthn), and a complete OAuth 2.0 / OpenID Connect provider.
 
-Its unique file-based storage system makes it incredibly portable, easy to back up, and simple to manage. Whether you're building a new application or need to centralize authentication for your existing services, AuthGlow offers a secure and flexible solution.
+Its unique fsspec-based storage system makes it incredibly flexible and portable. Store data locally as JSON files for simplicity, or seamlessly scale to cloud storage (AWS S3, Google Cloud Storage, Azure Blob Storage) without changing a line of code. Human-readable format makes backups and migration effortless. Whether you're building a new application or need to centralize authentication for your existing services, AuthGlow offers a secure and flexible solution.
 
 ---
 
@@ -181,7 +181,7 @@ While this README provides a quick start, our comprehensive documentation in the
 *   Advanced configuration and all available environment variables.
 *   Using AuthGlow as an OAuth 2.0 / OIDC provider for your applications.
 *   Managing users, roles, and permissions.
-*   Understanding the file-based storage system.
+*   Understanding the fsspec-based storage system and cloud backend configuration (S3, GCS, Azure Blob).
 
 ## 🤖 Generative AI-First Development
 
@@ -227,7 +227,7 @@ This project demonstrates:
 
 AuthGlow showcases that modern AI can:
 1. **Understand complex specifications** - OAuth 2.0, OIDC, WebAuthn standards
-2. **Make architectural decisions** - File-based storage, stateless design, security patterns
+2. **Make architectural decisions** - fsspec storage abstraction, stateless design, security patterns
 3. **Write production-quality code** - Error handling, validation, logging
 4. **Follow best practices** - Security, performance, maintainability
 5. **Create comprehensive documentation** - Setup guides, API references, security docs
