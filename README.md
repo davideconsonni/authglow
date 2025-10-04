@@ -148,7 +148,7 @@ While this README provides a quick start, our comprehensive documentation in the
 
 ### What is a "Generative AI-First" Project?
 
-This project represents a new paradigm in software development where **AI agents are the primary developers**, not assistants. Instead of developers writing code and using AI for autocomplete or suggestions, the entire system architecture, implementation, and documentation were created through iterative conversations with AI models.
+This project represents a new paradigm in software development where **AI generates 100% of the code**, but under human direction and decision-making. Instead of developers writing code and using AI for autocomplete or suggestions, the entire system was created through **co-thinking** - an iterative dialogue where the human defines requirements, makes architectural decisions, and guides the AI, while the AI implements everything in code.
 
 **Generative AI Tools Used:**
 - **Claude Code** with **Claude 3.5 Sonnet** (Anthropic) - Primary code generation and architecture design
@@ -165,22 +165,24 @@ This project represents a new paradigm in software development where **AI agents
 - ✅ Configuration files (Docker, requirements.txt, .env.example)
 - ✅ This README and landing page
 
-**Human involvement:**
-- Defining high-level requirements and use cases
-- Providing specifications and technical constraints
-- Reviewing and testing generated code
-- Directing the development flow through prompts
-- Quality assurance and validation
-- **Zero manual coding**
+**Human involvement (Co-Thinking Process):**
+- **Decision-making**: All architectural and design decisions
+- **Requirements definition**: Detailed specifications and use cases
+- **Technical direction**: Choosing technologies, patterns, and approaches
+- **Quality control**: Reviewing, testing, and validating AI-generated code
+- **Iterative refinement**: Guiding the AI through feedback and corrections
+- **Feature prioritization**: Deciding what to build and when
+- **Zero manual coding**: Not a single line of code written by hand
 
 **Purpose:**
 This project demonstrates:
 - **The current state-of-the-art** in AI code generation (2025)
-- How AI can design and implement complex, production-grade systems
+- The **co-thinking model**: human intelligence for decisions + AI for implementation
+- How AI can implement complex, production-grade systems under human guidance
 - The ability of AI to follow industry standards (OAuth 2.0, OIDC, WebAuthn)
 - AI's capability to write secure code (bcrypt, JWT, rate limiting, audit logs)
-- The potential for **10x faster** prototyping and development
-- The future of software engineering as a collaborative effort between humans and AI
+- The potential for **10x faster** development through human-AI collaboration
+- The future of software engineering: humans as architects, AI as builders
 
 ### Why This Matters
 
@@ -192,7 +194,7 @@ AuthGlow showcases that modern AI can:
 5. **Create comprehensive documentation** - Setup guides, API references, security docs
 6. **Iterate and refine** - Bug fixes, feature additions, optimizations
 
-This is not just "AI-assisted" development - this is **AI-led** development.
+This is not just "AI-assisted" development - this is **human-led, AI-implemented** development through **co-thinking**.
 
 ## ⚠️ Disclaimer
 
