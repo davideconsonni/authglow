@@ -1,0 +1,11 @@
+{
+  "id": "5851e494-5759-4b83-852c-c522707ada89",
+  "user_id": "120ad3ec-8b77-4000-af22-2ce25b6c30e8",
+  "email": "io@io.io",
+  "event_type": "login_success",
+  "ip_address": "127.0.0.1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  "timestamp": "2025-10-04T08:04:57.287436",
+  "metadata": {},
+  "severity": "info"
+}

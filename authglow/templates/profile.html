@@ -268,6 +268,23 @@
             font-weight: 600;
         }
 
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-sm:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
         .info-row {
             display: flex;
             justify-content: space-between;
@@ -648,14 +665,22 @@
                     verificationBadge.textContent = '';
                     const verifiedSpan = document.createElement('span');
                     verifiedSpan.className = 'verified-badge';
-                    verifiedSpan.textContent = 'Verified';
+                    verifiedSpan.textContent = '✓ Verified';
                     verificationBadge.appendChild(verifiedSpan);
                 } else {
                     verificationBadge.textContent = '';
                     const unverifiedSpan = document.createElement('span');
                     unverifiedSpan.className = 'unverified-badge';
-                    unverifiedSpan.textContent = 'Not Verified';
+                    unverifiedSpan.textContent = '⚠ Not Verified';
                     verificationBadge.appendChild(unverifiedSpan);
+
+                    // Add resend verification button
+                    const resendBtn = document.createElement('button');
+                    resendBtn.className = 'btn btn-sm';
+                    resendBtn.textContent = 'Resend Verification Email';
+                    resendBtn.style.marginLeft = '10px';
+                    resendBtn.onclick = resendVerificationEmail;
+                    verificationBadge.appendChild(resendBtn);
                 }
 
                 // Load passkey info
@@ -1106,6 +1131,27 @@
 
             } catch (error) {
                 showAlert('Failed to remove device: ' + error.message, 'error');
+            }
+        }
+
+        // Resend Verification Email
+        async function resendVerificationEmail() {
+            try {
+                const response = await fetch('/api/email/resend-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to send verification email');
+                }
+
+                showAlert('Verification email sent! Please check your inbox.', 'success');
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
             }
         }
 

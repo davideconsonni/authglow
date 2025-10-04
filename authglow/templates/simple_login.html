@@ -409,7 +409,22 @@
                 setTimeout(() => window.location.href = '/dashboard', 1000);
 
             } catch (error) {
-                showAlert('Passkey login failed: ' + error.message);
+                // User-friendly error messages
+                let errorMessage = 'Passkey authentication failed';
+
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Authentication was cancelled or timed out. Please try again.';
+                } else if (error.name === 'InvalidStateError') {
+                    errorMessage = 'This passkey is not registered for this account.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = 'Passkeys are not supported in this browser.';
+                } else if (error.name === 'SecurityError') {
+                    errorMessage = 'Security error. Please use HTTPS or localhost.';
+                } else if (error.message && !error.message.includes('https://www.w3.org')) {
+                    errorMessage = error.message;
+                }
+
+                showAlert(errorMessage);
             }
         }
 

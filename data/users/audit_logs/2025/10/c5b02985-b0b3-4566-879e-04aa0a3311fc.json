@@ -1,0 +1,13 @@
+{
+  "id": "c5b02985-b0b3-4566-879e-04aa0a3311fc",
+  "user_id": "120ad3ec-8b77-4000-af22-2ce25b6c30e8",
+  "email": "io@io.io",
+  "event_type": "email_verified",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-04T08:12:27.375979",
+  "metadata": {
+    "token": "8afabe5c-f553-44dc-b9e0-16f4f749a4b6"
+  },
+  "severity": "info"
+}

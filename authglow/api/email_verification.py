@@ -1,6 +1,7 @@
 """Email verification API endpoints."""
 
-from fastapi import APIRouter, HTTPException, status, Request
+from typing import Optional
+from fastapi import APIRouter, HTTPException, status, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
@@ -10,9 +11,11 @@ from authglow.models.email_verification import (
     EmailVerificationRequest,
     ResendVerificationRequest
 )
+from authglow.models.user import User
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.audit import AuditService
 from authglow.core.config import get_settings
+from authglow.api.auth import get_current_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
@@ -121,20 +124,23 @@ async def verify_email_api(
 @limiter.limit("5/hour")
 async def resend_verification_email(
     request: Request,
-    resend_request: ResendVerificationRequest
+    current_user: User = Depends(get_current_user)
 ):
-    """Resend verification email."""
+    """Resend verification email for authenticated user."""
     verification_service = get_verification_service()
     audit_service = get_audit_service()
 
+    # Use current user's email
+    email = current_user.email
+
     # Resend verification email
-    success, error = await verification_service.resend_verification_email(resend_request.email)
+    success, error = await verification_service.resend_verification_email(email)
 
     if not success:
         # Log failed resend attempt
         await audit_service.log_event(
             event_type="email_verification_resend_failed",
-            email=resend_request.email,
+            email=email,
             metadata={"error": error},
             severity="warning",
             ip_address=request.client.host if request.client else None
@@ -144,7 +150,7 @@ async def resend_verification_email(
     # Log successful resend
     await audit_service.log_event(
         event_type="email_verification_resent",
-        email=resend_request.email,
+        email=email,
         ip_address=request.client.host if request.client else None
     )
 

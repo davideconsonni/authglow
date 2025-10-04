@@ -1,0 +1,11 @@
+{
+  "id": "82eda446-669f-4b68-a32f-48bac59e87ce",
+  "user_id": null,
+  "email": "io@io.io",
+  "event_type": "email_verification_resent",
+  "ip_address": "127.0.0.1",
+  "user_agent": null,
+  "timestamp": "2025-10-04T08:12:06.637138",
+  "metadata": {},
+  "severity": "info"
+}
