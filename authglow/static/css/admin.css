@@ -129,3 +129,8 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary);
 }
+
+/* Dark Mode Table Header Contrast Fix */
+[data-theme="dark"] th {
+    color: var(--text-tertiary);
+}

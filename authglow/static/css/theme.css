@@ -42,6 +42,7 @@
     --background: #1A1A1A;
     --surface: #2A2A2A;
     --surface-elevated: #333333;
+    --surface-light: var(--surface-elevated);
     --text-primary: #F0F0F0;
     --text-secondary: #B0B0B0;
     --text-tertiary: #808080;
