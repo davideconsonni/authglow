@@ -43,16 +43,37 @@ Its unique file-based storage system makes it incredibly portable, easy to back 
 ## 📸 Screenshots
 
 ### Landing Page
+Modern gradient design showcasing AuthGlow's features and AI-first development approach.
+
 <img src="images/01-landing.png" alt="AuthGlow Landing Page" width="800">
 
+---
+
 ### Login Interface
+Clean authentication interface with support for email/password, MFA, and passwordless login via Passkeys.
+
 <img src="images/02-login.png" alt="AuthGlow Login" width="600">
 
+---
+
 ### Admin Dashboard
+Comprehensive admin panel with user statistics, recent activity monitoring, and system health metrics. Features light/dark theme support and responsive design.
+
 <img src="images/03-dashboard.png" alt="AuthGlow Admin Dashboard" width="800">
 
-### Machine-to-Machine API
+---
+
+### Machine-to-Machine API Authentication
+OAuth 2.0 Client Credentials flow for secure API access. Supports API key management and JWT token generation for service-to-service authentication.
+
 <img src="images/04-machine-to-machine-api.png" alt="M2M API Authentication" width="800">
+
+---
+
+### API Playground
+Interactive testing environment for OAuth 2.0 flows, OpenID Connect endpoints, and authenticated API calls. Experiment with Authorization Code, Client Credentials, and token validation in real-time.
+
+<img src="images/05-playground.png" alt="API Playground" width="800">
 
 ---
 
