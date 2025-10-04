@@ -61,7 +61,7 @@ This is the easiest and recommended way to run AuthGlow, as it handles all depen
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/authglow.git
+    git clone https://github.com/davideconsonni/authglow.git
     cd authglow
     ```
 
@@ -98,7 +98,7 @@ If you prefer to run the application directly without Docker.
 
 2.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/authglow.git
+    git clone https://github.com/davideconsonni/authglow.git
     cd authglow
     ```
 
@@ -170,6 +170,8 @@ This project demonstrates:
 - Best practices for AI-generated code organization
 
 ## ⚠️ Disclaimer
+
+**The author is not responsible for any use, misuse, or consequences arising from the deployment or operation of this software. Use at your own risk.**
 
 **DO NOT USE IN PRODUCTION WITHOUT:**
 - Comprehensive security audit by qualified professionals

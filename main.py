@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -25,6 +27,9 @@ from authglow.core.config import get_settings
 
 # Create FastAPI app
 settings = get_settings()
+
+# Initialize Jinja2 templates
+templates = Jinja2Templates(directory="authglow/templates")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, default_limits=["200 per hour"])
@@ -69,14 +74,17 @@ app.include_router(user_profile_router, tags=["User Profile"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "message": "AuthGlow - Serverless CIAM",
-        "version": "0.1.0",
-        "docs": "/docs"
-    }
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Landing page."""
+    ui_context = settings.get_ui_context()
+    return templates.TemplateResponse(
+        "landing.html",
+        {
+            "request": request,
+            **ui_context
+        }
+    )
 
 
 @app.get("/health")
