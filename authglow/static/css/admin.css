@@ -100,6 +100,22 @@ body {
     min-height: calc(100vh - var(--header-height));
 }
 
+/* Admin Container (for playground and other pages) */
+.admin-container {
+    display: flex;
+    min-height: 100vh;
+    padding-top: var(--header-height);
+}
+
+.admin-content {
+    flex: 1;
+    margin-left: var(--nav-width);
+    padding: 2rem;
+    overflow-y: auto;
+    background: var(--background);
+    min-height: calc(100vh - var(--header-height));
+}
+
 /* Typography Utilities */
 h1 {
     margin-bottom: 2rem;
@@ -272,69 +288,29 @@ tbody tr:hover {
 
 /* Mobile & Tablet */
 @media (max-width: 1024px) {
-    .admin-sidebar {
-        position: fixed;
-        left: -280px;
-        z-index: 1000;
-        transition: left 0.3s ease;
+    /* Hide navigation sidebar on mobile */
+    .nav {
+        display: none;
     }
 
-    .admin-sidebar.active {
-        left: 0;
-        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
-    }
-
+    /* Remove left margin on main content so it doesn't go under nav */
+    .main-content,
     .admin-content {
         margin-left: 0;
         width: 100%;
     }
 
-    /* Mobile menu toggle button */
-    .mobile-menu-toggle {
-        display: block;
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 999;
-        background: var(--primary);
-        color: white;
-        border: none;
-        padding: 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .mobile-menu-toggle:hover {
-        opacity: 0.9;
-    }
-
-    /* Overlay when sidebar is open */
-    .sidebar-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 999;
-    }
-
-    .sidebar-overlay.active {
-        display: block;
-    }
-
-    /* Adjust content padding for mobile toggle button */
-    .page-header {
-        padding-top: 60px;
+    .admin-container {
+        flex-direction: column;
     }
 }
 
 /* Small mobile devices */
 @media (max-width: 768px) {
+    /* Reduce padding on smaller screens */
+    .main-content,
     .admin-content {
-        padding: 15px;
+        padding: 1rem;
     }
 
     .page-header h1 {
