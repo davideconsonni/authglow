@@ -11,7 +11,7 @@ Choosing the correct OAuth 2.0 flow is critical for security and functionality. 
 ### 1. Authorization Code Flow + PKCE
 
 -   **Use Case**: The most common and secure flow. Use it for:
-    -   **Traditional Web Applications**: Apps with a backend (e.g., Python/Flask, Node.js/Express, Java/Spring).
+    -   **Traditional Web Applications**: Apps with a backend (e.g., Python/FastAPI, Node.js/Express, Java/Spring).
     -   **Single Page Applications (SPAs)**: Modern frontend apps (e.g., React, Vue, Angular) that have a backend component (Backend for Frontend).
     -   **Native Mobile/Desktop Apps**: Applications that can securely store a client secret or handle redirects.
 
