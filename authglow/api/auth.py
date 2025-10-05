@@ -78,7 +78,8 @@ async def get_current_user(
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service)
 ) -> User:
     """Get current authenticated user (supports both JWT and API Key)."""
     credentials_exception = HTTPException(
@@ -146,7 +147,19 @@ async def get_current_user(
 
     user = await storage.get_user(token_data.sub)
     if user is None:
-        raise credentials_exception
+        # Check if it's a client_credentials token
+        client = await oauth2_service.client_storage.get_client(token_data.sub)
+        if client:
+            # It's a valid client, create a synthetic user
+            user = User(
+                id=client.client_id,
+                email=f"{client.client_id}@client.internal",
+                hashed_password="", # Not relevant here
+                is_active=client.is_active,
+                scopes=token_data.scopes
+            )
+        else:
+            raise credentials_exception
 
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")

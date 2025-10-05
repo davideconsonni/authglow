@@ -130,7 +130,7 @@ class OAuth2Service:
 
             # If secret provided, verify it
             if client_secret:
-                return await self.client_storage.verify_client_secret(client_id, client_secret)
+                return await self.client_storage.verify_client_secret(client, client_secret)
 
             return True
 

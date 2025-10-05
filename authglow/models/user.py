@@ -24,6 +24,7 @@ class User(BaseModel):
 
     # OAuth2 related
     scopes: List[str] = Field(default_factory=list)
+    api_key_scopes: Optional[List[str]] = None
 
     # MFA related
     mfa_enabled: bool = False

@@ -99,12 +99,10 @@ class OAuth2ClientStorage:
 
     async def verify_client_secret(
         self,
-        client_id: str,
+        client: OAuth2Client,
         client_secret: str
     ) -> bool:
         """Verify client credentials."""
-        client = await self.get_client(client_id)
-
         if not client or not client.is_active:
             return False
 
