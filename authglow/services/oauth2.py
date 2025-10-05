@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from uuid import uuid4
 import fsspec
 from authglow.core.config import get_settings
@@ -167,6 +167,32 @@ class OAuth2Service:
 
         # Fallback: allow all scopes for settings-based client
         return client_id == self.settings.oauth2_client_id
+
+    async def process_scopes(self, client_id: str, requested_scopes: List[str]) -> List[str]:
+        """
+        Process and validate scopes based on client configuration and application settings.
+        """
+        client = await self.client_storage.get_client(client_id)
+        allowed_scopes = client.allowed_scopes if client else []
+
+        # Fallback for settings-based client
+        if not client and client_id == self.settings.oauth2_client_id:
+            # Allow any scope for the default client in permissive mode
+            if not self.settings.oauth2_reject_unknown_scopes:
+                return requested_scopes
+            # In strict mode, default client has no defined scopes, so reject any
+            else:
+                allowed_scopes = []
+
+        if self.settings.oauth2_reject_unknown_scopes:
+            # Strict mode: all requested scopes must be in allowed_scopes
+            unknown_scopes = set(requested_scopes) - set(allowed_scopes)
+            if unknown_scopes:
+                raise ValueError(f"Invalid scopes requested: {', '.join(unknown_scopes)}")
+            return requested_scopes
+        else:
+            # Permissive mode: filter requested scopes to only include allowed ones
+            return [scope for scope in requested_scopes if scope in allowed_scopes]
 
     async def verify_grant_type(self, client_id: str, grant_type: str) -> bool:
         """Verify if client is allowed to use this grant type."""

@@ -181,6 +181,14 @@ async def authorize(
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
+    # Process and validate scopes
+    requested_scopes = scope.split() if scope else []
+    try:
+        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+        validated_scope = " ".join(processed_scopes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+
     if response_type != "code":
         raise HTTPException(status_code=400, detail="Unsupported response_type")
 
@@ -193,7 +201,7 @@ async def authorize(
             **ui_context,
             "client_id": client_id,
             "redirect_uri": redirect_uri,
-            "scope": scope,
+            "scope": validated_scope,
             "state": state,
             "password_policy": PasswordValidator().get_policy_description()
         }
@@ -222,6 +230,14 @@ async def authorize_post(
 
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
+    # Process and validate scopes
+    requested_scopes = scope.split() if scope else []
+    try:
+        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+        validated_scope = " ".join(processed_scopes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid scope")
 
     # Authenticate user
     user = await storage.get_user_by_email(email)
@@ -259,7 +275,7 @@ async def authorize_post(
                 user_id=user.id,
                 client_id=client_id,
                 redirect_uri=redirect_uri,
-                scope=scope,
+                scope=validated_scope,
                 state=state
             )
 
@@ -283,7 +299,7 @@ async def authorize_post(
         user_id=user.id,
         client_id=client_id,
         redirect_uri=redirect_uri,
-        scope=scope,
+        scope=validated_scope,
         state=state
     )
 
@@ -329,23 +345,18 @@ async def token_endpoint(
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
 
-        # Parse scopes - use ONLY the scopes authorized in the authorization code
-        # Do NOT fall back to user.scopes for security!
-        print(f"DEBUG token endpoint - auth_code.scope: '{auth_code.scope}'")
-        print(f"DEBUG token endpoint - user.scopes: {user.scopes}")
+        # Parse and process scopes from the authorization code
+        requested_scopes = auth_code.scope.split() if auth_code.scope else []
+        try:
+            # Validate requested scopes against what the client is allowed to request
+            processed_scopes = await oauth2_service.process_scopes(
+                auth_code.client_id, requested_scopes
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scope")
 
-        if auth_code.scope:
-            requested_scopes = auth_code.scope.split()
-        else:
-            # If no scopes in auth code, use default "read" scope
-            requested_scopes = ["read"]
-
-        print(f"DEBUG token endpoint - requested_scopes: {requested_scopes}")
-
-        # Filter scopes: user must have each requested scope
-        scopes = [s for s in requested_scopes if s in user.scopes]
-
-        print(f"DEBUG token endpoint - final scopes: {scopes}")
+        # Final check: ensure the user has the scopes that were approved and are valid for the client
+        scopes = [s for s in processed_scopes if s in user.scopes]
 
         # Generate JWT access token
         access_token_response = jwt_service.create_token_response(
@@ -395,12 +406,18 @@ async def token_endpoint(
         if not await oauth2_service.verify_client(client_id, client_secret):
             raise HTTPException(status_code=401, detail="Invalid client credentials")
 
+        # Process and validate scopes
+        requested_scopes = scope.split() if scope else []
+        try:
+            validated_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scope")
+
         # Create token for client (no specific user)
-        scopes = scope.split() if scope else ["read"]
         return jwt_service.create_token_response(
             user_id=client_id,
             email=f"{client_id}@client.local",
-            scopes=scopes,
+            scopes=validated_scopes,
             include_refresh=False
         )
 
@@ -732,12 +749,22 @@ async def oauth2_mfa_verify(
     # Delete MFA session
     await session_service.delete_mfa_session(session_token)
 
+    # Process and validate scopes before creating the authorization code
+    requested_scopes = mfa_session.scope.split() if mfa_session.scope else []
+    try:
+        processed_scopes = await oauth2_service.process_scopes(
+            mfa_session.client_id, requested_scopes
+        )
+        validated_scope = " ".join(processed_scopes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+
     # Create authorization code
     auth_code = await oauth2_service.create_authorization_code(
         client_id=mfa_session.client_id,
         user_id=user.id,
         redirect_uri=mfa_session.redirect_uri,
-        scope=mfa_session.scope
+        scope=validated_scope
     )
 
     # Redirect with authorization code

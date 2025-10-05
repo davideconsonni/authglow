@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     oauth2_authorization_code_expire_minutes: int = 10
     oauth2_client_id: str = "default-client-id"
     oauth2_client_secret: str = "default-client-secret"
+    oauth2_reject_unknown_scopes: bool = False
 
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
