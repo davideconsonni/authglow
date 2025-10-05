@@ -162,6 +162,38 @@
         .form-group small {
             color: var(--text-secondary);
             font-size: 0.875rem;
+            display: block;
+            margin-top: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .checkbox-group {
+            background: var(--surface-elevated);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: flex-start;
+            cursor: pointer;
+            font-weight: 500;
+            margin-bottom: 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 0.75rem;
+            margin-top: 0.25rem;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .checkbox-label-text {
+            flex: 1;
         }
 
         .secret-display {
@@ -171,6 +203,29 @@
             font-family: 'Courier New', monospace;
             word-break: break-all;
             margin-top: 1rem;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            right: 0.5rem;
+            top: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            opacity: 0.8;
+        }
+
+        .copy-btn.copied {
+            background: #22c55e;
         }
 
         .warning {
@@ -248,16 +303,110 @@
                     <input type="text" name="allowed_scopes" value="read,write">
                 </div>
 
-                <div class="form-group">
+                <div class="checkbox-group">
                     <label>
                         <input type="checkbox" name="is_confidential" checked>
-                        Confidential Client (has client secret)
+                        <div class="checkbox-label-text">
+                            <div>Confidential Client</div>
+                            <small>
+                                The client can securely store a secret (e.g., server-side apps).
+                                Uncheck for public clients like mobile/SPA apps that cannot keep secrets safe.
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="require_pkce">
+                        <div class="checkbox-label-text">
+                            <div>Require PKCE</div>
+                            <small>
+                                Proof Key for Code Exchange adds extra security to prevent authorization code interception.
+                                <strong>Highly recommended for public clients</strong> (mobile apps, SPAs).
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="require_consent" checked>
+                        <div class="checkbox-label-text">
+                            <div>Require user consent</div>
+                            <small>
+                                Users will see a consent screen showing what permissions the app is requesting.
+                                Recommended for third-party applications.
+                            </small>
+                        </div>
                     </label>
                 </div>
 
                 <div style="display: flex; gap: 1rem;">
                     <button type="submit" class="btn btn-primary">Create Client</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('createModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Client Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h2>Edit OAuth2 Client</h2>
+            <form id="editForm" onsubmit="updateClient(event)">
+                <input type="hidden" id="editClientId" name="client_id">
+
+                <div class="form-group">
+                    <label>Client Name *</label>
+                    <input type="text" id="editClientName" name="client_name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="editDescription" name="description" rows="3"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Redirect URIs * (one per line)</label>
+                    <textarea id="editRedirectUris" name="redirect_uris" rows="3" required></textarea>
+                    <small>Example: https://myapp.com/callback</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Allowed Scopes (comma separated)</label>
+                    <input type="text" id="editAllowedScopes" name="allowed_scopes" value="read,write">
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="editRequirePkce" name="require_pkce">
+                        <div class="checkbox-label-text">
+                            <div>Require PKCE</div>
+                            <small>
+                                Proof Key for Code Exchange adds extra security to prevent authorization code interception.
+                                <strong>Highly recommended for public clients</strong> (mobile apps, SPAs).
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="editRequireConsent" name="require_consent">
+                        <div class="checkbox-label-text">
+                            <div>Require user consent</div>
+                            <small>
+                                Users will see a consent screen showing what permissions the app is requesting.
+                                Recommended for third-party applications.
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-primary">Update Client</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
                 </div>
             </form>
         </div>
@@ -272,11 +421,15 @@
             </div>
             <div class="form-group">
                 <label>Client ID</label>
-                <div class="secret-display" id="newClientId"></div>
+                <div class="secret-display" id="newClientId">
+                    <button class="copy-btn" onclick="copyToClipboard('newClientId', this)">Copy</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Client Secret</label>
-                <div class="secret-display" id="newClientSecret"></div>
+                <div class="secret-display" id="newClientSecret">
+                    <button class="copy-btn" onclick="copyToClipboard('newClientSecret', this)">Copy</button>
+                </div>
             </div>
             <button class="btn btn-primary" onclick="closeModal('secretModal'); loadClients()">Close</button>
         </div>
@@ -292,12 +445,26 @@
 
         document.getElementById('userEmail').textContent = adminUser.email || '';
 
+        // Helper function to handle authentication errors
+        function handleAuthError(response) {
+            if (response.status === 401) {
+                alert('Your session has expired. Please login again.');
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_user');
+                localStorage.removeItem('access_token');
+                window.location.href = '/login';
+                return true;
+            }
+            return false;
+        }
+
         async function loadClients() {
             try {
                 const response = await fetch('/api/oauth-clients', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
+                if (handleAuthError(response)) return;
                 if (!response.ok) throw new Error('Failed to load clients');
 
                 const clients = await response.json();
@@ -316,6 +483,7 @@
                         <td><span class="status-badge status-${client.is_active ? 'active' : 'inactive'}">${client.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>${new Date(client.created_at).toLocaleDateString()}</td>
                         <td>
+                            <button class="btn btn-secondary action-btn" onclick="showEditModal('${client.client_id}')">Edit</button>
                             ${client.is_active ?
                                 `<button class="btn btn-secondary action-btn" onclick="deactivateClient('${client.client_id}')">Deactivate</button>` :
                                 `<button class="btn btn-primary action-btn" onclick="activateClient('${client.client_id}')">Activate</button>`
@@ -338,6 +506,68 @@
             document.getElementById(modalId).style.display = 'none';
         }
 
+        async function showEditModal(clientId) {
+            try {
+                const response = await fetch(`/api/oauth-clients/${clientId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (handleAuthError(response)) return;
+                if (!response.ok) throw new Error('Failed to load client');
+
+                const client = await response.json();
+
+                // Populate form
+                document.getElementById('editClientId').value = client.client_id;
+                document.getElementById('editClientName').value = client.client_name;
+                document.getElementById('editDescription').value = client.description || '';
+                document.getElementById('editRedirectUris').value = client.redirect_uris.join('\n');
+                document.getElementById('editAllowedScopes').value = client.allowed_scopes.join(',');
+                document.getElementById('editRequireConsent').checked = client.require_consent;
+                document.getElementById('editRequirePkce').checked = client.require_pkce;
+
+                document.getElementById('editModal').style.display = 'block';
+            } catch (error) {
+                alert('Error loading client: ' + error.message);
+            }
+        }
+
+        async function updateClient(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const clientId = formData.get('client_id');
+
+            const data = {
+                client_name: formData.get('client_name'),
+                description: formData.get('description') || undefined,
+                redirect_uris: formData.get('redirect_uris').split('\n').map(s => s.trim()).filter(s => s),
+                allowed_scopes: formData.get('allowed_scopes').split(',').map(s => s.trim()).filter(s => s),
+                require_consent: formData.get('require_consent') === 'on',
+                require_pkce: formData.get('require_pkce') === 'on'
+            };
+
+            try {
+                const response = await fetch(`/api/oauth-clients/${clientId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (handleAuthError(response)) return;
+                if (!response.ok) throw new Error('Failed to update client');
+
+                closeModal('editModal');
+                loadClients();
+                alert('Client updated successfully!');
+            } catch (error) {
+                alert('Error updating client: ' + error.message);
+            }
+        }
+
         async function createClient(event) {
             event.preventDefault();
             const form = event.target;
@@ -349,6 +579,8 @@
                 redirect_uris: formData.get('redirect_uris').split('\n').map(s => s.trim()).filter(s => s),
                 allowed_scopes: formData.get('allowed_scopes').split(',').map(s => s.trim()).filter(s => s),
                 is_confidential: formData.get('is_confidential') === 'on',
+                require_pkce: formData.get('require_pkce') === 'on',
+                require_consent: formData.get('require_consent') === 'on',
                 grant_types: ['authorization_code', 'refresh_token']
             };
 
@@ -362,13 +594,19 @@
                     body: JSON.stringify(data)
                 });
 
+                if (handleAuthError(response)) return;
                 if (!response.ok) throw new Error('Failed to create client');
 
                 const result = await response.json();
 
                 // Show secret modal
-                document.getElementById('newClientId').textContent = result.client_id;
-                document.getElementById('newClientSecret').textContent = result.client_secret;
+                const clientIdDiv = document.getElementById('newClientId');
+                const clientSecretDiv = document.getElementById('newClientSecret');
+
+                // Clear and rebuild with copy button
+                clientIdDiv.innerHTML = `${result.client_id}<button class="copy-btn" onclick="copyToClipboard('newClientId', this)">Copy</button>`;
+                clientSecretDiv.innerHTML = `${result.client_secret}<button class="copy-btn" onclick="copyToClipboard('newClientSecret', this)">Copy</button>`;
+
                 closeModal('createModal');
                 document.getElementById('secretModal').style.display = 'block';
                 form.reset();
@@ -383,6 +621,7 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (handleAuthError(response)) return;
                 if (response.ok) loadClients();
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -396,6 +635,7 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (handleAuthError(response)) return;
                 if (response.ok) loadClients();
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -409,11 +649,17 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (handleAuthError(response)) return;
                 if (!response.ok) throw new Error('Failed to rotate secret');
 
                 const result = await response.json();
-                document.getElementById('newClientId').textContent = result.client_id;
-                document.getElementById('newClientSecret').textContent = result.new_client_secret;
+
+                const clientIdDiv = document.getElementById('newClientId');
+                const clientSecretDiv = document.getElementById('newClientSecret');
+
+                clientIdDiv.innerHTML = `${result.client_id}<button class="copy-btn" onclick="copyToClipboard('newClientId', this)">Copy</button>`;
+                clientSecretDiv.innerHTML = `${result.new_client_secret}<button class="copy-btn" onclick="copyToClipboard('newClientSecret', this)">Copy</button>`;
+
                 document.getElementById('secretModal').style.display = 'block';
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -427,10 +673,30 @@
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (handleAuthError(response)) return;
                 if (response.ok) loadClients();
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+        }
+
+        function copyToClipboard(elementId, button) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent.replace('Copy', '').replace('Copied!', '').trim();
+
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
         }
 
         function logout() {

@@ -28,11 +28,15 @@
         .logo-container {
             text-align: center;
             margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: var(--primary);
+            border-radius: 12px 12px 0 0;
+            margin: -2.5rem -2.5rem 2rem -2.5rem;
         }
 
         .logo {
             max-width: 180px;
-            margin-bottom: 1rem;
+            margin-bottom: 0;
         }
 
         .client-info {
@@ -260,10 +264,7 @@
         </div>
 
         <form id="consentForm" method="POST" action="/oauth2/consent">
-            <input type="hidden" name="client_id" value="{{ client_id }}">
-            <input type="hidden" name="scopes" value="{{ requested_scopes|join(',') }}">
-            <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
-            <input type="hidden" name="state" value="{{ state }}">
+            <input type="hidden" name="session_token" value="{{ session_token }}">
             <input type="hidden" name="approved" id="approvedInput" value="">
             <input type="hidden" name="remember" id="rememberInput" value="false">
 

@@ -87,7 +87,7 @@ async def create_oauth_client(
         event_type="oauth_client_created",
         user_id=current_user.id,
         email=current_user.email,
-        details={
+        metadata={
             "client_id": client.client_id,
             "client_name": client.client_name
         }
@@ -172,7 +172,7 @@ async def update_oauth_client(
         event_type="oauth_client_updated",
         user_id=current_user.id,
         email=current_user.email,
-        details={
+        metadata={
             "client_id": client_id,
             "updated_fields": list(update_dict.keys())
         }
@@ -212,7 +212,7 @@ async def delete_oauth_client(
         event_type="oauth_client_deleted",
         user_id=current_user.id,
         email=current_user.email,
-        details={
+        metadata={
             "client_id": client_id,
             "client_name": client.client_name
         },
@@ -252,7 +252,7 @@ async def rotate_client_secret(
         event_type="oauth_client_secret_rotated",
         user_id=current_user.id,
         email=current_user.email,
-        details={
+        metadata={
             "client_id": client_id,
             "client_name": client.client_name
         },
@@ -289,7 +289,7 @@ async def activate_oauth_client(
         event_type="oauth_client_activated",
         user_id=current_user.id,
         email=current_user.email,
-        details={"client_id": client_id}
+        metadata={"client_id": client_id}
     )
 
     return {"message": "OAuth2 client activated"}
@@ -319,7 +319,7 @@ async def deactivate_oauth_client(
         event_type="oauth_client_deactivated",
         user_id=current_user.id,
         email=current_user.email,
-        details={"client_id": client_id},
+        metadata={"client_id": client_id},
         severity="warning"
     )
 

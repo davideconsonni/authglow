@@ -151,6 +151,10 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    # Override user scopes with those from the JWT token
+    # This ensures the user only has the permissions authorized in this specific token
+    user.scopes = token_data.scopes
+
     return user
 
 
@@ -325,8 +329,23 @@ async def token_endpoint(
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
 
-        # Parse scopes
-        scopes = auth_code.scope.split() if auth_code.scope else user.scopes
+        # Parse scopes - use ONLY the scopes authorized in the authorization code
+        # Do NOT fall back to user.scopes for security!
+        print(f"DEBUG token endpoint - auth_code.scope: '{auth_code.scope}'")
+        print(f"DEBUG token endpoint - user.scopes: {user.scopes}")
+
+        if auth_code.scope:
+            requested_scopes = auth_code.scope.split()
+        else:
+            # If no scopes in auth code, use default "read" scope
+            requested_scopes = ["read"]
+
+        print(f"DEBUG token endpoint - requested_scopes: {requested_scopes}")
+
+        # Filter scopes: user must have each requested scope
+        scopes = [s for s in requested_scopes if s in user.scopes]
+
+        print(f"DEBUG token endpoint - final scopes: {scopes}")
 
         # Generate JWT access token
         access_token_response = jwt_service.create_token_response(

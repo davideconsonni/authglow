@@ -102,9 +102,9 @@ async def show_consent_screen(
             "request": request,
             **ui_context,
             "client_id": client.client_id,
-            "client_name": client.name,
+            "client_name": client.client_name,
             "client_description": client.description,
-            "client_logo_url": client.logo_url,
+            "client_logo_url": client.logo_uri,
             "user_email": user.email,
             "requested_scopes": requested_scopes,
             "scope_descriptions": scope_descriptions,
@@ -156,7 +156,7 @@ async def process_consent(
         if session.get("state"):
             redirect_url += f"&state={session['state']}"
 
-        return RedirectResponse(url=redirect_url)
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     # Handle approval
     requested_scopes = session["scope"].split() if session["scope"] else ["read"]
@@ -184,12 +184,14 @@ async def process_consent(
     )
 
     # Create authorization code
+    print(f"DEBUG consent - Creating auth code with scope: {session['scope']}")
     auth_code = await oauth2_service.create_authorization_code(
         client_id=session["client_id"],
         user_id=session["user_id"],
         redirect_uri=session["redirect_uri"],
         scope=session["scope"]
     )
+    print(f"DEBUG consent - Auth code created: {auth_code.code}, scope: {auth_code.scope}")
 
     # Delete the consent session
     await session_service.delete_consent_session(session_token)
@@ -199,4 +201,4 @@ async def process_consent(
     if session.get("state"):
         redirect_url += f"&state={session['state']}"
 
-    return RedirectResponse(url=redirect_url)
+    return RedirectResponse(url=redirect_url, status_code=303)

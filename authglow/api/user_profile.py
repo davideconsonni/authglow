@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from authglow.models.user import User
 from authglow.models.user_profile import (
     UserProfileUpdate,
     ChangePasswordRequest,
@@ -15,7 +16,7 @@ from authglow.models.user_profile import (
     UserProfileResponse
 )
 from authglow.services.user_profile import UserProfileService
-from authglow.core.permissions import get_current_user
+from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 
 router = APIRouter(tags=["User Profile"])
@@ -54,17 +55,21 @@ async def profile_page(request: Request):
 
 @router.get("/api/profile/me", response_model=UserProfileResponse)
 async def get_my_profile(
-    current_user_id: str = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get current user's profile."""
     profile_service = UserProfileService()
-    profile = await profile_service.get_user_profile(current_user_id)
+    profile = await profile_service.get_user_profile(current_user.id)
 
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found"
         )
+
+    # current_user already has the correct scopes from JWT (filtered in get_current_user)
+    profile.scopes = current_user.scopes
+    # roles field comes from the profile itself, not from current_user
 
     return profile
 
