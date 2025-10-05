@@ -24,6 +24,8 @@ from authglow.services.email_verification import EmailVerificationService
 from authglow.services.email.factory import get_email_service
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.core.config import get_settings
+import hashlib
+import base64
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
@@ -181,14 +183,24 @@ async def authorize(
     redirect_uri: str,
     scope: Optional[str] = "read",
     state: Optional[str] = None,
+    code_challenge: Optional[str] = None,
+    code_challenge_method: Optional[str] = None,
     oauth2_service: OAuth2Service = Depends(get_oauth2_service)
 ):
     """OAuth2 authorization endpoint - shows login page."""
     settings = get_settings()
 
     # Verify client
-    if not await oauth2_service.verify_client(client_id):
+    client = await oauth2_service.client_storage.get_client(client_id)
+    if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
+
+    # Enforce PKCE if required by the client
+    if client.require_pkce and not code_challenge:
+        raise HTTPException(
+            status_code=400,
+            detail="PKCE is required for this client, but code_challenge was not provided."
+        )
 
     # Verify redirect_uri is registered for this client
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
@@ -216,7 +228,9 @@ async def authorize(
             "redirect_uri": redirect_uri,
             "scope": validated_scope,
             "state": state,
-            "password_policy": PasswordValidator().get_policy_description()
+            "password_policy": PasswordValidator().get_policy_description(),
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method
         }
     )
 
@@ -231,6 +245,8 @@ async def authorize_post(
     redirect_uri: str = Form(...),
     scope: str = Form("read"),
     state: Optional[str] = Form(None),
+    code_challenge: Optional[str] = Form(None),
+    code_challenge_method: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -238,8 +254,16 @@ async def authorize_post(
 ):
     """Process login and create authorization code (or MFA challenge)."""
     # Verify client and redirect_uri before processing login
-    if not await oauth2_service.verify_client(client_id):
+    client = await oauth2_service.client_storage.get_client(client_id)
+    if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
+
+    # Enforce PKCE if required by the client
+    if client.require_pkce and not code_challenge:
+        raise HTTPException(
+            status_code=400,
+            detail="PKCE is required for this client, but code_challenge was not provided."
+        )
 
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
@@ -289,7 +313,9 @@ async def authorize_post(
                 client_id=client_id,
                 redirect_uri=redirect_uri,
                 scope=validated_scope,
-                state=state
+                state=state,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method
             )
 
             # Show MFA verification page
@@ -313,7 +339,9 @@ async def authorize_post(
         client_id=client_id,
         redirect_uri=redirect_uri,
         scope=validated_scope,
-        state=state
+        state=state,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method
     )
 
     # Redirect to consent screen
@@ -331,6 +359,7 @@ async def token_endpoint(
     client_secret: Optional[str] = Form(None),
     refresh_token: Optional[str] = Form(None),
     scope: Optional[str] = Form(None),
+    code_verifier: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
@@ -349,6 +378,23 @@ async def token_endpoint(
 
         if auth_code.redirect_uri != redirect_uri:
             raise HTTPException(status_code=400, detail="Redirect URI mismatch")
+
+        # --- PKCE Validation ---
+        if auth_code.code_challenge:
+            if not code_verifier:
+                raise HTTPException(status_code=400, detail="Missing code_verifier for PKCE flow")
+
+            # Validate S256 method
+            if auth_code.code_challenge_method == "S256":
+                hashed_verifier = hashlib.sha256(code_verifier.encode("utf-8")).digest()
+                recreated_challenge = base64.urlsafe_b64encode(hashed_verifier).decode("utf-8").rstrip("=")
+            else:
+                # Per RFC 7636, plain is not recommended. We only support S256.
+                raise HTTPException(status_code=400, detail="Unsupported code_challenge_method")
+
+            if recreated_challenge != auth_code.code_challenge:
+                raise HTTPException(status_code=401, detail="Invalid code_verifier")
+        # --- End PKCE Validation ---
 
         # Mark code as used
         await oauth2_service.mark_code_as_used(code)
@@ -429,7 +475,7 @@ async def token_endpoint(
         # Create token for client (no specific user)
         return jwt_service.create_token_response(
             user_id=client_id,
-            email=f"{client_id}@client.local",
+            email=f"{client_id}@client.internal",
             scopes=validated_scopes,
             include_refresh=False
         )
@@ -777,7 +823,9 @@ async def oauth2_mfa_verify(
         client_id=mfa_session.client_id,
         user_id=user.id,
         redirect_uri=mfa_session.redirect_uri,
-        scope=validated_scope
+        scope=validated_scope,
+        code_challenge=mfa_session.code_challenge,
+        code_challenge_method=mfa_session.code_challenge_method
     )
 
     # Redirect with authorization code

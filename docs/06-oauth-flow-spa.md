@@ -10,7 +10,9 @@ For maximum security, a modern SPA should **not** handle tokens directly in Java
 -   The BFF (backend) securely handles the token exchange with AuthGlow and stores the tokens in a **secure, `HttpOnly` cookie**.
 -   The SPA code itself cannot access the cookie, protecting it from XSS attacks.
 
-The backend logic for the token exchange is identical to the one described in the [Web App Authentication Guide](./05-oauth-flow-webapp.md). This guide focuses on the **frontend implementation** for popular frameworks.
+The backend logic for the token exchange is identical to the one described in the [Web App Authentication Guide](./05-oauth-flow-webapp.md). It's crucial to understand that AuthGlow now performs strict server-side validation of the PKCE parameters. The `code_verifier` sent from the SPA to your BFF is not just passed along; it's used by AuthGlow to verify the integrity of the authorization flow, preventing interception attacks. This server-side validation is what makes the flow secure.
+
+This guide focuses on the **frontend implementation** for popular frameworks.
 
 ---
 

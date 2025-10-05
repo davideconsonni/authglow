@@ -40,6 +40,10 @@ class AuthorizationCode(BaseModel):
     expires_at: datetime
     used: bool = False
 
+    # PKCE support
+    code_challenge: Optional[str] = None
+    code_challenge_method: Optional[str] = None
+
 
 class OAuth2AuthorizationRequest(BaseModel):
     """OAuth2 authorization request parameters."""

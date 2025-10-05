@@ -14,5 +14,7 @@ class MFASession(BaseModel):
     redirect_uri: str
     scope: str
     state: str | None = None
+    code_challenge: str | None = None
+    code_challenge_method: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: datetime  # Short-lived (5 minutes)

@@ -21,7 +21,7 @@ Before you start, you must have:
 4.  **Authentication**: The user logs in and grants consent on the AuthGlow page.
 5.  **Callback**: AuthGlow redirects the user back to your app's `redirect_uri` with an `authorization_code`.
 6.  **Token Exchange**: Your app's backend sends the `authorization_code` and the original `code_verifier` to AuthGlow's token endpoint.
-7.  **Receive Tokens**: AuthGlow validates the request and returns an `id_token`, `access_token`, and `refresh_token`.
+7.  **Receive Tokens**: AuthGlow performs a critical security check by hashing the `code_verifier` and comparing it to the `code_challenge` from the start of the flow. If they match, it validates the request and returns an `id_token`, `access_token`, and `refresh_token`.
 8.  **Session Creation**: Your app validates the tokens and creates a local session for the user.
 
 ---
@@ -104,7 +104,7 @@ def login():
 
 ## Step 3: The Callback Route and Token Exchange
 
-This is the most critical part. Your backend receives the `authorization_code` and securely exchanges it for tokens.
+This is the most critical part. Your backend receives the `authorization_code` and securely exchanges it for tokens. During this step, AuthGlow performs the vital PKCE validation. The `code_verifier` you send is hashed by the server and compared against the `code_challenge` stored at the beginning of the flow. If they do not match, or if the `code_verifier` is missing, the request will be rejected. This ensures that only the application that initiated the login can complete it.
 
 ### Python (Flask) Example
 ```python

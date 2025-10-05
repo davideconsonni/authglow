@@ -35,7 +35,9 @@ class SessionService:
         client_id: str,
         redirect_uri: str,
         scope: str,
-        state: Optional[str] = None
+        state: Optional[str] = None,
+        code_challenge: Optional[str] = None,
+        code_challenge_method: Optional[str] = None
     ) -> MFASession:
         """Create a temporary MFA session (5 minutes)."""
         session = MFASession(
@@ -44,6 +46,8 @@ class SessionService:
             redirect_uri=redirect_uri,
             scope=scope,
             state=state,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
             expires_at=datetime.utcnow() + timedelta(minutes=5)
         )
 
@@ -88,7 +92,9 @@ class SessionService:
         client_id: str,
         redirect_uri: str,
         scope: str,
-        state: Optional[str] = None
+        state: Optional[str] = None,
+        code_challenge: Optional[str] = None,
+        code_challenge_method: Optional[str] = None
     ) -> dict:
         """Create a temporary consent session (10 minutes)."""
         from uuid import uuid4
@@ -101,6 +107,8 @@ class SessionService:
             "redirect_uri": redirect_uri,
             "scope": scope,
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
             "expires_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
         }
 

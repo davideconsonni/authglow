@@ -40,7 +40,9 @@ class OAuth2Service:
         client_id: str,
         user_id: str,
         redirect_uri: str,
-        scope: str
+        scope: str,
+        code_challenge: Optional[str] = None,
+        code_challenge_method: Optional[str] = None
     ) -> AuthorizationCode:
         """Create a new authorization code."""
         expires_at = datetime.utcnow() + timedelta(
@@ -52,7 +54,9 @@ class OAuth2Service:
             user_id=user_id,
             redirect_uri=redirect_uri,
             scope=scope,
-            expires_at=expires_at
+            expires_at=expires_at,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method
         )
 
         # Save authorization code
