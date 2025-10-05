@@ -68,8 +68,9 @@ class OIDCService:
 
         if "email" in scopes:
             # Email scope claims
-            user_info_data["email"] = user.email
-            user_info_data["email_verified"] = user.email_verified
+            if user.email:
+                user_info_data["email"] = user.email
+                user_info_data["email_verified"] = user.email_verified
 
         if "phone" in scopes:
             # Phone scope claims

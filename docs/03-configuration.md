@@ -26,8 +26,9 @@ These are critical for securing your AuthGlow instance. **Change them in product
 | Variable | Description | Default | Required |
 | --- | --- | --- | --- |
 | `SECRET_KEY` | A long, random string for cryptographic signing (e.g., session cookies). Min 32 chars. | (none) | **Yes** |
-| `JWT_SECRET_KEY` | A long, random string for signing JSON Web Tokens (JWTs). Min 32 chars. | (none) | **Yes** |
-| `JWT_ALGORITHM` | The algorithm for signing JWTs. | `HS256` | **Yes** |
+| `JWT_ALGORITHM` | The algorithm for signing JWTs. Should be `RS256`. | `RS256` | **Yes** |
+| `PRIVATE_KEY_PATH` | Filesystem path to the RSA private key file for signing JWTs. | `data/keys/private_key.pem` | **Yes** |
+| `PUBLIC_KEY_PATH` | Filesystem path to the RSA public key file for verifying JWTs. | `data/keys/public_key.pem` | **Yes** |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | The lifespan of an access token in minutes. | `30` | No |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | The lifespan of a refresh token in days. | `7` | No |
 

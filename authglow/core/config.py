@@ -4,6 +4,49 @@ from functools import lru_cache
 from typing import Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+
+def get_or_generate_keys(private_key_path: str, public_key_path: str):
+    """
+    Load RSA keys from disk, or generate them if they don't exist.
+    """
+    priv_path = Path(private_key_path)
+    pub_path = Path(public_key_path)
+
+    # Create directory if it doesn't exist
+    priv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not (priv_path.exists() and pub_path.exists()):
+        print("Generating new RSA keys...")
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+            backend=default_backend()
+        )
+        public_key = private_key.public_key()
+
+        # Save private key
+        with open(priv_path, "wb") as f:
+            f.write(
+                private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+            )
+        
+        # Save public key
+        with open(pub_path, "wb") as f:
+            f.write(
+                public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                )
+            )
+        print(f"New RSA keys generated and saved to {priv_path.parent}")
 
 
 class Settings(BaseSettings):
@@ -21,10 +64,16 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
     secret_key: str = Field(..., min_length=32)
-    jwt_secret_key: str = Field(..., min_length=32)
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str = "RS256"
+    private_key_path: str = "data/keys/private_key.pem"
+    public_key_path: str = "data/keys/public_key.pem"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        # Ensure keys are generated after settings are loaded
+        get_or_generate_keys(self.private_key_path, self.public_key_path)
 
     # Server Settings
     host: str = "0.0.0.0"
@@ -106,7 +155,7 @@ class Settings(BaseSettings):
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
 
-    @field_validator("secret_key", "jwt_secret_key")
+    @field_validator("secret_key")
     @classmethod
     def validate_keys(cls, v: str) -> str:
         """Validate that keys are at least 32 characters."""

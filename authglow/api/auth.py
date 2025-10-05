@@ -415,7 +415,9 @@ async def token_endpoint(
             raise HTTPException(status_code=400, detail="Invalid scope")
 
         # Final check: ensure the user has the scopes that were approved and are valid for the client
-        scopes = [s for s in processed_scopes if s in user.scopes]
+        # OIDC standard scopes (openid, profile, email, phone, address) are always allowed
+        oidc_standard_scopes = {"openid", "profile", "email", "phone", "address"}
+        scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
 
         # Generate JWT access token
         access_token_response = jwt_service.create_token_response(

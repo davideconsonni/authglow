@@ -3,6 +3,11 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+import base64
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+
 from authglow.models.oidc import (
     UserInfoResponse,
     OpenIDConfiguration,
@@ -108,30 +113,36 @@ async def openid_configuration():
 async def jwks():
     """JSON Web Key Set (JWKS) endpoint.
 
-    Returns the public keys used to verify JWT signatures.
+    Returns the public key used to verify JWT signatures in JWK format.
     Spec: https://tools.ietf.org/html/rfc7517
-
-    Note: This is a placeholder implementation for symmetric keys (HS256).
-    For production, use asymmetric keys (RS256) and expose only the public key.
     """
     settings = get_settings()
+    
+    try:
+        with open(settings.public_key_path, "rb") as f:
+            public_key = serialization.load_pem_public_key(
+                f.read(),
+                backend=default_backend()
+            )
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Public key not found.")
 
-    # WARNING: This is NOT recommended for production.
-    # In production, use RS256 (asymmetric) and only expose public keys.
-    # For HS256 (symmetric), the secret must remain private.
+    public_numbers = public_key.public_numbers()
+    
+    # Helper to convert int to urlsafe_base64
+    def int_to_base64(n):
+        return base64.urlsafe_b64encode(n.to_bytes((n.bit_length() + 7) // 8, 'big')).rstrip(b'=').decode('utf-8')
 
-    return JWKSResponse(
-        keys=[
-            {
-                "kty": "oct",  # Key type: octet sequence (symmetric)
-                "use": "sig",  # Usage: signature
-                "alg": settings.jwt_algorithm,
-                "kid": "main-key",  # Key ID
-                # NOTE: Secret should NOT be exposed for HS256
-                # This is here for development only
-            }
-        ]
-    )
+    jwk = {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": settings.jwt_algorithm,
+        "kid": "main-key",  # Key ID
+        "n": int_to_base64(public_numbers.n),
+        "e": int_to_base64(public_numbers.e),
+    }
+
+    return JWKSResponse(keys=[jwk])
 
 
 @router.get("/oauth2/userinfo", response_model=UserInfoResponse)
@@ -183,7 +194,8 @@ async def userinfo(
             detail="User not found"
         )
 
-    return user_info
+    # Return user info excluding None values
+    return user_info.model_dump(exclude_none=True)
 
 
 @router.post("/oauth2/logout")

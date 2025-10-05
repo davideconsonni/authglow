@@ -67,10 +67,11 @@ class UserInfoResponse(BaseModel):
     # Address scope claims
     address: Optional[dict] = None
 
-    class Config:
-        json_encoders = {
+    model_config = {
+        "json_encoders": {
             datetime: lambda v: int(v.timestamp()) if v else None
         }
+    }
 
 
 class OpenIDConfiguration(BaseModel):

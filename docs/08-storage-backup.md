@@ -31,62 +31,76 @@ File-based storage is excellent for small to medium deployments but has some lim
 By default, AuthGlow stores all data in the `./data/users` directory. Here's the complete structure:
 
 ```
-data/users/
-├── {user_id}.json                    # User account files
-├── email_index.json                  # Email-to-UserID lookup index
+data/
+├── keys/
+│   ├── private_key.pem               # 🔴 CRITICAL: RSA private key for signing tokens
+│   └── public_key.pem                # RSA public key for verification
 │
-├── api_keys/
-│   └── {api_key_id}.json            # API key records
-│
-├── audit_logs/
-│   └── {year}/
-│       └── {month}/
-│           └── {log_id}.json        # Audit log entries (organized by date)
-│
-├── challenges/
-│   └── {challenge_id}.json          # WebAuthn challenges (temporary)
-│
-├── email_verifications/
-│   └── {token}.json                 # Email verification tokens
-│
-├── emails/                          # Sent emails (if EMAIL_BACKEND=file_storage)
-│   └── {timestamp}_{id}.json
-│
-├── mfa/
-│   ├── backup_codes/
-│   │   └── {user_id}.json           # MFA backup codes
-│   └── trusted_devices/
-│       └── {device_id}.json         # Trusted device records
-│
-├── oauth_clients/
-│   └── {client_id}.json             # OAuth2 client configurations
-│
-├── oauth_consents/
-│   └── {user_id}_{client_id}.json   # User consent records
-│
-├── passkeys/
-│   └── {user_id}_{credential_id}.json  # WebAuthn credentials
-│
-├── password_resets/
-│   └── {token}.json                 # Password reset tokens
-│
-├── rbac/
-│   ├── permissions/
-│   │   └── {permission_id}.json     # Permission definitions
-│   ├── roles/
-│   │   └── {role_id}.json           # Role definitions
-│   └── user_roles/
-│       └── {user_id}.json           # User-to-role assignments
-│
-├── refresh_tokens/
-│   └── {token_hash}.json            # OAuth2 refresh tokens
-│
-├── sessions/
-│   └── {session_id}.json            # User session data
-│
-└── user_preferences/
-    └── {user_id}.json               # User UI preferences
+└── users/
+    ├── {user_id}.json                # User account files
+    ├── email_index.json              # Email-to-UserID lookup index
+    │
+    ├── api_keys/
+    │   └── {api_key_id}.json        # API key records
+    │
+    ├── audit_logs/
+    │   └── {year}/
+    │       └── {month}/
+    │           └── {log_id}.json        # Audit log entries (organized by date)
+    │
+    ├── challenges/
+    │   └── {challenge_id}.json          # WebAuthn challenges (temporary)
+    │
+    ├── email_verifications/
+    │   └── {token}.json                 # Email verification tokens
+    │
+    ├── emails/                          # Sent emails (if EMAIL_BACKEND=file_storage)
+    │   └── {timestamp}_{id}.json
+    │
+    ├── mfa/
+    │   ├── backup_codes/
+    │   │   └── {user_id}.json           # MFA backup codes
+    │   └── trusted_devices/
+    │       └── {device_id}.json         # Trusted device records
+    │
+    ├── oauth_clients/
+    │   └── {client_id}.json             # OAuth2 client configurations
+    │
+    ├── oauth_consents/
+    │   └── {user_id}_{client_id}.json   # User consent records
+    │
+    ├── passkeys/
+    │   └── {user_id}_{credential_id}.json  # WebAuthn credentials
+    │
+    ├── password_resets/
+    │   └── {token}.json                 # Password reset tokens
+    │
+    ├── rbac/
+    │   ├── permissions/
+    │   │   └── {permission_id}.json     # Permission definitions
+    │   ├── roles/
+    │   │   └── {role_id}.json           # Role definitions
+    │   └── user_roles/
+    │       └── {user_id}.json           # User-to-role assignments
+    │
+    ├── refresh_tokens/
+    │   └── {token_hash}.json            # OAuth2 refresh tokens
+    │
+    ├── sessions/
+    │   └── {session_id}.json            # User session data
+    │
+    └── user_preferences/
+        └── {user_id}.json               # User UI preferences
 ```
+
+> **⚠️ CRITICAL: Back Up Your `keys` Directory**
+>
+> The `data/keys` directory contains the RSA private key used to sign all JWTs (Access Tokens and ID Tokens).
+>
+> - **If you lose this key, all previously issued tokens will become invalid.**
+> - **If this key is compromised, an attacker can sign their own valid tokens.**
+>
+> Treat this directory with the same level of security as a database password. Ensure it is included in your backup strategy and that access to it is strictly controlled.
 
 ### Key Files Explained
 

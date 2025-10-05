@@ -68,6 +68,8 @@
             {% if state %}
             <input type="hidden" name="state" value="{{ state }}">
             {% endif %}
+            <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+            <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
 
             <div class="form-group">
                 <label for="email">Email</label>
