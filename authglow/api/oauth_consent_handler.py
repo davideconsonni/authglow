@@ -75,7 +75,10 @@ async def show_consent_screen(
             client_id=client.client_id,
             user_id=user.id,
             redirect_uri=session["redirect_uri"],
-            scope=session["scope"]
+            scope=session["scope"],
+            code_challenge=session.get("code_challenge"),
+            code_challenge_method=session.get("code_challenge_method"),
+            nonce=session.get("nonce")
         )
 
         # Build redirect URL
@@ -189,7 +192,10 @@ async def process_consent(
         client_id=session["client_id"],
         user_id=session["user_id"],
         redirect_uri=session["redirect_uri"],
-        scope=session["scope"]
+        scope=session["scope"],
+        code_challenge=session.get("code_challenge"),
+        code_challenge_method=session.get("code_challenge_method"),
+        nonce=session.get("nonce")
     )
     print(f"DEBUG consent - Auth code created: {auth_code.code}, scope: {auth_code.scope}")
 

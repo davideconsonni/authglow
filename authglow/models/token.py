@@ -44,6 +44,9 @@ class AuthorizationCode(BaseModel):
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = None
 
+    # OIDC support
+    nonce: Optional[str] = None
+
 
 class OAuth2AuthorizationRequest(BaseModel):
     """OAuth2 authorization request parameters."""

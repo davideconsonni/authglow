@@ -37,7 +37,8 @@ class SessionService:
         scope: str,
         state: Optional[str] = None,
         code_challenge: Optional[str] = None,
-        code_challenge_method: Optional[str] = None
+        code_challenge_method: Optional[str] = None,
+        nonce: Optional[str] = None
     ) -> MFASession:
         """Create a temporary MFA session (5 minutes)."""
         session = MFASession(
@@ -48,6 +49,7 @@ class SessionService:
             state=state,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
+            nonce=nonce,
             expires_at=datetime.utcnow() + timedelta(minutes=5)
         )
 
@@ -94,7 +96,8 @@ class SessionService:
         scope: str,
         state: Optional[str] = None,
         code_challenge: Optional[str] = None,
-        code_challenge_method: Optional[str] = None
+        code_challenge_method: Optional[str] = None,
+        nonce: Optional[str] = None
     ) -> dict:
         """Create a temporary consent session (10 minutes)."""
         from uuid import uuid4
@@ -109,6 +112,7 @@ class SessionService:
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
+            "nonce": nonce,
             "expires_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
         }
 

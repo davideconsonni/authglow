@@ -185,6 +185,7 @@ async def authorize(
     state: Optional[str] = None,
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
+    nonce: Optional[str] = None,
     oauth2_service: OAuth2Service = Depends(get_oauth2_service)
 ):
     """OAuth2 authorization endpoint - shows login page."""
@@ -206,8 +207,8 @@ async def authorize(
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
-    # Process and validate scopes
-    requested_scopes = scope.split() if scope else []
+    # Process and validate scopes, handling both space and '+' delimiters
+    requested_scopes = scope.replace('+', ' ').split() if scope else []
     try:
         processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
         validated_scope = " ".join(processed_scopes)
@@ -230,7 +231,8 @@ async def authorize(
             "state": state,
             "password_policy": PasswordValidator().get_policy_description(),
             "code_challenge": code_challenge,
-            "code_challenge_method": code_challenge_method
+            "code_challenge_method": code_challenge_method,
+            "nonce": nonce
         }
     )
 
@@ -247,6 +249,7 @@ async def authorize_post(
     state: Optional[str] = Form(None),
     code_challenge: Optional[str] = Form(None),
     code_challenge_method: Optional[str] = Form(None),
+    nonce: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -315,7 +318,8 @@ async def authorize_post(
                 scope=validated_scope,
                 state=state,
                 code_challenge=code_challenge,
-                code_challenge_method=code_challenge_method
+                code_challenge_method=code_challenge_method,
+                nonce=nonce
             )
 
             # Show MFA verification page
@@ -341,7 +345,8 @@ async def authorize_post(
         scope=validated_scope,
         state=state,
         code_challenge=code_challenge,
-        code_challenge_method=code_challenge_method
+        code_challenge_method=code_challenge_method,
+        nonce=nonce
     )
 
     # Redirect to consent screen
@@ -827,7 +832,8 @@ async def oauth2_mfa_verify(
         redirect_uri=mfa_session.redirect_uri,
         scope=validated_scope,
         code_challenge=mfa_session.code_challenge,
-        code_challenge_method=mfa_session.code_challenge_method
+        code_challenge_method=mfa_session.code_challenge_method,
+        nonce=mfa_session.nonce
     )
 
     # Redirect with authorization code

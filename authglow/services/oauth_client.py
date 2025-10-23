@@ -17,7 +17,7 @@ class OAuth2ClientStorage:
     def __init__(self):
         """Initialize client storage."""
         settings = get_settings()
-        self.storage_path = Path(settings.storage_path) / "oauth_clients"
+        self.storage_path = Path(settings.storage_path) / "users" / "oauth_clients"
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
     def _get_client_path(self, client_id: str) -> Path:

@@ -42,7 +42,8 @@ class OAuth2Service:
         redirect_uri: str,
         scope: str,
         code_challenge: Optional[str] = None,
-        code_challenge_method: Optional[str] = None
+        code_challenge_method: Optional[str] = None,
+        nonce: Optional[str] = None
     ) -> AuthorizationCode:
         """Create a new authorization code."""
         expires_at = datetime.utcnow() + timedelta(
@@ -56,7 +57,8 @@ class OAuth2Service:
             scope=scope,
             expires_at=expires_at,
             code_challenge=code_challenge,
-            code_challenge_method=code_challenge_method
+            code_challenge_method=code_challenge_method,
+            nonce=nonce
         )
 
         # Save authorization code
@@ -175,28 +177,44 @@ class OAuth2Service:
     async def process_scopes(self, client_id: str, requested_scopes: List[str]) -> List[str]:
         """
         Process and validate scopes based on client configuration and application settings.
+
+        Security: Always validates that requested scopes are authorized for the client.
+        OIDC standard scopes (openid, profile, email, phone, address, offline_access)
+        are always allowed as per OIDC spec.
         """
+        # OIDC standard scopes that are always allowed
+        OIDC_STANDARD_SCOPES = {"openid", "profile", "email", "phone", "address", "offline_access"}
+
         client = await self.client_storage.get_client(client_id)
-        allowed_scopes = client.allowed_scopes if client else []
+        allowed_scopes = list(client.allowed_scopes) if client else []
 
         # Fallback for settings-based client
         if not client and client_id == self.settings.oauth2_client_id:
-            # Allow any scope for the default client in permissive mode
+            # In permissive mode, allow any scope for the default client
             if not self.settings.oauth2_reject_unknown_scopes:
                 return requested_scopes
-            # In strict mode, default client has no defined scopes, so reject any
-            else:
-                allowed_scopes = []
+            # In strict mode, default client has no defined scopes
+            allowed_scopes = []
 
-        if self.settings.oauth2_reject_unknown_scopes:
-            # Strict mode: all requested scopes must be in allowed_scopes
-            unknown_scopes = set(requested_scopes) - set(allowed_scopes)
-            if unknown_scopes:
-                raise ValueError(f"Invalid scopes requested: {', '.join(unknown_scopes)}")
-            return requested_scopes
-        else:
-            # Permissive mode: filter requested scopes to only include allowed ones
-            return [scope for scope in requested_scopes if scope in allowed_scopes]
+        # Always include OIDC standard scopes in allowed list
+        allowed_scopes_set = set(allowed_scopes) | OIDC_STANDARD_SCOPES
+
+        # Check for unauthorized scopes
+        unknown_scopes = set(requested_scopes) - allowed_scopes_set
+
+        if unknown_scopes:
+            if self.settings.oauth2_reject_unknown_scopes:
+                # Strict mode: reject immediately with error
+                raise ValueError(
+                    f"Unauthorized scopes: {', '.join(sorted(unknown_scopes))}. "
+                    f"Allowed: {', '.join(sorted(allowed_scopes_set))}"
+                )
+            else:
+                # Permissive mode: filter out unauthorized scopes and allow request to proceed
+                filtered_scopes = [s for s in requested_scopes if s in allowed_scopes_set]
+                return filtered_scopes
+
+        return requested_scopes
 
     async def verify_grant_type(self, client_id: str, grant_type: str) -> bool:
         """Verify if client is allowed to use this grant type."""

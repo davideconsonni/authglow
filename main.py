@@ -41,13 +41,13 @@ app = FastAPI(
 # app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# CORS middleware
+# CORS middleware - Configured from environment variables for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.get_cors_origins(),
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.get_cors_methods(),
+    allow_headers=[settings.cors_allowed_headers] if settings.cors_allowed_headers != "*" else ["*"],
 )
 
 # Mount static files

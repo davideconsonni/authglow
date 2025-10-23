@@ -39,49 +39,62 @@ class OIDCService:
 
         # Add claims based on requested scopes
         if "profile" in scopes:
-            # Profile scope claims
-            if user.first_name or user.last_name:
+            # Profile scope claims - use getattr for optional fields
+            first_name = getattr(user, 'first_name', None)
+            last_name = getattr(user, 'last_name', None)
+
+            if first_name or last_name:
                 name_parts = []
-                if user.first_name:
-                    name_parts.append(user.first_name)
-                    user_info_data["given_name"] = user.first_name
-                if user.last_name:
-                    name_parts.append(user.last_name)
-                    user_info_data["family_name"] = user.last_name
+                if first_name:
+                    name_parts.append(first_name)
+                    user_info_data["given_name"] = first_name
+                if last_name:
+                    name_parts.append(last_name)
+                    user_info_data["family_name"] = last_name
                 if name_parts:
                     user_info_data["name"] = " ".join(name_parts)
 
             if user.email:
                 user_info_data["preferred_username"] = user.email
 
-            if user.avatar_url:
-                user_info_data["picture"] = user.avatar_url
+            # Optional profile fields - handle gracefully
+            avatar_url = getattr(user, 'avatar_url', None)
+            if avatar_url:
+                user_info_data["picture"] = avatar_url
 
-            if user.timezone:
-                user_info_data["zoneinfo"] = user.timezone
+            timezone = getattr(user, 'timezone', None)
+            if timezone:
+                user_info_data["zoneinfo"] = timezone
 
-            if user.language:
-                user_info_data["locale"] = user.language
+            language = getattr(user, 'language', None)
+            if language:
+                user_info_data["locale"] = language
 
-            if user.updated_at:
-                user_info_data["updated_at"] = int(user.updated_at.timestamp())
+            updated_at = getattr(user, 'updated_at', None)
+            if updated_at:
+                user_info_data["updated_at"] = int(updated_at.timestamp())
 
         if "email" in scopes:
             # Email scope claims
             if user.email:
                 user_info_data["email"] = user.email
-                user_info_data["email_verified"] = user.email_verified
+                user_info_data["email_verified"] = getattr(user, 'email_verified', False)
 
         if "phone" in scopes:
             # Phone scope claims
-            if user.phone:
-                user_info_data["phone_number"] = user.phone
+            phone = getattr(user, 'phone', None)
+            if phone:
+                user_info_data["phone_number"] = phone
                 user_info_data["phone_number_verified"] = False  # TODO: implement phone verification
 
         if "address" in scopes:
             # Address scope claims (not implemented in User model yet)
             # user_info_data["address"] = {...}
             pass
+
+        # --- Add permissions claim if requested ---
+        if "permissions" in scopes:
+            user_info_data["permissions"] = user.scopes
 
         return UserInfoResponse(**user_info_data)
 
@@ -99,43 +112,62 @@ class OIDCService:
 
         # Profile scope
         if "profile" in scopes:
-            if user.first_name:
-                claims["given_name"] = user.first_name
-            if user.last_name:
-                claims["family_name"] = user.last_name
-            if user.first_name or user.last_name:
+            # Use getattr with defaults to handle missing attributes gracefully
+            first_name = getattr(user, 'first_name', None)
+            last_name = getattr(user, 'last_name', None)
+
+            if first_name:
+                claims["given_name"] = first_name
+            if last_name:
+                claims["family_name"] = last_name
+            if first_name or last_name:
                 name_parts = []
-                if user.first_name:
-                    name_parts.append(user.first_name)
-                if user.last_name:
-                    name_parts.append(user.last_name)
+                if first_name:
+                    name_parts.append(first_name)
+                if last_name:
+                    name_parts.append(last_name)
                 claims["name"] = " ".join(name_parts)
+
             if user.email:
                 claims["preferred_username"] = user.email
-            if user.avatar_url:
-                claims["picture"] = user.avatar_url
-            if user.timezone:
-                claims["zoneinfo"] = user.timezone
-            if user.language:
-                claims["locale"] = user.language
-            if user.updated_at:
-                claims["updated_at"] = int(user.updated_at.timestamp())
+
+            # Optional profile fields - handle gracefully if missing
+            avatar_url = getattr(user, 'avatar_url', None)
+            if avatar_url:
+                claims["picture"] = avatar_url
+
+            timezone = getattr(user, 'timezone', None)
+            if timezone:
+                claims["zoneinfo"] = timezone
+
+            language = getattr(user, 'language', None)
+            if language:
+                claims["locale"] = language
+
+            updated_at = getattr(user, 'updated_at', None)
+            if updated_at:
+                claims["updated_at"] = int(updated_at.timestamp())
 
         # Email scope
         if "email" in scopes:
             claims["email"] = user.email
-            claims["email_verified"] = user.email_verified
+            claims["email_verified"] = getattr(user, 'email_verified', False)
 
         # Phone scope
         if "phone" in scopes:
-            if user.phone:
-                claims["phone_number"] = user.phone
+            phone = getattr(user, 'phone', None)
+            if phone:
+                claims["phone_number"] = phone
                 claims["phone_number_verified"] = False
 
         # Address scope
         if "address" in scopes:
             # Not implemented yet
             pass
+
+        # --- Add permissions claim if requested ---
+        if "permissions" in scopes:
+            claims["permissions"] = user.scopes
 
         return claims
 

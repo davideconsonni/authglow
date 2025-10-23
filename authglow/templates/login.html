@@ -68,6 +68,9 @@
             {% if state %}
             <input type="hidden" name="state" value="{{ state }}">
             {% endif %}
+            {% if nonce %}
+            <input type="hidden" name="nonce" value="{{ nonce }}">
+            {% endif %}
             <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
             <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
 

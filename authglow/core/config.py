@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     oauth2_client_secret: str = "default-client-secret"
     oauth2_reject_unknown_scopes: bool = False
 
+    # CORS Security Settings
+    cors_allowed_origins: str = "http://localhost:3000,http://localhost:8080"  # Comma-separated list
+    cors_allow_credentials: bool = True
+    cors_allowed_methods: str = "GET,POST,PUT,DELETE,OPTIONS"  # Comma-separated list
+    cors_allowed_headers: str = "*"
+
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
 
@@ -188,6 +194,16 @@ class Settings(BaseSettings):
                 }
 
         return options
+
+    def get_cors_origins(self) -> list:
+        """Get CORS allowed origins as a list."""
+        if self.cors_allowed_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    def get_cors_methods(self) -> list:
+        """Get CORS allowed methods as a list."""
+        return [method.strip() for method in self.cors_allowed_methods.split(",") if method.strip()]
 
     def get_ui_context(self) -> dict:
         """Get UI customization context for templates."""
