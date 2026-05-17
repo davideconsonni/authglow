@@ -119,11 +119,11 @@ class UserProfileService:
                 return False, "User not found"
 
             # Verify current password
-            if not verify_password(current_password, user.password_hash):
+            if not verify_password(current_password, user.hashed_password):
                 return False, "Current password is incorrect"
 
             # Update password
-            user.password_hash = hash_password(new_password)
+            user.hashed_password = hash_password(new_password)
             user.updated_at = utcnow()
 
             await self.user_storage._write_user(user)
@@ -155,7 +155,7 @@ class UserProfileService:
                 return False, "User not found"
 
             # Verify password
-            if not verify_password(password, user.password_hash):
+            if not verify_password(password, user.hashed_password):
                 return False, "Password is incorrect"
 
             # Check if new email is already in use
@@ -200,7 +200,7 @@ class UserProfileService:
             return False, "User not found"
 
         # Verify password
-        if not verify_password(password, user.password_hash):
+        if not verify_password(password, user.hashed_password):
             return False, "Password is incorrect"
 
         # Delete user preferences

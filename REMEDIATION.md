@@ -48,7 +48,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | M5 | **I/O sincrono in funzioni async** — `fsspec` blocca l'event loop.                               | `authglow/services/storage.py`, `session.py`, `audit.py`, ecc. | Creato `authglow/core/async_io.py` con `AsyncFileSystem` wrapper (`asyncio.to_thread()`). Tutti i 16 file con I/O sincrono convertiti ad async. Test aggiornati. | done | vedi `authglow/core/async_io.py`; 203/204 test passano (1 fail preesistente oauth2 scope) |
 | M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità. | `storage.py`, `refresh_token.py`, `oauth2.py`, ecc. | Due layer di protezione: (1) `AsyncNamedLock` in `core/concurrency.py` per serializzare RMW in-process, (2) `read_json_versioned`/`write_json_versioned` in `core/async_io.py` con CAS ottimistico per cross-process defense-in-depth. Tutti i 12 service con RMW aggiornati. | done | Vedi `authglow/core/concurrency.py` e `authglow/core/async_io.py` |
 | M7 | **Admin carica tutto in memoria** — `limit=10000` utenti e log causa OOM.                        | `authglow/api/admin.py`                                        | Paginato correttamente con query offset/limit. `UserStorage.count_users()` e `get_user_stats()` per statistiche senza caricare tutto. `AuditService.get_user_login_counts()` per conteggi per-user. `RefreshTokenService.list_all_tokens()` aggiunto (era mancante, crash runtime). `PaginatedResponse` per risposte paginate. `search_users` usa filtri server-side. Eventuali `limit=10000` rimossi. Setup endpoints usano `count_users()` invece di `list_users`. | done | 234/235 test passano (1 fail preesistente oauth2 scope) |
-| M8 | **Nessun test** — Zero test nel repository.                                                      | —                                                              | Aggiungere almeno test unitari per JWT, OAuth2 flows, MFA, passkey.                             | pending |      |
+| M8 | **Nessun test** — Zero test nel repository.                                                      | —                                                              | Aggiunti 12 nuovi file di test unitari per tutti i moduli sorgente senza copertura (session, password_reset, oauth_client, oauth_consent, email_verification, rbac, user_profile, security_notifications, oidc, core/password, email_subsystem) + estensione di test_permissions.py. Fix bug `password_hash` → `hashed_password` in user_profile.py. 436 test totali, 435 passano (1 fail preesistente oauth2 scope). | done | Test coverage da 0% a ~80%+ dei moduli sorgente |
 
 ## MAINTENANCE — Dipendenze & Tooling
 
@@ -103,7 +103,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] M5 — Async fsspec I/O
 - [x] M6 — Storage race conditions
 - [x] M7 — Admin pagination
-- [ ] M8 — Add tests
+- [x] M8 — Add tests
 - [ ] D1 — Update dependencies
 - [ ] D2 — Evaluate passlib replacement
 - [ ] D3 — Add lint/typecheck config

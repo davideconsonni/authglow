@@ -193,3 +193,106 @@ def password_validator(test_settings):
 
     with patch("authglow.services.password.get_settings", return_value=test_settings):
         return PasswordValidator()
+
+
+@pytest.fixture
+def session_service(test_settings):
+    from authglow.services.session import SessionService
+
+    with patch("authglow.services.session.get_settings", return_value=test_settings):
+        return SessionService()
+
+
+@pytest.fixture
+def password_reset_service(test_settings):
+    from authglow.services.password_reset import PasswordResetService
+
+    with patch(
+        "authglow.services.password_reset.get_settings", return_value=test_settings
+    ):
+        return PasswordResetService()
+
+
+@pytest.fixture
+def oauth_client_storage(test_settings):
+    from authglow.services.oauth_client import OAuth2ClientStorage
+
+    with patch(
+        "authglow.services.oauth_client.get_settings", return_value=test_settings
+    ):
+        with patch(
+            "authglow.services.password.get_settings", return_value=test_settings
+        ):
+            return OAuth2ClientStorage()
+
+
+@pytest.fixture
+def oauth_consent_service(test_settings):
+    from authglow.services.oauth_consent import OAuth2ConsentService
+
+    with patch(
+        "authglow.services.oauth_consent.get_settings", return_value=test_settings
+    ):
+        return OAuth2ConsentService()
+
+
+@pytest.fixture
+def email_verification_service(test_settings):
+    from authglow.services.email_verification import EmailVerificationService
+
+    with patch(
+        "authglow.services.email_verification.get_settings", return_value=test_settings
+    ):
+        with patch("authglow.services.email_verification.UserStorage") as mock_cls:
+            svc = EmailVerificationService()
+            svc.user_storage = MagicMock()
+            return svc
+
+
+@pytest.fixture
+def rbac_service(test_settings):
+    from authglow.services.rbac import RBACService
+
+    with patch("authglow.services.rbac.get_settings", return_value=test_settings):
+        return RBACService()
+
+
+@pytest.fixture
+def user_profile_service(test_settings):
+    from authglow.services.user_profile import UserProfileService
+
+    with patch(
+        "authglow.services.user_profile.get_settings", return_value=test_settings
+    ):
+        with patch("authglow.services.user_profile.EmailVerificationService"):
+            with patch("authglow.services.user_profile.SecurityNotificationService"):
+                svc = UserProfileService()
+                svc.user_storage = MagicMock()
+                svc.email_service = MagicMock()
+                svc.security_service = MagicMock()
+                return svc
+
+
+@pytest.fixture
+def oidc_service():
+    from authglow.services.oidc import OIDCService
+
+    with patch("authglow.services.oidc.UserStorage"):
+        return OIDCService()
+
+
+@pytest.fixture
+def security_notification_service(test_settings):
+    from authglow.services.security_notifications import SecurityNotificationService
+
+    with patch(
+        "authglow.services.security_notifications.get_settings",
+        return_value=test_settings,
+    ):
+        with patch(
+            "authglow.services.security_notifications.get_email_service"
+        ) as mock:
+            mock_email = MagicMock()
+            mock.return_value = mock_email
+            svc = SecurityNotificationService()
+            return svc
