@@ -31,7 +31,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 |----|-----------------------------------------------------------------------------------------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------|---------|------|
 | H1 | **TOTP secrets in chiaro** — `mfa_secret` è testo base32 non cifrato nel DB. | `authglow/models/user.py`, `authglow/api/mfa.py` | Cifrare TOTP secret con AES-256-GCM usando chiave derivata dall'app secret prima di salvarlo. | done | AES-256-GCM encryption via `authglow/core/crypto.py`. Key derived from `secret_key` via HKDF-SHA256. Format: `ag1:`+base64(iv+ciphertext+tag). Legacy plaintext values pass through for migration. |
 | H2 | **Rate limiter non collegato** — SlowAPI decoratori presenti ma `limiter` non in `app.state`. | `authglow/main.py`, `authglow/api/*.py` | Creato `authglow/core/rate_limit.py` con singleton `Limiter`. Collegato in `main.py` via `app.state.limiter` + `SlowAPIMiddleware`. Sostituiti 9 `Limiter()` locali nei moduli API con import dal singleton. | done | SlowAPIMiddleware registra eccezione 429 automaticamente |
-| H3 | **Validazione API key O(n)** — Carica tutte le key e fa bcrypt su ognuna.                     | `authglow/services/api_key.py`                   | Aggiungere indice per prefix (es. prime 8 char del plaintext) per evitare scan completo.      | pending |      |
+| H3 | **Validazione API key O(n)** — Carica tutte le key e fa bcrypt su ognuna.                     | `authglow/services/api_key.py`                   | Aggiunto prefix index O(1) in `api_keys/index/<prefix>.json`. `validate_key()` ora estrae il prefix (primi 12 char) e carica solo i key_id candidati. `create_key()`, `delete_key()` e `cleanup_expired_keys()` mantengono l'indice aggiornato. | done | Prefix index in `api_keys/index/`; fallback a lista vuota se prefix non esiste |
 | H4 | **Setup endpoint senza rate limit** — Race condition + brute force possibile.                 | `authglow/api/setup.py`                          | Aggiungere `@limiter.limit(...)` dopo aver fissato H2, o altra protezione.                    | pending |      |
 | H5 | **CORS header parsing bug** — La stringa CSV finisce come singolo elemento.                   | `authglow/main.py:50`                            | Splittare `settings.cors_allowed_headers` su `,` prima di passare a `allow_headers`.          | pending |      |
 | H6 | **Passkey registration permette duplicati** — `exclude_credentials` è hardcodato `[]`.        | `authglow/services/passkey.py`                   | Popolare `exclude_credentials` con le passkey esistenti dell'utente.                          | pending |      |
@@ -91,7 +91,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] C6 — Replace UUID4 with secrets.token_urlsafe
 - [x] H1 — Encrypt TOTP secrets
 - [x] H2 — Wire up SlowAPI limiter
-- [ ] H3 — API key O(n) fix
+- [x] H3 — API key O(n) fix
 - [ ] H4 — Setup endpoint rate limit
 - [ ] H5 — CORS headers parsing
 - [ ] H6 — Passkey exclude_credentials
