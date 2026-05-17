@@ -33,7 +33,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | H2 | **Rate limiter non collegato** — SlowAPI decoratori presenti ma `limiter` non in `app.state`. | `authglow/main.py`, `authglow/api/*.py` | Creato `authglow/core/rate_limit.py` con singleton `Limiter`. Collegato in `main.py` via `app.state.limiter` + `SlowAPIMiddleware`. Sostituiti 9 `Limiter()` locali nei moduli API con import dal singleton. | done | SlowAPIMiddleware registra eccezione 429 automaticamente |
 | H3 | **Validazione API key O(n)** — Carica tutte le key e fa bcrypt su ognuna.                     | `authglow/services/api_key.py`                   | Aggiunto prefix index O(1) in `api_keys/index/<prefix>.json`. `validate_key()` ora estrae il prefix (primi 12 char) e carica solo i key_id candidati. `create_key()`, `delete_key()` e `cleanup_expired_keys()` mantengono l'indice aggiornato. | done | Prefix index in `api_keys/index/`; fallback a lista vuota se prefix non esiste |
 | H4 | **Setup endpoint senza rate limit** — Race condition + brute force possibile.                 | `authglow/api/setup.py`                          | Aggiunto `@limiter.limit()` a tutti e 3 gli endpoint: create-admin 5/min, check 20/min, setup page 20/min. Aggiunto `Request` param dove mancante. Aggiornato test rate_limit per verificare setup module.                    | done |      |
-| H5 | **CORS header parsing bug** — La stringa CSV finisce come singolo elemento.                   | `authglow/main.py:50`                            | Splittare `settings.cors_allowed_headers` su `,` prima di passare a `allow_headers`.          | pending |      |
+| H5 | **CORS header parsing bug** — La stringa CSV finisce come singolo elemento.                   | `authglow/main.py:50`, `authglow/core/config.py` | Aggiunto `get_cors_headers()` in Settings (split su `,` con wildcard `*`). Sostituita logica inline in `main.py` con `settings.get_cors_headers()`. Test aggiornato per verificare split corretto e wildcard. | done |      |
 | H6 | **Passkey registration permette duplicati** — `exclude_credentials` è hardcodato `[]`.        | `authglow/services/passkey.py`                   | Popolare `exclude_credentials` con le passkey esistenti dell'utente.                          | pending |      |
 | H7 | **Passkey service: bytes.fromhex su base64url** — Parsing errato del credential_id.           | `authglow/services/passkey.py`                   | Usare `base64url_to_bytes` invece di `bytes.fromhex`.                                         | pending |      |
 
@@ -93,7 +93,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] H2 — Wire up SlowAPI limiter
 - [x] H3 — API key O(n) fix
 - [x] H4 — Setup endpoint rate limit
-- [ ] H5 — CORS headers parsing
+- [x] H5 — CORS headers parsing
 - [ ] H6 — Passkey exclude_credentials
 - [ ] H7 — Passkey base64url parsing
 - [ ] M1 — Audit log exact event_type match

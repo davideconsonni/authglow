@@ -33,81 +33,65 @@ def _generate_test_keys(tmp_dir):
 
 
 class TestCORSConfiguration:
-    def test_cors_allow_headers_should_be_split(self):
-        from authglow.core.config import Settings
-
-        tmp = tempfile.mkdtemp()
-        priv_path, pub_path = _generate_test_keys(tmp)
-        settings = Settings(
-            secret_key="test-secret-key-for-authglow-testing-32ch!",
-            storage_path=os.path.join(tmp, "data"),
-            storage_backend="file",
-            private_key_path=priv_path,
-            public_key_path=pub_path,
-            password_min_length=8,
-            cors_allowed_headers="Content-Type,Authorization,X-API-Key",
-        )
-        raw = settings.cors_allowed_headers
-        assert "," in raw, (
-            "Bug H5: When cors_allowed_headers is a comma-separated string like "
-            "'Content-Type,Authorization', main.py passes it as a single-element list "
-            "to CORSMiddleware. It should be split on ',' before passing to allow_headers."
+    def test_cors_allow_headers_should_be_split(self, test_settings):
+        test_settings.cors_allowed_headers = "Content-Type,Authorization,X-API-Key"
+        headers = test_settings.get_cors_headers()
+        assert isinstance(headers, list), "get_cors_headers() must return a list"
+        assert "Content-Type" in headers
+        assert "Authorization" in headers
+        assert "X-API-Key" in headers
+        assert len(headers) == 3, (
+            "Bug H5: cors_allowed_headers should be split into individual headers, "
+            f"got {headers}"
         )
 
-    def test_cors_allow_origins_parsed(self):
-        from authglow.core.config import Settings
+    def test_cors_allow_headers_wildcard(self, test_settings):
+        test_settings.cors_allowed_headers = "*"
+        headers = test_settings.get_cors_headers()
+        assert headers == ["*"]
 
-        tmp = tempfile.mkdtemp()
-        priv_path, pub_path = _generate_test_keys(tmp)
-        settings = Settings(
-            secret_key="test-secret-key-for-authglow-testing-32ch!",
-            storage_path=os.path.join(tmp, "data"),
-            storage_backend="file",
-            private_key_path=priv_path,
-            public_key_path=pub_path,
-            password_min_length=8,
-            cors_allowed_origins="http://localhost:3000,http://localhost:8080",
+    def test_cors_allow_origins_parsed(self, test_settings):
+        test_settings.cors_allowed_origins = (
+            "http://localhost:3000,http://localhost:8080"
         )
-        origins = settings.get_cors_origins()
+        origins = test_settings.get_cors_origins()
         assert isinstance(origins, list)
         assert "http://localhost:3000" in origins
         assert "http://localhost:8080" in origins
 
-    def test_cors_allow_origins_wildcard(self):
-        from authglow.core.config import Settings
-
-        tmp = tempfile.mkdtemp()
-        priv_path, pub_path = _generate_test_keys(tmp)
-        settings = Settings(
-            secret_key="test-secret-key-for-authglow-testing-32ch!",
-            storage_path=os.path.join(tmp, "data"),
-            storage_backend="file",
-            private_key_path=priv_path,
-            public_key_path=pub_path,
-            password_min_length=8,
-            cors_allowed_origins="*",
-        )
-        origins = settings.get_cors_origins()
+    def test_cors_allow_origins_wildcard(self, test_settings):
+        test_settings.cors_allowed_origins = "*"
+        origins = test_settings.get_cors_origins()
         assert origins == ["*"]
 
-    def test_cors_allow_methods_parsed(self):
-        from authglow.core.config import Settings
-
-        tmp = tempfile.mkdtemp()
-        priv_path, pub_path = _generate_test_keys(tmp)
-        settings = Settings(
-            secret_key="test-secret-key-for-authglow-testing-32ch!",
-            storage_path=os.path.join(tmp, "data"),
-            storage_backend="file",
-            private_key_path=priv_path,
-            public_key_path=pub_path,
-            password_min_length=8,
-            cors_allowed_methods="GET,POST,PUT,DELETE,OPTIONS",
-        )
-        methods = settings.get_cors_methods()
+    def test_cors_allow_methods_parsed(self, test_settings):
+        test_settings.cors_allowed_methods = "GET,POST,PUT,DELETE,OPTIONS"
+        methods = test_settings.get_cors_methods()
         assert isinstance(methods, list)
         assert "GET" in methods
         assert "POST" in methods
+
+    def test_cors_headers_strips_whitespace(self, test_settings):
+        test_settings.cors_allowed_headers = (
+            " Content-Type , Authorization , X-API-Key "
+        )
+        headers = test_settings.get_cors_headers()
+        assert headers == ["Content-Type", "Authorization", "X-API-Key"]
+
+    def test_cors_headers_empty_string(self, test_settings):
+        test_settings.cors_allowed_headers = ""
+        headers = test_settings.get_cors_headers()
+        assert headers == []
+
+    def test_cors_main_uses_get_cors_headers(self):
+        import main as main_module
+        import inspect
+
+        source = inspect.getsource(main_module)
+        assert "get_cors_headers()" in source, (
+            "Bug H5: main.py should call settings.get_cors_headers() instead of "
+            "passing cors_allowed_headers directly to CORSMiddleware"
+        )
 
     def test_oauth2_advanced_router_is_mounted(self):
         from authglow.api.oauth2_advanced import router

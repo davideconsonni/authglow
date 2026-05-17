@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
+
 def get_or_generate_keys(private_key_path: str, public_key_path: str):
     """
     Load RSA keys from disk, or generate them if they don't exist.
@@ -22,9 +23,7 @@ def get_or_generate_keys(private_key_path: str, public_key_path: str):
     if not (priv_path.exists() and pub_path.exists()):
         print("Generating new RSA keys...")
         private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-            backend=default_backend()
+            public_exponent=65537, key_size=2048, backend=default_backend()
         )
         public_key = private_key.public_key()
 
@@ -34,16 +33,16 @@ def get_or_generate_keys(private_key_path: str, public_key_path: str):
                 private_key.private_bytes(
                     encoding=serialization.Encoding.PEM,
                     format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()
+                    encryption_algorithm=serialization.NoEncryption(),
                 )
             )
-        
+
         # Save public key
         with open(pub_path, "wb") as f:
             f.write(
                 public_key.public_bytes(
                     encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
                 )
             )
         print(f"New RSA keys generated and saved to {priv_path.parent}")
@@ -53,10 +52,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
     # Application Settings
@@ -99,8 +95,12 @@ class Settings(BaseSettings):
     password_require_special: bool = True
 
     # UI Customization
-    ui_logo_url: Optional[str] = "/static/images/authglow_full_dark.png"  # Dark logo for light backgrounds
-    ui_logo_dark_url: Optional[str] = "/static/images/authglow_full_light.png"  # Light logo for dark backgrounds
+    ui_logo_url: Optional[str] = (
+        "/static/images/authglow_full_dark.png"  # Dark logo for light backgrounds
+    )
+    ui_logo_dark_url: Optional[str] = (
+        "/static/images/authglow_full_light.png"  # Light logo for dark backgrounds
+    )
     ui_primary_color: str = "#3498DB"
     ui_secondary_color: str = "#FF3366"
     ui_background_color: str = "#F8F8F8"
@@ -119,7 +119,9 @@ class Settings(BaseSettings):
     oauth2_reject_unknown_scopes: bool = False
 
     # CORS Security Settings
-    cors_allowed_origins: str = "http://localhost:3000,http://localhost:8080"  # Comma-separated list
+    cors_allowed_origins: str = (
+        "http://localhost:3000,http://localhost:8080"  # Comma-separated list
+    )
     cors_allow_credentials: bool = True
     cors_allowed_methods: str = "GET,POST,PUT,DELETE,OPTIONS"  # Comma-separated list
     cors_allowed_headers: str = "*"
@@ -134,7 +136,7 @@ class Settings(BaseSettings):
 
     # Email settings
     email_backend: str = "console"  # console, file_storage
-    email_provider: Optional[str] = None # For future use with real email services
+    email_provider: Optional[str] = None  # For future use with real email services
     email_from_address: str = "noreply@authglow.example.com"
     email_from_name: str = "AuthGlow"
     email_storage_path: str = "data/users/emails"
@@ -199,11 +201,29 @@ class Settings(BaseSettings):
         """Get CORS allowed origins as a list."""
         if self.cors_allowed_origins == "*":
             return ["*"]
-        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     def get_cors_methods(self) -> list:
         """Get CORS allowed methods as a list."""
-        return [method.strip() for method in self.cors_allowed_methods.split(",") if method.strip()]
+        return [
+            method.strip()
+            for method in self.cors_allowed_methods.split(",")
+            if method.strip()
+        ]
+
+    def get_cors_headers(self) -> list:
+        """Get CORS allowed headers as a list."""
+        if self.cors_allowed_headers == "*":
+            return ["*"]
+        return [
+            header.strip()
+            for header in self.cors_allowed_headers.split(",")
+            if header.strip()
+        ]
 
     def get_ui_context(self) -> dict:
         """Get UI customization context for templates."""

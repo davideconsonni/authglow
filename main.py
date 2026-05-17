@@ -44,9 +44,7 @@ app.add_middleware(
     allow_origins=settings.get_cors_origins(),
     allow_credentials=settings.cors_allow_credentials,
     allow_methods=settings.get_cors_methods(),
-    allow_headers=[settings.cors_allowed_headers]
-    if settings.cors_allowed_headers != "*"
-    else ["*"],
+    allow_headers=settings.get_cors_headers(),
 )
 
 # Mount static files
