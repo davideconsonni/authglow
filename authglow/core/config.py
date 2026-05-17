@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     password_require_digits: bool = True
     password_require_special: bool = True
 
+    # Registration
+    allow_public_registration: bool = True
+
     # UI Customization
     ui_logo_url: Optional[str] = (
         "/static/images/authglow_full_dark.png"  # Dark logo for light backgrounds

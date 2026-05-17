@@ -85,6 +85,15 @@ class UserResponse(BaseModel):
     email_verified: bool = False
 
 
+class RegisterUser(BaseModel):
+    """Schema for public self-registration."""
+
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
 class InviteUser(BaseModel):
     """Schema for inviting a new user."""
 

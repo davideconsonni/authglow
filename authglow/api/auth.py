@@ -12,7 +12,14 @@ from fastapi.templating import Jinja2Templates
 from authglow.core.rate_limit import limiter
 
 from authglow.core.crypto import decrypt_totp_secret
-from authglow.models.user import User, UserCreate, UserLogin, InviteUser, UserResponse
+from authglow.models.user import (
+    User,
+    UserCreate,
+    UserLogin,
+    InviteUser,
+    UserResponse,
+    RegisterUser,
+)
 from authglow.models.token import Token, OAuth2AuthorizationRequest, OAuth2TokenRequest
 from authglow.models.mfa import MFALoginRequest
 from authglow.services.storage import UserStorage
@@ -966,6 +973,86 @@ async def passkey_management_page(request: Request):
             **ui_context,
         },
     )
+
+
+@router.post(
+    "/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
+@limiter.limit("5/minute")
+async def register_user(
+    request: Request,
+    user_data: RegisterUser,
+    storage: UserStorage = Depends(get_user_storage),
+    password_validator: PasswordValidator = Depends(get_password_validator),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Public self-registration endpoint."""
+    settings = get_settings()
+
+    if not settings.allow_public_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is disabled",
+        )
+
+    errors = password_validator.validate(user_data.password)
+    if not errors[0]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Password validation failed: {'; '.join(errors[1])}",
+        )
+
+    existing_user = await storage.get_user_by_email(user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists",
+        )
+
+    user = User(
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        scopes=["read"],
+        is_active=True,
+        is_invited=False,
+        email_verified=False,
+    )
+
+    user = await storage.create_user(user)
+
+    verification_service = EmailVerificationService()
+    token = await verification_service.create_verification_token(user)
+    await verification_service.send_verification_email(user, token.token)
+
+    email_service = get_email_service()
+    try:
+        context = {
+            "user_name": user.first_name or user.email.split("@")[0],
+            "email": user.email,
+            "created_at": user.created_at.strftime("%Y-%m-%d %H:%M"),
+            "login_url": f"{settings.base_url}/login",
+            "company_name": settings.company_name,
+            "verification_url": f"{settings.base_url}/verify-email?token={token.token}",
+        }
+        await email_service.send_template(
+            to=[user.email],
+            subject=f"Welcome to {settings.company_name} - Verify your email",
+            template_name="welcome",
+            context=context,
+        )
+    except Exception:
+        pass
+
+    await audit_service.log_event(
+        event_type="user_registered",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return UserResponse(**user.model_dump())
 
 
 @router.get("/api/users", response_model=list[UserResponse])
