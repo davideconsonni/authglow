@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
-from uuid import uuid4
+import secrets
 
 
 class Token(BaseModel):
@@ -31,7 +31,7 @@ class TokenData(BaseModel):
 class AuthorizationCode(BaseModel):
     """OAuth2 authorization code (stored temporarily)."""
 
-    code: str = Field(default_factory=lambda: str(uuid4()))
+    code: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     client_id: str
     user_id: str
     redirect_uri: str

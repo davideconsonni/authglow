@@ -2,13 +2,13 @@
 
 from datetime import datetime
 from pydantic import BaseModel, Field
-from uuid import uuid4
+import secrets
 
 
 class MFASession(BaseModel):
     """Temporary session after first auth step, waiting for MFA."""
 
-    session_token: str = Field(default_factory=lambda: str(uuid4()))
+    session_token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     user_id: str
     client_id: str
     redirect_uri: str

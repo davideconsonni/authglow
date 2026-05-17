@@ -3,14 +3,14 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel, Field
-from uuid import uuid4
+import secrets
 
 
 class RefreshToken(BaseModel):
     """Refresh token model with rotation support."""
 
-    token_id: str = Field(default_factory=lambda: str(uuid4()))
-    token: str = Field(default_factory=lambda: str(uuid4()))  # The actual token
+    token_id: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     user_id: str
     client_id: str
     scopes: list[str] = Field(default_factory=list)
@@ -33,9 +33,7 @@ class RefreshToken(BaseModel):
     last_used_ip: Optional[str] = None
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class RefreshTokenFamily(BaseModel):

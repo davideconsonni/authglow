@@ -2,14 +2,14 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
-from uuid import uuid4
+import secrets
 from pydantic import BaseModel, EmailStr, Field
 
 
 class EmailVerificationToken(BaseModel):
     """Email verification token model."""
 
-    token: str = Field(default_factory=lambda: str(uuid4()))
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     user_id: str
     email: EmailStr
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -20,16 +20,16 @@ class EmailVerificationToken(BaseModel):
     used_at: Optional[datetime] = None
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class EmailVerificationRequest(BaseModel):
     """Request to verify email."""
+
     token: str
 
 
 class ResendVerificationRequest(BaseModel):
     """Request to resend verification email."""
+
     email: EmailStr

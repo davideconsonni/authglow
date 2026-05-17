@@ -22,8 +22,8 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | C2 | **MFA trusted device rotto** — Il fingerprint usa `pwd_context.hash(data)[:64]`, distruggendo l'hash bcrypt. Confronto in `is_device_trusted()` fallisce sempre. | `authglow/services/mfa.py`                                                                              | Sostituito bcrypt truncato con HMAC-SHA256 usando `secret_key` dell'app.                                            | done | Fingerprint ora deterministica, confronto `==` funziona correttamente |
 | C3 | **Backup code MFA rotto nell'endpoint standalone** — `code in backup_codes.codes` fallisce perché i codici sono hash bcrypt.                                     | `authglow/api/mfa.py` (verify_mfa_login)                                                                | Sostituito confronto diretto con `mfa_service.verify_user_backup_code()`, come in `auth.py`. Rimossa logica manuale di rimozione codice (gestita dal service). | done |      |
 | C4 | **Token endpoint non autentica il client** — Scambio authorization code senza verificare `client_id`/`client_secret`. | `authglow/api/auth.py` (token_endpoint) | Aggiunto autenticazione client per `authorization_code` grant: verifica `client_id` match con auth code, autenticazione obbligatoria per client confidential (form params + Basic Auth), client pubblici richiedono PKCE. | done | RFC 6749 §4.1.3 |
-| C5 | **Password hashing difettoso per UTF-8 lunghe** — `encode()[:72]` poi `decode(errors='ignore')` causa collisioni.                                                | `authglow/services/password.py`                                                                         | Passare `password.encode('utf-8')[:72]` direttamente a bcrypt (come bytes) senza round-trip decode.                      | pending |      |
-| C6 | **Token sensibili usano UUID4** — Non crittograficamente sicuro per bearer tokens.                                                                               | `authglow/models/token.py`, `authglow/models/refresh_token.py`, `authglow/models/email_verification.py` | Sostituire `uuid4()` con `secrets.token_urlsafe(32)` per authorization codes, refresh tokens, email verification tokens. | pending |      |
+| C5 | **Password hashing difettoso per UTF-8 lunghe** — `encode()[:72]` tronca a byte 72 spezzando caratteri multi-byte, causando collisioni.                                | `authglow/services/password.py`, `authglow/api/password_reset.py`                                  | Aggiunto `_prepare_password_bytes()` con troncamento UTF-8 boundary-safe in `password.py`. Sostituiti 4 chiamate dirette `bcrypt` in `password_reset.py` con `hash_password`/`verify_password`. | done | Collisioni UTF-8 eliminate; test verificano boundary-aware truncation |
+| C6 | **Token sensibili usano UUID4** — Non crittograficamente sicuro per bearer tokens.                                                                               | `authglow/models/token.py`, `authglow/models/refresh_token.py`, `authglow/models/email_verification.py`, `authglow/models/session.py`, `authglow/services/session.py`, `authglow/services/oauth2.py` | Sostituito `uuid4()` con `secrets.token_urlsafe(32)` per authorization codes, refresh tokens (token + token_id), email verification tokens, MFA session tokens, consent session tokens. Rimosa import `uuid4` in `oauth2.py`. | done | Esteso scope a MFA session e consent session tokens (anch'essi bearer token sensibili) |
 
 ## HIGH — Sicurezza / Affidabilità
 
@@ -87,8 +87,8 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] C2 — MFA trusted device fingerprint
 - [x] C3 — MFA backup code fix
 - [x] C4 — Token endpoint client auth
-- [ ] C5 — Password hashing UTF-8 fix
-- [ ] C6 — Replace UUID4 with secrets.token_urlsafe
+- [x] C5 — Password hashing UTF-8 fix
+- [x] C6 — Replace UUID4 with secrets.token_urlsafe
 - [ ] H1 — Encrypt TOTP secrets
 - [ ] H2 — Wire up SlowAPI limiter
 - [ ] H3 — API key O(n) fix

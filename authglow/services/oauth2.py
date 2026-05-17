@@ -3,7 +3,6 @@
 import json
 from datetime import datetime, timedelta
 from typing import Optional, List
-from uuid import uuid4
 import fsspec
 from authglow.core.config import get_settings
 from authglow.models.token import AuthorizationCode
@@ -23,12 +22,12 @@ class OAuth2Service:
         # Initialize filesystem
         if self.settings.storage_backend == "file":
             import os
+
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def _get_code_path(self, code: str) -> str:
@@ -43,7 +42,7 @@ class OAuth2Service:
         scope: str,
         code_challenge: Optional[str] = None,
         code_challenge_method: Optional[str] = None,
-        nonce: Optional[str] = None
+        nonce: Optional[str] = None,
     ) -> AuthorizationCode:
         """Create a new authorization code."""
         expires_at = datetime.utcnow() + timedelta(
@@ -58,7 +57,7 @@ class OAuth2Service:
             expires_at=expires_at,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            nonce=nonce
+            nonce=nonce,
         )
 
         # Save authorization code
@@ -117,7 +116,9 @@ class OAuth2Service:
         except FileNotFoundError:
             pass
 
-    async def verify_client(self, client_id: str, client_secret: Optional[str] = None) -> bool:
+    async def verify_client(
+        self, client_id: str, client_secret: Optional[str] = None
+    ) -> bool:
         """
         Verify client credentials using dynamic client storage.
 
@@ -136,7 +137,9 @@ class OAuth2Service:
 
             # If secret provided, verify it
             if client_secret:
-                return await self.client_storage.verify_client_secret(client, client_secret)
+                return await self.client_storage.verify_client_secret(
+                    client, client_secret
+                )
 
             return True
 
@@ -155,12 +158,14 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
+            return await self.client_storage.verify_redirect_uri(
+                client_id, redirect_uri
+            )
 
         # Fallback: only allow specific callback for settings-based client
         if client_id == self.settings.oauth2_client_id:
             return redirect_uri == "http://localhost:8000/callback"
-        
+
         return False
 
     async def verify_scopes(self, client_id: str, requested_scopes: list[str]) -> bool:
@@ -169,12 +174,16 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
+            return await self.client_storage.is_scope_allowed(
+                client_id, requested_scopes
+            )
 
         # Fallback: allow all scopes for settings-based client
         return client_id == self.settings.oauth2_client_id
 
-    async def process_scopes(self, client_id: str, requested_scopes: List[str]) -> List[str]:
+    async def process_scopes(
+        self, client_id: str, requested_scopes: List[str]
+    ) -> List[str]:
         """
         Process and validate scopes based on client configuration and application settings.
 
@@ -183,7 +192,14 @@ class OAuth2Service:
         are always allowed as per OIDC spec.
         """
         # OIDC standard scopes that are always allowed
-        OIDC_STANDARD_SCOPES = {"openid", "profile", "email", "phone", "address", "offline_access"}
+        OIDC_STANDARD_SCOPES = {
+            "openid",
+            "profile",
+            "email",
+            "phone",
+            "address",
+            "offline_access",
+        }
 
         client = await self.client_storage.get_client(client_id)
         allowed_scopes = list(client.allowed_scopes) if client else []
@@ -211,7 +227,9 @@ class OAuth2Service:
                 )
             else:
                 # Permissive mode: filter out unauthorized scopes and allow request to proceed
-                filtered_scopes = [s for s in requested_scopes if s in allowed_scopes_set]
+                filtered_scopes = [
+                    s for s in requested_scopes if s in allowed_scopes_set
+                ]
                 return filtered_scopes
 
         return requested_scopes
@@ -222,7 +240,9 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.is_grant_type_allowed(client_id, grant_type)
+            return await self.client_storage.is_grant_type_allowed(
+                client_id, grant_type
+            )
 
         # Fallback: allow all grant types for settings-based client
         return client_id == self.settings.oauth2_client_id

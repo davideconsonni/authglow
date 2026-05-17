@@ -25,8 +25,7 @@ class SessionService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     async def create_mfa_session(
@@ -38,7 +37,7 @@ class SessionService:
         state: Optional[str] = None,
         code_challenge: Optional[str] = None,
         code_challenge_method: Optional[str] = None,
-        nonce: Optional[str] = None
+        nonce: Optional[str] = None,
     ) -> MFASession:
         """Create a temporary MFA session (5 minutes)."""
         session = MFASession(
@@ -50,7 +49,7 @@ class SessionService:
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             nonce=nonce,
-            expires_at=datetime.utcnow() + timedelta(minutes=5)
+            expires_at=datetime.utcnow() + timedelta(minutes=5),
         )
 
         path = f"{self.storage_path}/{session.session_token}.json"
@@ -97,12 +96,12 @@ class SessionService:
         state: Optional[str] = None,
         code_challenge: Optional[str] = None,
         code_challenge_method: Optional[str] = None,
-        nonce: Optional[str] = None
+        nonce: Optional[str] = None,
     ) -> dict:
         """Create a temporary consent session (10 minutes)."""
-        from uuid import uuid4
+        from secrets import token_urlsafe
 
-        session_token = str(uuid4())
+        session_token = token_urlsafe(32)
         session_data = {
             "session_token": session_token,
             "user_id": user_id,
@@ -113,7 +112,7 @@ class SessionService:
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
             "nonce": nonce,
-            "expires_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+            "expires_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
         }
 
         path = f"{self.storage_path}/consent_{session_token}.json"

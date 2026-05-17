@@ -119,3 +119,73 @@ class TestTokenGenerationSecurity:
         )
         assert not uuid4_pattern.match(token)
         assert len(token) >= 32
+
+    def test_mfa_session_token_uses_secrets_not_uuid4(self):
+        from authglow.models.session import MFASession
+        from datetime import datetime, timedelta
+
+        session = MFASession(
+            user_id="test",
+            client_id="test",
+            redirect_uri="http://localhost/callback",
+            scope="read",
+            expires_at=datetime.utcnow() + timedelta(minutes=5),
+        )
+        uuid4_pattern = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            re.IGNORECASE,
+        )
+        assert not uuid4_pattern.match(session.session_token), (
+            "MFA session tokens should use secrets.token_urlsafe() instead of uuid4() "
+            "for cryptographic security."
+        )
+
+    def test_mfa_session_token_has_sufficient_entropy(self):
+        from authglow.models.session import MFASession
+        from datetime import datetime, timedelta
+
+        session = MFASession(
+            user_id="test",
+            client_id="test",
+            redirect_uri="http://localhost/callback",
+            scope="read",
+            expires_at=datetime.utcnow() + timedelta(minutes=5),
+        )
+        assert len(session.session_token) >= 32, (
+            "MFA session tokens should have at least 256 bits of entropy. "
+            f"Token length is {len(session.session_token)}, expected at least 32 chars from token_urlsafe."
+        )
+
+    def test_refresh_token_id_uses_secrets_not_uuid4(self):
+        from authglow.models.refresh_token import RefreshToken
+        from datetime import datetime, timedelta
+
+        rt = RefreshToken(
+            user_id="test",
+            client_id="test",
+            scopes=["read"],
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        )
+        uuid4_pattern = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            re.IGNORECASE,
+        )
+        assert not uuid4_pattern.match(rt.token_id), (
+            "Refresh token IDs should use secrets.token_urlsafe() instead of uuid4() "
+            "for cryptographic security."
+        )
+
+    def test_refresh_token_id_has_sufficient_entropy(self):
+        from authglow.models.refresh_token import RefreshToken
+        from datetime import datetime, timedelta
+
+        rt = RefreshToken(
+            user_id="test",
+            client_id="test",
+            scopes=["read"],
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        )
+        assert len(rt.token_id) >= 32, (
+            "Refresh token IDs should have at least 256 bits of entropy. "
+            f"ID length is {len(rt.token_id)}, expected at least 32 chars from token_urlsafe."
+        )

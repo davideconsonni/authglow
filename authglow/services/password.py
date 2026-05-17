@@ -73,13 +73,31 @@ class PasswordValidator:
         return "; ".join(requirements)
 
 
+def _prepare_password_bytes(password: str, max_bytes: int = 72) -> bytes:
+    """Encode password as UTF-8 and truncate to max_bytes without splitting multi-byte sequences.
+
+    If truncation lands inside a multi-byte UTF-8 character, the incomplete character
+    is stripped entirely to avoid collisions between different passwords that would
+    produce the same truncated byte sequence.
+    """
+    raw = password.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return raw
+    truncated = raw[:max_bytes]
+    while truncated and (truncated[-1] & 0xC0) == 0x80:
+        truncated = truncated[:-1]
+    if truncated and (truncated[-1] & 0xC0) == 0xC0:
+        truncated = truncated[:-1]
+    return truncated
+
+
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt.
 
     Bcrypt has a maximum password length of 72 bytes.
-    Passwords longer than 72 bytes are truncated.
+    Passwords longer than 72 bytes are truncated at UTF-8 boundaries.
     """
-    password_bytes = password.encode("utf-8")[:72]
+    password_bytes = _prepare_password_bytes(password)
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
@@ -88,7 +106,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash.
 
     Bcrypt has a maximum password length of 72 bytes.
-    Passwords longer than 72 bytes are truncated to match hashing behavior.
+    Passwords longer than 72 bytes are truncated at UTF-8 boundaries to match hashing behavior.
     """
-    password_bytes = plain_password.encode("utf-8")[:72]
+    password_bytes = _prepare_password_bytes(plain_password)
     return bcrypt.checkpw(password_bytes, hashed_password.encode("utf-8"))

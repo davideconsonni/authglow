@@ -1,5 +1,10 @@
 import pytest
-from authglow.services.password import hash_password, verify_password, PasswordValidator
+from authglow.services.password import (
+    hash_password,
+    verify_password,
+    PasswordValidator,
+    _prepare_password_bytes,
+)
 
 
 class TestPasswordHashing:
@@ -65,6 +70,53 @@ class TestPasswordHashing:
         pw = "TestP@ss1"
         hashed = hash_password(pw)
         assert verify_password(pw, hashed)
+
+    def test_prepare_password_bytes_short_password(self):
+        result = _prepare_password_bytes("hello")
+        assert result == b"hello"
+
+    def test_prepare_password_bytes_ascii_exactly_72(self):
+        result = _prepare_password_bytes("A" * 72)
+        assert len(result) == 72
+
+    def test_prepare_password_bytes_ascii_73_truncated_to_72(self):
+        result = _prepare_password_bytes("A" * 73)
+        assert len(result) == 72
+        assert result == b"A" * 72
+
+    def test_prepare_password_bytes_utf8_no_boundary_split(self):
+        pw1 = "a" * 70 + "ü"
+        pw2 = "a" * 70 + "à"
+        b1 = _prepare_password_bytes(pw1)
+        b2 = _prepare_password_bytes(pw2)
+        assert b1 != b2
+        assert b"\\xc3\\xbc" not in b1 or b1 == pw1.encode("utf-8")
+
+    def test_prepare_password_bytes_utf8_boundary_strips_incomplete_char(self):
+        pw = "a" * 71 + "ü"
+        raw = pw.encode("utf-8")
+        assert len(raw) == 73
+        result = _prepare_password_bytes(pw)
+        assert len(result) == 71
+        assert result == b"a" * 71
+
+    def test_password_long_utf8_no_collision_across_boundary(self):
+        pw1 = "a" * 70 + "ü"
+        pw2 = "a" * 70 + "à"
+        assert pw1.encode("utf-8")[:72] != pw2.encode("utf-8")[:72]
+        h1 = hash_password(pw1)
+        h2 = hash_password(pw2)
+        assert not verify_password(pw2, h1)
+        assert not verify_password(pw1, h2)
+
+    def test_password_truncation_preserves_full_chars(self):
+        pw = "TestP@ss1" + "🔑" * 20
+        hashed = hash_password(pw)
+        assert verify_password(pw, hashed)
+
+    def test_prepare_password_bytes_empty_string(self):
+        result = _prepare_password_bytes("")
+        assert result == b""
 
 
 class TestPasswordValidation:
