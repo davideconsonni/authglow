@@ -1,5 +1,7 @@
 """MFA (TOTP) service for two-factor authentication."""
 
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -36,8 +38,7 @@ class MFAService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def generate_totp_secret(self) -> str:
@@ -47,10 +48,7 @@ class MFAService:
     def get_totp_uri(self, secret: str, email: str) -> str:
         """Get TOTP provisioning URI for QR code."""
         totp = pyotp.TOTP(secret)
-        return totp.provisioning_uri(
-            name=email,
-            issuer_name=self.settings.app_name
-        )
+        return totp.provisioning_uri(name=email, issuer_name=self.settings.app_name)
 
     def generate_qr_code(self, uri: str) -> str:
         """Generate QR code image as base64 string."""
@@ -78,7 +76,9 @@ class MFAService:
         codes = []
         for _ in range(count):
             # Generate 8-character code (easier to type than full random)
-            code = ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+            code = "".join(
+                secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(8)
+            )
             # Format as XXXX-XXXX for readability
             formatted = f"{code[:4]}-{code[4:]}"
             codes.append(formatted)
@@ -99,10 +99,7 @@ class MFAService:
         """Save hashed backup codes for a user."""
         hashed_codes = [self.hash_backup_code(code) for code in codes]
 
-        backup_codes = BackupCodes(
-            user_id=user_id,
-            codes=hashed_codes
-        )
+        backup_codes = BackupCodes(user_id=user_id, codes=hashed_codes)
 
         path = f"{self.storage_path}/backup_codes/{user_id}.json"
         with self.fs.open(path, "w") as f:
@@ -131,7 +128,9 @@ class MFAService:
                 backup_codes.used_count += 1
                 path = f"{self.storage_path}/backup_codes/{user_id}.json"
                 with self.fs.open(path, "w") as f:
-                    json.dump(backup_codes.model_dump(mode="json"), f, indent=2, default=str)
+                    json.dump(
+                        backup_codes.model_dump(mode="json"), f, indent=2, default=str
+                    )
                 return True
 
         return False
@@ -147,22 +146,23 @@ class MFAService:
     # Trusted devices management
 
     def generate_device_fingerprint(self, user_agent: str, ip: str) -> str:
-        """Generate a device fingerprint."""
+        """Generate a deterministic device fingerprint using HMAC-SHA256."""
         data = f"{user_agent}:{ip}"
-        return pwd_context.hash(data)[:64]  # Truncate for storage
+        return hmac.new(
+            self.settings.secret_key.encode(),
+            data.encode(),
+            hashlib.sha256,
+        ).hexdigest()
 
     async def add_trusted_device(
-        self,
-        user_id: str,
-        device_fingerprint: str,
-        device_name: Optional[str] = None
+        self, user_id: str, device_fingerprint: str, device_name: Optional[str] = None
     ) -> TrustedDevice:
         """Add a trusted device for a user."""
         device = TrustedDevice(
             user_id=user_id,
             device_fingerprint=device_fingerprint,
             name=device_name,
-            expires_at=datetime.utcnow() + timedelta(days=30)
+            expires_at=datetime.utcnow() + timedelta(days=30),
         )
 
         path = f"{self.storage_path}/trusted_devices/{device.id}.json"
@@ -183,14 +183,17 @@ class MFAService:
                     data = json.load(f)
                     device = TrustedDevice(**data)
 
-                    if (device.user_id == user_id and
-                        device.device_fingerprint == device_fingerprint and
-                        datetime.utcnow() < device.expires_at):
-
+                    if (
+                        device.user_id == user_id
+                        and device.device_fingerprint == device_fingerprint
+                        and datetime.utcnow() < device.expires_at
+                    ):
                         # Update last used
                         device.last_used = datetime.utcnow()
                         with self.fs.open(file_path, "w") as f:
-                            json.dump(device.model_dump(mode="json"), f, indent=2, default=str)
+                            json.dump(
+                                device.model_dump(mode="json"), f, indent=2, default=str
+                            )
 
                         return True
 
@@ -210,7 +213,10 @@ class MFAService:
                     data = json.load(f)
                     device = TrustedDevice(**data)
 
-                    if device.user_id == user_id and datetime.utcnow() < device.expires_at:
+                    if (
+                        device.user_id == user_id
+                        and datetime.utcnow() < device.expires_at
+                    ):
                         devices.append(device)
 
             return devices

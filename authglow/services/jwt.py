@@ -15,12 +15,12 @@ class JWTService:
     def __init__(self):
         """Initialize JWT service with settings and RSA keys."""
         self.settings = get_settings()
-        
+
         # Load raw key bytes/string directly from files
         try:
             with open(self.settings.private_key_path, "rb") as f:
                 self._private_key = f.read()
-                
+
             with open(self.settings.public_key_path, "rb") as f:
                 self._public_key = f.read()
         except FileNotFoundError as e:
@@ -30,9 +30,7 @@ class JWTService:
     def _encode_token(self, payload: dict) -> str:
         """Encode a token payload using the private key."""
         return jwt.encode(
-            payload,
-            self._private_key,
-            algorithm=self.settings.jwt_algorithm
+            payload, self._private_key, algorithm=self.settings.jwt_algorithm
         )
 
     def _decode_token(self, token: str) -> Optional[dict]:
@@ -41,7 +39,8 @@ class JWTService:
             return jwt.decode(
                 token,
                 self._public_key,
-                algorithms=[self.settings.jwt_algorithm]
+                algorithms=[self.settings.jwt_algorithm],
+                options={"verify_exp": True},
             )
         except jwt.PyJWTError:
             return None
@@ -51,7 +50,7 @@ class JWTService:
         user_id: str,
         email: str,
         scopes: List[str],
-        expires_delta: Optional[timedelta] = None
+        expires_delta: Optional[timedelta] = None,
     ) -> str:
         """Create an access token."""
         if expires_delta:
@@ -67,16 +66,11 @@ class JWTService:
             "scopes": scopes,
             "exp": expire,
             "iat": datetime.now(timezone.utc),
-            "token_type": "access"
+            "token_type": "access",
         }
         return self._encode_token(token_data)
 
-    def create_refresh_token(
-        self,
-        user_id: str,
-        email: str,
-        scopes: List[str]
-    ) -> str:
+    def create_refresh_token(self, user_id: str, email: str, scopes: List[str]) -> str:
         """Create a refresh token."""
         expire = datetime.now(timezone.utc) + timedelta(
             days=self.settings.refresh_token_expire_days
@@ -87,15 +81,11 @@ class JWTService:
             "scopes": scopes,
             "exp": expire,
             "iat": datetime.now(timezone.utc),
-            "token_type": "refresh"
+            "token_type": "refresh",
         }
         return self._encode_token(token_data)
 
-    def create_mfa_session_token(
-        self,
-        user_id: str,
-        email: str
-    ) -> str:
+    def create_mfa_session_token(self, user_id: str, email: str) -> str:
         """Create a temporary session token for MFA verification."""
         expire = datetime.now(timezone.utc) + timedelta(minutes=5)
         token_data = {
@@ -103,7 +93,7 @@ class JWTService:
             "email": email,
             "exp": expire,
             "iat": datetime.now(timezone.utc),
-            "token_type": "mfa_session"
+            "token_type": "mfa_session",
         }
         return self._encode_token(token_data)
 
@@ -113,14 +103,19 @@ class JWTService:
         if not payload:
             return None
 
-        return TokenData(
+        token_data = TokenData(
             sub=payload.get("sub"),
             email=payload.get("email"),
             scopes=payload.get("scopes", []),
             exp=datetime.fromtimestamp(payload.get("exp"), tz=timezone.utc),
             iat=datetime.fromtimestamp(payload.get("iat"), tz=timezone.utc),
-            token_type=payload.get("token_type", "access")
+            token_type=payload.get("token_type", "access"),
         )
+
+        if token_data.exp < datetime.now(timezone.utc):
+            return None
+
+        return token_data
 
     def create_id_token(
         self,
@@ -130,7 +125,7 @@ class JWTService:
         user_claims: Dict[str, Any],
         nonce: Optional[str] = None,
         auth_time: Optional[datetime] = None,
-        expires_delta: Optional[timedelta] = None
+        expires_delta: Optional[timedelta] = None,
     ) -> str:
         """Create an OpenID Connect ID Token."""
         # Use timezone-aware datetime objects to generate correct UTC timestamps
@@ -170,14 +165,15 @@ class JWTService:
         payload = self._decode_token(token)
         if not payload:
             return None
-        return IDTokenClaims(**payload)
+        claims = IDTokenClaims(**payload)
+        if datetime.fromtimestamp(claims.exp, tz=timezone.utc) < datetime.now(
+            timezone.utc
+        ):
+            return None
+        return claims
 
     def create_token_response(
-        self,
-        user_id: str,
-        email: str,
-        scopes: List[str],
-        include_refresh: bool = True
+        self, user_id: str, email: str, scopes: List[str], include_refresh: bool = True
     ) -> Token:
         """Create a complete token response."""
         access_token = self.create_access_token(user_id, email, scopes)
@@ -185,7 +181,7 @@ class JWTService:
             access_token=access_token,
             token_type="bearer",
             expires_in=self.settings.access_token_expire_minutes * 60,
-            scope=" ".join(scopes)
+            scope=" ".join(scopes),
         )
         if include_refresh:
             refresh_token = self.create_refresh_token(user_id, email, scopes)

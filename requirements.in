@@ -1,0 +1,45 @@
+# Core framework
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+
+# Authentication & Security
+pyjwt[crypto]
+bcrypt
+passlib
+python-jose[cryptography]
+cryptography
+
+# Password validation
+password-strength
+
+# MFA / TOTP
+pyotp
+qrcode[pil]
+
+# WebAuthn / Passkeys
+webauthn
+
+# Rate Limiting
+slowapi
+
+# Storage - fsspec with cloud providers
+fsspec
+s3fs
+gcsfs
+adlfs
+
+# Configuration
+pydantic
+pydantic-settings
+python-dotenv
+
+# Utilities
+email-validator
+python-dateutil
+
+# Testing
+pytest
+pytest-asyncio
+httpx
