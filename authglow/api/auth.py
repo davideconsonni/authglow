@@ -1,7 +1,10 @@
 """Authentication API endpoints."""
 
+import base64
+import hashlib
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
+
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -24,13 +27,31 @@ from authglow.services.email_verification import EmailVerificationService
 from authglow.services.email.factory import get_email_service
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.core.config import get_settings
-import hashlib
-import base64
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
 templates = Jinja2Templates(directory="authglow/templates")
 limiter = Limiter(key_func=get_remote_address)
+
+
+def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]:
+    """Extract client_id and client_secret from HTTP Basic Auth header.
+
+    Per RFC 6749 Section 2.3.1, clients MAY use HTTP Basic authentication.
+    Format: Authorization: Basic base64(client_id:client_secret)
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        return None, None
+
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+        if ":" not in decoded:
+            return None, None
+        cid, csec = decoded.split(":", 1)
+        return cid, csec
+    except Exception:
+        return None, None
 
 
 # Dependency injection
@@ -81,7 +102,7 @@ async def get_current_user(
     jwt_service: JWTService = Depends(get_jwt_service),
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service)
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
 ) -> User:
     """Get current authenticated user (supports both JWT and API Key)."""
     credentials_exception = HTTPException(
@@ -106,7 +127,7 @@ async def get_current_user(
         if not bearer_token:
             raise credentials_exception
         token = bearer_token
-    
+
     if api_key:
         api_key_obj = await api_key_service.validate_key(api_key)
         if api_key_obj:
@@ -115,18 +136,15 @@ async def get_current_user(
             await api_key_service.record_usage(
                 key_id=api_key_obj.key_id,
                 ip_address=client_ip,
-                user_agent=request.headers.get("user-agent")
+                user_agent=request.headers.get("user-agent"),
             )
 
             # Log API key usage
             await audit_service.log_event(
                 event_type="api_key_used",
                 user_id=api_key_obj.user_id,
-                metadata={
-                    "key_id": api_key_obj.key_id,
-                    "key_name": api_key_obj.name
-                },
-                ip_address=client_ip
+                metadata={"key_id": api_key_obj.key_id, "key_name": api_key_obj.name},
+                ip_address=client_ip,
             )
 
             # Get user
@@ -135,7 +153,7 @@ async def get_current_user(
                 # Attach API key info to user for scope checking
                 user.api_key_scopes = api_key_obj.scopes
                 return user
-        
+
         # If API key is provided but invalid, raise an error
         raise credentials_exception
 
@@ -156,9 +174,9 @@ async def get_current_user(
             user = User(
                 id=client.client_id,
                 email=f"{client.client_id}@client.internal",
-                hashed_password="", # Not relevant here
+                hashed_password="",  # Not relevant here
                 is_active=client.is_active,
-                scopes=token_data.scopes
+                scopes=token_data.scopes,
             )
         else:
             raise credentials_exception
@@ -175,6 +193,7 @@ async def get_current_user(
 
 # OAuth2 Authorization Code Flow Endpoints
 
+
 @router.get("/oauth2/authorize", response_class=HTMLResponse)
 async def authorize(
     request: Request,
@@ -186,7 +205,7 @@ async def authorize(
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
     nonce: Optional[str] = None,
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service)
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
 ):
     """OAuth2 authorization endpoint - shows login page."""
     settings = get_settings()
@@ -200,7 +219,7 @@ async def authorize(
     if client.require_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
-            detail="PKCE is required for this client, but code_challenge was not provided."
+            detail="PKCE is required for this client, but code_challenge was not provided.",
         )
 
     # Verify redirect_uri is registered for this client
@@ -208,9 +227,11 @@ async def authorize(
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
     # Process and validate scopes, handling both space and '+' delimiters
-    requested_scopes = scope.replace('+', ' ').split() if scope else []
+    requested_scopes = scope.replace("+", " ").split() if scope else []
     try:
-        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+        processed_scopes = await oauth2_service.process_scopes(
+            client_id, requested_scopes
+        )
         validated_scope = " ".join(processed_scopes)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
@@ -232,8 +253,8 @@ async def authorize(
             "password_policy": PasswordValidator().get_policy_description(),
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
-            "nonce": nonce
-        }
+            "nonce": nonce,
+        },
     )
 
 
@@ -253,7 +274,7 @@ async def authorize_post(
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
-    session_service: SessionService = Depends(get_session_service)
+    session_service: SessionService = Depends(get_session_service),
 ):
     """Process login and create authorization code (or MFA challenge)."""
     # Verify client and redirect_uri before processing login
@@ -265,7 +286,7 @@ async def authorize_post(
     if client.require_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
-            detail="PKCE is required for this client, but code_challenge was not provided."
+            detail="PKCE is required for this client, but code_challenge was not provided.",
         )
 
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
@@ -274,7 +295,9 @@ async def authorize_post(
     # Process and validate scopes
     requested_scopes = scope.split() if scope else []
     try:
-        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+        processed_scopes = await oauth2_service.process_scopes(
+            client_id, requested_scopes
+        )
         validated_scope = " ".join(processed_scopes)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
@@ -305,7 +328,9 @@ async def authorize_post(
         # Check if device is trusted
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
-        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
+        device_fingerprint = mfa_service.generate_device_fingerprint(
+            user_agent, client_host
+        )
 
         is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
 
@@ -319,7 +344,7 @@ async def authorize_post(
                 state=state,
                 code_challenge=code_challenge,
                 code_challenge_method=code_challenge_method,
-                nonce=nonce
+                nonce=nonce,
             )
 
             # Show MFA verification page
@@ -330,8 +355,8 @@ async def authorize_post(
                 {
                     "request": request,
                     **ui_context,
-                    "session_token": mfa_session.session_token
-                }
+                    "session_token": mfa_session.session_token,
+                },
             )
 
     # No MFA required or device trusted - proceed with consent
@@ -346,7 +371,7 @@ async def authorize_post(
         state=state,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        nonce=nonce
+        nonce=nonce,
     )
 
     # Redirect to consent screen
@@ -368,7 +393,7 @@ async def token_endpoint(
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
-    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService())
+    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
     """OAuth2 token endpoint - exchanges code for tokens."""
 
@@ -379,7 +404,53 @@ async def token_endpoint(
 
         auth_code = await oauth2_service.get_authorization_code(code)
         if not auth_code:
-            raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired authorization code"
+            )
+
+        # --- Client Authentication (RFC 6749 Section 4.1.3) ---
+        # Extract client credentials from HTTP Basic Auth (client_secret_basic)
+        basic_client_id, basic_client_secret = _extract_basic_auth(request)
+
+        # Resolve client_id/client_secret: form params take precedence over Basic auth
+        resolved_client_id = client_id or basic_client_id
+        resolved_client_secret = client_secret or basic_client_secret
+
+        # client_id is required and must match the authorization code
+        if not resolved_client_id:
+            raise HTTPException(status_code=400, detail="Missing client_id")
+
+        if resolved_client_id != auth_code.client_id:
+            raise HTTPException(status_code=400, detail="Client ID mismatch")
+
+        # Determine if client is confidential or public
+        oauth_client = await oauth2_service.client_storage.get_client(
+            resolved_client_id
+        )
+        is_confidential = True  # Default for settings-based fallback client
+
+        if oauth_client:
+            is_confidential = oauth_client.is_confidential
+
+        if is_confidential:
+            # Confidential clients MUST authenticate with client_secret
+            if not resolved_client_secret:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Client authentication required for confidential clients",
+                    headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
+                )
+            if not await oauth2_service.verify_client(
+                resolved_client_id, resolved_client_secret
+            ):
+                raise HTTPException(
+                    status_code=401, detail="Invalid client credentials"
+                )
+        else:
+            # Public client: validate client_id exists but don't require secret
+            if not await oauth2_service.verify_client(resolved_client_id):
+                raise HTTPException(status_code=400, detail="Invalid client_id")
+        # --- End Client Authentication ---
 
         if auth_code.redirect_uri != redirect_uri:
             raise HTTPException(status_code=400, detail="Redirect URI mismatch")
@@ -387,18 +458,32 @@ async def token_endpoint(
         # --- PKCE Validation ---
         if auth_code.code_challenge:
             if not code_verifier:
-                raise HTTPException(status_code=400, detail="Missing code_verifier for PKCE flow")
+                raise HTTPException(
+                    status_code=400, detail="Missing code_verifier for PKCE flow"
+                )
 
             # Validate S256 method
             if auth_code.code_challenge_method == "S256":
                 hashed_verifier = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-                recreated_challenge = base64.urlsafe_b64encode(hashed_verifier).decode("utf-8").rstrip("=")
+                recreated_challenge = (
+                    base64.urlsafe_b64encode(hashed_verifier)
+                    .decode("utf-8")
+                    .rstrip("=")
+                )
             else:
                 # Per RFC 7636, plain is not recommended. We only support S256.
-                raise HTTPException(status_code=400, detail="Unsupported code_challenge_method")
+                raise HTTPException(
+                    status_code=400, detail="Unsupported code_challenge_method"
+                )
 
             if recreated_challenge != auth_code.code_challenge:
                 raise HTTPException(status_code=401, detail="Invalid code_verifier")
+        elif not is_confidential:
+            # Public clients without PKCE are insecure; reject the token exchange
+            raise HTTPException(
+                status_code=400,
+                detail="Public clients must use PKCE (code_challenge required)",
+            )
         # --- End PKCE Validation ---
 
         # Mark code as used
@@ -422,7 +507,9 @@ async def token_endpoint(
         # Final check: ensure the user has the scopes that were approved and are valid for the client
         # OIDC standard scopes (openid, profile, email, phone, address) are always allowed
         oidc_standard_scopes = {"openid", "profile", "email", "phone", "address"}
-        scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
+        scopes = [
+            s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes
+        ]
 
         # Generate JWT access token
         access_token_response = jwt_service.create_token_response(
@@ -435,7 +522,7 @@ async def token_endpoint(
             client_id=auth_code.client_id,
             scopes=scopes,
             issued_ip=request.client.host if request.client else None,
-            expires_in_days=30
+            expires_in_days=30,
         )
 
         # Add refresh token to response
@@ -444,6 +531,7 @@ async def token_endpoint(
         # Add ID token if OpenID Connect flow (openid scope requested)
         if "openid" in scopes:
             from authglow.services.oidc import OIDCService
+
             oidc_service = OIDCService()
 
             # Build user claims for ID token
@@ -455,8 +543,8 @@ async def token_endpoint(
                 client_id=auth_code.client_id,
                 scopes=scopes,
                 user_claims=user_claims,
-                nonce=getattr(auth_code, 'nonce', None),  # If nonce was stored
-                auth_time=user.last_login
+                nonce=getattr(auth_code, "nonce", None),  # If nonce was stored
+                auth_time=user.last_login,
             )
 
             # Add to response
@@ -475,7 +563,9 @@ async def token_endpoint(
         # Process and validate scopes
         requested_scopes = scope.split() if scope else []
         try:
-            validated_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+            validated_scopes = await oauth2_service.process_scopes(
+                client_id, requested_scopes
+            )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid scope")
 
@@ -484,19 +574,21 @@ async def token_endpoint(
             user_id=client_id,
             email=f"{client_id}@client.internal",
             scopes=validated_scopes,
-            include_refresh=False
+            include_refresh=False,
         )
 
     elif grant_type == "refresh_token":
         # Refresh token flow with rotation
         if not refresh_token or not client_id:
-            raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
+            raise HTTPException(
+                status_code=400, detail="Missing refresh_token or client_id"
+            )
 
         # Validate and rotate refresh token
         new_rt, error = await refresh_token_service.validate_and_rotate(
             token=refresh_token,
             client_id=client_id,
-            ip_address=request.client.host if request.client else None
+            ip_address=request.client.host if request.client else None,
         )
 
         if error:
@@ -529,7 +621,7 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Direct token endpoint (username/password)."""
     user = await storage.get_user_by_email(form_data.username)
@@ -541,7 +633,7 @@ async def login_for_access_token(
             email=form_data.username,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            severity="warning"
+            severity="warning",
         )
         # For existing users, also record the failed attempt for account locking
         if user:
@@ -553,7 +645,7 @@ async def login_for_access_token(
                     email=user.email,
                     ip_address=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
-                    severity="high"
+                    severity="high",
                 )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -573,7 +665,7 @@ async def login_for_access_token(
             email=user.email,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            severity="high"
+            severity="high",
         )
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -596,13 +688,13 @@ async def login_for_access_token(
             user_id=user.id,
             email=user.email,
             ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent")
+            user_agent=request.headers.get("user-agent"),
         )
 
         return {
             "mfa_required": True,
             "session_token": session_token,
-            "message": "MFA verification required"
+            "message": "MFA verification required",
         }
 
     # Update last login
@@ -614,7 +706,7 @@ async def login_for_access_token(
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent")
+        user_agent=request.headers.get("user-agent"),
     )
 
     return jwt_service.create_token_response(user.id, user.email, user.scopes)
@@ -627,7 +719,7 @@ async def exchange_api_key_for_token(
     api_key_service: APIKeyService = Depends(get_api_key_service),
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Exchange an API key for an access token.
 
@@ -638,7 +730,7 @@ async def exchange_api_key_for_token(
     if not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header. Use: Authorization: Bearer <api_key>"
+            detail="Invalid authorization header. Use: Authorization: Bearer <api_key>",
         )
 
     api_key = auth_header.replace("Bearer ", "")
@@ -649,11 +741,11 @@ async def exchange_api_key_for_token(
         await audit_service.log_event(
             event_type="api_key_invalid",
             ip_address=request.client.host if request.client else None,
-            severity="warning"
+            severity="warning",
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired API key"
+            detail="Invalid or expired API key",
         )
 
     # Get user
@@ -661,14 +753,14 @@ async def exchange_api_key_for_token(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
+            detail="User not found or inactive",
         )
 
     # Record usage
     await api_key_service.record_usage(
         key_id=key_data.key_id,
         ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent")
+        user_agent=request.headers.get("user-agent"),
     )
 
     # Log successful authentication
@@ -677,7 +769,7 @@ async def exchange_api_key_for_token(
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request.client else None,
-        metadata={"api_key_name": key_data.name}
+        metadata={"api_key_name": key_data.name},
     )
 
     # Return access token with API key scopes
@@ -685,13 +777,17 @@ async def exchange_api_key_for_token(
 
 
 # User management endpoints
-@router.post("/api/users/invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/users/invite",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def invite_user(
     invite: InviteUser,
     current_user: User = Depends(get_current_user),
     storage: UserStorage = Depends(get_user_storage),
     password_validator: PasswordValidator = Depends(get_password_validator),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Invite a new user (admin only - requires 'admin' scope)."""
     settings = get_settings()
@@ -706,6 +802,7 @@ async def invite_user(
 
     # Generate temporary password (user should change it)
     import secrets
+
     temp_password = secrets.token_urlsafe(16)
 
     # Create user
@@ -716,7 +813,7 @@ async def invite_user(
         last_name=invite.last_name,
         scopes=invite.scopes,
         is_invited=True,
-        email_verified=False  # Require email verification
+        email_verified=False,  # Require email verification
     )
 
     user = await storage.create_user(user)
@@ -736,14 +833,14 @@ async def invite_user(
             "docs_url": f"{settings.base_url}/docs",
             "company_name": settings.company_name,
             "temp_password": temp_password,
-            "verification_url": f"{settings.base_url}/verify-email?token={token.token}"
+            "verification_url": f"{settings.base_url}/verify-email?token={token.token}",
         }
 
         await email_service.send_template(
             to=[user.email],
             subject=f"Welcome to {settings.company_name} - Verify your email",
             template_name="welcome",
-            context=context
+            context=context,
         )
 
         # Also send verification email
@@ -757,10 +854,7 @@ async def invite_user(
         event_type="user_invited",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "invited_user_id": user.id,
-            "invited_email": user.email
-        }
+        metadata={"invited_user_id": user.id, "invited_email": user.email},
     )
 
     return UserResponse(**user.model_dump())
@@ -775,7 +869,7 @@ async def oauth2_mfa_verify(
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
-    session_service: SessionService = Depends(get_session_service)
+    session_service: SessionService = Depends(get_session_service),
 ):
     """Verify MFA code and complete OAuth2 authorization."""
     # Get MFA session
@@ -809,7 +903,9 @@ async def oauth2_mfa_verify(
     if trust_device:
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
-        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
+        device_fingerprint = mfa_service.generate_device_fingerprint(
+            user_agent, client_host
+        )
         await mfa_service.add_trusted_device(user.id, device_fingerprint, "Browser")
 
     # Delete MFA session
@@ -833,7 +929,7 @@ async def oauth2_mfa_verify(
         scope=validated_scope,
         code_challenge=mfa_session.code_challenge,
         code_challenge_method=mfa_session.code_challenge_method,
-        nonce=mfa_session.nonce
+        nonce=mfa_session.nonce,
     )
 
     # Redirect with authorization code
@@ -855,11 +951,7 @@ async def login_page(request: Request):
     """Simple login page (non-OAuth)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "simple_login.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "simple_login.html", {"request": request, **settings.get_ui_context()}
     )
 
 
@@ -873,7 +965,7 @@ async def passkey_management_page(request: Request):
         {
             "request": request,
             **ui_context,
-        }
+        },
     )
 
 
@@ -882,7 +974,7 @@ async def list_users(
     limit: int = 100,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
-    storage: UserStorage = Depends(get_user_storage)
+    storage: UserStorage = Depends(get_user_storage),
 ):
     """List all users (admin only)."""
     if "admin" not in current_user.scopes:
@@ -898,7 +990,7 @@ async def oauth2_callback(
     request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
-    error: Optional[str] = None
+    error: Optional[str] = None,
 ):
     """OAuth2 callback endpoint - displays authorization code for testing."""
     settings = get_settings()
@@ -911,6 +1003,6 @@ async def oauth2_callback(
             **ui_context,
             "code": code,
             "state": state,
-            "error": error
-        }
+            "error": error,
+        },
     )

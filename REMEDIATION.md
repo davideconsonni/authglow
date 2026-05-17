@@ -21,7 +21,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | C1 | **JWT scaduti accettati** — `decode_token()` non valida il claim `exp`.                                                                                          | `authglow/services/jwt.py`                                                                              | Aggiunto `verify_exp: True` esplicito in `_decode_token()`, controllo defense-in-depth in `decode_token()` e `decode_id_token()`.        | done |      |
 | C2 | **MFA trusted device rotto** — Il fingerprint usa `pwd_context.hash(data)[:64]`, distruggendo l'hash bcrypt. Confronto in `is_device_trusted()` fallisce sempre. | `authglow/services/mfa.py`                                                                              | Sostituito bcrypt truncato con HMAC-SHA256 usando `secret_key` dell'app.                                            | done | Fingerprint ora deterministica, confronto `==` funziona correttamente |
 | C3 | **Backup code MFA rotto nell'endpoint standalone** — `code in backup_codes.codes` fallisce perché i codici sono hash bcrypt.                                     | `authglow/api/mfa.py` (verify_mfa_login)                                                                | Sostituito confronto diretto con `mfa_service.verify_user_backup_code()`, come in `auth.py`. Rimossa logica manuale di rimozione codice (gestita dal service). | done |      |
-| C4 | **Token endpoint non autentica il client** — Scambio authorization code senza verificare `client_id`/`client_secret`.                                            | `authglow/api/auth.py` (token_endpoint)                                                                 | Aggiungere autenticazione client (client_secret_post o basic auth) per `authorization_code` grant.                       | pending |      |
+| C4 | **Token endpoint non autentica il client** — Scambio authorization code senza verificare `client_id`/`client_secret`. | `authglow/api/auth.py` (token_endpoint) | Aggiunto autenticazione client per `authorization_code` grant: verifica `client_id` match con auth code, autenticazione obbligatoria per client confidential (form params + Basic Auth), client pubblici richiedono PKCE. | done | RFC 6749 §4.1.3 |
 | C5 | **Password hashing difettoso per UTF-8 lunghe** — `encode()[:72]` poi `decode(errors='ignore')` causa collisioni.                                                | `authglow/services/password.py`                                                                         | Passare `password.encode('utf-8')[:72]` direttamente a bcrypt (come bytes) senza round-trip decode.                      | pending |      |
 | C6 | **Token sensibili usano UUID4** — Non crittograficamente sicuro per bearer tokens.                                                                               | `authglow/models/token.py`, `authglow/models/refresh_token.py`, `authglow/models/email_verification.py` | Sostituire `uuid4()` con `secrets.token_urlsafe(32)` per authorization codes, refresh tokens, email verification tokens. | pending |      |
 
@@ -86,7 +86,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] C1 — JWT exp validation
 - [x] C2 — MFA trusted device fingerprint
 - [x] C3 — MFA backup code fix
-- [ ] C4 — Token endpoint client auth
+- [x] C4 — Token endpoint client auth
 - [ ] C5 — Password hashing UTF-8 fix
 - [ ] C6 — Replace UUID4 with secrets.token_urlsafe
 - [ ] H1 — Encrypt TOTP secrets
