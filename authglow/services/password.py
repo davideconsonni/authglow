@@ -2,14 +2,10 @@
 
 import re
 from typing import List, Optional
-from passlib.context import CryptContext
+
+import bcrypt
+
 from authglow.core.config import get_settings
-
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
 
 
 class PasswordValidator:
@@ -28,7 +24,6 @@ class PasswordValidator:
         """
         errors = []
 
-
         # Check minimum length
         if len(password) < self.settings.password_min_length:
             errors.append(
@@ -36,11 +31,15 @@ class PasswordValidator:
             )
 
         # Check for uppercase
-        if self.settings.password_require_uppercase and not re.search(r"[A-Z]", password):
+        if self.settings.password_require_uppercase and not re.search(
+            r"[A-Z]", password
+        ):
             errors.append("Password must contain at least one uppercase letter")
 
         # Check for lowercase
-        if self.settings.password_require_lowercase and not re.search(r"[a-z]", password):
+        if self.settings.password_require_lowercase and not re.search(
+            r"[a-z]", password
+        ):
             errors.append("Password must contain at least one lowercase letter")
 
         # Check for digits
@@ -57,9 +56,7 @@ class PasswordValidator:
 
     def get_policy_description(self) -> str:
         """Get human-readable password policy description."""
-        requirements = [
-            f"At least {self.settings.password_min_length} characters"
-        ]
+        requirements = [f"At least {self.settings.password_min_length} characters"]
 
         if self.settings.password_require_uppercase:
             requirements.append("At least one uppercase letter")
@@ -82,10 +79,9 @@ def hash_password(password: str) -> str:
     Bcrypt has a maximum password length of 72 bytes.
     Passwords longer than 72 bytes are truncated.
     """
-    # Truncate to 72 bytes to avoid bcrypt errors
-    password_bytes = password.encode('utf-8')[:72]
-    truncated_password = password_bytes.decode('utf-8', errors='ignore')
-    return pwd_context.hash(truncated_password)
+    password_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -94,7 +90,5 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Bcrypt has a maximum password length of 72 bytes.
     Passwords longer than 72 bytes are truncated to match hashing behavior.
     """
-    # Truncate to 72 bytes to match hash_password behavior
-    password_bytes = plain_password.encode('utf-8')[:72]
-    truncated_password = password_bytes.decode('utf-8', errors='ignore')
-    return pwd_context.verify(truncated_password, hashed_password)
+    password_bytes = plain_password.encode("utf-8")[:72]
+    return bcrypt.checkpw(password_bytes, hashed_password.encode("utf-8"))

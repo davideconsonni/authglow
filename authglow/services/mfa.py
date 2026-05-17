@@ -12,13 +12,10 @@ import pyotp
 import qrcode
 import base64
 import fsspec
-from passlib.context import CryptContext
+import bcrypt
 
 from authglow.core.config import get_settings
 from authglow.models.mfa import BackupCodes, TrustedDevice
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class MFAService:
@@ -86,14 +83,16 @@ class MFAService:
 
     def hash_backup_code(self, code: str) -> str:
         """Hash a backup code for storage."""
-        # Remove dash for verification
         clean_code = code.replace("-", "")
-        return pwd_context.hash(clean_code)
+        code_bytes = clean_code.encode("utf-8")[:72]
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(code_bytes, salt).decode("utf-8")
 
     def verify_backup_code(self, code: str, hashed_code: str) -> bool:
         """Verify a backup code against its hash."""
         clean_code = code.replace("-", "").upper()
-        return pwd_context.verify(clean_code, hashed_code)
+        code_bytes = clean_code.encode("utf-8")[:72]
+        return bcrypt.checkpw(code_bytes, hashed_code.encode("utf-8"))
 
     async def save_backup_codes(self, user_id: str, codes: List[str]):
         """Save hashed backup codes for a user."""
