@@ -25,8 +25,7 @@ class AuditService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def _get_log_path(self, log_id: str) -> str:
@@ -50,7 +49,7 @@ class AuditService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         metadata: Optional[dict] = None,
-        severity: str = "info"
+        severity: str = "info",
     ) -> AuditLogEntry:
         """Log an audit event."""
         log_entry = AuditLogEntry(
@@ -60,7 +59,7 @@ class AuditService:
             ip_address=ip_address,
             user_agent=user_agent,
             metadata=metadata or {},
-            severity=severity
+            severity=severity,
         )
 
         path = self._get_log_path(log_entry.id)
@@ -73,7 +72,7 @@ class AuditService:
         self,
         filters: Optional[AuditLogFilter] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[AuditLogEntry]:
         """Get audit logs with filtering."""
         logs = []
@@ -88,7 +87,7 @@ class AuditService:
             for file_path in files:
                 try:
                     info = self.fs.info(file_path)
-                    mtime = info.get('mtime', 0)
+                    mtime = info.get("mtime", 0)
                     files_with_time.append((file_path, mtime))
                 except:
                     files_with_time.append((file_path, 0))
@@ -109,20 +108,36 @@ class AuditService:
                         if filters:
                             if filters.user_id and log_entry.user_id != filters.user_id:
                                 continue
-                            if filters.event_type and filters.event_type.lower() not in log_entry.event_type.lower():
+                            if (
+                                filters.event_type
+                                and log_entry.event_type.lower()
+                                != filters.event_type.lower()
+                            ):
                                 continue
-                            if filters.severity and log_entry.severity != filters.severity:
+                            if (
+                                filters.severity
+                                and log_entry.severity != filters.severity
+                            ):
                                 continue
-                            if filters.start_date and log_entry.timestamp < filters.start_date:
+                            if (
+                                filters.start_date
+                                and log_entry.timestamp < filters.start_date
+                            ):
                                 continue
-                            if filters.end_date and log_entry.timestamp > filters.end_date:
+                            if (
+                                filters.end_date
+                                and log_entry.timestamp > filters.end_date
+                            ):
                                 continue
                             if filters.search:
                                 search_lower = filters.search.lower()
                                 if not (
-                                    (log_entry.email and search_lower in log_entry.email.lower()) or
-                                    search_lower in log_entry.event_type.lower() or
-                                    search_lower in str(log_entry.metadata).lower()
+                                    (
+                                        log_entry.email
+                                        and search_lower in log_entry.email.lower()
+                                    )
+                                    or search_lower in log_entry.event_type.lower()
+                                    or search_lower in str(log_entry.metadata).lower()
                                 ):
                                     continue
 
@@ -132,15 +147,13 @@ class AuditService:
                     continue
 
             # Apply pagination
-            return logs[offset:offset + limit]
+            return logs[offset : offset + limit]
 
         except Exception:
             return []
 
     async def get_event_counts_by_type(
-        self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> dict:
         """Get count of events by type."""
         counts = {}
@@ -172,26 +185,27 @@ class AuditService:
         except Exception:
             return {}
 
-    async def get_logs_by_date(
-        self,
-        days: int = 30
-    ) -> List[dict]:
+    async def get_logs_by_date(self, days: int = 30) -> List[dict]:
         """Get log counts grouped by date."""
         result = []
-        start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days-1)
+        start_date = datetime.utcnow().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) - timedelta(days=days - 1)
 
         # Initialize result with all dates
         for i in range(days):
             date = start_date + timedelta(days=i)
-            result.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "display_date": date.strftime("%m/%d"),  # For display
-                "total": 0,
-                "success": 0,
-                "failed": 0,
-                "security": 0,
-                "new_users": 0
-            })
+            result.append(
+                {
+                    "date": date.strftime("%Y-%m-%d"),
+                    "display_date": date.strftime("%m/%d"),  # For display
+                    "total": 0,
+                    "success": 0,
+                    "failed": 0,
+                    "security": 0,
+                    "new_users": 0,
+                }
+            )
 
         try:
             pattern = f"{self.storage_path}/**/*.json"
@@ -226,7 +240,11 @@ class AuditService:
                                     day_data["new_users"] += 1
 
                                 # Count security events
-                                if log_entry.severity in ["warning", "error", "critical"]:
+                                if log_entry.severity in [
+                                    "warning",
+                                    "error",
+                                    "critical",
+                                ]:
                                     day_data["security"] += 1
 
                                 break

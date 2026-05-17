@@ -35,13 +35,13 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | H4 | **Setup endpoint senza rate limit** — Race condition + brute force possibile.                 | `authglow/api/setup.py`                          | Aggiunto `@limiter.limit()` a tutti e 3 gli endpoint: create-admin 5/min, check 20/min, setup page 20/min. Aggiunto `Request` param dove mancante. Aggiornato test rate_limit per verificare setup module.                    | done |      |
 | H5 | **CORS header parsing bug** — La stringa CSV finisce come singolo elemento.                   | `authglow/main.py:50`, `authglow/core/config.py` | Aggiunto `get_cors_headers()` in Settings (split su `,` con wildcard `*`). Sostituita logica inline in `main.py` con `settings.get_cors_headers()`. Test aggiornato per verificare split corretto e wildcard. | done |      |
 | H6 | **Passkey registration permette duplicati** — `exclude_credentials` è hardcodato `[]`.        | `authglow/services/passkey.py`, `authglow/api/passkey.py` | Aggiunto parametro `user_passkeys` a `generate_registration_options_dict()`, endpoint `begin_registration` ora recupera le passkey esistenti e le passa al metodo. Sostituito `bytes.fromhex` con `base64url_to_bytes` nella costruzione di `exclude_credentials`. | done | Fix include anche la correzione del parsing del credential_id da hex a base64url nella comprehension di exclude_credentials |
-| H7 | **Passkey service: bytes.fromhex su base64url** — Parsing errato del credential_id.           | `authglow/services/passkey.py`                   | Usare `base64url_to_bytes` invece di `bytes.fromhex`.                                         | pending |      |
+| H7 | **Passkey service: bytes.fromhex su base64url** — Parsing errato del credential_id.           | `authglow/services/passkey.py`                   | Usare `base64url_to_bytes` invece di `bytes.fromhex`.                                         | done | Già corretto come parte di H6; nessun `bytes.fromhex` rimasto. Test verificano assenza e uso corretto di `base64url_to_bytes`. |
 
 ## MEDIUM — Bug / Architettura
 
 | #  | Problema                                                                                         | File/i coinvolti                                               | Azione richiesta                                                                                | Stato   | Note |
 |----|--------------------------------------------------------------------------------------------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------|------|
-| M1 | **Audit log: filtro event_type usa substring matching** — `"login"` matcha anche `login_failed`. | `authglow/services/audit.py`                                   | Usare confronto esatto o prefix matching strutturato.                                           | pending |      |
+| M1 | **Audit log: filtro event_type usa substring matching** — `"login"` matcha anche `login_failed`. | `authglow/services/audit.py`                                   | Sostituito `in` con confronto esatto case-insensitive (`!=`). Aggiunti 3 test: exact match, no-substring, distinct-prefix. | done | Search field mantiene substring matching (intenzionale) |
 | M2 | **JWTService istanziato a livello modulo** — Triggera generazione chiavi all'import.             | `authglow/core/permissions.py`                                 | Usare lazy initialization o dependency injection.                                               | pending |      |
 | M3 | **Router oauth2_advanced non montato** — Revocation/introspection irraggiungibili.               | `authglow/main.py`                                             | Aggiungere `include_router(oauth2_advanced_router)`.                                            | pending |      |
 | M4 | **Timezone handling inconsistente** — `utcnow()` (naive) vs `now(timezone.utc)` (aware).         | Tutto il codebase                                              | Standardizzare su `datetime.now(timezone.utc)` ovunque.                                         | pending |      |
@@ -95,8 +95,8 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] H4 — Setup endpoint rate limit
 - [x] H5 — CORS headers parsing
 - [x] H6 — Passkey exclude_credentials
-- [ ] H7 — Passkey base64url parsing
-- [ ] M1 — Audit log exact event_type match
+- [x] H7 — Passkey base64url parsing
+- [x] M1 — Audit log exact event_type match
 - [ ] M2 — Lazy JWTService init
 - [ ] M3 — Mount oauth2_advanced router
 - [ ] M4 — Consistent timezone usage

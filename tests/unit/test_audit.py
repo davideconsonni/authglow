@@ -70,13 +70,56 @@ class TestAuditFiltering:
                 filters=AuditLogFilter(event_type="login_success"), limit=100
             )
         )
-        exact_matches = [l for l in logs if l.event_type == "login_success"]
-        substring_matches = [l for l in logs if "login_success" in l.event_type.lower()]
-        assert len(exact_matches) == 1, (
-            f"Expected exact match for 'login_success' to return 1 result, "
-            f"got {len(exact_matches)}. Substring matching incorrectly includes: "
-            f"{[l.event_type for l in logs if 'login_success' in l.event_type.lower() and l.event_type != 'login_success']}"
+        assert len(logs) == 1, (
+            f"Expected exactly 1 result for 'login_success', "
+            f"got {len(logs)}: {[l.event_type for l in logs]}"
         )
+        assert logs[0].event_type == "login_success"
+
+    def test_filter_event_type_no_substring_match(self, audit_service):
+        import asyncio
+
+        self._create_logs(
+            audit_service,
+            [
+                ("login_failed", "u1", "warning"),
+                ("login_success", "u2", "info"),
+                ("login_success_with_mfa", "u3", "info"),
+            ],
+        )
+        from authglow.models.admin import AuditLogFilter
+
+        logs = asyncio.get_event_loop().run_until_complete(
+            audit_service.get_logs(
+                filters=AuditLogFilter(event_type="login"), limit=100
+            )
+        )
+        assert len(logs) == 0, (
+            f"Expected 0 results for substring 'login', "
+            f"got {len(logs)}: {[l.event_type for l in logs]}"
+        )
+
+    def test_filter_event_type_distinct_prefix(self, audit_service):
+        import asyncio
+
+        self._create_logs(
+            audit_service,
+            [
+                ("login_failed", "u1", "warning"),
+                ("login_success", "u2", "info"),
+                ("login_success_with_mfa", "u3", "info"),
+                ("password_reset_requested", "u4", "info"),
+            ],
+        )
+        from authglow.models.admin import AuditLogFilter
+
+        logs = asyncio.get_event_loop().run_until_complete(
+            audit_service.get_logs(
+                filters=AuditLogFilter(event_type="login_failed"), limit=100
+            )
+        )
+        assert len(logs) == 1
+        assert logs[0].event_type == "login_failed"
 
     def test_filter_by_severity(self, audit_service):
         import asyncio
