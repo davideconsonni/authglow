@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta, timezone
+from authglow.core.datetime import utcnow
 
 
 class TestTOTPGeneration:
@@ -232,7 +233,7 @@ class TestDeviceFingerprint:
             mfa_service.add_trusted_device(user_id, fp, "Expired Browser")
         )
         expired_device = TrustedDevice(**device.model_dump())
-        expired_device.expires_at = datetime.utcnow() - timedelta(days=1)
+        expired_device.expires_at = utcnow() - timedelta(days=1)
         device_path = f"{mfa_service.storage_path}/trusted_devices/{device.id}.json"
         with mfa_service.fs.open(device_path, "w") as f:
             json.dump(expired_device.model_dump(mode="json"), f, indent=2, default=str)

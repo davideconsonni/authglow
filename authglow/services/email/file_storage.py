@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from authglow.models.email import EmailMessage, EmailSendResult
 from authglow.services.email.base import EmailProvider
+from authglow.core.datetime import utcnow
 
 
 class FileStorageEmailProvider(EmailProvider):
@@ -37,11 +38,13 @@ class FileStorageEmailProvider(EmailProvider):
         """
         try:
             # Generate unique message ID
-            timestamp = datetime.utcnow()
+            timestamp = utcnow()
             message_id = f"file-{uuid4()}"
 
             # Create filename with timestamp and ID
-            filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{message_id.split('-')[1]}.json"
+            filename = (
+                f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{message_id.split('-')[1]}.json"
+            )
             file_path = self.storage_path / filename
 
             # Prepare email data
@@ -51,7 +54,7 @@ class FileStorageEmailProvider(EmailProvider):
                 "provider": "file_storage",
                 "from": {
                     "email": message.from_email or "noreply@authglow.local",
-                    "name": message.from_name
+                    "name": message.from_name,
                 },
                 "to": message.to,
                 "cc": message.cc or [],
@@ -66,28 +69,22 @@ class FileStorageEmailProvider(EmailProvider):
                     {
                         "filename": att.filename,
                         "content_type": att.content_type,
-                        "size_bytes": len(att.content)
+                        "size_bytes": len(att.content),
                     }
                     for att in (message.attachments or [])
-                ]
+                ],
             }
 
             # Save to file
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(email_data, f, indent=2, ensure_ascii=False)
 
             return EmailSendResult(
-                success=True,
-                message_id=message_id,
-                provider="file_storage"
+                success=True, message_id=message_id, provider="file_storage"
             )
 
         except Exception as e:
-            return EmailSendResult(
-                success=False,
-                error=str(e),
-                provider="file_storage"
-            )
+            return EmailSendResult(success=False, error=str(e), provider="file_storage")
 
     def validate_config(self) -> bool:
         """Validate file storage provider configuration.

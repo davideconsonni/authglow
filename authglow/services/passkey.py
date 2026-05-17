@@ -30,6 +30,7 @@ from authglow.models.passkey import (
     PasskeyAuthenticationOptions,
 )
 from authglow.models.user import User
+from authglow.core.datetime import utcnow
 
 
 class PasskeyService:
@@ -114,7 +115,7 @@ class PasskeyService:
         """Update passkey last used time and sign count."""
         passkey = await self.get_passkey(user_id, credential_id)
         if passkey:
-            passkey.last_used_at = datetime.utcnow()
+            passkey.last_used_at = utcnow()
             passkey.sign_count = sign_count
             await self.save_passkey(passkey)
 
@@ -137,7 +138,7 @@ class PasskeyService:
                 challenge = PasskeyChallenge(**data)
 
                 # Check if expired
-                if challenge.expires_at < datetime.utcnow():
+                if challenge.expires_at < utcnow():
                     self.fs.rm(path)  # Clean up expired challenge
                     return None
 

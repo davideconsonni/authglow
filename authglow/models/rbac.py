@@ -5,6 +5,8 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
+
 
 class Permission(BaseModel):
     """Permission model.
@@ -18,12 +20,10 @@ class Permission(BaseModel):
     description: Optional[str] = None
     resource: str  # e.g., "users", "api_keys", "oauth_clients"
     action: str  # e.g., "read", "write", "delete", "create"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class Role(BaseModel):
@@ -38,13 +38,11 @@ class Role(BaseModel):
     description: Optional[str] = None
     permissions: List[str] = Field(default_factory=list)  # List of permission names
     is_system: bool = False  # System roles cannot be deleted
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class UserRole(BaseModel):
@@ -54,19 +52,19 @@ class UserRole(BaseModel):
     user_id: str
     role_id: str
     assigned_by: str  # user_id of admin who assigned
-    assigned_at: datetime = Field(default_factory=datetime.utcnow)
+    assigned_at: datetime = Field(default_factory=utcnow)
     expires_at: Optional[datetime] = None  # Optional expiration
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 # Request/Response models
 
+
 class PermissionCreate(BaseModel):
     """Create permission request."""
+
     name: str
     description: Optional[str] = None
     resource: str
@@ -75,6 +73,7 @@ class PermissionCreate(BaseModel):
 
 class PermissionResponse(BaseModel):
     """Permission response."""
+
     permission_id: str
     name: str
     description: Optional[str]
@@ -85,6 +84,7 @@ class PermissionResponse(BaseModel):
 
 class RoleCreate(BaseModel):
     """Create role request."""
+
     name: str
     description: Optional[str] = None
     permissions: List[str] = Field(default_factory=list)
@@ -92,6 +92,7 @@ class RoleCreate(BaseModel):
 
 class RoleUpdate(BaseModel):
     """Update role request."""
+
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
@@ -99,6 +100,7 @@ class RoleUpdate(BaseModel):
 
 class RoleResponse(BaseModel):
     """Role response."""
+
     role_id: str
     name: str
     description: Optional[str]
@@ -110,11 +112,13 @@ class RoleResponse(BaseModel):
 
 class RoleWithPermissions(RoleResponse):
     """Role response with full permission details."""
+
     permission_details: List[PermissionResponse] = Field(default_factory=list)
 
 
 class AssignRoleRequest(BaseModel):
     """Assign role to user request."""
+
     user_id: str
     role_id: str
     expires_at: Optional[datetime] = None
@@ -122,6 +126,7 @@ class AssignRoleRequest(BaseModel):
 
 class UserRoleResponse(BaseModel):
     """User role assignment response."""
+
     assignment_id: str
     user_id: str
     user_email: Optional[str] = None
@@ -134,6 +139,7 @@ class UserRoleResponse(BaseModel):
 
 class UserPermissions(BaseModel):
     """User's aggregated permissions."""
+
     user_id: str
     user_email: str
     roles: List[str]  # Role names

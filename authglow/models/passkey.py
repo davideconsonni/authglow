@@ -4,22 +4,37 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from authglow.core.datetime import utcnow
+
 
 class Passkey(BaseModel):
     """Passkey credential stored for a user."""
 
     credential_id: str = Field(..., description="Base64url encoded credential ID")
     public_key: str = Field(..., description="Base64url encoded public key")
-    sign_count: int = Field(default=0, description="Signature counter for replay protection")
-    transports: list[str] = Field(default_factory=list, description="Authenticator transports (usb, nfc, ble, internal)")
+    sign_count: int = Field(
+        default=0, description="Signature counter for replay protection"
+    )
+    transports: list[str] = Field(
+        default_factory=list,
+        description="Authenticator transports (usb, nfc, ble, internal)",
+    )
     aaguid: str = Field(..., description="Authenticator AAGUID")
     user_id: str = Field(..., description="User ID this passkey belongs to")
-    name: str = Field(default="My Passkey", description="User-friendly name for this passkey")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    name: str = Field(
+        default="My Passkey", description="User-friendly name for this passkey"
+    )
+    created_at: datetime = Field(default_factory=utcnow)
     last_used_at: Optional[datetime] = None
-    device_type: Optional[str] = Field(None, description="Device type (phone, computer, security_key)")
-    backup_eligible: bool = Field(default=False, description="Whether credential can be backed up")
-    backup_state: bool = Field(default=False, description="Whether credential is currently backed up")
+    device_type: Optional[str] = Field(
+        None, description="Device type (phone, computer, security_key)"
+    )
+    backup_eligible: bool = Field(
+        default=False, description="Whether credential can be backed up"
+    )
+    backup_state: bool = Field(
+        default=False, description="Whether credential is currently backed up"
+    )
 
 
 class PasskeyRegistrationOptions(BaseModel):
@@ -32,10 +47,18 @@ class PasskeyRegistrationOptions(BaseModel):
     user_name: str = Field(..., description="User name (email)")
     user_display_name: str = Field(..., description="User display name")
     timeout: int = Field(default=60000, description="Timeout in milliseconds")
-    attestation: str = Field(default="none", description="Attestation conveyance preference")
-    user_verification: str = Field(default="preferred", description="User verification requirement")
-    authenticator_attachment: Optional[str] = Field(None, description="platform or cross-platform")
-    resident_key: str = Field(default="required", description="Resident key requirement")
+    attestation: str = Field(
+        default="none", description="Attestation conveyance preference"
+    )
+    user_verification: str = Field(
+        default="preferred", description="User verification requirement"
+    )
+    authenticator_attachment: Optional[str] = Field(
+        None, description="platform or cross-platform"
+    )
+    resident_key: str = Field(
+        default="required", description="Resident key requirement"
+    )
 
 
 class PasskeyRegistrationVerification(BaseModel):
@@ -54,8 +77,12 @@ class PasskeyAuthenticationOptions(BaseModel):
     challenge: str = Field(..., description="Base64url encoded challenge")
     rp_id: str = Field(..., description="Relying Party ID (domain)")
     timeout: int = Field(default=60000, description="Timeout in milliseconds")
-    user_verification: str = Field(default="preferred", description="User verification requirement")
-    allow_credentials: list[dict] = Field(default_factory=list, description="Allowed credentials")
+    user_verification: str = Field(
+        default="preferred", description="User verification requirement"
+    )
+    allow_credentials: list[dict] = Field(
+        default_factory=list, description="Allowed credentials"
+    )
 
 
 class PasskeyAuthenticationVerification(BaseModel):

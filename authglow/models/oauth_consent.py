@@ -5,6 +5,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
+
 
 class OAuth2Consent(BaseModel):
     """OAuth2 user consent for client access."""
@@ -13,15 +15,13 @@ class OAuth2Consent(BaseModel):
     user_id: str
     client_id: str
     scopes: List[str] = Field(default_factory=list)
-    granted_at: datetime = Field(default_factory=datetime.utcnow)
+    granted_at: datetime = Field(default_factory=utcnow)
     expires_at: Optional[datetime] = None  # None = never expires
     revoked: bool = False
     revoked_at: Optional[datetime] = None
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class ConsentRequest(BaseModel):

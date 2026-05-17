@@ -7,6 +7,7 @@ from typing import Optional, List
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.oauth_consent import OAuth2Consent
 
 
@@ -25,8 +26,7 @@ class OAuth2ConsentService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def _get_consent_path(self, consent_id: str) -> str:
@@ -42,7 +42,7 @@ class OAuth2ConsentService:
         user_id: str,
         client_id: str,
         scopes: List[str],
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
     ) -> OAuth2Consent:
         """Create a new consent record.
 
@@ -56,10 +56,7 @@ class OAuth2ConsentService:
             OAuth2Consent object
         """
         consent = OAuth2Consent(
-            user_id=user_id,
-            client_id=client_id,
-            scopes=scopes,
-            expires_at=expires_at
+            user_id=user_id, client_id=client_id, scopes=scopes, expires_at=expires_at
         )
 
         # Save consent
@@ -87,9 +84,7 @@ class OAuth2ConsentService:
             return None
 
     async def get_user_consent(
-        self,
-        user_id: str,
-        client_id: str
+        self, user_id: str, client_id: str
     ) -> Optional[OAuth2Consent]:
         """Get existing consent for user and client.
 
@@ -119,7 +114,7 @@ class OAuth2ConsentService:
                             continue
 
                         # Check if expired
-                        if consent.expires_at and datetime.utcnow() > consent.expires_at:
+                        if consent.expires_at and utcnow() > consent.expires_at:
                             # Auto-delete expired consent
                             self.fs.rm(file_path)
                             continue
@@ -135,10 +130,7 @@ class OAuth2ConsentService:
             return None
 
     async def check_consent(
-        self,
-        user_id: str,
-        client_id: str,
-        required_scopes: List[str]
+        self, user_id: str, client_id: str, required_scopes: List[str]
     ) -> tuple[bool, Optional[OAuth2Consent]]:
         """Check if user has granted consent for the requested scopes.
 
@@ -174,7 +166,7 @@ class OAuth2ConsentService:
             return False
 
         consent.revoked = True
-        consent.revoked_at = datetime.utcnow()
+        consent.revoked_at = utcnow()
 
         # Save updated consent
         consent_path = self._get_consent_path(consent_id)
@@ -185,11 +177,7 @@ class OAuth2ConsentService:
         except Exception:
             return False
 
-    async def revoke_user_client_consent(
-        self,
-        user_id: str,
-        client_id: str
-    ) -> bool:
+    async def revoke_user_client_consent(self, user_id: str, client_id: str) -> bool:
         """Revoke all consents for a user and client.
 
         Args:
@@ -255,7 +243,7 @@ class OAuth2ConsentService:
                         consent = OAuth2Consent(**data)
 
                         # Delete if expired
-                        if consent.expires_at and datetime.utcnow() > consent.expires_at:
+                        if consent.expires_at and utcnow() > consent.expires_at:
                             self.fs.rm(file_path)
                             deleted += 1
 

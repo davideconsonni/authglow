@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from authglow.core.rate_limit import limiter
+from authglow.core.datetime import utcnow
 
 from authglow.models.passkey import (
     PasskeyResponse,
@@ -107,7 +108,7 @@ async def begin_registration(
     challenge = PasskeyChallenge(
         challenge=challenge_str,
         user_id=current_user.id,
-        expires_at=datetime.utcnow() + timedelta(minutes=5),
+        expires_at=utcnow() + timedelta(minutes=5),
         type="registration",
     )
     await passkey_service.save_challenge(challenge)
@@ -211,7 +212,7 @@ async def begin_authentication(
     challenge = PasskeyChallenge(
         challenge=challenge_str,
         user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(minutes=5),
+        expires_at=utcnow() + timedelta(minutes=5),
         type="authentication",
     )
     await passkey_service.save_challenge(challenge)

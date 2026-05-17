@@ -5,6 +5,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 import secrets
 
+from authglow.core.datetime import utcnow
+
 
 class Token(BaseModel):
     """OAuth2 token response."""
@@ -36,7 +38,7 @@ class AuthorizationCode(BaseModel):
     user_id: str
     redirect_uri: str
     scope: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime
     used: bool = False
 

@@ -5,6 +5,8 @@ from typing import Optional
 from pydantic import BaseModel, Field
 import secrets
 
+from authglow.core.datetime import utcnow
+
 
 class RefreshToken(BaseModel):
     """Refresh token model with rotation support."""
@@ -16,7 +18,7 @@ class RefreshToken(BaseModel):
     scopes: list[str] = Field(default_factory=list)
 
     # Rotation tracking
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime
     used: bool = False
     used_at: Optional[datetime] = None

@@ -5,6 +5,7 @@ from typing import Optional
 from authglow.models.user import User
 from authglow.services.email.factory import get_email_service
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 
 
 class SecurityNotificationService:
@@ -22,7 +23,7 @@ class SecurityNotificationService:
         device: Optional[str] = None,
         browser: Optional[str] = None,
         location: Optional[str] = None,
-        was_you: bool = True
+        was_you: bool = True,
     ) -> bool:
         """Send login alert email.
 
@@ -41,21 +42,21 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": "a new login to your account",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "device": device,
                 "browser": browser,
                 "location": location,
                 "was_you": was_you,
                 "security_url": f"{self.settings.base_url}/admin",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"New login to your {self.settings.company_name} account",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -63,9 +64,7 @@ class SecurityNotificationService:
             return False
 
     async def send_password_changed_alert(
-        self,
-        user: User,
-        ip_address: Optional[str] = None
+        self, user: User, ip_address: Optional[str] = None
     ) -> bool:
         """Send password changed alert email.
 
@@ -80,18 +79,18 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": "your password was changed",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
                 "security_url": f"{self.settings.base_url}/password-reset/request",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"Your {self.settings.company_name} password was changed",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -103,7 +102,7 @@ class SecurityNotificationService:
         old_email: str,
         new_email: str,
         user_name: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> bool:
         """Send email changed alert to BOTH old and new addresses.
 
@@ -120,11 +119,11 @@ class SecurityNotificationService:
             context = {
                 "user_name": user_name or old_email.split("@")[0],
                 "alert_type": f"your email was changed from {old_email} to {new_email}",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
                 "security_url": f"{self.settings.base_url}/admin",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             # Send to old email
@@ -132,7 +131,7 @@ class SecurityNotificationService:
                 to=[old_email],
                 subject=f"Your {self.settings.company_name} email was changed",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
 
             # Send to new email
@@ -140,7 +139,7 @@ class SecurityNotificationService:
                 to=[new_email],
                 subject=f"Your {self.settings.company_name} email was changed",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
 
             return result1.success and result2.success
@@ -149,9 +148,7 @@ class SecurityNotificationService:
             return False
 
     async def send_mfa_enabled_alert(
-        self,
-        user: User,
-        ip_address: Optional[str] = None
+        self, user: User, ip_address: Optional[str] = None
     ) -> bool:
         """Send MFA enabled alert email.
 
@@ -166,18 +163,18 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": "Two-Factor Authentication (MFA) was enabled on your account",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": True,  # Assume it's them since they just did it
                 "security_url": f"{self.settings.base_url}/admin",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"MFA enabled on your {self.settings.company_name} account",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -185,9 +182,7 @@ class SecurityNotificationService:
             return False
 
     async def send_mfa_disabled_alert(
-        self,
-        user: User,
-        ip_address: Optional[str] = None
+        self, user: User, ip_address: Optional[str] = None
     ) -> bool:
         """Send MFA disabled alert email.
 
@@ -202,18 +197,18 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": "Two-Factor Authentication (MFA) was disabled on your account",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
                 "security_url": f"{self.settings.base_url}/admin",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"MFA disabled on your {self.settings.company_name} account",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -221,10 +216,7 @@ class SecurityNotificationService:
             return False
 
     async def send_api_key_created_alert(
-        self,
-        user: User,
-        key_name: str,
-        ip_address: Optional[str] = None
+        self, user: User, key_name: str, ip_address: Optional[str] = None
     ) -> bool:
         """Send API key created alert email.
 
@@ -240,18 +232,18 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": f"a new API key '{key_name}' was created",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": True,  # Assume it's them since they just did it
                 "security_url": f"{self.settings.base_url}/admin/api-keys",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"New API key created on your {self.settings.company_name} account",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -262,7 +254,7 @@ class SecurityNotificationService:
         self,
         user: User,
         reason: str = "too many failed login attempts",
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> bool:
         """Send account locked alert email.
 
@@ -278,18 +270,18 @@ class SecurityNotificationService:
             context = {
                 "user_name": user.first_name or user.email.split("@")[0],
                 "alert_type": f"your account was locked due to {reason}",
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
                 "security_url": f"{self.settings.base_url}/password-reset/request",
-                "company_name": self.settings.company_name
+                "company_name": self.settings.company_name,
             }
 
             result = await self.email_service.send_template(
                 to=[user.email],
                 subject=f"Your {self.settings.company_name} account was locked",
                 template_name="security_alert",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:

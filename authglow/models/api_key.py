@@ -5,6 +5,8 @@ from typing import List, Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+from authglow.core.datetime import utcnow
+
 
 class APIKey(BaseModel):
     """API Key model."""
@@ -29,7 +31,7 @@ class APIKey(BaseModel):
     last_used_ua: Optional[str] = None
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     created_by: str  # user_id of creator
     revoked_at: Optional[datetime] = None
     revoked_by: Optional[str] = None
@@ -38,9 +40,7 @@ class APIKey(BaseModel):
     allowed_ips: List[str] = Field(default_factory=list)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class APIKeyCreate(BaseModel):

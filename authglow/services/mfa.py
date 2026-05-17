@@ -15,6 +15,7 @@ import fsspec
 import bcrypt
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.mfa import BackupCodes, TrustedDevice
 
 
@@ -161,7 +162,7 @@ class MFAService:
             user_id=user_id,
             device_fingerprint=device_fingerprint,
             name=device_name,
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
 
         path = f"{self.storage_path}/trusted_devices/{device.id}.json"
@@ -185,10 +186,10 @@ class MFAService:
                     if (
                         device.user_id == user_id
                         and device.device_fingerprint == device_fingerprint
-                        and datetime.utcnow() < device.expires_at
+                        and utcnow() < device.expires_at
                     ):
                         # Update last used
-                        device.last_used = datetime.utcnow()
+                        device.last_used = utcnow()
                         with self.fs.open(file_path, "w") as f:
                             json.dump(
                                 device.model_dump(mode="json"), f, indent=2, default=str
@@ -212,10 +213,7 @@ class MFAService:
                     data = json.load(f)
                     device = TrustedDevice(**data)
 
-                    if (
-                        device.user_id == user_id
-                        and datetime.utcnow() < device.expires_at
-                    ):
+                    if device.user_id == user_id and utcnow() < device.expires_at:
                         devices.append(device)
 
             return devices
@@ -242,7 +240,7 @@ class MFAService:
                     data = json.load(f)
                     device = TrustedDevice(**data)
 
-                    if datetime.utcnow() >= device.expires_at:
+                    if utcnow() >= device.expires_at:
                         self.fs.rm(file_path)
         except Exception:
             pass

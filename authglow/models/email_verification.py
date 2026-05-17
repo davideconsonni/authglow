@@ -5,6 +5,8 @@ from typing import Optional
 import secrets
 from pydantic import BaseModel, EmailStr, Field
 
+from authglow.core.datetime import utcnow
+
 
 class EmailVerificationToken(BaseModel):
     """Email verification token model."""
@@ -12,10 +14,8 @@ class EmailVerificationToken(BaseModel):
     token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     user_id: str
     email: EmailStr
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: datetime = Field(
-        default_factory=lambda: datetime.utcnow() + timedelta(hours=24)
-    )
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(default_factory=lambda: utcnow() + timedelta(hours=24))
     used: bool = False
     used_at: Optional[datetime] = None
 

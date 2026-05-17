@@ -7,6 +7,7 @@ from typing import TextIO
 
 from authglow.models.email import EmailMessage, EmailSendResult
 from authglow.services.email.base import EmailProvider
+from authglow.core.datetime import utcnow
 
 
 class ConsoleEmailProvider(EmailProvider):
@@ -60,7 +61,7 @@ class ConsoleEmailProvider(EmailProvider):
 
         # Metadata
         lines.append(f"Message ID: {self._colorize(message_id, '\033[33m')}")  # Yellow
-        lines.append(f"Timestamp:  {datetime.utcnow().isoformat()}Z")
+        lines.append(f"Timestamp:  {utcnow().isoformat()}Z")
         lines.append(f"Provider:   {self._colorize('console', '\033[35m')}")  # Magenta
         lines.append("")
 
@@ -87,7 +88,9 @@ class ConsoleEmailProvider(EmailProvider):
         if message.reply_to:
             lines.append(f"Reply-To: {message.reply_to}")
 
-        lines.append(f"Subject:  {self._colorize(message.subject, '\033[1;37m')}")  # White bold
+        lines.append(
+            f"Subject:  {self._colorize(message.subject, '\033[1;37m')}"
+        )  # White bold
 
         if message.priority.value != "normal":
             lines.append(f"Priority: {message.priority.value.upper()}")
@@ -148,17 +151,11 @@ class ConsoleEmailProvider(EmailProvider):
             self.output.flush()
 
             return EmailSendResult(
-                success=True,
-                message_id=message_id,
-                provider="console"
+                success=True, message_id=message_id, provider="console"
             )
 
         except Exception as e:
-            return EmailSendResult(
-                success=False,
-                error=str(e),
-                provider="console"
-            )
+            return EmailSendResult(success=False, error=str(e), provider="console")
 
     def validate_config(self) -> bool:
         """Validate console provider configuration.

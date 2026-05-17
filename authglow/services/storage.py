@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import fsspec
 from authglow.models.user import User
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 
 
 class UserStorage:
@@ -26,8 +27,7 @@ class UserStorage:
         else:
             # For cloud backends (s3, gcs, abfs)
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def _get_user_path(self, user_id: str) -> str:
@@ -95,7 +95,7 @@ class UserStorage:
 
     async def update_user(self, user: User) -> User:
         """Update an existing user."""
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
         user_path = self._get_user_path(user.id)
         user_data = user.model_dump(mode="json")
 
@@ -126,7 +126,7 @@ class UserStorage:
     async def list_users(self, limit: int = 100, offset: int = 0) -> List[User]:
         """List all users with pagination."""
         email_index = self._load_email_index()
-        user_ids = list(email_index.values())[offset:offset + limit]
+        user_ids = list(email_index.values())[offset : offset + limit]
 
         users = []
         for user_id in user_ids:
@@ -140,10 +140,12 @@ class UserStorage:
         """Update user's last login timestamp."""
         user = await self.get_user(user_id)
         if user:
-            user.last_login = datetime.utcnow()
+            user.last_login = utcnow()
             await self.update_user(user)
 
-    async def record_failed_login(self, user_id: str, max_attempts: int = 5, lockout_duration_minutes: int = 15):
+    async def record_failed_login(
+        self, user_id: str, max_attempts: int = 5, lockout_duration_minutes: int = 15
+    ):
         """Record a failed login attempt and lock account if threshold exceeded."""
         user = await self.get_user(user_id)
         if user:
@@ -151,7 +153,9 @@ class UserStorage:
 
             # Lock account if max attempts exceeded
             if user.failed_login_attempts >= max_attempts:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=lockout_duration_minutes)
+                user.locked_until = utcnow() + timedelta(
+                    minutes=lockout_duration_minutes
+                )
 
             await self.update_user(user)
             return user.locked_until
@@ -171,7 +175,7 @@ class UserStorage:
             return False
 
         # Check if lockout period has expired
-        if datetime.utcnow() >= user.locked_until:
+        if utcnow() >= user.locked_until:
             # Auto-unlock account
             user.locked_until = None
             user.failed_login_attempts = 0

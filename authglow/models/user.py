@@ -5,6 +5,8 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
+
 
 class User(BaseModel):
     """User model."""
@@ -14,8 +16,8 @@ class User(BaseModel):
     hashed_password: str
     is_active: bool = True
     is_invited: bool = True  # Users can only be created via invitation
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
     last_login: Optional[datetime] = None
 
     # Additional profile fields

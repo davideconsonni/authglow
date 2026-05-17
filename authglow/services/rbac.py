@@ -7,6 +7,7 @@ from typing import List, Optional, Set
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.rbac import Role, Permission, UserRole
 
 
@@ -29,8 +30,7 @@ class RBACService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     # Permission Management
@@ -158,7 +158,7 @@ class RBACService:
 
     async def update_role(self, role: Role) -> Role:
         """Update a role."""
-        role.updated_at = datetime.utcnow()
+        role.updated_at = utcnow()
         file_path = f"{self.roles_path}/{role.role_id}.json"
         with self.fs.open(file_path, "w") as f:
             json.dump(role.model_dump(), f, default=str)
@@ -220,7 +220,7 @@ class RBACService:
                         ur = UserRole(**data)
                         if ur.user_id == user_id:
                             # Check if expired
-                            if ur.expires_at and datetime.utcnow() > ur.expires_at:
+                            if ur.expires_at and utcnow() > ur.expires_at:
                                 self.fs.rm(file_path)
                                 continue
                             user_roles.append(ur)
@@ -265,17 +265,72 @@ class RBACService:
         """Initialize default roles and permissions."""
         # Default permissions
         default_permissions = [
-            Permission(name="users.read", resource="users", action="read", description="View users"),
-            Permission(name="users.write", resource="users", action="write", description="Create/update users"),
-            Permission(name="users.delete", resource="users", action="delete", description="Delete users"),
-            Permission(name="api_keys.read", resource="api_keys", action="read", description="View API keys"),
-            Permission(name="api_keys.write", resource="api_keys", action="write", description="Create/update API keys"),
-            Permission(name="api_keys.delete", resource="api_keys", action="delete", description="Delete API keys"),
-            Permission(name="oauth_clients.read", resource="oauth_clients", action="read", description="View OAuth clients"),
-            Permission(name="oauth_clients.write", resource="oauth_clients", action="write", description="Create/update OAuth clients"),
-            Permission(name="audit.read", resource="audit", action="read", description="View audit logs"),
-            Permission(name="roles.read", resource="roles", action="read", description="View roles"),
-            Permission(name="roles.write", resource="roles", action="write", description="Create/update roles"),
+            Permission(
+                name="users.read",
+                resource="users",
+                action="read",
+                description="View users",
+            ),
+            Permission(
+                name="users.write",
+                resource="users",
+                action="write",
+                description="Create/update users",
+            ),
+            Permission(
+                name="users.delete",
+                resource="users",
+                action="delete",
+                description="Delete users",
+            ),
+            Permission(
+                name="api_keys.read",
+                resource="api_keys",
+                action="read",
+                description="View API keys",
+            ),
+            Permission(
+                name="api_keys.write",
+                resource="api_keys",
+                action="write",
+                description="Create/update API keys",
+            ),
+            Permission(
+                name="api_keys.delete",
+                resource="api_keys",
+                action="delete",
+                description="Delete API keys",
+            ),
+            Permission(
+                name="oauth_clients.read",
+                resource="oauth_clients",
+                action="read",
+                description="View OAuth clients",
+            ),
+            Permission(
+                name="oauth_clients.write",
+                resource="oauth_clients",
+                action="write",
+                description="Create/update OAuth clients",
+            ),
+            Permission(
+                name="audit.read",
+                resource="audit",
+                action="read",
+                description="View audit logs",
+            ),
+            Permission(
+                name="roles.read",
+                resource="roles",
+                action="read",
+                description="View roles",
+            ),
+            Permission(
+                name="roles.write",
+                resource="roles",
+                action="write",
+                description="Create/update roles",
+            ),
         ]
 
         for perm in default_permissions:
@@ -290,7 +345,7 @@ class RBACService:
                 name="admin",
                 description="Full system access",
                 permissions=[p.name for p in default_permissions],
-                is_system=True
+                is_system=True,
             )
             await self.create_role(admin_role)
 
@@ -300,7 +355,7 @@ class RBACService:
                 name="user",
                 description="Standard user access",
                 permissions=["users.read", "api_keys.read"],
-                is_system=True
+                is_system=True,
             )
             await self.create_role(user_role)
 
@@ -311,9 +366,12 @@ class RBACService:
                 description="Developer access",
                 permissions=[
                     "users.read",
-                    "api_keys.read", "api_keys.write", "api_keys.delete",
-                    "oauth_clients.read", "oauth_clients.write"
+                    "api_keys.read",
+                    "api_keys.write",
+                    "api_keys.delete",
+                    "oauth_clients.read",
+                    "oauth_clients.write",
                 ],
-                is_system=False
+                is_system=False,
             )
             await self.create_role(developer_role)

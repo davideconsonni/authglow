@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import fsspec
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.token import AuthorizationCode
 from authglow.services.oauth_client import OAuth2ClientStorage
 
@@ -45,7 +46,7 @@ class OAuth2Service:
         nonce: Optional[str] = None,
     ) -> AuthorizationCode:
         """Create a new authorization code."""
-        expires_at = datetime.utcnow() + timedelta(
+        expires_at = utcnow() + timedelta(
             minutes=self.settings.oauth2_authorization_code_expire_minutes
         )
 
@@ -79,7 +80,7 @@ class OAuth2Service:
                 auth_code = AuthorizationCode(**code_data)
 
                 # Check if expired
-                if datetime.utcnow() > auth_code.expires_at:
+                if utcnow() > auth_code.expires_at:
                     # Delete expired code
                     self.fs.rm(code_path)
                     return None

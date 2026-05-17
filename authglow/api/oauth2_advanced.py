@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Request, Header
 from fastapi.responses import JSONResponse
 from authglow.core.rate_limit import limiter
+from authglow.core.datetime import utcnow
 
 from authglow.models.user import User
 from authglow.services.refresh_token import RefreshTokenService
@@ -139,12 +140,8 @@ async def introspect_token(
     if token_type_hint == "refresh_token" or not token_type_hint:
         rt = await refresh_token_service.get_refresh_token(token)
         if rt:
-            from datetime import datetime
-
             # Check if token is active
-            active = (
-                not rt.revoked and not rt.used and datetime.utcnow() < rt.expires_at
-            )
+            active = not rt.revoked and not rt.used and utcnow() < rt.expires_at
 
             # Get user info
             user = await user_storage.get_user(rt.user_id)
@@ -169,9 +166,7 @@ async def introspect_token(
     if token_type_hint == "access_token" or not token_type_hint:
         token_data = jwt_service.decode_token(token)
         if token_data:
-            from datetime import datetime
-
-            active = datetime.utcnow() < token_data.exp
+            active = utcnow() < token_data.exp
 
             # Get user info
             user = await user_storage.get_user(token_data.sub)

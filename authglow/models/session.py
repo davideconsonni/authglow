@@ -4,6 +4,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 import secrets
 
+from authglow.core.datetime import utcnow
+
 
 class MFASession(BaseModel):
     """Temporary session after first auth step, waiting for MFA."""
@@ -17,5 +19,5 @@ class MFASession(BaseModel):
     code_challenge: str | None = None
     code_challenge_method: str | None = None
     nonce: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime  # Short-lived (5 minutes)

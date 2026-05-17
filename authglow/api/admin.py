@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from authglow.core.rate_limit import limiter
+from authglow.core.datetime import utcnow
 
 from authglow.models.user import User, UserResponse
 from authglow.models.admin import (
@@ -160,7 +161,7 @@ async def get_dashboard_stats(
     mfa_percentage = (users_with_mfa / total_users * 100) if total_users > 0 else 0
 
     # Get new users
-    now = datetime.utcnow()
+    now = utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
@@ -681,7 +682,7 @@ async def get_active_sessions(
                     rt = RefreshToken(**data)
 
                     # Skip revoked or expired
-                    if rt.revoked or datetime.utcnow() > rt.expires_at:
+                    if rt.revoked or utcnow() > rt.expires_at:
                         continue
 
                     # Get user

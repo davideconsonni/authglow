@@ -1,12 +1,13 @@
 import pytest
 import secrets
 import re
+from authglow.core.datetime import utcnow
 
 
 class TestTokenGenerationSecurity:
     def test_authorization_code_uses_secrets_not_uuid4(self):
         from authglow.models.token import AuthorizationCode
-        from datetime import datetime, timedelta, timezone
+        from datetime import timedelta
         import re
 
         code_instance = AuthorizationCode(
@@ -14,7 +15,7 @@ class TestTokenGenerationSecurity:
             user_id="test",
             redirect_uri="http://localhost/callback",
             scope="read",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=utcnow() + timedelta(minutes=10),
         )
         uuid4_pattern = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -27,14 +28,14 @@ class TestTokenGenerationSecurity:
 
     def test_authorization_code_has_sufficient_entropy(self):
         from authglow.models.token import AuthorizationCode
-        from datetime import datetime, timedelta, timezone
+        from datetime import timedelta
 
         code_instance = AuthorizationCode(
             client_id="test",
             user_id="test",
             redirect_uri="http://localhost/callback",
             scope="read",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=utcnow() + timedelta(minutes=10),
         )
         assert len(code_instance.code) >= 32, (
             "Authorization codes should have at least 256 bits of entropy. "
@@ -47,32 +48,17 @@ class TestTokenGenerationSecurity:
         assert not uuid4_pattern.match(code_instance.code), (
             "Authorization codes should use secrets.token_urlsafe() instead of uuid4() "
             "for cryptographic security. UUID4 is predictable and not suitable for bearer tokens."
-        )
-
-    def test_authorization_code_has_sufficient_entropy(self):
-        from authglow.models.token import AuthorizationCode
-
-        code_instance = AuthorizationCode(
-            client_id="test",
-            user_id="test",
-            redirect_uri="http://localhost/callback",
-            scope="read",
-            expires_at=None,
-        )
-        assert len(code_instance.code) >= 32, (
-            "Authorization codes should have at least 256 bits of entropy. "
-            f"Code length is {len(code_instance.code)}, expected at least 32 chars from token_urlsafe."
         )
 
     def test_refresh_token_uses_secrets_not_uuid4(self):
         from authglow.models.refresh_token import RefreshToken
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         rt = RefreshToken(
             user_id="test",
             client_id="test",
             scopes=["read"],
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         uuid4_pattern = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -85,13 +71,13 @@ class TestTokenGenerationSecurity:
 
     def test_refresh_token_has_sufficient_entropy(self):
         from authglow.models.refresh_token import RefreshToken
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         rt = RefreshToken(
             user_id="test",
             client_id="test",
             scopes=["read"],
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         assert len(rt.token) >= 32, (
             "Refresh tokens should have at least 256 bits of entropy. "
@@ -122,14 +108,14 @@ class TestTokenGenerationSecurity:
 
     def test_mfa_session_token_uses_secrets_not_uuid4(self):
         from authglow.models.session import MFASession
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         session = MFASession(
             user_id="test",
             client_id="test",
             redirect_uri="http://localhost/callback",
             scope="read",
-            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            expires_at=utcnow() + timedelta(minutes=5),
         )
         uuid4_pattern = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -142,14 +128,14 @@ class TestTokenGenerationSecurity:
 
     def test_mfa_session_token_has_sufficient_entropy(self):
         from authglow.models.session import MFASession
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         session = MFASession(
             user_id="test",
             client_id="test",
             redirect_uri="http://localhost/callback",
             scope="read",
-            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            expires_at=utcnow() + timedelta(minutes=5),
         )
         assert len(session.session_token) >= 32, (
             "MFA session tokens should have at least 256 bits of entropy. "
@@ -158,13 +144,13 @@ class TestTokenGenerationSecurity:
 
     def test_refresh_token_id_uses_secrets_not_uuid4(self):
         from authglow.models.refresh_token import RefreshToken
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         rt = RefreshToken(
             user_id="test",
             client_id="test",
             scopes=["read"],
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         uuid4_pattern = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -177,13 +163,13 @@ class TestTokenGenerationSecurity:
 
     def test_refresh_token_id_has_sufficient_entropy(self):
         from authglow.models.refresh_token import RefreshToken
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         rt = RefreshToken(
             user_id="test",
             client_id="test",
             scopes=["read"],
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=utcnow() + timedelta(days=30),
         )
         assert len(rt.token_id) >= 32, (
             "Refresh token IDs should have at least 256 bits of entropy. "

@@ -5,6 +5,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
+
 
 class MFASecret(BaseModel):
     """TOTP secret for a user."""
@@ -12,7 +14,7 @@ class MFASecret(BaseModel):
     user_id: str
     secret: str  # Base32 encoded secret
     is_verified: bool = False  # True after first successful verification
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     verified_at: Optional[datetime] = None
 
 
@@ -21,7 +23,7 @@ class BackupCodes(BaseModel):
 
     user_id: str
     codes: List[str] = Field(default_factory=list)  # Hashed backup codes
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     used_count: int = 0
 
 
@@ -32,9 +34,9 @@ class TrustedDevice(BaseModel):
     user_id: str
     device_fingerprint: str  # Hash of user agent + IP or other identifying info
     name: Optional[str] = None  # User-friendly device name
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime
-    last_used: datetime = Field(default_factory=datetime.utcnow)
+    last_used: datetime = Field(default_factory=utcnow)
 
 
 class MFAEnrollRequest(BaseModel):

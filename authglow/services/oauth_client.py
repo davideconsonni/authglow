@@ -9,6 +9,7 @@ from datetime import datetime
 from authglow.models.oauth_client import OAuth2Client
 from authglow.services.password import hash_password, verify_password
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 
 
 class OAuth2ClientStorage:
@@ -24,7 +25,9 @@ class OAuth2ClientStorage:
         """Get path for a client file."""
         return self.storage_path / f"{client_id}.json"
 
-    async def create_client(self, client: OAuth2Client, plaintext_secret: str) -> OAuth2Client:
+    async def create_client(
+        self, client: OAuth2Client, plaintext_secret: str
+    ) -> OAuth2Client:
         """
         Create a new OAuth2 client.
 
@@ -76,10 +79,7 @@ class OAuth2ClientStorage:
         return True
 
     async def list_clients(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        active_only: bool = False
+        self, limit: int = 100, offset: int = 0, active_only: bool = False
     ) -> List[OAuth2Client]:
         """List all OAuth2 clients with pagination."""
         clients = []
@@ -95,12 +95,10 @@ class OAuth2ClientStorage:
                 clients.append(client)
 
         # Apply pagination
-        return clients[offset:offset + limit]
+        return clients[offset : offset + limit]
 
     async def verify_client_secret(
-        self,
-        client: OAuth2Client,
-        client_secret: str
+        self, client: OAuth2Client, client_secret: str
     ) -> bool:
         """Verify client credentials."""
         if not client or not client.is_active:
@@ -108,11 +106,7 @@ class OAuth2ClientStorage:
 
         return verify_password(client_secret, client.client_secret)
 
-    async def verify_redirect_uri(
-        self,
-        client_id: str,
-        redirect_uri: str
-    ) -> bool:
+    async def verify_redirect_uri(self, client_id: str, redirect_uri: str) -> bool:
         """Verify if redirect_uri is allowed for the client."""
         client = await self.get_client(client_id)
 
@@ -125,7 +119,7 @@ class OAuth2ClientStorage:
         """Update last used timestamp."""
         client = await self.get_client(client_id)
         if client:
-            client.last_used_at = datetime.utcnow()
+            client.last_used_at = utcnow()
             await self.update_client(client)
 
     async def rotate_secret(self, client_id: str) -> str:
@@ -153,9 +147,7 @@ class OAuth2ClientStorage:
         return secrets.token_urlsafe(32)
 
     async def is_scope_allowed(
-        self,
-        client_id: str,
-        requested_scopes: List[str]
+        self, client_id: str, requested_scopes: List[str]
     ) -> bool:
         """Check if client is allowed to request these scopes."""
         client = await self.get_client(client_id)
@@ -166,11 +158,7 @@ class OAuth2ClientStorage:
         # Check if all requested scopes are in allowed scopes
         return all(scope in client.allowed_scopes for scope in requested_scopes)
 
-    async def is_grant_type_allowed(
-        self,
-        client_id: str,
-        grant_type: str
-    ) -> bool:
+    async def is_grant_type_allowed(self, client_id: str, grant_type: str) -> bool:
         """Check if client is allowed to use this grant type."""
         client = await self.get_client(client_id)
 

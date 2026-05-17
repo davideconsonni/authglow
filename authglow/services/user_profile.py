@@ -7,12 +7,13 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.services.password import verify_password, hash_password
 from authglow.models.user_profile import (
     UserProfileUpdate,
     UserPreferences,
     UserPreferencesUpdate,
-    UserProfileResponse
+    UserProfileResponse,
 )
 from authglow.services.storage import UserStorage
 from authglow.services.email_verification import EmailVerificationService
@@ -37,8 +38,7 @@ class UserProfileService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     # Profile Management
@@ -58,10 +58,10 @@ class UserProfileService:
             email_verified=user.email_verified,
             first_name=user.first_name,
             last_name=user.last_name,
-            avatar_url=getattr(user, 'avatar_url', None),
-            phone=getattr(user, 'phone', None),
-            timezone=getattr(user, 'timezone', None) or "UTC",
-            language=getattr(user, 'language', None) or "en",
+            avatar_url=getattr(user, "avatar_url", None),
+            phone=getattr(user, "phone", None),
+            timezone=getattr(user, "timezone", None) or "UTC",
+            language=getattr(user, "language", None) or "en",
             is_active=user.is_active,
             mfa_enabled=user.mfa_enabled,
             created_at=user.created_at,
@@ -69,14 +69,12 @@ class UserProfileService:
             roles=user.scopes or [],  # Using scopes as roles for now
             scopes=user.scopes or [],
             preferences=preferences,
-            total_logins=getattr(user, 'total_logins', 0),
-            failed_login_attempts=user.failed_login_attempts
+            total_logins=getattr(user, "total_logins", 0),
+            failed_login_attempts=user.failed_login_attempts,
         )
 
     async def update_user_profile(
-        self,
-        user_id: str,
-        profile_update: UserProfileUpdate
+        self, user_id: str, profile_update: UserProfileUpdate
     ) -> Optional[UserProfileResponse]:
         """Update user profile."""
         user = await self.user_storage.get_user(user_id)
@@ -88,7 +86,7 @@ class UserProfileService:
         for field, value in update_data.items():
             setattr(user, field, value)
 
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
 
         # Save updated user
         await self.user_storage.update_user(user)
@@ -102,7 +100,7 @@ class UserProfileService:
         user_id: str,
         current_password: str,
         new_password: str,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> tuple[bool, str]:
         """Change user password.
 
@@ -119,15 +117,13 @@ class UserProfileService:
 
         # Update password
         user.password_hash = hash_password(new_password)
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
 
         await self.user_storage.update_user(user)
 
         # Send security notification
         await self.security_service.send_password_changed_alert(
-            user.email,
-            user.first_name or "User",
-            ip_address
+            user.email, user.first_name or "User", ip_address
         )
 
         return True, "Password changed successfully"
@@ -139,7 +135,7 @@ class UserProfileService:
         user_id: str,
         new_email: str,
         password: str,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ) -> tuple[bool, str]:
         """Change user email (requires verification).
 
@@ -164,7 +160,7 @@ class UserProfileService:
         # Update email and mark as unverified
         user.email = new_email
         user.email_verified = False
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
 
         await self.user_storage.update_user(user)
 
@@ -173,10 +169,7 @@ class UserProfileService:
 
         # Send notification to old email
         await self.security_service.send_email_changed_alert(
-            old_email,
-            user.first_name or "User",
-            new_email,
-            ip_address
+            old_email, user.first_name or "User", new_email, ip_address
         )
 
         return True, "Email changed. Please verify your new email address."
@@ -184,10 +177,7 @@ class UserProfileService:
     # Account Deletion
 
     async def delete_account(
-        self,
-        user_id: str,
-        password: str,
-        confirmation: str
+        self, user_id: str, password: str, confirmation: str
     ) -> tuple[bool, str]:
         """Delete user account (permanent).
 
@@ -236,9 +226,7 @@ class UserProfileService:
             return UserPreferences(user_id=user_id)
 
     async def update_user_preferences(
-        self,
-        user_id: str,
-        preferences_update: UserPreferencesUpdate
+        self, user_id: str, preferences_update: UserPreferencesUpdate
     ) -> UserPreferences:
         """Update user preferences."""
         # Get existing preferences or create new
@@ -251,7 +239,7 @@ class UserProfileService:
         for field, value in update_data.items():
             setattr(preferences, field, value)
 
-        preferences.updated_at = datetime.utcnow()
+        preferences.updated_at = utcnow()
 
         # Save preferences
         file_path = f"{self.preferences_path}/{user_id}.json"
@@ -269,7 +257,7 @@ class UserProfileService:
             return False, "User not found"
 
         user.is_active = False
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
 
         await self.user_storage.update_user(user)
 
@@ -282,7 +270,7 @@ class UserProfileService:
             return False, "User not found"
 
         user.is_active = True
-        user.updated_at = datetime.utcnow()
+        user.updated_at = utcnow()
 
         await self.user_storage.update_user(user)
 

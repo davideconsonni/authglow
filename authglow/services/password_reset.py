@@ -8,6 +8,7 @@ import fsspec
 
 from authglow.models.password_reset import PasswordResetToken
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 
 
 class PasswordResetService:
@@ -48,7 +49,7 @@ class PasswordResetService:
         email: str,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        expires_in_minutes: int = 30
+        expires_in_minutes: int = 30,
     ) -> tuple[PasswordResetToken, str]:
         """Create a new password reset token.
 
@@ -68,9 +69,9 @@ class PasswordResetService:
             user_id=user_id,
             email=email,
             token_hash=token_hash,
-            expires_at=datetime.utcnow() + timedelta(minutes=expires_in_minutes),
+            expires_at=utcnow() + timedelta(minutes=expires_in_minutes),
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
 
         # Save token
@@ -102,7 +103,7 @@ class PasswordResetService:
                     if token.is_used:
                         return None
 
-                    if datetime.utcnow() > token.expires_at:
+                    if utcnow() > token.expires_at:
                         return None
 
                     return token
@@ -129,7 +130,7 @@ class PasswordResetService:
             token = PasswordResetToken.model_validate_json(f.read())
 
         token.is_used = True
-        token.used_at = datetime.utcnow()
+        token.used_at = utcnow()
 
         with self.fs.open(token_path, "w") as f:
             f.write(token.model_dump_json(indent=2))
@@ -154,9 +155,7 @@ class PasswordResetService:
             return PasswordResetToken.model_validate_json(f.read())
 
     async def list_user_tokens(
-        self,
-        user_id: str,
-        active_only: bool = True
+        self, user_id: str, active_only: bool = True
     ) -> List[PasswordResetToken]:
         """List all reset tokens for a user.
 
@@ -182,7 +181,7 @@ class PasswordResetService:
                     continue
 
                 if active_only:
-                    if token.is_used or datetime.utcnow() > token.expires_at:
+                    if token.is_used or utcnow() > token.expires_at:
                         continue
 
                 tokens.append(token)
@@ -190,10 +189,7 @@ class PasswordResetService:
         return sorted(tokens, key=lambda t: t.created_at, reverse=True)
 
     async def list_all_tokens(
-        self,
-        active_only: bool = False,
-        limit: int = 100,
-        offset: int = 0
+        self, active_only: bool = False, limit: int = 100, offset: int = 0
     ) -> List[PasswordResetToken]:
         """List all reset tokens (admin).
 
@@ -217,7 +213,7 @@ class PasswordResetService:
                 token = PasswordResetToken.model_validate_json(f.read())
 
                 if active_only:
-                    if token.is_used or datetime.utcnow() > token.expires_at:
+                    if token.is_used or utcnow() > token.expires_at:
                         continue
 
                 tokens.append(token)
@@ -226,7 +222,7 @@ class PasswordResetService:
         tokens.sort(key=lambda t: t.created_at, reverse=True)
 
         # Apply pagination
-        return tokens[offset:offset + limit]
+        return tokens[offset : offset + limit]
 
     async def revoke_user_tokens(self, user_id: str) -> int:
         """Revoke all active tokens for a user.
@@ -264,9 +260,8 @@ class PasswordResetService:
                 token = PasswordResetToken.model_validate_json(f.read())
 
             # Delete if used or expired (older than 24 hours after expiration)
-            should_delete = (
-                token.is_used or
-                datetime.utcnow() > token.expires_at + timedelta(hours=24)
+            should_delete = token.is_used or utcnow() > token.expires_at + timedelta(
+                hours=24
             )
 
             if should_delete:
@@ -282,19 +277,14 @@ class PasswordResetService:
             Dictionary with stats
         """
         if not self.fs.exists(self.reset_path):
-            return {
-                "total": 0,
-                "active": 0,
-                "expired": 0,
-                "used": 0
-            }
+            return {"total": 0, "active": 0, "expired": 0, "used": 0}
 
         total = 0
         active = 0
         expired = 0
         used = 0
 
-        now = datetime.utcnow()
+        now = utcnow()
 
         for file_path in self.fs.ls(self.reset_path):
             if not file_path.endswith(".json"):
@@ -312,9 +302,4 @@ class PasswordResetService:
             else:
                 active += 1
 
-        return {
-            "total": total,
-            "active": active,
-            "expired": expired,
-            "used": used
-        }
+        return {"total": total, "active": active, "expired": expired, "used": used}

@@ -7,6 +7,7 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.user import User
 from authglow.services.storage import UserStorage
@@ -29,8 +30,7 @@ class EmailVerificationService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     async def create_verification_token(self, user: User) -> EmailVerificationToken:
@@ -42,10 +42,7 @@ class EmailVerificationService:
         Returns:
             EmailVerificationToken
         """
-        token = EmailVerificationToken(
-            user_id=user.id,
-            email=user.email
-        )
+        token = EmailVerificationToken(user_id=user.id, email=user.email)
 
         # Save token
         file_path = f"{self.storage_path}/{token.token}.json"
@@ -85,7 +82,7 @@ class EmailVerificationService:
             return False
 
         verification_token.used = True
-        verification_token.used_at = datetime.utcnow()
+        verification_token.used_at = utcnow()
 
         # Save updated token
         file_path = f"{self.storage_path}/{token}.json"
@@ -115,7 +112,7 @@ class EmailVerificationService:
             return False, "Token already used"
 
         # Check if expired
-        if datetime.utcnow() > verification_token.expires_at:
+        if utcnow() > verification_token.expires_at:
             return False, "Token expired"
 
         # Get user
@@ -125,7 +122,7 @@ class EmailVerificationService:
 
         # Mark email as verified
         user.email_verified = True
-        user.email_verified_at = datetime.utcnow()
+        user.email_verified_at = utcnow()
         await self.user_storage.update_user(user)
 
         # Mark token as used
@@ -152,7 +149,7 @@ class EmailVerificationService:
             "user_name": user.first_name or user.email.split("@")[0],
             "verification_url": verification_url,
             "company_name": self.settings.company_name,
-            "expires_hours": 24
+            "expires_hours": 24,
         }
 
         try:
@@ -160,7 +157,7 @@ class EmailVerificationService:
                 to=[user.email],
                 subject=f"Verify your email - {self.settings.company_name}",
                 template_name="email_verification",
-                context=context
+                context=context,
             )
             return result.success
         except Exception as e:
@@ -213,7 +210,7 @@ class EmailVerificationService:
                         token = EmailVerificationToken(**data)
 
                         # Delete if expired
-                        if datetime.utcnow() > token.expires_at:
+                        if utcnow() > token.expires_at:
                             self.fs.rm(file_path)
                             deleted += 1
                 except Exception:

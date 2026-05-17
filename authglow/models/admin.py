@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 
+from authglow.core.datetime import utcnow
+
 
 class DashboardStats(BaseModel):
     """Dashboard statistics."""
@@ -85,13 +87,13 @@ class BulkUserOperation(BaseModel):
 class AuditLogEntry(BaseModel):
     """Audit log entry."""
 
-    id: str = Field(default_factory=lambda: str(__import__('uuid').uuid4()))
+    id: str = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
     user_id: Optional[str] = None
     email: Optional[str] = None
     event_type: str  # login_success, login_failed, mfa_enabled, mfa_disabled, etc.
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     severity: str = "info"  # info, warning, error, critical
 

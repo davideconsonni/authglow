@@ -5,6 +5,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, HttpUrl
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
+
 
 class OAuth2Client(BaseModel):
     """OAuth2 Client model."""
@@ -16,7 +18,9 @@ class OAuth2Client(BaseModel):
     # OAuth2 settings
     redirect_uris: List[str] = Field(default_factory=list)
     allowed_scopes: List[str] = Field(default_factory=lambda: ["read"])
-    grant_types: List[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
+    grant_types: List[str] = Field(
+        default_factory=lambda: ["authorization_code", "refresh_token"]
+    )
 
     # Client type
     is_confidential: bool = True  # False for public clients (PKCE required)
@@ -30,7 +34,7 @@ class OAuth2Client(BaseModel):
 
     # Status
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
     created_by: Optional[str] = None  # User ID who created the client
 
     # Security
@@ -48,7 +52,7 @@ class OAuth2Client(BaseModel):
                 "client_name": "My Application",
                 "redirect_uris": ["https://myapp.com/callback"],
                 "allowed_scopes": ["read", "write"],
-                "description": "My awesome application"
+                "description": "My awesome application",
             }
         }
 
@@ -59,7 +63,9 @@ class OAuth2ClientCreate(BaseModel):
     client_name: str = Field(..., min_length=3, max_length=100)
     redirect_uris: List[str] = Field(..., min_items=1)
     allowed_scopes: List[str] = Field(default_factory=lambda: ["read"])
-    grant_types: List[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
+    grant_types: List[str] = Field(
+        default_factory=lambda: ["authorization_code", "refresh_token"]
+    )
 
     is_confidential: bool = True
     require_pkce: bool = False
@@ -72,7 +78,9 @@ class OAuth2ClientCreate(BaseModel):
     privacy_uri: Optional[str] = None
 
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
-    refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days
+    refresh_token_lifetime: int = Field(
+        2592000, ge=3600, le=7776000
+    )  # 1 hour to 90 days
 
 
 class OAuth2ClientUpdate(BaseModel):

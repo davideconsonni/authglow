@@ -7,6 +7,7 @@ from typing import Optional, List
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 
 
@@ -25,8 +26,7 @@ class RefreshTokenService:
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
-                self.settings.storage_backend,
-                **self.storage_options
+                self.settings.storage_backend, **self.storage_options
             )
 
     def _get_token_path(self, token_id: str) -> str:
@@ -40,7 +40,7 @@ class RefreshTokenService:
         scopes: List[str],
         issued_ip: Optional[str] = None,
         expires_in_days: int = 30,
-        parent_token_id: Optional[str] = None
+        parent_token_id: Optional[str] = None,
     ) -> RefreshToken:
         """Create a new refresh token.
 
@@ -59,9 +59,9 @@ class RefreshTokenService:
             user_id=user_id,
             client_id=client_id,
             scopes=scopes,
-            expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
+            expires_at=utcnow() + timedelta(days=expires_in_days),
             issued_ip=issued_ip,
-            parent_token_id=parent_token_id
+            parent_token_id=parent_token_id,
         )
 
         # Save token
@@ -120,10 +120,7 @@ class RefreshTokenService:
             return None
 
     async def validate_and_rotate(
-        self,
-        token: str,
-        client_id: str,
-        ip_address: Optional[str] = None
+        self, token: str, client_id: str, ip_address: Optional[str] = None
     ) -> tuple[Optional[RefreshToken], Optional[str]]:
         """Validate a refresh token and automatically rotate it.
 
@@ -155,7 +152,7 @@ class RefreshTokenService:
             return None, "Client mismatch"
 
         # Check if expired
-        if datetime.utcnow() > rt.expires_at:
+        if utcnow() > rt.expires_at:
             return None, "Token expired"
 
         # SECURITY: Check if token was already used (replay attack detection)
@@ -166,7 +163,7 @@ class RefreshTokenService:
 
         # Mark current token as used
         rt.used = True
-        rt.used_at = datetime.utcnow()
+        rt.used_at = utcnow()
         rt.last_used_ip = ip_address
 
         # Create new refresh token (rotation)
@@ -175,7 +172,7 @@ class RefreshTokenService:
             client_id=rt.client_id,
             scopes=rt.scopes,
             issued_ip=ip_address,
-            parent_token_id=rt.token_id
+            parent_token_id=rt.token_id,
         )
 
         # Update old token with replacement info
@@ -188,11 +185,7 @@ class RefreshTokenService:
 
         return new_token, None
 
-    async def revoke_token(
-        self,
-        token: str,
-        reason: Optional[str] = None
-    ) -> bool:
+    async def revoke_token(self, token: str, reason: Optional[str] = None) -> bool:
         """Revoke a specific refresh token.
 
         Args:
@@ -207,7 +200,7 @@ class RefreshTokenService:
             return False
 
         rt.revoked = True
-        rt.revoked_at = datetime.utcnow()
+        rt.revoked_at = utcnow()
         rt.revoked_reason = reason
 
         # Save updated token
@@ -258,7 +251,7 @@ class RefreshTokenService:
         rt = await self.get_refresh_token_by_id(token_id)
         if rt and not rt.revoked:
             rt.revoked = True
-            rt.revoked_at = datetime.utcnow()
+            rt.revoked_at = utcnow()
             rt.revoked_reason = "Token family revoked due to security violation"
 
             token_path = self._get_token_path(token_id)
@@ -274,9 +267,7 @@ class RefreshTokenService:
         return revoked_count
 
     async def revoke_user_tokens(
-        self,
-        user_id: str,
-        client_id: Optional[str] = None
+        self, user_id: str, client_id: Optional[str] = None
     ) -> int:
         """Revoke all refresh tokens for a user.
 
@@ -312,7 +303,7 @@ class RefreshTokenService:
 
                         # Revoke token
                         rt.revoked = True
-                        rt.revoked_at = datetime.utcnow()
+                        rt.revoked_at = utcnow()
                         rt.revoked_reason = "Revoked by user or admin"
 
                         with self.fs.open(file_path, "w") as f_write:
@@ -346,7 +337,7 @@ class RefreshTokenService:
                         rt = RefreshToken(**data)
 
                         # Delete if expired
-                        if datetime.utcnow() > rt.expires_at:
+                        if utcnow() > rt.expires_at:
                             self.fs.rm(file_path)
                             deleted += 1
 

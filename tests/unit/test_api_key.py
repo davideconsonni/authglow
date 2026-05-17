@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from datetime import datetime, timedelta
 from authglow.models.api_key import APIKeyCreate
+from authglow.core.datetime import utcnow
 
 
 def _run(coro):
@@ -45,9 +46,7 @@ class TestAPIKeyLifecycle:
                 user_id="user-api-3", key_data=key_data, created_by="admin-1"
             )
         )
-        validated = _run(
-            api_key_service.validate_key("ak_wrongkey1234567890123456789")
-        )
+        validated = _run(api_key_service.validate_key("ak_wrongkey1234567890123456789"))
         assert validated is None
 
     def test_revoke_api_key(self, api_key_service):
@@ -87,7 +86,9 @@ class TestAPIKeyPrefixIndex:
         assert api_key.key_id in index_ids
 
     def test_validate_uses_prefix_index_only(self, api_key_service):
-        key_data = APIKeyCreate(name="Prefix Lookup", scopes=["read"], never_expires=True)
+        key_data = APIKeyCreate(
+            name="Prefix Lookup", scopes=["read"], never_expires=True
+        )
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-idx-2", key_data=key_data, created_by="admin-1"
@@ -101,7 +102,9 @@ class TestAPIKeyPrefixIndex:
         assert api_key.key_id in index_ids
 
     def test_validate_invalid_prefix_returns_none_quickly(self, api_key_service):
-        key_data = APIKeyCreate(name="Quick Reject", scopes=["read"], never_expires=True)
+        key_data = APIKeyCreate(
+            name="Quick Reject", scopes=["read"], never_expires=True
+        )
         _run(
             api_key_service.create_key(
                 user_id="user-idx-3", key_data=key_data, created_by="admin-1"
@@ -114,7 +117,9 @@ class TestAPIKeyPrefixIndex:
         assert validated is None
 
     def test_delete_key_removes_from_prefix_index(self, api_key_service):
-        key_data = APIKeyCreate(name="Delete Index", scopes=["read"], never_expires=True)
+        key_data = APIKeyCreate(
+            name="Delete Index", scopes=["read"], never_expires=True
+        )
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-idx-4", key_data=key_data, created_by="admin-1"
@@ -139,7 +144,7 @@ class TestAPIKeyPrefixIndex:
                 user_id="user-api-exp", key_data=key_data, created_by="admin-1"
             )
         )
-        api_key.expires_at = datetime.utcnow() - timedelta(days=2)
+        api_key.expires_at = utcnow() - timedelta(days=2)
 
         file_path = f"{api_key_service.storage_path}/{api_key.key_id}.json"
         with api_key_service.fs.open(file_path, "w") as f:
@@ -149,8 +154,12 @@ class TestAPIKeyPrefixIndex:
         assert validated is None
 
     def test_prefix_index_handles_prefix_collision(self, api_key_service):
-        key_data_a = APIKeyCreate(name="Collision A", scopes=["read"], never_expires=True)
-        key_data_b = APIKeyCreate(name="Collision B", scopes=["read"], never_expires=True)
+        key_data_a = APIKeyCreate(
+            name="Collision A", scopes=["read"], never_expires=True
+        )
+        key_data_b = APIKeyCreate(
+            name="Collision B", scopes=["read"], never_expires=True
+        )
         api_a, _ = _run(
             api_key_service.create_key(
                 user_id="user-col-1", key_data=key_data_a, created_by="admin-1"
@@ -161,7 +170,9 @@ class TestAPIKeyPrefixIndex:
                 user_id="user-col-2", key_data=key_data_b, created_by="admin-1"
             )
         )
-        assert api_a.key_prefix != api_b.key_prefix, "Collision extremely unlikely with 12-char prefix from token_urlsafe"
+        assert api_a.key_prefix != api_b.key_prefix, (
+            "Collision extremely unlikely with 12-char prefix from token_urlsafe"
+        )
         prefix_a_ids = api_key_service._load_prefix_index(api_a.key_prefix)
         assert api_a.key_id in prefix_a_ids
         assert api_b.key_id not in prefix_a_ids

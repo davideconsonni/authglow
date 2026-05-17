@@ -9,6 +9,7 @@ import bcrypt
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKey, APIKeyCreate
 
 PREFIX_LENGTH = 12
@@ -104,7 +105,7 @@ class APIKeyService:
         # Calculate expiration
         expires_at = None
         if not key_data.never_expires and key_data.expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=key_data.expires_in_days)
+            expires_at = utcnow() + timedelta(days=key_data.expires_in_days)
 
         api_key = APIKey(
             user_id=user_id,
@@ -206,7 +207,7 @@ class APIKeyService:
                 if not api_key.is_active:
                     return None
 
-                if api_key.expires_at and api_key.expires_at < datetime.utcnow():
+                if api_key.expires_at and api_key.expires_at < utcnow():
                     return None
 
                 return api_key
@@ -225,7 +226,7 @@ class APIKeyService:
             return None
 
         # Update usage stats
-        api_key.last_used_at = datetime.utcnow()
+        api_key.last_used_at = utcnow()
         api_key.total_requests += 1
         if ip_address:
             api_key.last_used_ip = ip_address
@@ -246,7 +247,7 @@ class APIKeyService:
             return False
 
         api_key.is_active = False
-        api_key.revoked_at = datetime.utcnow()
+        api_key.revoked_at = utcnow()
         api_key.revoked_by = revoked_by
 
         file_path = f"{self.storage_path}/{key_id}.json"
@@ -281,7 +282,7 @@ class APIKeyService:
                 return False
 
         # Update usage stats
-        api_key.last_used_at = datetime.utcnow()
+        api_key.last_used_at = utcnow()
         api_key.total_requests += 1
 
         # Save
@@ -307,7 +308,7 @@ class APIKeyService:
                         # Check if expired
                         if (
                             api_key.expires_at
-                            and api_key.expires_at < datetime.utcnow()
+                            and api_key.expires_at < utcnow()
                             and not api_key.is_active
                         ):
                             self._remove_from_prefix_index(

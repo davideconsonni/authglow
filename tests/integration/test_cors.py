@@ -116,21 +116,24 @@ class TestCORSConfiguration:
 
 
 class TestTimezoneConsistency:
-    def test_services_use_timezone_aware_datetime(self):
-        from authglow.services.storage import UserStorage
-        from authglow.services.mfa import MFAService
-        from authglow.services.refresh_token import RefreshTokenService
+    def test_services_do_not_use_deprecated_utcnow(self):
         import inspect
+        import pkgutil
+        import authglow.services as svc_pkg
+        import authglow.models as mdl_pkg
+        import authglow.api as api_pkg
 
-        services_with_utcnow = []
-        for svc_class in [UserStorage, MFAService, RefreshTokenService]:
-            source = inspect.getsource(svc_class)
-            if "utcnow()" in source:
-                services_with_utcnow.append(svc_class.__name__)
+        offenders = []
+        for pkg in (svc_pkg, mdl_pkg, api_pkg):
+            for _importer, modname, _ispkg in pkgutil.iter_modules(pkg.__path__):
+                mod = __import__(f"{pkg.__name__}.{modname}", fromlist=[""])
+                source = inspect.getsource(mod)
+                if "datetime.utcnow()" in source:
+                    offenders.append(f"{pkg.__name__}.{modname}")
 
-        assert len(services_with_utcnow) > 0, (
-            f"Bug M4: {', '.join(services_with_utcnow)} use(s) deprecated datetime.utcnow() "
-            f"instead of datetime.now(timezone.utc). These produce naive datetimes."
+        assert len(offenders) == 0, (
+            f"Bug M4: the following modules still use deprecated datetime.utcnow() "
+            f"instead of authglow.core.datetime.utcnow(): {', '.join(offenders)}"
         )
 
     def test_main_py_mounts_oauth2_advanced_router(self):

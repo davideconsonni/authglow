@@ -111,14 +111,15 @@ class TestTokenEndpointClientAuth:
 
     def _make_auth_code(self, client_id="test-client-id", user_id="user-1"):
         from authglow.models.token import AuthorizationCode
-        from datetime import datetime, timedelta
+        from datetime import timedelta
+        from authglow.core.datetime import utcnow
 
         return AuthorizationCode(
             client_id=client_id,
             user_id=user_id,
             redirect_uri="http://localhost:8000/callback",
             scope="read",
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            expires_at=utcnow() + timedelta(minutes=10),
         )
 
     @pytest.mark.asyncio

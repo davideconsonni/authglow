@@ -7,6 +7,7 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.session import MFASession
 
 
@@ -49,7 +50,7 @@ class SessionService:
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             nonce=nonce,
-            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            expires_at=utcnow() + timedelta(minutes=5),
         )
 
         path = f"{self.storage_path}/{session.session_token}.json"
@@ -68,7 +69,7 @@ class SessionService:
                 session = MFASession(**data)
 
                 # Check if expired
-                if datetime.utcnow() > session.expires_at:
+                if utcnow() > session.expires_at:
                     self.fs.rm(path)
                     return None
 
@@ -112,7 +113,7 @@ class SessionService:
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
             "nonce": nonce,
-            "expires_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
+            "expires_at": (utcnow() + timedelta(minutes=10)).isoformat(),
         }
 
         path = f"{self.storage_path}/consent_{session_token}.json"
@@ -131,7 +132,7 @@ class SessionService:
 
                 # Check if expired
                 expires_at = datetime.fromisoformat(session_data["expires_at"])
-                if datetime.utcnow() > expires_at:
+                if utcnow() > expires_at:
                     self.fs.rm(path)
                     return None
 

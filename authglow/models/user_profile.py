@@ -4,9 +4,12 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
+from authglow.core.datetime import utcnow
+
 
 class UserProfileUpdate(BaseModel):
     """Update user profile request."""
+
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     avatar_url: Optional[str] = None
@@ -17,18 +20,21 @@ class UserProfileUpdate(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     """Change password request."""
+
     current_password: str
     new_password: str = Field(..., min_length=8)
 
 
 class ChangeEmailRequest(BaseModel):
     """Change email request."""
+
     new_email: EmailStr
     password: str  # Confirm with password
 
 
 class DeleteAccountRequest(BaseModel):
     """Delete account request."""
+
     password: str  # Confirm with password
     confirmation: str  # Must be "DELETE" to confirm
 
@@ -36,7 +42,7 @@ class DeleteAccountRequest(BaseModel):
 class UserPreferences(BaseModel):
     """User preferences/settings."""
 
-    preferences_id: str = Field(default_factory=lambda: str(__import__('uuid').uuid4()))
+    preferences_id: str = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
     user_id: str
 
     # Notification preferences
@@ -57,17 +63,16 @@ class UserPreferences(BaseModel):
     session_timeout: int = 3600  # seconds
     require_mfa_always: bool = False
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class UserPreferencesUpdate(BaseModel):
     """Update user preferences request."""
+
     email_notifications: Optional[bool] = None
     security_alerts: Optional[bool] = None
     marketing_emails: Optional[bool] = None
@@ -82,6 +87,7 @@ class UserPreferencesUpdate(BaseModel):
 
 class UserProfileResponse(BaseModel):
     """Complete user profile response."""
+
     id: str
     email: EmailStr
     email_verified: bool

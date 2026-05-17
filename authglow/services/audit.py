@@ -7,6 +7,7 @@ from typing import List, Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.admin import AuditLogEntry, AuditLogFilter
 
 
@@ -31,7 +32,7 @@ class AuditService:
     def _get_log_path(self, log_id: str) -> str:
         """Get path for a log entry (organized by date)."""
         # Organize logs by year/month for better performance
-        now = datetime.utcnow()
+        now = utcnow()
         year_month = now.strftime("%Y/%m")
         directory = f"{self.storage_path}/{year_month}"
 
@@ -188,7 +189,7 @@ class AuditService:
     async def get_logs_by_date(self, days: int = 30) -> List[dict]:
         """Get log counts grouped by date."""
         result = []
-        start_date = datetime.utcnow().replace(
+        start_date = utcnow().replace(
             hour=0, minute=0, second=0, microsecond=0
         ) - timedelta(days=days - 1)
 
@@ -259,7 +260,7 @@ class AuditService:
 
     async def delete_old_logs(self, days: int = 365):
         """Delete logs older than specified days."""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = utcnow() - timedelta(days=days)
 
         try:
             pattern = f"{self.storage_path}/**/*.json"
