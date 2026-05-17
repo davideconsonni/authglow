@@ -43,7 +43,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 |----|--------------------------------------------------------------------------------------------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------|------|
 | M1 | **Audit log: filtro event_type usa substring matching** — `"login"` matcha anche `login_failed`. | `authglow/services/audit.py`                                   | Sostituito `in` con confronto esatto case-insensitive (`!=`). Aggiunti 3 test: exact match, no-substring, distinct-prefix. | done | Search field mantiene substring matching (intenzionale) |
 | M2 | **JWTService istanziato a livello modulo** — Triggera generazione chiavi all'import.             | `authglow/core/permissions.py`                                 | Sostituito `jwt_service = JWTService()` con lazy singleton `_get_jwt_service()`. L'istanza viene creata solo alla prima chiamata, non all'import. | done | Test in `tests/unit/test_permissions.py` verificano lazy init, caching e assenza di init a import |
-| M3 | **Router oauth2_advanced non montato** — Revocation/introspection irraggiungibili.               | `authglow/main.py`                                             | Aggiungere `include_router(oauth2_advanced_router)`.                                            | pending |      |
+| M3 | **Router oauth2_advanced non montato** — Revocation/introspection irraggiungibili.               | `authglow/main.py`                                             | Aggiunto `include_router(oauth2_advanced_router)` in `main.py`. | done |      |
 | M4 | **Timezone handling inconsistente** — `utcnow()` (naive) vs `now(timezone.utc)` (aware).         | Tutto il codebase                                              | Standardizzare su `datetime.now(timezone.utc)` ovunque.                                         | pending |      |
 | M5 | **I/O sincrono in funzioni async** — `fsspec` blocca l'event loop.                               | `authglow/services/storage.py`, `session.py`, `audit.py`, ecc. | Wrappare operazioni fsspec in `asyncio.to_thread()` o usare `run_in_executor`.                  | pending |      |
 | M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità.                   | `storage.py`, `refresh_token.py`, `oauth2.py`                  | Aggiungere locking (es. file-based lock con fsspec) o usare operazioni atomiche dove possibile. | pending |      |
@@ -98,7 +98,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] H7 — Passkey base64url parsing
 - [x] M1 — Audit log exact event_type match
 - [x] M2 — Lazy JWTService init
-- [ ] M3 — Mount oauth2_advanced router
+- [x] M3 — Mount oauth2_advanced router
 - [ ] M4 — Consistent timezone usage
 - [ ] M5 — Async fsspec I/O
 - [ ] M6 — Storage race conditions

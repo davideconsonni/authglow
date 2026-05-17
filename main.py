@@ -23,6 +23,7 @@ from authglow.api.rbac import router as rbac_router
 from authglow.api.oidc import router as oidc_router
 from authglow.api.setup import router as setup_router
 from authglow.api.oauth_consent_handler import router as consent_router
+from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 
 # Load settings. Key generation is now handled within the Settings class.
 settings = get_settings()
@@ -64,6 +65,7 @@ app.include_router(consent_router, tags=["OAuth2 Consent"])
 app.include_router(rbac_router, tags=["RBAC"])
 app.include_router(user_profile_router, tags=["User Profile"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
+app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 
 templates = Jinja2Templates(directory="authglow/templates")
 
