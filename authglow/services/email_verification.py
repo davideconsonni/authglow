@@ -8,6 +8,7 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.user import User
@@ -16,7 +17,13 @@ from authglow.services.email.factory import get_email_service
 
 
 class EmailVerificationService:
-    """Service for email verification."""
+    """Service for email verification.
+
+    The ``mark_token_used`` operation is protected by a named lock and
+    optimistic-concurrency versioning to prevent token reuse.
+    """
+
+    MAX_CAS_RETRIES = 3
 
     def __init__(self):
         """Initialize email verification service."""
@@ -35,6 +42,7 @@ class EmailVerificationService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     async def create_verification_token(self, user: User) -> EmailVerificationToken:
         """Create a new email verification token.
@@ -72,25 +80,38 @@ class EmailVerificationService:
     async def mark_token_used(self, token: str) -> bool:
         """Mark a token as used.
 
+        Protected by a named lock and optimistic-concurrency versioning
+        to prevent the same verification token from being used twice.
+
         Args:
             token: Token string
 
         Returns:
             True if successful, False otherwise
         """
-        verification_token = await self.get_token(token)
-        if not verification_token:
-            return False
+        async with self._lock(f"email_token:{token}"):
+            for attempt in range(self.MAX_CAS_RETRIES):
+                verification_token = await self.get_token(token)
+                if not verification_token:
+                    return False
 
-        verification_token.used = True
-        verification_token.used_at = utcnow()
+                if verification_token.used:
+                    return False
 
-        # Save updated token
-        file_path = f"{self.storage_path}/{token}.json"
-        try:
-            await self._afs.write_json(file_path, verification_token.model_dump())
-            return True
-        except Exception:
+                verification_token.used = True
+                verification_token.used_at = utcnow()
+
+                # Save updated token
+                file_path = f"{self.storage_path}/{token}.json"
+                try:
+                    _, version = await self._afs.read_json_versioned(file_path)
+                    await self._afs.write_json_versioned(
+                        file_path, verification_token.model_dump(), version
+                    )
+                    return True
+                except ConcurrentWriteError:
+                    continue
+
             return False
 
     async def verify_email(self, token: str) -> tuple[bool, Optional[str]]:

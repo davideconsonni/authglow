@@ -8,6 +8,7 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 from authglow.models.rbac import Role, Permission, UserRole
 
@@ -35,6 +36,7 @@ class RBACService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     # Permission Management
 
@@ -153,9 +155,10 @@ class RBACService:
 
     async def update_role(self, role: Role) -> Role:
         """Update a role."""
-        role.updated_at = utcnow()
-        file_path = f"{self.roles_path}/{role.role_id}.json"
-        await self._afs.write_json(file_path, role.model_dump())
+        async with self._lock(f"role:{role.role_id}"):
+            role.updated_at = utcnow()
+            file_path = f"{self.roles_path}/{role.role_id}.json"
+            await self._afs.write_json(file_path, role.model_dump())
         return role
 
     async def delete_role(self, role_id: str) -> bool:

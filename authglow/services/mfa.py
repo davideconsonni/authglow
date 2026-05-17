@@ -16,6 +16,7 @@ import bcrypt
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 from authglow.models.mfa import BackupCodes, TrustedDevice
 
@@ -41,6 +42,7 @@ class MFAService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def generate_totp_secret(self) -> str:
         """Generate a new TOTP secret."""
@@ -117,21 +119,28 @@ class MFAService:
             return None
 
     async def verify_user_backup_code(self, user_id: str, code: str) -> bool:
-        """Verify a backup code for a user (multi-use)."""
-        backup_codes = await self.get_backup_codes(user_id)
-        if not backup_codes:
+        """Verify a backup code for a user (multi-use).
+
+        Protected by a named lock to prevent concurrent backup code
+        verification from corrupting the used_count.
+        """
+        async with self._lock(f"backup_codes:{user_id}"):
+            backup_codes = await self.get_backup_codes(user_id)
+            if not backup_codes:
+                return False
+
+            # Check against all codes
+            for hashed_code in backup_codes.codes:
+                if self.verify_backup_code(code, hashed_code):
+                    # Increment used count but don't remove (multi-use)
+                    backup_codes.used_count += 1
+                    path = f"{self.storage_path}/backup_codes/{user_id}.json"
+                    await self._afs.write_json(
+                        path, backup_codes.model_dump(mode="json"), indent=2
+                    )
+                    return True
+
             return False
-
-        # Check against all codes
-        for hashed_code in backup_codes.codes:
-            if self.verify_backup_code(code, hashed_code):
-                # Increment used count but don't remove (multi-use)
-                backup_codes.used_count += 1
-                path = f"{self.storage_path}/backup_codes/{user_id}.json"
-                await self._afs.write_json(path, backup_codes.model_dump(mode="json"), indent=2)
-                return True
-
-        return False
 
     async def delete_backup_codes(self, user_id: str):
         """Delete backup codes for a user."""
@@ -169,30 +178,37 @@ class MFAService:
         return device
 
     async def is_device_trusted(self, user_id: str, device_fingerprint: str) -> bool:
-        """Check if a device is trusted and not expired."""
-        try:
-            # List all trusted devices for user
-            pattern = f"{self.storage_path}/trusted_devices/*.json"
-            files = await self._afs.glob(pattern)
+        """Check if a device is trusted and not expired.
 
-            for file_path in files:
-                data = await self._afs.read_json(file_path)
-                device = TrustedDevice(**data)
+        Protected by a named lock on user_id to prevent concurrent
+        last_used updates from clobbering each other.
+        """
+        async with self._lock(f"trusted_devices:{user_id}"):
+            try:
+                # List all trusted devices for user
+                pattern = f"{self.storage_path}/trusted_devices/*.json"
+                files = await self._afs.glob(pattern)
 
-                if (
-                    device.user_id == user_id
-                    and device.device_fingerprint == device_fingerprint
-                    and utcnow() < device.expires_at
-                ):
-                    # Update last used
-                    device.last_used = utcnow()
-                    await self._afs.write_json(file_path, device.model_dump(mode="json"), indent=2)
+                for file_path in files:
+                    data = await self._afs.read_json(file_path)
+                    device = TrustedDevice(**data)
 
-                    return True
+                    if (
+                        device.user_id == user_id
+                        and device.device_fingerprint == device_fingerprint
+                        and utcnow() < device.expires_at
+                    ):
+                        # Update last used
+                        device.last_used = utcnow()
+                        await self._afs.write_json(
+                            file_path, device.model_dump(mode="json"), indent=2
+                        )
 
-            return False
-        except Exception:
-            return False
+                        return True
+
+                return False
+            except Exception:
+                return False
 
     async def list_trusted_devices(self, user_id: str) -> List[TrustedDevice]:
         """List all trusted devices for a user."""

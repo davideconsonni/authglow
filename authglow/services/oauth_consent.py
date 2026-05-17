@@ -8,6 +8,7 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_consent import OAuth2Consent
 
@@ -31,6 +32,7 @@ class OAuth2ConsentService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_consent_path(self, consent_id: str) -> str:
         """Get path for consent file."""
@@ -155,26 +157,29 @@ class OAuth2ConsentService:
     async def revoke_consent(self, consent_id: str) -> bool:
         """Revoke a consent.
 
+        Protected by a named lock to prevent concurrent revocation races.
+
         Args:
             consent_id: Consent ID
 
         Returns:
             True if revoked successfully, False otherwise
         """
-        consent = await self.get_consent(consent_id)
-        if not consent:
-            return False
+        async with self._lock(f"consent:{consent_id}"):
+            consent = await self.get_consent(consent_id)
+            if not consent:
+                return False
 
-        consent.revoked = True
-        consent.revoked_at = utcnow()
+            consent.revoked = True
+            consent.revoked_at = utcnow()
 
-        # Save updated consent
-        consent_path = self._get_consent_path(consent_id)
-        try:
-            await self._afs.write_json(consent_path, consent.model_dump())
-            return True
-        except Exception:
-            return False
+            # Save updated consent
+            consent_path = self._get_consent_path(consent_id)
+            try:
+                await self._afs.write_json(consent_path, consent.model_dump())
+                return True
+            except Exception:
+                return False
 
     async def revoke_user_client_consent(self, user_id: str, client_id: str) -> bool:
         """Revoke all consents for a user and client.

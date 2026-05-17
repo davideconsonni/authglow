@@ -24,6 +24,7 @@ from webauthn.helpers.structs import (
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.models.passkey import (
     Passkey,
     PasskeyChallenge,
@@ -53,6 +54,7 @@ class PasskeyService:
         self.origin = origin
         self.fs = fsspec.core.url_to_fs(storage_path)[0]
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
         # Ensure storage directories exist
         self.fs.mkdirs(f"{self.storage_path}/passkeys", exist_ok=True)
@@ -69,7 +71,9 @@ class PasskeyService:
     async def get_user_passkeys(self, user_id: str) -> list[Passkey]:
         """Get all passkeys for a user."""
         try:
-            files = await self._afs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
+            files = await self._afs.glob(
+                f"{self.storage_path}/passkeys/{user_id}_*.json"
+            )
             passkeys = []
 
             for file_path in files:
@@ -111,12 +115,16 @@ class PasskeyService:
     async def update_passkey_usage(
         self, user_id: str, credential_id: str, sign_count: int
     ):
-        """Update passkey last used time and sign count."""
-        passkey = await self.get_passkey(user_id, credential_id)
-        if passkey:
-            passkey.last_used_at = utcnow()
-            passkey.sign_count = sign_count
-            await self.save_passkey(passkey)
+        """Update passkey last used time and sign count.
+
+        Protected by a named lock to prevent concurrent sign_count corruption.
+        """
+        async with self._lock(f"passkey:{user_id}:{credential_id}"):
+            passkey = await self.get_passkey(user_id, credential_id)
+            if passkey:
+                passkey.last_used_at = utcnow()
+                passkey.sign_count = sign_count
+                await self.save_passkey(passkey)
 
     async def save_challenge(self, challenge: PasskeyChallenge) -> PasskeyChallenge:
         """Save a WebAuthn challenge."""

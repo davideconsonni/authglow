@@ -8,6 +8,7 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 from authglow.services.password import verify_password, hash_password
 from authglow.models.user_profile import (
@@ -43,6 +44,7 @@ class UserProfileService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     # Profile Management
 
@@ -80,19 +82,20 @@ class UserProfileService:
         self, user_id: str, profile_update: UserProfileUpdate
     ) -> Optional[UserProfileResponse]:
         """Update user profile."""
-        user = await self.user_storage.get_user(user_id)
-        if not user:
-            return None
+        async with self._lock(f"user:{user_id}"):
+            user = await self.user_storage.get_user(user_id)
+            if not user:
+                return None
 
-        # Update fields that are provided
-        update_data = profile_update.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(user, field, value)
+            # Update fields that are provided
+            update_data = profile_update.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(user, field, value)
 
-        user.updated_at = utcnow()
+            user.updated_at = utcnow()
 
-        # Save updated user
-        await self.user_storage.update_user(user)
+            # Use _write_user to avoid nested lock (we already hold the lock)
+            await self.user_storage._write_user(user)
 
         return await self.get_user_profile(user_id)
 
@@ -110,19 +113,20 @@ class UserProfileService:
         Returns:
             (success, message)
         """
-        user = await self.user_storage.get_user(user_id)
-        if not user:
-            return False, "User not found"
+        async with self._lock(f"user:{user_id}"):
+            user = await self.user_storage.get_user(user_id)
+            if not user:
+                return False, "User not found"
 
-        # Verify current password
-        if not verify_password(current_password, user.password_hash):
-            return False, "Current password is incorrect"
+            # Verify current password
+            if not verify_password(current_password, user.password_hash):
+                return False, "Current password is incorrect"
 
-        # Update password
-        user.password_hash = hash_password(new_password)
-        user.updated_at = utcnow()
+            # Update password
+            user.password_hash = hash_password(new_password)
+            user.updated_at = utcnow()
 
-        await self.user_storage.update_user(user)
+            await self.user_storage._write_user(user)
 
         # Send security notification
         await self.security_service.send_password_changed_alert(
@@ -145,27 +149,28 @@ class UserProfileService:
         Returns:
             (success, message)
         """
-        user = await self.user_storage.get_user(user_id)
-        if not user:
-            return False, "User not found"
+        async with self._lock(f"user:{user_id}"):
+            user = await self.user_storage.get_user(user_id)
+            if not user:
+                return False, "User not found"
 
-        # Verify password
-        if not verify_password(password, user.password_hash):
-            return False, "Password is incorrect"
+            # Verify password
+            if not verify_password(password, user.password_hash):
+                return False, "Password is incorrect"
 
-        # Check if new email is already in use
-        existing_user = await self.user_storage.get_user_by_email(new_email)
-        if existing_user:
-            return False, "Email already in use"
+            # Check if new email is already in use
+            existing_user = await self.user_storage.get_user_by_email(new_email)
+            if existing_user:
+                return False, "Email already in use"
 
-        old_email = user.email
+            old_email = user.email
 
-        # Update email and mark as unverified
-        user.email = new_email
-        user.email_verified = False
-        user.updated_at = utcnow()
+            # Update email and mark as unverified
+            user.email = new_email
+            user.email_verified = False
+            user.updated_at = utcnow()
 
-        await self.user_storage.update_user(user)
+            await self.user_storage._write_user(user)
 
         # Send verification email to new address
         await self.email_service.send_verification_email(user_id, new_email)
@@ -231,21 +236,22 @@ class UserProfileService:
         self, user_id: str, preferences_update: UserPreferencesUpdate
     ) -> UserPreferences:
         """Update user preferences."""
-        # Get existing preferences or create new
-        preferences = await self.get_user_preferences(user_id)
-        if not preferences:
-            preferences = UserPreferences(user_id=user_id)
+        async with self._lock(f"preferences:{user_id}"):
+            # Get existing preferences or create new
+            preferences = await self.get_user_preferences(user_id)
+            if not preferences:
+                preferences = UserPreferences(user_id=user_id)
 
-        # Update fields that are provided
-        update_data = preferences_update.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(preferences, field, value)
+            # Update fields that are provided
+            update_data = preferences_update.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(preferences, field, value)
 
-        preferences.updated_at = utcnow()
+            preferences.updated_at = utcnow()
 
-        # Save preferences
-        file_path = f"{self.preferences_path}/{user_id}.json"
-        await self._afs.write_json(file_path, preferences.model_dump())
+            # Save preferences
+            file_path = f"{self.preferences_path}/{user_id}.json"
+            await self._afs.write_json(file_path, preferences.model_dump())
 
         return preferences
 
@@ -253,26 +259,28 @@ class UserProfileService:
 
     async def deactivate_account(self, user_id: str) -> tuple[bool, str]:
         """Deactivate user account (can be reactivated)."""
-        user = await self.user_storage.get_user(user_id)
-        if not user:
-            return False, "User not found"
+        async with self._lock(f"user:{user_id}"):
+            user = await self.user_storage.get_user(user_id)
+            if not user:
+                return False, "User not found"
 
-        user.is_active = False
-        user.updated_at = utcnow()
+            user.is_active = False
+            user.updated_at = utcnow()
 
-        await self.user_storage.update_user(user)
+            await self.user_storage._write_user(user)
 
         return True, "Account deactivated successfully"
 
     async def reactivate_account(self, user_id: str) -> tuple[bool, str]:
         """Reactivate user account."""
-        user = await self.user_storage.get_user(user_id)
-        if not user:
-            return False, "User not found"
+        async with self._lock(f"user:{user_id}"):
+            user = await self.user_storage.get_user(user_id)
+            if not user:
+                return False, "User not found"
 
-        user.is_active = True
-        user.updated_at = utcnow()
+            user.is_active = True
+            user.updated_at = utcnow()
 
-        await self.user_storage.update_user(user)
+            await self.user_storage._write_user(user)
 
         return True, "Account reactivated successfully"

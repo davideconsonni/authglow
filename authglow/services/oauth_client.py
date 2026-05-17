@@ -10,6 +10,7 @@ from datetime import datetime
 from authglow.models.oauth_client import OAuth2Client
 from authglow.services.password import hash_password, verify_password
 from authglow.core.config import get_settings
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 
 
@@ -21,6 +22,7 @@ class OAuth2ClientStorage:
         settings = get_settings()
         self.storage_path = Path(settings.storage_path) / "users" / "oauth_clients"
         self.storage_path.mkdir(parents=True, exist_ok=True)
+        self._lock = named_lock()
 
     def _get_client_path(self, client_id: str) -> Path:
         """Get path for a client file."""
@@ -136,10 +138,11 @@ class OAuth2ClientStorage:
 
     async def update_last_used(self, client_id: str):
         """Update last used timestamp."""
-        client = await self.get_client(client_id)
-        if client:
-            client.last_used_at = utcnow()
-            await self.update_client(client)
+        async with self._lock(f"oauth_client:{client_id}"):
+            client = await self.get_client(client_id)
+            if client:
+                client.last_used_at = utcnow()
+                await self.update_client(client)
 
     async def rotate_secret(self, client_id: str) -> str:
         """
@@ -148,16 +151,17 @@ class OAuth2ClientStorage:
         Returns:
             New plaintext secret
         """
-        client = await self.get_client(client_id)
-        if not client:
-            raise ValueError("Client not found")
+        async with self._lock(f"oauth_client:{client_id}"):
+            client = await self.get_client(client_id)
+            if not client:
+                raise ValueError("Client not found")
 
-        # Generate new secret
-        new_secret = secrets.token_urlsafe(32)
+            # Generate new secret
+            new_secret = secrets.token_urlsafe(32)
 
-        # Hash and update
-        client.client_secret = hash_password(new_secret)
-        await self.update_client(client)
+            # Hash and update
+            client.client_secret = hash_password(new_secret)
+            await self.update_client(client)
 
         return new_secret
 

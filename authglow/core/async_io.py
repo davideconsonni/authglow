@@ -4,11 +4,19 @@ All fsspec operations are synchronous and would block the asyncio event loop.
 This module provides async versions that delegate to a thread pool via
 ``asyncio.to_thread()``, keeping the event loop responsive especially when
 the storage backend is a cloud provider (S3, GCS, ADLS).
+
+CAS (Compare-And-Swap) helpers are provided for optimistic-concurrency control:
+``read_json_versioned`` reads a record together with its ``_version`` field,
+and ``write_json_versioned`` writes only if the version has not changed since
+the read.  This prevents cross-process race conditions when multiple instances
+write to the same storage backend.
 """
 
 import asyncio
 import json
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
+
+from authglow.core.concurrency import ConcurrentWriteError
 
 
 class AsyncFileSystem:
@@ -48,6 +56,47 @@ class AsyncFileSystem:
                 json.dump(data, f, indent=indent, default=_default)
 
         await asyncio.to_thread(_op)
+
+    async def read_json_versioned(self, path: str) -> Tuple[Any, int]:
+        """Read a JSON record and return ``(data, version)``.
+
+        If the record does not contain a ``_version`` key, version defaults to 0.
+        """
+        data = await self.read_json(path)
+        version = data.pop("_version", 0)
+        return data, version
+
+    async def write_json_versioned(
+        self,
+        path: str,
+        data: Any,
+        expected_version: int,
+        indent: int = 2,
+        default=None,
+    ) -> None:
+        """Write a JSON record with optimistic-concurrency check.
+
+        Atomically reads the current ``_version`` from disk, compares it to
+        *expected_version*, and only writes if they match.  On mismatch,
+        ``ConcurrentWriteError`` is raised so the caller can retry.
+
+        On success the stored record's ``_version`` is incremented by 1.
+        """
+        try:
+            current = await self.read_json(path)
+        except FileNotFoundError:
+            current = {}
+
+        current_version = current.get("_version", 0)
+
+        if current_version != expected_version:
+            raise ConcurrentWriteError(
+                f"Version mismatch for {path}: expected {expected_version}, "
+                f"found {current_version}"
+            )
+
+        data_with_version = {**data, "_version": expected_version + 1}
+        await self.write_json(path, data_with_version, indent=indent, default=default)
 
     async def read_text(self, path: str) -> str:
         def _op():

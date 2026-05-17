@@ -8,11 +8,20 @@ import fsspec
 from authglow.models.user import User
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 
 
 class UserStorage:
-    """Stateless user storage using fsspec."""
+    """Stateless user storage using fsspec.
+
+    All read-modify-write operations acquire a named lock keyed by resource
+    (e.g. ``"user:<id>"`` or ``"email_index"``) to prevent in-process
+    race conditions.
+
+    Internal methods prefixed with ``_`` do NOT acquire locks — they are
+    called from within lock-holding methods.  Public methods acquire locks.
+    """
 
     def __init__(self):
         """Initialize storage with settings."""
@@ -32,6 +41,7 @@ class UserStorage:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_user_path(self, user_id: str) -> str:
         """Get full path for a user file."""
@@ -54,22 +64,34 @@ class UserStorage:
         index_path = self._get_email_index_path()
         await self._afs.write_json(index_path, index)
 
-    async def create_user(self, user: User) -> User:
-        """Create a new user."""
-        # Check if email already exists
-        if await self.get_user_by_email(user.email):
-            raise ValueError(f"User with email {user.email} already exists")
+    async def _write_user(self, user: User) -> User:
+        """Write user data to storage without acquiring any lock.
 
-        # Save user
+        Caller must hold the appropriate lock if needed.
+        """
+        user.updated_at = utcnow()
         user_path = self._get_user_path(user.id)
         user_data = user.model_dump(mode="json")
-
         await self._afs.write_json(user_path, user_data)
+        return user
 
-        # Update email index
-        email_index = await self._load_email_index()
-        email_index[user.email.lower()] = user.id
-        await self._save_email_index(email_index)
+    async def create_user(self, user: User) -> User:
+        """Create a new user."""
+        async with self._lock(f"user:{user.id}"), self._lock("email_index"):
+            # Check if email already exists
+            email_index = await self._load_email_index()
+            if user.email.lower() in email_index:
+                raise ValueError(f"User with email {user.email} already exists")
+
+            # Save user
+            user_path = self._get_user_path(user.id)
+            user_data = user.model_dump(mode="json")
+
+            await self._afs.write_json(user_path, user_data)
+
+            # Update email index
+            email_index[user.email.lower()] = user.id
+            await self._save_email_index(email_index)
 
         return user
 
@@ -93,33 +115,29 @@ class UserStorage:
         return None
 
     async def update_user(self, user: User) -> User:
-        """Update an existing user."""
-        user.updated_at = utcnow()
-        user_path = self._get_user_path(user.id)
-        user_data = user.model_dump(mode="json")
-
-        await self._afs.write_json(user_path, user_data)
-
-        return user
+        """Update an existing user (acquires per-user lock)."""
+        async with self._lock(f"user:{user.id}"):
+            return await self._write_user(user)
 
     async def delete_user(self, user_id: str) -> bool:
         """Delete a user."""
-        user = await self.get_user(user_id)
-        if not user:
-            return False
+        async with self._lock(f"user:{user_id}"), self._lock("email_index"):
+            user = await self.get_user(user_id)
+            if not user:
+                return False
 
-        # Remove from email index
-        email_index = await self._load_email_index()
-        email_index.pop(user.email.lower(), None)
-        await self._save_email_index(email_index)
+            # Remove from email index
+            email_index = await self._load_email_index()
+            email_index.pop(user.email.lower(), None)
+            await self._save_email_index(email_index)
 
-        # Delete user file
-        user_path = self._get_user_path(user_id)
-        try:
-            await self._afs.rm(user_path)
-            return True
-        except FileNotFoundError:
-            return False
+            # Delete user file
+            user_path = self._get_user_path(user_id)
+            try:
+                await self._afs.rm(user_path)
+                return True
+            except FileNotFoundError:
+                return False
 
     async def list_users(self, limit: int = 100, offset: int = 0) -> List[User]:
         """List all users with pagination."""
@@ -136,48 +154,52 @@ class UserStorage:
 
     async def update_last_login(self, user_id: str):
         """Update user's last login timestamp."""
-        user = await self.get_user(user_id)
-        if user:
-            user.last_login = utcnow()
-            await self.update_user(user)
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if user:
+                user.last_login = utcnow()
+                await self._write_user(user)
 
     async def record_failed_login(
         self, user_id: str, max_attempts: int = 5, lockout_duration_minutes: int = 15
     ):
         """Record a failed login attempt and lock account if threshold exceeded."""
-        user = await self.get_user(user_id)
-        if user:
-            user.failed_login_attempts += 1
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if user:
+                user.failed_login_attempts += 1
 
-            # Lock account if max attempts exceeded
-            if user.failed_login_attempts >= max_attempts:
-                user.locked_until = utcnow() + timedelta(
-                    minutes=lockout_duration_minutes
-                )
+                # Lock account if max attempts exceeded
+                if user.failed_login_attempts >= max_attempts:
+                    user.locked_until = utcnow() + timedelta(
+                        minutes=lockout_duration_minutes
+                    )
 
-            await self.update_user(user)
-            return user.locked_until
+                await self._write_user(user)
+                return user.locked_until
 
     async def reset_failed_login_attempts(self, user_id: str):
         """Reset failed login attempts after successful login."""
-        user = await self.get_user(user_id)
-        if user:
-            user.failed_login_attempts = 0
-            user.locked_until = None
-            await self.update_user(user)
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if user:
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                await self._write_user(user)
 
     async def is_account_locked(self, user_id: str) -> bool:
         """Check if account is currently locked."""
-        user = await self.get_user(user_id)
-        if not user or not user.locked_until:
-            return False
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if not user or not user.locked_until:
+                return False
 
-        # Check if lockout period has expired
-        if utcnow() >= user.locked_until:
-            # Auto-unlock account
-            user.locked_until = None
-            user.failed_login_attempts = 0
-            await self.update_user(user)
-            return False
+            # Check if lockout period has expired
+            if utcnow() >= user.locked_until:
+                # Auto-unlock account
+                user.locked_until = None
+                user.failed_login_attempts = 0
+                await self._write_user(user)
+                return False
 
-        return True
+            return True

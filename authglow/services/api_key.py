@@ -10,6 +10,7 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKey, APIKeyCreate
 
@@ -37,6 +38,7 @@ class APIKeyService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     async def _load_prefix_index(self, prefix: str) -> List[str]:
         """Load key_ids for a given prefix from the index."""
@@ -49,26 +51,27 @@ class APIKeyService:
 
     async def _save_prefix_index(self, api_key: APIKey) -> None:
         """Add key_id to the prefix index for O(1) lookups."""
-        prefix = api_key.key_prefix
-        existing_ids = await self._load_prefix_index(prefix)
-        if api_key.key_id not in existing_ids:
-            existing_ids.append(api_key.key_id)
-        index_file = f"{self.index_path}/{prefix}.json"
-        await self._afs.write_json(index_file, {"key_ids": existing_ids})
+        async with self._lock(f"prefix_index:{api_key.key_prefix}"):
+            existing_ids = await self._load_prefix_index(api_key.key_prefix)
+            if api_key.key_id not in existing_ids:
+                existing_ids.append(api_key.key_id)
+            index_file = f"{self.index_path}/{api_key.key_prefix}.json"
+            await self._afs.write_json(index_file, {"key_ids": existing_ids})
 
     async def _remove_from_prefix_index(self, prefix: str, key_id: str) -> None:
         """Remove a key_id from the prefix index."""
-        existing_ids = await self._load_prefix_index(prefix)
-        if key_id in existing_ids:
-            existing_ids.remove(key_id)
-        index_file = f"{self.index_path}/{prefix}.json"
-        if not existing_ids:
-            try:
-                await self._afs.rm(index_file)
-            except Exception:
-                pass
-        else:
-            await self._afs.write_json(index_file, {"key_ids": existing_ids})
+        async with self._lock(f"prefix_index:{prefix}"):
+            existing_ids = await self._load_prefix_index(prefix)
+            if key_id in existing_ids:
+                existing_ids.remove(key_id)
+            index_file = f"{self.index_path}/{prefix}.json"
+            if not existing_ids:
+                try:
+                    await self._afs.rm(index_file)
+                except Exception:
+                    pass
+            else:
+                await self._afs.write_json(index_file, {"key_ids": existing_ids})
 
     def _generate_api_key(self) -> tuple[str, str, str]:
         """Generate a new API key.
@@ -217,38 +220,40 @@ class APIKeyService:
         user_agent: Optional[str] = None,
     ) -> Optional[APIKey]:
         """Update an API key's usage statistics."""
-        api_key = await self.get_key(key_id)
-        if not api_key:
-            return None
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key:
+                return None
 
-        # Update usage stats
-        api_key.last_used_at = utcnow()
-        api_key.total_requests += 1
-        if ip_address:
-            api_key.last_used_ip = ip_address
-        if user_agent:
-            api_key.last_used_ua = user_agent
+            # Update usage stats
+            api_key.last_used_at = utcnow()
+            api_key.total_requests += 1
+            if ip_address:
+                api_key.last_used_ip = ip_address
+            if user_agent:
+                api_key.last_used_ua = user_agent
 
-        # Save
-        file_path = f"{self.storage_path}/{key_id}.json"
-        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+            # Save
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
-        return api_key
+            return api_key
 
     async def revoke_key(self, key_id: str, revoked_by: str) -> bool:
         """Revoke an API key."""
-        api_key = await self.get_key(key_id)
-        if not api_key:
-            return False
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key:
+                return False
 
-        api_key.is_active = False
-        api_key.revoked_at = utcnow()
-        api_key.revoked_by = revoked_by
+            api_key.is_active = False
+            api_key.revoked_at = utcnow()
+            api_key.revoked_by = revoked_by
 
-        file_path = f"{self.storage_path}/{key_id}.json"
-        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
-        return True
+            return True
 
     async def delete_key(self, key_id: str) -> bool:
         """Permanently delete an API key."""
@@ -266,24 +271,25 @@ class APIKeyService:
 
     async def track_usage(self, key_id: str, ip_address: Optional[str] = None) -> bool:
         """Track API key usage."""
-        api_key = await self.get_key(key_id)
-        if not api_key:
-            return False
-
-        # Check IP restrictions
-        if api_key.allowed_ips and ip_address:
-            if ip_address not in api_key.allowed_ips:
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key:
                 return False
 
-        # Update usage stats
-        api_key.last_used_at = utcnow()
-        api_key.total_requests += 1
+            # Check IP restrictions
+            if api_key.allowed_ips and ip_address:
+                if ip_address not in api_key.allowed_ips:
+                    return False
 
-        # Save
-        file_path = f"{self.storage_path}/{key_id}.json"
-        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+            # Update usage stats
+            api_key.last_used_at = utcnow()
+            api_key.total_requests += 1
 
-        return True
+            # Save
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+
+            return True
 
     async def cleanup_expired_keys(self) -> int:
         """Delete expired API keys. Returns count of deleted keys."""

@@ -6,13 +6,21 @@ from typing import Optional, List
 import fsspec
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
 from authglow.models.token import AuthorizationCode
 from authglow.services.oauth_client import OAuth2ClientStorage
 
 
 class OAuth2Service:
-    """Service for OAuth2 authorization codes (stateless)."""
+    """Service for OAuth2 authorization codes (stateless).
+
+    The ``mark_code_as_used`` operation is protected by a named lock
+    (in-process) and optimistic-concurrency versioning (cross-process)
+    to prevent authorization code reuse.
+    """
+
+    MAX_CAS_RETRIES = 3
 
     def __init__(self):
         """Initialize OAuth2 service with settings."""
@@ -33,6 +41,7 @@ class OAuth2Service:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_code_path(self, code: str) -> str:
         """Get full path for an authorization code."""
@@ -96,18 +105,29 @@ class OAuth2Service:
             return None
 
     async def mark_code_as_used(self, code: str) -> bool:
-        """Mark an authorization code as used."""
-        auth_code = await self.get_authorization_code(code)
-        if not auth_code:
+        """Mark an authorization code as used.
+
+        Protected by a named lock on the code and optimistic-concurrency
+        versioning to prevent the same code from being redeemed twice.
+        """
+        async with self._lock(f"auth_code:{code}"):
+            for attempt in range(self.MAX_CAS_RETRIES):
+                auth_code = await self.get_authorization_code(code)
+                if not auth_code:
+                    return False
+
+                auth_code.used = True
+                code_path = self._get_code_path(code)
+                code_data = auth_code.model_dump(mode="json")
+
+                try:
+                    _, version = await self._afs.read_json_versioned(code_path)
+                    await self._afs.write_json_versioned(code_path, code_data, version)
+                    return True
+                except ConcurrentWriteError:
+                    continue
+
             return False
-
-        auth_code.used = True
-        code_path = self._get_code_path(code)
-        code_data = auth_code.model_dump(mode="json")
-
-        await self._afs.write_json(code_path, code_data)
-
-        return True
 
     async def delete_authorization_code(self, code: str):
         """Delete an authorization code."""

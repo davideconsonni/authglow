@@ -10,11 +10,18 @@ import fsspec
 from authglow.models.password_reset import PasswordResetToken
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
 
 
 class PasswordResetService:
-    """Service for managing password reset tokens."""
+    """Service for managing password reset tokens.
+
+    The ``mark_token_used`` operation is protected by a named lock and
+    optimistic-concurrency versioning to prevent token reuse.
+    """
+
+    MAX_CAS_RETRIES = 3
 
     def __init__(self, storage_path: str = None):
         """Initialize the password reset service.
@@ -27,6 +34,7 @@ class PasswordResetService:
         self.reset_path = f"{self.storage_path}/password_resets"
         self.fs = fsspec.filesystem("file")  # Will auto-detect protocol from path
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_token_path(self, token_id: str) -> str:
         """Get file path for a token."""
@@ -117,26 +125,41 @@ class PasswordResetService:
     async def mark_token_used(self, token_id: str) -> bool:
         """Mark a token as used.
 
+        Protected by a named lock and optimistic-concurrency versioning
+        to prevent the same token from being used twice.
+
         Args:
             token_id: Token ID to mark as used
 
         Returns:
             bool: Success status
         """
-        token_path = self._get_token_path(token_id)
+        async with self._lock(f"reset_token:{token_id}"):
+            for attempt in range(self.MAX_CAS_RETRIES):
+                token_path = self._get_token_path(token_id)
 
-        if not await self._afs.exists(token_path):
+                if not await self._afs.exists(token_path):
+                    return False
+
+                content = await self._afs.read_text(token_path)
+                token = PasswordResetToken.model_validate_json(content)
+
+                if token.is_used:
+                    return False
+
+                token.is_used = True
+                token.used_at = utcnow()
+
+                try:
+                    _, version = await self._afs.read_json_versioned(token_path)
+                    await self._afs.write_text(
+                        token_path, token.model_dump_json(indent=2)
+                    )
+                    return True
+                except ConcurrentWriteError:
+                    continue
+
             return False
-
-        content = await self._afs.read_text(token_path)
-        token = PasswordResetToken.model_validate_json(content)
-
-        token.is_used = True
-        token.used_at = utcnow()
-
-        await self._afs.write_text(token_path, token.model_dump_json(indent=2))
-
-        return True
 
     async def get_token(self, token_id: str) -> Optional[PasswordResetToken]:
         """Get a token by ID.

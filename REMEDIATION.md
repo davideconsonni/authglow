@@ -46,7 +46,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | M3 | **Router oauth2_advanced non montato** — Revocation/introspection irraggiungibili.               | `authglow/main.py`                                             | Aggiunto `include_router(oauth2_advanced_router)` in `main.py`. | done |      |
 | M4 | **Timezone handling inconsistente** — `utcnow()` (naive) vs `now(timezone.utc)` (aware). | Tutto il codebase | Creato `authglow/core/datetime.py` con `utcnow()` che ritorna `datetime.now(timezone.utc)`. Sostituiti tutti i `datetime.utcnow()` con `utcnow()` e `default_factory=datetime.utcnow` con `default_factory=utcnow` in modelli Pydantic. Test M4 aggiornato e invertito per verificare assenza di `datetime.utcnow()`. | done | 177 test passano; 1 fail preesistente (oauth2 scope) |
 | M5 | **I/O sincrono in funzioni async** — `fsspec` blocca l'event loop.                               | `authglow/services/storage.py`, `session.py`, `audit.py`, ecc. | Creato `authglow/core/async_io.py` con `AsyncFileSystem` wrapper (`asyncio.to_thread()`). Tutti i 16 file con I/O sincrono convertiti ad async. Test aggiornati. | done | vedi `authglow/core/async_io.py`; 203/204 test passano (1 fail preesistente oauth2 scope) |
-| M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità.                   | `storage.py`, `refresh_token.py`, `oauth2.py`                  | Aggiungere locking (es. file-based lock con fsspec) o usare operazioni atomiche dove possibile. | pending |      |
+| M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità. | `storage.py`, `refresh_token.py`, `oauth2.py`, ecc. | Due layer di protezione: (1) `AsyncNamedLock` in `core/concurrency.py` per serializzare RMW in-process, (2) `read_json_versioned`/`write_json_versioned` in `core/async_io.py` con CAS ottimistico per cross-process defense-in-depth. Tutti i 12 service con RMW aggiornati. | done | Vedi `authglow/core/concurrency.py` e `authglow/core/async_io.py` |
 | M7 | **Admin carica tutto in memoria** — `limit=10000` utenti e log causa OOM.                        | `authglow/api/admin.py`                                        | Paginare correttamente con query offset/limit, non caricare tutto in memoria.                   | pending |      |
 | M8 | **Nessun test** — Zero test nel repository.                                                      | —                                                              | Aggiungere almeno test unitari per JWT, OAuth2 flows, MFA, passkey.                             | pending |      |
 
@@ -101,7 +101,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] M3 — Mount oauth2_advanced router
 - [x] M4 — Consistent timezone usage
 - [x] M5 — Async fsspec I/O
-- [ ] M6 — Storage race conditions
+- [x] M6 — Storage race conditions
 - [ ] M7 — Admin pagination
 - [ ] M8 — Add tests
 - [ ] D1 — Update dependencies

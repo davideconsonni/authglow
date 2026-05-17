@@ -8,12 +8,20 @@ import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 
 
 class RefreshTokenService:
-    """Service for managing refresh tokens with rotation."""
+    """Service for managing refresh tokens with rotation.
+
+    Security-critical read-modify-write operations are protected by
+    named locks (in-process) and optimistic-concurrency versioning
+    (cross-process defense-in-depth).
+    """
+
+    MAX_CAS_RETRIES = 3
 
     def __init__(self):
         """Initialize refresh token service."""
@@ -31,6 +39,7 @@ class RefreshTokenService:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_token_path(self, token_id: str) -> str:
         """Get path for refresh token file."""
@@ -128,6 +137,9 @@ class RefreshTokenService:
         If the token is valid, it's marked as used and a new one is issued.
         If a token is reused (already marked as used), the entire token family is revoked.
 
+        Protected by a named lock on the token_id to prevent concurrent rotations,
+        and by optimistic-concurrency versioning as a cross-process safeguard.
+
         Args:
             token: Refresh token string
             client_id: OAuth2 client ID
@@ -137,7 +149,7 @@ class RefreshTokenService:
             Tuple of (new_refresh_token, error_message)
             If error_message is not None, new_refresh_token will be None
         """
-        # Get the refresh token
+        # Get the refresh token (read outside lock — idempotent)
         rt = await self.get_refresh_token(token)
 
         if not rt:
@@ -161,28 +173,51 @@ class RefreshTokenService:
             await self._revoke_token_family(rt)
             return None, "Token reuse detected - all tokens in family revoked"
 
-        # Mark current token as used
-        rt.used = True
-        rt.used_at = utcnow()
-        rt.last_used_ip = ip_address
+        # Acquire per-token lock for the RMW
+        async with self._lock(f"refresh_token:{rt.token_id}"):
+            for attempt in range(self.MAX_CAS_RETRIES):
+                # Re-read inside lock to get latest version
+                rt = await self.get_refresh_token_by_id(rt.token_id)
+                if rt is None:
+                    return None, "Invalid refresh token"
 
-        # Create new refresh token (rotation)
-        new_token = await self.create_refresh_token(
-            user_id=rt.user_id,
-            client_id=rt.client_id,
-            scopes=rt.scopes,
-            issued_ip=ip_address,
-            parent_token_id=rt.token_id,
-        )
+                if rt.revoked:
+                    return None, "Token has been revoked"
+                if rt.used:
+                    await self._revoke_token_family(rt)
+                    return None, "Token reuse detected - all tokens in family revoked"
 
-        # Update old token with replacement info
-        rt.replaced_by = new_token.token_id
+                # Mark current token as used
+                rt.used = True
+                rt.used_at = utcnow()
+                rt.last_used_ip = ip_address
 
-        # Save both tokens
-        token_path = self._get_token_path(rt.token_id)
-        await self._afs.write_json(token_path, rt.model_dump())
+                # Create new refresh token (rotation)
+                new_token = await self.create_refresh_token(
+                    user_id=rt.user_id,
+                    client_id=rt.client_id,
+                    scopes=rt.scopes,
+                    issued_ip=ip_address,
+                    parent_token_id=rt.token_id,
+                )
 
-        return new_token, None
+                # Update old token with replacement info
+                rt.replaced_by = new_token.token_id
+
+                # CAS write — fail if another process already modified this token
+                token_path = self._get_token_path(rt.token_id)
+                try:
+                    token_data = rt.model_dump()
+                    data, version = await self._afs.read_json_versioned(token_path)
+                    await self._afs.write_json_versioned(
+                        token_path, token_data, version
+                    )
+                except ConcurrentWriteError:
+                    continue
+
+                return new_token, None
+
+            return None, "Concurrent modification - please retry"
 
     async def revoke_token(self, token: str, reason: Optional[str] = None) -> bool:
         """Revoke a specific refresh token.
@@ -198,17 +233,18 @@ class RefreshTokenService:
         if not rt:
             return False
 
-        rt.revoked = True
-        rt.revoked_at = utcnow()
-        rt.revoked_reason = reason
+        async with self._lock(f"refresh_token:{rt.token_id}"):
+            rt.revoked = True
+            rt.revoked_at = utcnow()
+            rt.revoked_reason = reason
 
-        # Save updated token
-        token_path = self._get_token_path(rt.token_id)
-        try:
-            await self._afs.write_json(token_path, rt.model_dump())
-            return True
-        except Exception:
-            return False
+            # Save updated token
+            token_path = self._get_token_path(rt.token_id)
+            try:
+                await self._afs.write_json(token_path, rt.model_dump())
+                return True
+            except Exception:
+                return False
 
     async def _revoke_token_family(self, token: RefreshToken) -> int:
         """Revoke all tokens in a family (security measure).
@@ -246,20 +282,25 @@ class RefreshTokenService:
         revoked_count = 0
 
         # Revoke this token
-        rt = await self.get_refresh_token_by_id(token_id)
-        if rt and not rt.revoked:
-            rt.revoked = True
-            rt.revoked_at = utcnow()
-            rt.revoked_reason = "Token family revoked due to security violation"
+        async with self._lock(f"refresh_token:{token_id}"):
+            rt = await self.get_refresh_token_by_id(token_id)
+            if rt and not rt.revoked:
+                rt.revoked = True
+                rt.revoked_at = utcnow()
+                rt.revoked_reason = "Token family revoked due to security violation"
 
-            token_path = self._get_token_path(token_id)
-            await self._afs.write_json(token_path, rt.model_dump())
+                token_path = self._get_token_path(token_id)
+                await self._afs.write_json(token_path, rt.model_dump())
 
-            revoked_count += 1
+                revoked_count += 1
 
-            # If this token has a replacement, revoke that too
-            if rt.replaced_by:
-                revoked_count += await self._revoke_descendants(rt.replaced_by)
+                # If this token has a replacement, revoke that too
+                if rt.replaced_by:
+                    pass
+
+        # Revoke children outside the lock to avoid nesting
+        if rt and rt.replaced_by:
+            revoked_count += await self._revoke_descendants(rt.replaced_by)
 
         return revoked_count
 
@@ -297,14 +338,17 @@ class RefreshTokenService:
                     if rt.revoked:
                         continue
 
-                    # Revoke token
-                    rt.revoked = True
-                    rt.revoked_at = utcnow()
-                    rt.revoked_reason = "Revoked by user or admin"
+                    async with self._lock(f"refresh_token:{rt.token_id}"):
+                        # Re-read inside lock
+                        rt = await self.get_refresh_token_by_id(rt.token_id)
+                        if rt and not rt.revoked:
+                            rt.revoked = True
+                            rt.revoked_at = utcnow()
+                            rt.revoked_reason = "Revoked by user or admin"
 
-                    await self._afs.write_json(file_path, rt.model_dump())
+                            await self._afs.write_json(file_path, rt.model_dump())
 
-                    revoked_count += 1
+                            revoked_count += 1
 
                 except Exception:
                     continue
