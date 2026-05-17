@@ -77,7 +77,7 @@ async def admin_dashboard(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_dashboard.html", {"request": request, **ui_context}
+        request, "admin_dashboard.html", context={**ui_context}
     )
 
 
@@ -88,7 +88,7 @@ async def admin_users_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_users.html", {"request": request, **ui_context}
+        request, "admin_users.html", context={**ui_context}
     )
 
 
@@ -99,11 +99,11 @@ async def admin_audit_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
+        request,
         "admin_audit.html",
-        {
-            "request": request,
+        context={
             **ui_context,
-            "current_user": {"email": "Loading..."},  # Will be loaded by JS
+            "current_user": {"email": "Loading..."},
         },
     )
 
@@ -115,7 +115,7 @@ async def admin_oauth_clients_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_oauth_clients.html", {"request": request, **ui_context}
+        request, "admin_oauth_clients.html", context={**ui_context}
     )
 
 
@@ -126,7 +126,7 @@ async def admin_api_keys_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_api_keys.html", {"request": request, **ui_context}
+        request, "admin_api_keys.html", context={**ui_context}
     )
 
 
@@ -137,7 +137,7 @@ async def admin_password_resets_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_password_resets.html", {"request": request, **ui_context}
+        request, "admin_password_resets.html", context={**ui_context}
     )
 
 
@@ -605,7 +605,7 @@ async def admin_sessions_page(request: Request):
     """Active sessions management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_sessions.html", {"request": request, **settings.get_ui_context()}
+        request, "admin_sessions.html", context={**settings.get_ui_context()}
     )
 
 
@@ -614,7 +614,7 @@ async def admin_oauth_consents_page(request: Request):
     """OAuth2 consents management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_oauth_consents.html", {"request": request, **settings.get_ui_context()}
+        request, "admin_oauth_consents.html", context={**settings.get_ui_context()}
     )
 
 
@@ -623,7 +623,7 @@ async def admin_rbac_page(request: Request):
     """RBAC management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_rbac.html", {"request": request, **settings.get_ui_context()}
+        request, "admin_rbac.html", context={**settings.get_ui_context()}
     )
 
 
@@ -632,7 +632,7 @@ async def admin_playground_page(request: Request):
     """API Playground page for testing OAuth2/OIDC flows (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_playground.html", {"request": request, **settings.get_ui_context()}
+        request, "admin_playground.html", context={**settings.get_ui_context()}
     )
 
 

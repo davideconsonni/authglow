@@ -273,7 +273,7 @@ async def forgot_password_page(request: Request):
     """Forgot password page."""
     ui_context = settings.get_ui_context()
     return templates.TemplateResponse(
-        "password_forgot.html", {"request": request, **ui_context}
+        request, "password_forgot.html", context={**ui_context}
     )
 
 
@@ -282,7 +282,7 @@ async def reset_password_page(request: Request, token: str = None):
     """Reset password page with token."""
     ui_context = settings.get_ui_context()
     return templates.TemplateResponse(
-        "password_reset.html", {"request": request, "token": token, **ui_context}
+        request, "password_reset.html", context={"token": token, **ui_context}
     )
 
 

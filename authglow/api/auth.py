@@ -241,9 +241,9 @@ async def authorize(
     # Render login page with OAuth2 parameters
     ui_context = settings.get_ui_context()
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
+        context={
             **ui_context,
             "client_id": client_id,
             "redirect_uri": redirect_uri,
@@ -350,9 +350,9 @@ async def authorize_post(
             settings = get_settings()
             ui_context = settings.get_ui_context()
             return templates.TemplateResponse(
+                request,
                 "mfa_verify.html",
-                {
-                    "request": request,
+                context={
                     **ui_context,
                     "session_token": mfa_session.session_token,
                 },
@@ -950,7 +950,7 @@ async def login_page(request: Request):
     """Simple login page (non-OAuth)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "simple_login.html", {"request": request, **settings.get_ui_context()}
+        request, "simple_login.html", context={**settings.get_ui_context()}
     )
 
 
@@ -960,9 +960,9 @@ async def passkey_management_page(request: Request):
     settings = get_settings()
     ui_context = settings.get_ui_context()
     return templates.TemplateResponse(
+        request,
         "passkey_manage.html",
-        {
-            "request": request,
+        context={
             **ui_context,
         },
     )
@@ -996,9 +996,9 @@ async def oauth2_callback(
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
+        request,
         "callback.html",
-        {
-            "request": request,
+        context={
             **ui_context,
             "code": code,
             "state": state,

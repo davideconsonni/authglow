@@ -13,7 +13,7 @@ from authglow.models.user_profile import (
     DeleteAccountRequest,
     UserPreferencesUpdate,
     UserPreferences,
-    UserProfileResponse
+    UserProfileResponse,
 )
 from authglow.services.user_profile import UserProfileService
 from authglow.api.auth import get_current_user
@@ -25,16 +25,13 @@ templates = Jinja2Templates(directory="authglow/templates")
 
 # Profile Page
 
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """User dashboard page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        request, "dashboard.html", context={**settings.get_ui_context()}
     )
 
 
@@ -43,28 +40,22 @@ async def profile_page(request: Request):
     """User profile management page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "profile.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        request, "profile.html", context={**settings.get_ui_context()}
     )
 
 
 # Profile API Endpoints
 
+
 @router.get("/api/profile/me", response_model=UserProfileResponse)
-async def get_my_profile(
-    current_user: User = Depends(get_current_user)
-):
+async def get_my_profile(current_user: User = Depends(get_current_user)):
     """Get current user's profile."""
     profile_service = UserProfileService()
     profile = await profile_service.get_user_profile(current_user.id)
 
     if not profile:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
         )
 
     # current_user already has the correct scopes from JWT (filtered in get_current_user)
@@ -76,8 +67,7 @@ async def get_my_profile(
 
 @router.patch("/api/profile/me", response_model=UserProfileResponse)
 async def update_my_profile(
-    profile_update: UserProfileUpdate,
-    current_user_id: str = Depends(get_current_user)
+    profile_update: UserProfileUpdate, current_user_id: str = Depends(get_current_user)
 ):
     """Update current user's profile."""
     profile_service = UserProfileService()
@@ -85,8 +75,7 @@ async def update_my_profile(
 
     if not profile:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
         )
 
     return profile
@@ -96,7 +85,7 @@ async def update_my_profile(
 async def change_my_password(
     password_request: ChangePasswordRequest,
     request: Request,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
 ):
     """Change current user's password."""
     profile_service = UserProfileService()
@@ -108,14 +97,11 @@ async def change_my_password(
         current_user_id,
         password_request.current_password,
         password_request.new_password,
-        ip_address
+        ip_address,
     )
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message}
 
@@ -124,7 +110,7 @@ async def change_my_password(
 async def change_my_email(
     email_request: ChangeEmailRequest,
     request: Request,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
 ):
     """Change current user's email (requires verification)."""
     profile_service = UserProfileService()
@@ -133,17 +119,11 @@ async def change_my_email(
     ip_address = request.client.host if request.client else None
 
     success, message = await profile_service.change_email(
-        current_user_id,
-        email_request.new_email,
-        email_request.password,
-        ip_address
+        current_user_id, email_request.new_email, email_request.password, ip_address
     )
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message}
 
@@ -151,68 +131,52 @@ async def change_my_email(
 @router.delete("/api/profile/me", status_code=status.HTTP_200_OK)
 async def delete_my_account(
     delete_request: DeleteAccountRequest,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
 ):
     """Delete current user's account (permanent)."""
     profile_service = UserProfileService()
 
     success, message = await profile_service.delete_account(
-        current_user_id,
-        delete_request.password,
-        delete_request.confirmation
+        current_user_id, delete_request.password, delete_request.confirmation
     )
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message}
 
 
 @router.post("/api/profile/me/deactivate")
-async def deactivate_my_account(
-    current_user_id: str = Depends(get_current_user)
-):
+async def deactivate_my_account(current_user_id: str = Depends(get_current_user)):
     """Deactivate current user's account (can be reactivated)."""
     profile_service = UserProfileService()
 
     success, message = await profile_service.deactivate_account(current_user_id)
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message}
 
 
 @router.post("/api/profile/me/reactivate")
-async def reactivate_my_account(
-    current_user_id: str = Depends(get_current_user)
-):
+async def reactivate_my_account(current_user_id: str = Depends(get_current_user)):
     """Reactivate current user's account."""
     profile_service = UserProfileService()
 
     success, message = await profile_service.reactivate_account(current_user_id)
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message}
 
 
 # User Preferences Endpoints
 
+
 @router.get("/api/profile/me/preferences", response_model=UserPreferences)
-async def get_my_preferences(
-    current_user_id: str = Depends(get_current_user)
-):
+async def get_my_preferences(current_user_id: str = Depends(get_current_user)):
     """Get current user's preferences."""
     profile_service = UserProfileService()
     preferences = await profile_service.get_user_preferences(current_user_id)
@@ -223,13 +187,12 @@ async def get_my_preferences(
 @router.patch("/api/profile/me/preferences", response_model=UserPreferences)
 async def update_my_preferences(
     preferences_update: UserPreferencesUpdate,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
 ):
     """Update current user's preferences."""
     profile_service = UserProfileService()
     preferences = await profile_service.update_user_preferences(
-        current_user_id,
-        preferences_update
+        current_user_id, preferences_update
     )
 
     return preferences

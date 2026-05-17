@@ -96,9 +96,9 @@ async def show_consent_screen(
         )
 
     return templates.TemplateResponse(
+        request,
         "oauth_consent.html",
-        {
-            "request": request,
+        context={
             **ui_context,
             "client_id": client.client_id,
             "client_name": client.client_name,

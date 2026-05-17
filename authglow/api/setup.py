@@ -122,5 +122,5 @@ async def setup_page(request: Request):
 
     settings = get_settings()
     return templates.TemplateResponse(
-        "setup.html", {"request": request, **settings.get_ui_context()}
+        request, "setup.html", context={**settings.get_ui_context()}
     )
