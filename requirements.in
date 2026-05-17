@@ -7,8 +7,6 @@ jinja2
 # Authentication & Security
 pyjwt[crypto]
 bcrypt
-passlib
-python-jose[cryptography]
 cryptography
 
 # Password validation

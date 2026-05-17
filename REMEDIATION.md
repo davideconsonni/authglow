@@ -54,8 +54,8 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 
 | #  | Problema                                                                                                                                | Azione richiesta                                       | Stato   | Note                                                                                                                         |
 |----|-----------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------|
-| D1 | **Migrare gestione dipendenze a uv compile** — Creato `requirements.in` top-level; `requirements.txt` ora generato da `uv pip compile`. | Aggiornare `requirements.txt` e testare compatibilità. | done    | Per aggiornare: `uv pip compile --upgrade requirements.in -o requirements.txt --python-version 3.13 --python-platform linux` |
-| D2 | **Valutare sostituzione passlib** — Passlib 1.7.4 è ormai unmaintained.                                                                 | Considerare `pwdlib`, `argon2-cffi`, o bcrypt diretto. | pending |                                                                                                                              |
+| D1 | **Migrare gestione dipendenze a uv compile** — Creato `requirements.in` top-level; `requirements.txt` ora generato da `uv pip compile`. | Aggiornare `requirements.txt` e testare compatibilità. | done    | `uv pip compile --upgrade requirements.in -o requirements.txt --python-version 3.13 --python-platform linux`. Aggiornati: `python-multipart 0.0.28→0.0.29`, `decorator 5.2.1→5.3.0`. Dockerfile aggiornato a `python:3.13-slim`. 435/436 test passano (1 fail preesistente oauth2 scope). |
+| D2 | **Valutare sostituzione passlib** — Passlib 1.7.4 è ormai unmaintained.                                                                 | Rimuovere passlib e python-jose (entrambe dipendenze morte, zero import nel codebase). Rimpiazzate da bcrypt diretto (già in uso) e PyJWT (già in uso). | done    | 4 pacchetti rimossi: `passlib`, `python-jose`, `ecdsa`, `rsa`. Nessuna modifica al codice sorgente necessaria. 100→96 pacchetti nel lockfile. 435/436 test passano (1 fail preesistente oauth2 scope). |
 | D3 | **Aggiungere type checking / linting** — Assicurarsi che `mypy` e `ruff` passino.                                                       | Aggiungere config in `pyproject.toml` se mancante.     | pending |                                                                                                                              |
 
 ---
@@ -66,9 +66,9 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 |-------------------|--------------|---------|------------------------------------|
 | fastapi           | **0.136.1**  | Lockato |                                    |
 | uvicorn           | **0.47.0**   | Lockato |                                    |
-| python-multipart  | **0.0.28**   | Lockato |                                    |
+| python-multipart  | **0.0.29**   | Lockato |                                    |
 | pyjwt             | **2.12.1**   | Lockato |                                    |
-| bcrypt            | **5.0.0**    | Lockato | **Breaking con passlib — vedi D2** |
+| bcrypt            | **5.0.0**    | Lockato | Usato direttamente per password/MFA/API key hashing |
 | cryptography      | **48.0.0**   | Lockato |                                    |
 | webauthn          | **2.7.1**    | Lockato |                                    |
 | fsspec            | **2026.4.0** | Lockato |                                    |
@@ -104,6 +104,6 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] M6 — Storage race conditions
 - [x] M7 — Admin pagination
 - [x] M8 — Add tests
-- [ ] D1 — Update dependencies
-- [ ] D2 — Evaluate passlib replacement
+- [x] D1 — Update dependencies
+- [x] D2 — Remove passlib + python-jose
 - [ ] D3 — Add lint/typecheck config
