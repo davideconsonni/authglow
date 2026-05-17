@@ -95,9 +95,12 @@ async def begin_registration(
 
     Returns WebAuthn credential creation options.
     """
+    # Fetch existing passkeys to prevent duplicate registration
+    existing_passkeys = await passkey_service.get_user_passkeys(current_user.id)
+
     # Generate registration options
     options_dict, challenge_str = passkey_service.generate_registration_options_dict(
-        current_user
+        current_user, user_passkeys=existing_passkeys
     )
 
     # Save challenge

@@ -108,7 +108,9 @@ class PasskeyService:
         except Exception:
             return False
 
-    async def update_passkey_usage(self, user_id: str, credential_id: str, sign_count: int):
+    async def update_passkey_usage(
+        self, user_id: str, credential_id: str, sign_count: int
+    ):
         """Update passkey last used time and sign count."""
         passkey = await self.get_passkey(user_id, credential_id)
         if passkey:
@@ -151,25 +153,36 @@ class PasskeyService:
         except Exception:
             pass
 
-    def generate_registration_options_dict(self, user: User) -> tuple[dict, str]:
+    def generate_registration_options_dict(
+        self,
+        user: User,
+        user_passkeys: Optional[list] = None,
+    ) -> tuple[dict, str]:
         """
         Generate WebAuthn registration options.
+
+        Args:
+            user: The user registering a new passkey.
+            user_passkeys: Existing passkeys for the user, used to prevent
+                duplicate registrations via exclude_credentials.
 
         Returns:
             Tuple of (options_dict, challenge_string)
         """
-        # Get existing passkeys to exclude
-        user_passkeys = []  # We'll fetch this in the endpoint
+        from webauthn.helpers import base64url_to_bytes
+
+        existing_passkeys = user_passkeys or []
 
         options = generate_registration_options(
             rp_id=self.rp_id,
             rp_name=self.rp_name,
-            user_id=user.id.encode('utf-8'),
+            user_id=user.id.encode("utf-8"),
             user_name=user.email,
-            user_display_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email,
+            user_display_name=f"{user.first_name or ''} {user.last_name or ''}".strip()
+            or user.email,
             exclude_credentials=[
-                PublicKeyCredentialDescriptor(id=bytes.fromhex(pk.credential_id))
-                for pk in user_passkeys
+                PublicKeyCredentialDescriptor(id=base64url_to_bytes(pk.credential_id))
+                for pk in existing_passkeys
             ],
             authenticator_selection=AuthenticatorSelectionCriteria(
                 resident_key=ResidentKeyRequirement.REQUIRED,
@@ -187,7 +200,9 @@ class PasskeyService:
 
         return options_dict, challenge_str
 
-    def generate_authentication_options_dict(self, user_passkeys: list[Passkey]) -> tuple[dict, str]:
+    def generate_authentication_options_dict(
+        self, user_passkeys: list[Passkey]
+    ) -> tuple[dict, str]:
         """
         Generate WebAuthn authentication options.
 
@@ -201,7 +216,11 @@ class PasskeyService:
             allow_credentials=[
                 PublicKeyCredentialDescriptor(
                     id=base64url_to_bytes(pk.credential_id),
-                    transports=[AuthenticatorTransport(t) for t in pk.transports if t in ["usb", "nfc", "ble", "internal"]],
+                    transports=[
+                        AuthenticatorTransport(t)
+                        for t in pk.transports
+                        if t in ["usb", "nfc", "ble", "internal"]
+                    ],
                 )
                 for pk in user_passkeys
             ],
@@ -248,15 +267,17 @@ class PasskeyService:
 
         # Verify the registration response
         verification = verify_registration_response(
-            credential=json.dumps({
-                "id": credential_id,
-                "rawId": credential_id,
-                "response": {
-                    "clientDataJSON": client_data_json,
-                    "attestationObject": attestation_object,
-                },
-                "type": "public-key",
-            }),
+            credential=json.dumps(
+                {
+                    "id": credential_id,
+                    "rawId": credential_id,
+                    "response": {
+                        "clientDataJSON": client_data_json,
+                        "attestationObject": attestation_object,
+                    },
+                    "type": "public-key",
+                }
+            ),
             expected_challenge=base64url_to_bytes(challenge_str),
             expected_origin=self.origin,
             expected_rp_id=self.rp_id,
@@ -320,16 +341,18 @@ class PasskeyService:
 
         # Verify the authentication response
         verification = verify_authentication_response(
-            credential=json.dumps({
-                "id": credential_id,
-                "rawId": credential_id,
-                "response": {
-                    "clientDataJSON": client_data_json,
-                    "authenticatorData": authenticator_data,
-                    "signature": signature,
-                },
-                "type": "public-key",
-            }),
+            credential=json.dumps(
+                {
+                    "id": credential_id,
+                    "rawId": credential_id,
+                    "response": {
+                        "clientDataJSON": client_data_json,
+                        "authenticatorData": authenticator_data,
+                        "signature": signature,
+                    },
+                    "type": "public-key",
+                }
+            ),
             expected_challenge=base64url_to_bytes(challenge_str),
             expected_origin=self.origin,
             expected_rp_id=self.rp_id,
