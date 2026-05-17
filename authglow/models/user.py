@@ -28,7 +28,9 @@ class User(BaseModel):
 
     # MFA related
     mfa_enabled: bool = False
-    mfa_secret: Optional[str] = None  # Encrypted TOTP secret
+    mfa_secret: Optional[str] = (
+        None  # AES-256-GCM encrypted TOTP secret (prefix "ag1:"), or plaintext for migration
+    )
     mfa_verified: bool = False  # True after first successful MFA verification
 
     # Account lockout related
@@ -44,7 +46,7 @@ class User(BaseModel):
             "example": {
                 "email": "user@example.com",
                 "is_active": True,
-                "scopes": ["read", "write"]
+                "scopes": ["read", "write"],
             }
         }
 

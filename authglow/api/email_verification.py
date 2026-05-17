@@ -4,12 +4,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.email_verification import (
     EmailVerificationRequest,
-    ResendVerificationRequest
+    ResendVerificationRequest,
 )
 from authglow.models.user import User
 from authglow.services.email_verification import EmailVerificationService
@@ -19,7 +18,6 @@ from authglow.api.auth import get_current_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
-limiter = Limiter(key_func=get_remote_address)
 
 
 def get_verification_service():
@@ -33,10 +31,7 @@ def get_audit_service():
 
 
 @router.get("/verify-email", response_class=HTMLResponse)
-async def verify_email_page(
-    request: Request,
-    token: str
-):
+async def verify_email_page(request: Request, token: str):
     """Email verification page (verify via GET for easy email links)."""
     settings = get_settings()
     verification_service = get_verification_service()
@@ -55,7 +50,7 @@ async def verify_email_page(
                 user_id=verification_token.user_id,
                 email=verification_token.email,
                 metadata={"token": token},
-                ip_address=request.client.host if request.client else None
+                ip_address=request.client.host if request.client else None,
             )
 
         return templates.TemplateResponse(
@@ -65,8 +60,8 @@ async def verify_email_page(
                 "success": True,
                 "message": "Email verified successfully! You can now login.",
                 "login_url": f"{settings.base_url}/login",
-                **settings.get_ui_context()
-            }
+                **settings.get_ui_context(),
+            },
         )
     else:
         return templates.TemplateResponse(
@@ -76,16 +71,15 @@ async def verify_email_page(
                 "success": False,
                 "error": error,
                 "resend_url": f"{settings.base_url}/resend-verification",
-                **settings.get_ui_context()
-            }
+                **settings.get_ui_context(),
+            },
         )
 
 
 @router.post("/api/email/verify")
 @limiter.limit("10/hour")
 async def verify_email_api(
-    request: Request,
-    verification_request: EmailVerificationRequest
+    request: Request, verification_request: EmailVerificationRequest
 ):
     """Verify email via API (POST with token in body)."""
     verification_service = get_verification_service()
@@ -101,12 +95,14 @@ async def verify_email_api(
             email="unknown",
             metadata={"token": verification_request.token, "error": error},
             severity="warning",
-            ip_address=request.client.host if request.client else None
+            ip_address=request.client.host if request.client else None,
         )
         raise HTTPException(status_code=400, detail=error)
 
     # Get the token to find user
-    verification_token = await verification_service.get_token(verification_request.token)
+    verification_token = await verification_service.get_token(
+        verification_request.token
+    )
     if verification_token:
         # Log the verification
         await audit_service.log_event(
@@ -114,7 +110,7 @@ async def verify_email_api(
             user_id=verification_token.user_id,
             email=verification_token.email,
             metadata={"token": verification_request.token},
-            ip_address=request.client.host if request.client else None
+            ip_address=request.client.host if request.client else None,
         )
 
     return {"message": "Email verified successfully"}
@@ -123,8 +119,7 @@ async def verify_email_api(
 @router.post("/api/email/resend-verification")
 @limiter.limit("5/hour")
 async def resend_verification_email(
-    request: Request,
-    current_user: User = Depends(get_current_user)
+    request: Request, current_user: User = Depends(get_current_user)
 ):
     """Resend verification email for authenticated user."""
     verification_service = get_verification_service()
@@ -143,7 +138,7 @@ async def resend_verification_email(
             email=email,
             metadata={"error": error},
             severity="warning",
-            ip_address=request.client.host if request.client else None
+            ip_address=request.client.host if request.client else None,
         )
         raise HTTPException(status_code=400, detail=error)
 
@@ -151,7 +146,7 @@ async def resend_verification_email(
     await audit_service.log_event(
         event_type="email_verification_resent",
         email=email,
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     return {"message": "Verification email sent successfully"}
@@ -162,9 +157,5 @@ async def resend_verification_page(request: Request):
     """Resend verification email page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "resend_verification.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "resend_verification.html", {"request": request, **settings.get_ui_context()}
     )

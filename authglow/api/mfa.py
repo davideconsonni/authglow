@@ -3,6 +3,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 
+from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
 from authglow.models.user import User, UserResponse
 from authglow.models.mfa import (
     MFAEnrollResponse,
@@ -66,8 +67,8 @@ async def enroll_mfa(
     # Generate backup codes
     backup_codes = mfa_service.generate_backup_codes(10)
 
-    # Save secret to user (not verified yet)
-    current_user.mfa_secret = secret
+    # Save encrypted secret to user (not verified yet)
+    current_user.mfa_secret = encrypt_totp_secret(secret)
     current_user.mfa_enabled = True
     current_user.mfa_verified = False
     await storage.update_user(current_user)
@@ -99,8 +100,10 @@ async def verify_mfa_enrollment(
     if not current_user.mfa_secret:
         raise HTTPException(status_code=400, detail="No MFA secret found")
 
-    # Verify TOTP code
-    if not mfa_service.verify_totp(current_user.mfa_secret, verify_request.code):
+    # Verify TOTP code (decrypt stored secret first)
+    if not mfa_service.verify_totp(
+        decrypt_totp_secret(current_user.mfa_secret), verify_request.code
+    ):
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
     # Mark as verified
@@ -250,7 +253,9 @@ async def verify_mfa_login(
 
     if len(verify_request.code) == 6 and verify_request.code.isdigit():
         # Try TOTP
-        is_valid = mfa_service.verify_totp(user.mfa_secret, verify_request.code)
+        is_valid = mfa_service.verify_totp(
+            decrypt_totp_secret(user.mfa_secret), verify_request.code
+        )
     else:
         # Try backup code
         if await mfa_service.verify_user_backup_code(user.id, verify_request.code):

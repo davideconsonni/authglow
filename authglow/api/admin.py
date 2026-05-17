@@ -5,8 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.user import User, UserResponse
 from authglow.models.admin import (
@@ -18,7 +17,7 @@ from authglow.models.admin import (
     BulkUserOperation,
     AuditLogEntry,
     AuditLogFilter,
-    SecurityEvent
+    SecurityEvent,
 )
 from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
@@ -32,7 +31,6 @@ from authglow.core.config import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
-limiter = Limiter(key_func=get_remote_address)
 
 
 def get_user_storage():
@@ -70,6 +68,7 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 # Dashboard Pages
 
+
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Admin dashboard page (auth handled by JS)."""
@@ -77,11 +76,7 @@ async def admin_dashboard(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_dashboard.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "admin_dashboard.html", {"request": request, **ui_context}
     )
 
 
@@ -92,11 +87,7 @@ async def admin_users_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_users.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "admin_users.html", {"request": request, **ui_context}
     )
 
 
@@ -111,8 +102,8 @@ async def admin_audit_page(request: Request):
         {
             "request": request,
             **ui_context,
-            "current_user": {"email": "Loading..."}  # Will be loaded by JS
-        }
+            "current_user": {"email": "Loading..."},  # Will be loaded by JS
+        },
     )
 
 
@@ -123,11 +114,7 @@ async def admin_oauth_clients_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_oauth_clients.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "admin_oauth_clients.html", {"request": request, **ui_context}
     )
 
 
@@ -138,11 +125,7 @@ async def admin_api_keys_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_api_keys.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "admin_api_keys.html", {"request": request, **ui_context}
     )
 
 
@@ -153,21 +136,18 @@ async def admin_password_resets_page(request: Request):
     ui_context = settings.get_ui_context()
 
     return templates.TemplateResponse(
-        "admin_password_resets.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "admin_password_resets.html", {"request": request, **ui_context}
     )
 
 
 # API Endpoints
 
+
 @router.get("/api/admin/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get dashboard statistics."""
     # Get all users
@@ -217,7 +197,7 @@ async def get_dashboard_stats(
         total_logins_today=total_logins_today,
         total_logins_this_week=total_logins_this_week,
         total_logins_this_month=total_logins_this_month,
-        failed_logins_today=failed_logins_today
+        failed_logins_today=failed_logins_today,
     )
 
 
@@ -226,7 +206,7 @@ async def get_stats_timeseries(
     days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get time series statistics for charts."""
     return await audit_service.get_logs_by_date(days=days)
@@ -241,7 +221,7 @@ async def search_users(
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Search and filter users."""
     # Get all users (in production, implement database-level filtering)
@@ -254,9 +234,9 @@ async def search_users(
         if search:
             search_lower = search.lower()
             if not (
-                search_lower in user.email.lower() or
-                (user.first_name and search_lower in user.first_name.lower()) or
-                (user.last_name and search_lower in user.last_name.lower())
+                search_lower in user.email.lower()
+                or (user.first_name and search_lower in user.first_name.lower())
+                or (user.last_name and search_lower in user.last_name.lower())
             ):
                 continue
 
@@ -270,21 +250,24 @@ async def search_users(
 
         # Get login counts from audit logs
         user_logs = await audit_service.get_logs(
-            filters=AuditLogFilter(user_id=user.id),
-            limit=10000
+            filters=AuditLogFilter(user_id=user.id), limit=10000
         )
 
         login_count = sum(1 for log in user_logs if log.event_type == "login_success")
-        failed_login_count = sum(1 for log in user_logs if log.event_type == "login_failed")
+        failed_login_count = sum(
+            1 for log in user_logs if log.event_type == "login_failed"
+        )
 
-        filtered_users.append(AdminUserDetail(
-            **user.model_dump(),
-            login_count=login_count,
-            failed_login_count=failed_login_count
-        ))
+        filtered_users.append(
+            AdminUserDetail(
+                **user.model_dump(),
+                login_count=login_count,
+                failed_login_count=failed_login_count,
+            )
+        )
 
     # Apply pagination
-    return filtered_users[offset:offset + limit]
+    return filtered_users[offset : offset + limit]
 
 
 @router.get("/api/admin/users/{user_id}", response_model=AdminUserDetail)
@@ -292,7 +275,7 @@ async def get_user_detail(
     user_id: str,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get detailed user information."""
     user = await storage.get_user(user_id)
@@ -301,8 +284,7 @@ async def get_user_detail(
 
     # Get login counts
     user_logs = await audit_service.get_logs(
-        filters=AuditLogFilter(user_id=user_id),
-        limit=10000
+        filters=AuditLogFilter(user_id=user_id), limit=10000
     )
 
     login_count = sum(1 for log in user_logs if log.event_type == "login_success")
@@ -311,7 +293,7 @@ async def get_user_detail(
     return AdminUserDetail(
         **user.model_dump(),
         login_count=login_count,
-        failed_login_count=failed_login_count
+        failed_login_count=failed_login_count,
     )
 
 
@@ -323,7 +305,7 @@ async def update_user(
     update_data: UserUpdate,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Update user details."""
     user = await storage.get_user(user_id)
@@ -352,8 +334,8 @@ async def update_user(
         metadata={
             "target_user_id": user_id,
             "target_user_email": user.email,
-            "changes": update_data.model_dump(exclude_none=True)
-        }
+            "changes": update_data.model_dump(exclude_none=True),
+        },
     )
 
     return UserResponse(**user.model_dump())
@@ -367,7 +349,7 @@ async def delete_user(
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """Delete a user."""
     if user_id == current_user.id:
@@ -386,11 +368,8 @@ async def delete_user(
         event_type="user_deleted",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email
-        },
-        severity="warning"
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
     )
 
     return {"message": "User deleted successfully"}
@@ -400,7 +379,7 @@ async def delete_user(
 async def get_user_passkey_count(
     user_id: str,
     current_user: User = Depends(require_admin),
-    passkey_service: PasskeyService = Depends(get_passkey_service)
+    passkey_service: PasskeyService = Depends(get_passkey_service),
 ):
     """Get passkey count for a user."""
     passkeys = await passkey_service.get_user_passkeys(user_id)
@@ -411,7 +390,7 @@ async def get_user_passkey_count(
 async def get_user_passkeys_list(
     user_id: str,
     current_user: User = Depends(require_admin),
-    passkey_service: PasskeyService = Depends(get_passkey_service)
+    passkey_service: PasskeyService = Depends(get_passkey_service),
 ):
     """Get full list of passkeys for a user."""
     from authglow.models.passkey import PasskeyResponse
@@ -441,7 +420,7 @@ async def delete_user_passkey(
     current_user: User = Depends(require_admin),
     passkey_service: PasskeyService = Depends(get_passkey_service),
     audit_service: AuditService = Depends(get_audit_service),
-    storage: UserStorage = Depends(get_user_storage)
+    storage: UserStorage = Depends(get_user_storage),
 ):
     """Delete a user's passkey (admin only)."""
     user = await storage.get_user(user_id)
@@ -461,9 +440,9 @@ async def delete_user_passkey(
         metadata={
             "target_user_id": user_id,
             "target_user_email": user.email,
-            "credential_id": credential_id
+            "credential_id": credential_id,
         },
-        severity="warning"
+        severity="warning",
     )
 
     return {"message": "Passkey deleted successfully"}
@@ -477,7 +456,7 @@ async def reset_user_mfa(
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """Reset MFA for a user."""
     user = await storage.get_user(user_id)
@@ -496,11 +475,8 @@ async def reset_user_mfa(
         event_type="mfa_reset_by_admin",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email
-        },
-        severity="warning"
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
     )
 
     return {"message": "MFA reset successfully"}
@@ -513,7 +489,7 @@ async def bulk_user_operation(
     operation: BulkUserOperation,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Perform bulk operations on users."""
     results = {"success": 0, "failed": 0, "errors": []}
@@ -564,8 +540,8 @@ async def bulk_user_operation(
         metadata={
             "operation": operation.operation,
             "user_count": len(operation.user_ids),
-            "results": results
-        }
+            "results": results,
+        },
     )
 
     return results
@@ -580,14 +556,11 @@ async def get_audit_logs(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get audit logs with filtering."""
     filters = AuditLogFilter(
-        user_id=user_id,
-        event_type=event_type,
-        severity=severity,
-        search=search
+        user_id=user_id, event_type=event_type, severity=severity, search=search
     )
 
     return await audit_service.get_logs(filters=filters, limit=limit, offset=offset)
@@ -597,43 +570,41 @@ async def get_audit_logs(
 async def get_security_events(
     limit: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get recent security events."""
     # Get logs with warning/error/critical severity
     logs = await audit_service.get_logs(
-        filters=AuditLogFilter(severity="warning"),
-        limit=limit
+        filters=AuditLogFilter(severity="warning"), limit=limit
     )
 
     # Convert to security events
     events = []
     for log in logs:
-        events.append(SecurityEvent(
-            id=log.id,
-            event_type=log.event_type,
-            user_email=log.email,
-            timestamp=log.timestamp,
-            severity=log.severity,
-            description=log.event_type.replace("_", " ").title(),
-            ip_address=log.ip_address
-        ))
+        events.append(
+            SecurityEvent(
+                id=log.id,
+                event_type=log.event_type,
+                user_email=log.email,
+                timestamp=log.timestamp,
+                severity=log.severity,
+                description=log.event_type.replace("_", " ").title(),
+                ip_address=log.ip_address,
+            )
+        )
 
     return events
 
 
 # New admin endpoints for OAuth2 features
 
+
 @router.get("/admin/sessions", response_class=HTMLResponse)
 async def admin_sessions_page(request: Request):
     """Active sessions management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_sessions.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "admin_sessions.html", {"request": request, **settings.get_ui_context()}
     )
 
 
@@ -642,11 +613,7 @@ async def admin_oauth_consents_page(request: Request):
     """OAuth2 consents management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_oauth_consents.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "admin_oauth_consents.html", {"request": request, **settings.get_ui_context()}
     )
 
 
@@ -655,11 +622,7 @@ async def admin_rbac_page(request: Request):
     """RBAC management page (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_rbac.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "admin_rbac.html", {"request": request, **settings.get_ui_context()}
     )
 
 
@@ -668,11 +631,7 @@ async def admin_playground_page(request: Request):
     """API Playground page for testing OAuth2/OIDC flows (auth handled by JS)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        "admin_playground.html",
-        {
-            "request": request,
-            **settings.get_ui_context()
-        }
+        "admin_playground.html", {"request": request, **settings.get_ui_context()}
     )
 
 
@@ -680,7 +639,7 @@ async def admin_playground_page(request: Request):
 async def get_active_sessions(
     email: Optional[str] = Query(None),
     type: str = Query("all"),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_admin),
 ):
     """Get all active sessions and refresh tokens."""
     refresh_token_service = RefreshTokenService()
@@ -694,17 +653,18 @@ async def get_active_sessions(
     # Get all refresh tokens
     try:
         import fsspec
+
         settings = get_settings()
         storage_path = f"{settings.storage_path}/refresh_tokens"
 
         if settings.storage_backend == "file":
             import os
+
             os.makedirs(storage_path, exist_ok=True)
             fs = fsspec.filesystem("file")
         else:
             fs = fsspec.filesystem(
-                settings.storage_backend,
-                **settings.get_storage_options()
+                settings.storage_backend, **settings.get_storage_options()
             )
 
         pattern = f"{storage_path}/*.json"
@@ -713,9 +673,11 @@ async def get_active_sessions(
         for file_path in files:
             try:
                 import json
+
                 with fs.open(file_path, "r") as f:
                     data = json.load(f)
                     from authglow.models.refresh_token import RefreshToken
+
                     rt = RefreshToken(**data)
 
                     # Skip revoked or expired
@@ -738,17 +700,23 @@ async def get_active_sessions(
                     unique_users.add(rt.user_id)
                     total_refresh_tokens += 1
 
-                    sessions_list.append({
-                        "id": rt.token_id,
-                        "type": "refresh",
-                        "user_email": user.email,
-                        "client_id": rt.client_id,
-                        "created_at": rt.created_at.isoformat(),
-                        "expires_at": rt.expires_at.isoformat() if rt.expires_at else None,
-                        "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
-                        "ip_address": rt.issued_ip,
-                        "scopes": rt.scopes
-                    })
+                    sessions_list.append(
+                        {
+                            "id": rt.token_id,
+                            "type": "refresh",
+                            "user_email": user.email,
+                            "client_id": rt.client_id,
+                            "created_at": rt.created_at.isoformat(),
+                            "expires_at": rt.expires_at.isoformat()
+                            if rt.expires_at
+                            else None,
+                            "last_used_at": rt.used_at.isoformat()
+                            if rt.used_at
+                            else None,
+                            "ip_address": rt.issued_ip,
+                            "scopes": rt.scopes,
+                        }
+                    )
 
             except Exception:
                 continue
@@ -762,7 +730,7 @@ async def get_active_sessions(
         "sessions": sessions_list,
         "total_sessions": total_sessions,
         "total_refresh_tokens": total_refresh_tokens,
-        "unique_users": len(unique_users)
+        "unique_users": len(unique_users),
     }
 
 
@@ -770,7 +738,7 @@ async def get_active_sessions(
 async def revoke_refresh_token_admin(
     token_id: str,
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a refresh token (admin)."""
     refresh_token_service = RefreshTokenService()
@@ -780,8 +748,7 @@ async def revoke_refresh_token_admin(
         raise HTTPException(status_code=404, detail="Token not found")
 
     success = await refresh_token_service.revoke_token(
-        rt.token,
-        reason="Revoked by admin"
+        rt.token, reason="Revoked by admin"
     )
 
     if success:
@@ -790,16 +757,14 @@ async def revoke_refresh_token_admin(
             user_id=current_user.id,
             email=current_user.email,
             metadata={"token_id": token_id, "target_user_id": rt.user_id},
-            severity="warning"
+            severity="warning",
         )
 
     return {"message": "Token revoked successfully"}
 
 
 @router.post("/api/admin/sessions/cleanup")
-async def cleanup_expired_sessions(
-    current_user: User = Depends(require_admin)
-):
+async def cleanup_expired_sessions(current_user: User = Depends(require_admin)):
     """Clean up expired sessions and tokens."""
     refresh_token_service = RefreshTokenService()
 
@@ -810,8 +775,7 @@ async def cleanup_expired_sessions(
 
 @router.get("/api/admin/oauth-consents")
 async def get_oauth_consents_admin(
-    email: Optional[str] = Query(None),
-    current_user: User = Depends(require_admin)
+    email: Optional[str] = Query(None), current_user: User = Depends(require_admin)
 ):
     """Get all OAuth2 consents."""
     consent_service = OAuth2ConsentService()
@@ -823,17 +787,18 @@ async def get_oauth_consents_admin(
     # Get all consents
     try:
         import fsspec
+
         settings = get_settings()
         storage_path = f"{settings.storage_path}/oauth_consents"
 
         if settings.storage_backend == "file":
             import os
+
             os.makedirs(storage_path, exist_ok=True)
             fs = fsspec.filesystem("file")
         else:
             fs = fsspec.filesystem(
-                settings.storage_backend,
-                **settings.get_storage_options()
+                settings.storage_backend, **settings.get_storage_options()
             )
 
         pattern = f"{storage_path}/*.json"
@@ -842,9 +807,11 @@ async def get_oauth_consents_admin(
         for file_path in files:
             try:
                 import json
+
                 with fs.open(file_path, "r") as f:
                     data = json.load(f)
                     from authglow.models.oauth_consent import OAuth2Consent
+
                     consent = OAuth2Consent(**data)
 
                     # Get user
@@ -860,17 +827,23 @@ async def get_oauth_consents_admin(
                     client = await client_storage.get_client(consent.client_id)
                     client_name = client.name if client else consent.client_id
 
-                    consents_list.append({
-                        "consent_id": consent.consent_id,
-                        "user_email": user.email,
-                        "client_id": consent.client_id,
-                        "client_name": client_name,
-                        "scopes": consent.scopes,
-                        "granted_at": consent.granted_at.isoformat(),
-                        "expires_at": consent.expires_at.isoformat() if consent.expires_at else None,
-                        "revoked": consent.revoked,
-                        "revoked_at": consent.revoked_at.isoformat() if consent.revoked_at else None
-                    })
+                    consents_list.append(
+                        {
+                            "consent_id": consent.consent_id,
+                            "user_email": user.email,
+                            "client_id": consent.client_id,
+                            "client_name": client_name,
+                            "scopes": consent.scopes,
+                            "granted_at": consent.granted_at.isoformat(),
+                            "expires_at": consent.expires_at.isoformat()
+                            if consent.expires_at
+                            else None,
+                            "revoked": consent.revoked,
+                            "revoked_at": consent.revoked_at.isoformat()
+                            if consent.revoked_at
+                            else None,
+                        }
+                    )
 
             except Exception:
                 continue
@@ -888,7 +861,7 @@ async def get_oauth_consents_admin(
 async def revoke_consent_admin(
     consent_id: str,
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke an OAuth2 consent (admin)."""
     consent_service = OAuth2ConsentService()
@@ -903,7 +876,7 @@ async def revoke_consent_admin(
         user_id=current_user.id,
         email=current_user.email,
         metadata={"consent_id": consent_id},
-        severity="info"
+        severity="info",
     )
 
     return {"message": "Consent revoked successfully"}

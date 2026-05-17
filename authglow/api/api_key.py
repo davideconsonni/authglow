@@ -2,8 +2,7 @@
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.user import User
 from authglow.models.api_key import (
@@ -11,7 +10,7 @@ from authglow.models.api_key import (
     APIKeyResponse,
     APIKeyWithSecret,
     APIKeyUpdate,
-    APIKeyUsageStats
+    APIKeyUsageStats,
 )
 from authglow.services.api_key import APIKeyService
 from authglow.services.audit import AuditService
@@ -19,17 +18,18 @@ from authglow.api.auth import get_current_user, get_api_key_service, get_audit_s
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
-@router.post("/api/keys", response_model=APIKeyWithSecret, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/keys", response_model=APIKeyWithSecret, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit("10/hour")  # Limit API key creation
 async def create_api_key(
     request: Request,
     key_data: APIKeyCreate,
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Create a new API key for the current user.
 
@@ -37,9 +37,7 @@ async def create_api_key(
     """
     # Create the key
     api_key, plaintext_key = await api_key_service.create_key(
-        user_id=current_user.id,
-        key_data=key_data,
-        created_by=current_user.id
+        user_id=current_user.id, key_data=key_data, created_by=current_user.id
     )
 
     # Log the creation
@@ -50,22 +48,19 @@ async def create_api_key(
         metadata={
             "key_id": api_key.key_id,
             "key_name": api_key.name,
-            "scopes": api_key.scopes
+            "scopes": api_key.scopes,
         },
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     # Return response with plaintext key
-    return APIKeyWithSecret(
-        **api_key.model_dump(),
-        api_key=plaintext_key
-    )
+    return APIKeyWithSecret(**api_key.model_dump(), api_key=plaintext_key)
 
 
 @router.get("/api/keys", response_model=List[APIKeyResponse])
 async def list_my_api_keys(
     current_user: User = Depends(get_current_user),
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
     """List all API keys for the current user."""
     keys = await api_key_service.get_user_keys(current_user.id)
@@ -76,7 +71,7 @@ async def list_my_api_keys(
 async def get_api_key(
     key_id: str,
     current_user: User = Depends(get_current_user),
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
     """Get details of a specific API key."""
     api_key = await api_key_service.get_key(key_id)
@@ -92,7 +87,7 @@ async def get_api_key(
     user_storage = UserStorage()
     key_data = api_key.model_dump()
     user = await user_storage.get_user(api_key.user_id)
-    key_data['user_email'] = user.email if user else None
+    key_data["user_email"] = user.email if user else None
 
     return APIKeyResponse(**key_data)
 
@@ -105,7 +100,7 @@ async def update_api_key(
     update_data: APIKeyUpdate,
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Update an API key."""
     api_key = await api_key_service.get_key(key_id)
@@ -129,9 +124,9 @@ async def update_api_key(
         metadata={
             "key_id": key_id,
             "key_name": api_key.name,
-            "updates": list(updates.keys())
+            "updates": list(updates.keys()),
         },
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     return APIKeyResponse(**updated_key.model_dump())
@@ -144,7 +139,7 @@ async def revoke_api_key(
     key_id: str,
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke an API key (makes it inactive but keeps it in the system)."""
     api_key = await api_key_service.get_key(key_id)
@@ -167,12 +162,9 @@ async def revoke_api_key(
         event_type="api_key_revoked",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "key_id": key_id,
-            "key_name": api_key.name
-        },
+        metadata={"key_id": key_id, "key_name": api_key.name},
         severity="warning",
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     return {"message": "API key revoked successfully"}
@@ -185,7 +177,7 @@ async def delete_api_key(
     key_id: str,
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Permanently delete an API key."""
     api_key = await api_key_service.get_key(key_id)
@@ -208,12 +200,9 @@ async def delete_api_key(
         event_type="api_key_deleted",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "key_id": key_id,
-            "key_name": api_key.name
-        },
+        metadata={"key_id": key_id, "key_name": api_key.name},
         severity="warning",
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     return {"message": "API key deleted successfully"}
@@ -221,22 +210,21 @@ async def delete_api_key(
 
 # Admin endpoints
 
+
 @router.get("/api/admin/keys", response_model=List[APIKeyResponse])
 async def list_all_api_keys(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     active_only: bool = Query(False),
     current_user: User = Depends(get_current_user),
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
     """List all API keys (admin only)."""
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     keys = await api_key_service.list_all_keys(
-        limit=limit,
-        offset=offset,
-        active_only=active_only
+        limit=limit, offset=offset, active_only=active_only
     )
 
     # Enrich with user email
@@ -245,7 +233,7 @@ async def list_all_api_keys(
     for key in keys:
         key_data = key.model_dump()
         user = await user_storage.get_user(key.user_id)
-        key_data['user_email'] = user.email if user else None
+        key_data["user_email"] = user.email if user else None
         responses.append(APIKeyResponse(**key_data))
 
     return responses
@@ -255,7 +243,7 @@ async def list_all_api_keys(
 async def list_user_api_keys(
     user_id: str,
     current_user: User = Depends(get_current_user),
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
     """List all API keys for a specific user (admin only)."""
     if "admin" not in current_user.scopes:
@@ -269,7 +257,7 @@ async def list_user_api_keys(
 async def cleanup_expired_keys(
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete all expired and inactive API keys (admin only)."""
     if "admin" not in current_user.scopes:
@@ -282,7 +270,7 @@ async def cleanup_expired_keys(
         event_type="api_keys_cleanup",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"deleted_count": deleted_count}
+        metadata={"deleted_count": deleted_count},
     )
 
     return {"message": f"Cleaned up {deleted_count} expired API keys"}

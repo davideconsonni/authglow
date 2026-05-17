@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
+from authglow.core.crypto import decrypt_totp_secret
 from authglow.models.user import User, UserCreate, UserLogin, InviteUser, UserResponse
 from authglow.models.token import Token, OAuth2AuthorizationRequest, OAuth2TokenRequest
 from authglow.models.mfa import MFALoginRequest
@@ -31,7 +31,6 @@ from authglow.core.config import get_settings
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
 templates = Jinja2Templates(directory="authglow/templates")
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]:
@@ -887,7 +886,7 @@ async def oauth2_mfa_verify(
 
     # Try TOTP
     if user.mfa_secret and len(code) == 6:
-        is_valid = mfa_service.verify_totp(user.mfa_secret, code)
+        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), code)
 
     # Try backup code if TOTP failed
     if not is_valid and len(code) >= 8:

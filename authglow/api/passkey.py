@@ -6,8 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.passkey import (
     PasskeyResponse,
@@ -24,7 +23,6 @@ from authglow.core.config import get_settings
 router = APIRouter(prefix="/api/passkey")
 security = HTTPBearer()
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address)
 
 
 def get_passkey_service(request: Request) -> PasskeyService:
@@ -98,7 +96,9 @@ async def begin_registration(
     Returns WebAuthn credential creation options.
     """
     # Generate registration options
-    options_dict, challenge_str = passkey_service.generate_registration_options_dict(current_user)
+    options_dict, challenge_str = passkey_service.generate_registration_options_dict(
+        current_user
+    )
 
     # Save challenge
     challenge = PasskeyChallenge(
@@ -128,7 +128,10 @@ async def complete_registration(
         # The challenge is embedded in client_data_json, extract it
         import json
         import base64
-        client_data = json.loads(base64.urlsafe_b64decode(verification.client_data_json + "=="))
+
+        client_data = json.loads(
+            base64.urlsafe_b64decode(verification.client_data_json + "==")
+        )
         challenge_str = client_data["challenge"]
 
         # Verify and save passkey
@@ -163,6 +166,7 @@ async def complete_registration(
 
 class EmailRequest(BaseModel):
     """Email request for passkey authentication."""
+
     email: str
 
 
@@ -196,7 +200,9 @@ async def begin_authentication(
         )
 
     # Generate authentication options
-    options_dict, challenge_str = passkey_service.generate_authentication_options_dict(passkeys)
+    options_dict, challenge_str = passkey_service.generate_authentication_options_dict(
+        passkeys
+    )
 
     # Save challenge
     challenge = PasskeyChallenge(
@@ -228,7 +234,10 @@ async def complete_authentication(
         # Extract challenge from client_data_json
         import json
         import base64
-        client_data = json.loads(base64.urlsafe_b64decode(verification.client_data_json + "=="))
+
+        client_data = json.loads(
+            base64.urlsafe_b64decode(verification.client_data_json + "==")
+        )
         challenge_str = client_data["challenge"]
 
         # Verify authentication

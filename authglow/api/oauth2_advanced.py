@@ -3,8 +3,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Request, Header
 from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.user import User
 from authglow.services.refresh_token import RefreshTokenService
@@ -15,7 +14,6 @@ from authglow.services.storage import UserStorage
 from authglow.api.auth import get_current_user
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 def get_refresh_token_service():
@@ -54,7 +52,7 @@ async def revoke_token(
     refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
     jwt_service: JWTService = Depends(get_jwt_service),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """RFC 7009: Token Revocation Endpoint.
 
@@ -75,8 +73,7 @@ async def revoke_token(
         rt = await refresh_token_service.get_refresh_token(token)
         if rt:
             success = await refresh_token_service.revoke_token(
-                token,
-                reason="Revoked via revocation endpoint"
+                token, reason="Revoked via revocation endpoint"
             )
 
             if success:
@@ -84,12 +81,9 @@ async def revoke_token(
                 await audit_service.log_event(
                     event_type="refresh_token_revoked",
                     user_id=rt.user_id,
-                    metadata={
-                        "client_id": rt.client_id,
-                        "token_id": rt.token_id
-                    },
+                    metadata={"client_id": rt.client_id, "token_id": rt.token_id},
                     severity="info",
-                    ip_address=request.client.host if request.client else None
+                    ip_address=request.client.host if request.client else None,
                 )
 
             # Return success regardless (per RFC 7009)
@@ -111,10 +105,10 @@ async def revoke_token(
                 email=token_data.email,
                 metadata={
                     "token_type": "access_token",
-                    "note": "Access tokens cannot be revoked (stateless JWTs)"
+                    "note": "Access tokens cannot be revoked (stateless JWTs)",
                 },
                 severity="info",
-                ip_address=request.client.host if request.client else None
+                ip_address=request.client.host if request.client else None,
             )
 
     # Always return 200 OK per RFC 7009
@@ -129,7 +123,7 @@ async def introspect_token(
     token_type_hint: Optional[str] = Form(None),
     refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
     jwt_service: JWTService = Depends(get_jwt_service),
-    user_storage: UserStorage = Depends(get_user_storage)
+    user_storage: UserStorage = Depends(get_user_storage),
 ):
     """RFC 7662: Token Introspection Endpoint.
 
@@ -141,7 +135,6 @@ async def introspect_token(
     # and only accessible to trusted resource servers. For the playground,
     # we are leaving it open.
 
-
     # Try as refresh token
     if token_type_hint == "refresh_token" or not token_type_hint:
         rt = await refresh_token_service.get_refresh_token(token)
@@ -150,9 +143,7 @@ async def introspect_token(
 
             # Check if token is active
             active = (
-                not rt.revoked and
-                not rt.used and
-                datetime.utcnow() < rt.expires_at
+                not rt.revoked and not rt.used and datetime.utcnow() < rt.expires_at
             )
 
             # Get user info
@@ -192,7 +183,7 @@ async def introspect_token(
                 "exp": int(token_data.exp.timestamp()),
                 "iat": int(token_data.iat.timestamp()),
                 "sub": token_data.sub,
-                "email": token_data.email
+                "email": token_data.email,
             }
 
             if user and active:
@@ -207,7 +198,7 @@ async def introspect_token(
 @router.get("/api/tokens/refresh/list")
 async def list_user_refresh_tokens(
     current_user: User = Depends(get_current_user),
-    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
 ):
     """List all active refresh tokens for current user.
 
@@ -215,10 +206,7 @@ async def list_user_refresh_tokens(
     """
     # This would require adding a method to list user's tokens
     # For now, return placeholder
-    return {
-        "message": "Feature not yet implemented",
-        "user_id": current_user.id
-    }
+    return {"message": "Feature not yet implemented", "user_id": current_user.id}
 
 
 @router.post("/api/tokens/refresh/revoke-all")
@@ -227,7 +215,7 @@ async def revoke_all_user_refresh_tokens(
     request: Request,
     current_user: User = Depends(get_current_user),
     refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke all refresh tokens for the current user.
 
@@ -242,10 +230,7 @@ async def revoke_all_user_refresh_tokens(
         email=current_user.email,
         metadata={"revoked_count": count},
         severity="warning",
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
-    return {
-        "message": f"Successfully revoked {count} refresh tokens",
-        "count": count
-    }
+    return {"message": f"Successfully revoked {count} refresh tokens", "count": count}

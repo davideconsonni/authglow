@@ -2,8 +2,7 @@
 
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.models.oauth_client import (
     OAuth2Client,
@@ -11,7 +10,7 @@ from authglow.models.oauth_client import (
     OAuth2ClientUpdate,
     OAuth2ClientResponse,
     OAuth2ClientWithSecret,
-    OAuth2ClientSecretRotation
+    OAuth2ClientSecretRotation,
 )
 from authglow.models.user import User
 from authglow.services.oauth_client import OAuth2ClientStorage
@@ -19,7 +18,7 @@ from authglow.services.audit import AuditService
 from authglow.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/oauth-clients")
-limiter = Limiter(key_func=get_remote_address)
+
 
 
 def get_client_storage() -> OAuth2ClientStorage:
@@ -36,20 +35,21 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Require admin scope."""
     if "admin" not in current_user.scopes:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )
     return current_user
 
 
-@router.post("", response_model=OAuth2ClientWithSecret, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=OAuth2ClientWithSecret, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit("10/hour")  # Max 10 client creations per hour
 async def create_oauth_client(
     request: Request,
     client_data: OAuth2ClientCreate,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """
     Create a new OAuth2 client (admin only).
@@ -77,7 +77,7 @@ async def create_oauth_client(
         privacy_uri=client_data.privacy_uri,
         access_token_lifetime=client_data.access_token_lifetime,
         refresh_token_lifetime=client_data.refresh_token_lifetime,
-        created_by=current_user.id
+        created_by=current_user.id,
     )
 
     await storage.create_client(client, plaintext_secret)
@@ -87,16 +87,12 @@ async def create_oauth_client(
         event_type="oauth_client_created",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "client_id": client.client_id,
-            "client_name": client.client_name
-        }
+        metadata={"client_id": client.client_id, "client_name": client.client_name},
     )
 
     # Return client with plaintext secret (only shown once)
     response = OAuth2ClientWithSecret(
-        **client.model_dump(exclude={"client_secret"}),
-        client_secret=plaintext_secret
+        **client.model_dump(exclude={"client_secret"}), client_secret=plaintext_secret
     )
 
     return response
@@ -108,13 +104,11 @@ async def list_oauth_clients(
     offset: int = 0,
     active_only: bool = False,
     current_user: User = Depends(require_admin),
-    storage: OAuth2ClientStorage = Depends(get_client_storage)
+    storage: OAuth2ClientStorage = Depends(get_client_storage),
 ):
     """List all OAuth2 clients (admin only)."""
     clients = await storage.list_clients(
-        limit=limit,
-        offset=offset,
-        active_only=active_only
+        limit=limit, offset=offset, active_only=active_only
     )
 
     return [
@@ -127,15 +121,14 @@ async def list_oauth_clients(
 async def get_oauth_client(
     client_id: str,
     current_user: User = Depends(require_admin),
-    storage: OAuth2ClientStorage = Depends(get_client_storage)
+    storage: OAuth2ClientStorage = Depends(get_client_storage),
 ):
     """Get a specific OAuth2 client (admin only)."""
     client = await storage.get_client(client_id)
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
@@ -149,15 +142,14 @@ async def update_oauth_client(
     update_data: OAuth2ClientUpdate,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Update an OAuth2 client (admin only)."""
     client = await storage.get_client(client_id)
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     # Update fields
@@ -172,10 +164,7 @@ async def update_oauth_client(
         event_type="oauth_client_updated",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "client_id": client_id,
-            "updated_fields": list(update_dict.keys())
-        }
+        metadata={"client_id": client_id, "updated_fields": list(update_dict.keys())},
     )
 
     return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
@@ -188,15 +177,14 @@ async def delete_oauth_client(
     client_id: str,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete an OAuth2 client (admin only)."""
     client = await storage.get_client(client_id)
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     success = await storage.delete_client(client_id)
@@ -204,7 +192,7 @@ async def delete_oauth_client(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete OAuth2 client"
+            detail="Failed to delete OAuth2 client",
         )
 
     # Audit log
@@ -212,11 +200,8 @@ async def delete_oauth_client(
         event_type="oauth_client_deleted",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "client_id": client_id,
-            "client_name": client.client_name
-        },
-        severity="warning"
+        metadata={"client_id": client_id, "client_name": client.client_name},
+        severity="warning",
     )
 
     return {"message": "OAuth2 client deleted successfully"}
@@ -229,7 +214,7 @@ async def rotate_client_secret(
     client_id: str,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """
     Rotate OAuth2 client secret (admin only).
@@ -240,8 +225,7 @@ async def rotate_client_secret(
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     # Rotate secret
@@ -252,17 +236,11 @@ async def rotate_client_secret(
         event_type="oauth_client_secret_rotated",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "client_id": client_id,
-            "client_name": client.client_name
-        },
-        severity="high"
+        metadata={"client_id": client_id, "client_name": client.client_name},
+        severity="high",
     )
 
-    return OAuth2ClientSecretRotation(
-        client_id=client_id,
-        new_client_secret=new_secret
-    )
+    return OAuth2ClientSecretRotation(client_id=client_id, new_client_secret=new_secret)
 
 
 @router.post("/{client_id}/activate")
@@ -270,15 +248,14 @@ async def activate_oauth_client(
     client_id: str,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Activate an OAuth2 client (admin only)."""
     client = await storage.get_client(client_id)
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     client.is_active = True
@@ -289,7 +266,7 @@ async def activate_oauth_client(
         event_type="oauth_client_activated",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"client_id": client_id}
+        metadata={"client_id": client_id},
     )
 
     return {"message": "OAuth2 client activated"}
@@ -300,15 +277,14 @@ async def deactivate_oauth_client(
     client_id: str,
     current_user: User = Depends(require_admin),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Deactivate an OAuth2 client (admin only)."""
     client = await storage.get_client(client_id)
 
     if not client:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth2 client not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found"
         )
 
     client.is_active = False
@@ -320,7 +296,7 @@ async def deactivate_oauth_client(
         user_id=current_user.id,
         email=current_user.email,
         metadata={"client_id": client_id},
-        severity="warning"
+        severity="warning",
     )
 
     return {"message": "OAuth2 client deactivated"}

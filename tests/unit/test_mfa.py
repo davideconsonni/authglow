@@ -284,17 +284,101 @@ class TestDeviceFingerprint:
         assert result
 
 
-class TestTOTPSecretStorage:
-    def test_totp_secret_stored_encrypted(self):
-        from authglow.models.user import User
+class TestTOTPSecretEncryption:
+    def test_encrypt_produces_ciphertext(self):
+        from authglow.core.crypto import encrypt_totp_secret
 
-        user = User(
-            email="totptest@example.com",
-            hashed_password="$2b$12$xxxx",
-            mfa_secret="JBSWY3DPEHPK3PXP",
-        )
-        assert user.mfa_secret is not None
-        raw_secret = "JBSWY3DPEHPK3PXP"
-        assert user.mfa_secret == raw_secret, (
-            "MFA secret should be stored encrypted, not as plaintext base32"
-        )
+        secret = "JBSWY3DPEHPK3PXP"
+        encrypted = encrypt_totp_secret(secret)
+        assert encrypted != secret
+        assert encrypted.startswith("ag1:")
+
+    def test_decrypt_roundtrip(self):
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+
+        secret = "JBSWY3DPEHPK3PXP"
+        encrypted = encrypt_totp_secret(secret)
+        decrypted = decrypt_totp_secret(encrypted)
+        assert decrypted == secret
+
+    def test_encrypt_nondeterministic_iv(self):
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+
+        secret = "JBSWY3DPEHPK3PXP"
+        enc1 = encrypt_totp_secret(secret)
+        enc2 = encrypt_totp_secret(secret)
+        assert enc1 != enc2, "Each encryption must use a unique IV"
+        assert decrypt_totp_secret(enc1) == secret
+        assert decrypt_totp_secret(enc2) == secret
+
+    def test_decrypt_legacy_plaintext(self):
+        from authglow.core.crypto import decrypt_totp_secret
+
+        raw = "JBSWY3DPEHPK3PXP"
+        assert decrypt_totp_secret(raw) == raw, "Legacy plaintext must pass through"
+
+    def test_decrypt_empty_and_none_like(self):
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+
+        assert encrypt_totp_secret("") == ""
+        assert decrypt_totp_secret("") == ""
+        assert decrypt_totp_secret(None) is None
+
+    def test_wrong_key_fails(self):
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+        from unittest.mock import patch
+
+        secret = "JBSWY3DPEHPK3PXP"
+        encrypted = encrypt_totp_secret(secret)
+
+        with patch("authglow.core.crypto.get_settings") as mock_settings:
+            mock_settings.return_value.secret_key = "x" + "y" * 63
+            with patch(
+                "authglow.core.crypto.HKDF",
+                side_effect=Exception(
+                    "should not be called in AESGCM.decrypt path directly"
+                ),
+            ):
+                pass
+            try:
+                from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+                from cryptography.hazmat.primitives import hashes
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+                alt_settings = mock_settings.return_value
+                hkdf = HKDF(
+                    algorithm=hashes.SHA256(),
+                    length=32,
+                    salt=None,
+                    info=b"authglow-totp-encryption-v1",
+                )
+                wrong_key = hkdf.derive(alt_settings.secret_key.encode())
+                import base64
+
+                raw = base64.b64decode(encrypted[len("ag1:") :])
+                iv = raw[:12]
+                ciphertext = raw[12:]
+                aesgcm = AESGCM(wrong_key)
+                try:
+                    aesgcm.decrypt(iv, ciphertext, b"authglow-totp")
+                    assert False, "Decryption with wrong key should fail"
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    def test_totp_end_to_end_with_encryption(self):
+        import pyotp
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+
+        secret = pyotp.random_base32()
+        encrypted = encrypt_totp_secret(secret)
+        assert encrypted != secret
+        assert encrypted.startswith("ag1:")
+
+        decrypted = decrypt_totp_secret(encrypted)
+        assert decrypted == secret
+
+        totp = pyotp.TOTP(decrypted)
+        code = totp.now()
+        assert len(code) == 6

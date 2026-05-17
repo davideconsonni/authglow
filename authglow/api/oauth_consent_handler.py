@@ -4,8 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.oauth2 import OAuth2Service
@@ -17,7 +16,7 @@ from authglow.core.config import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
-limiter = Limiter(key_func=get_remote_address)
+
 
 # Scope descriptions for consent screen
 SCOPE_DESCRIPTIONS = {
@@ -37,7 +36,7 @@ async def show_consent_screen(
     session_service: SessionService = Depends(lambda: SessionService()),
     client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
     user_storage: UserStorage = Depends(lambda: UserStorage()),
-    consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService())
+    consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
 ):
     """Show OAuth2 consent screen."""
     settings = get_settings()
@@ -62,9 +61,7 @@ async def show_consent_screen(
 
     # Check if user has already consented
     has_consent, existing_consent = await consent_service.check_consent(
-        user_id=user.id,
-        client_id=client.client_id,
-        required_scopes=requested_scopes
+        user_id=user.id, client_id=client.client_id, required_scopes=requested_scopes
     )
 
     # If already consented, skip consent screen
@@ -78,7 +75,7 @@ async def show_consent_screen(
             scope=session["scope"],
             code_challenge=session.get("code_challenge"),
             code_challenge_method=session.get("code_challenge_method"),
-            nonce=session.get("nonce")
+            nonce=session.get("nonce"),
         )
 
         # Build redirect URL
@@ -95,8 +92,7 @@ async def show_consent_screen(
     scope_descriptions = {}
     for scope in requested_scopes:
         scope_descriptions[scope] = SCOPE_DESCRIPTIONS.get(
-            scope,
-            f"Access {scope} resources"
+            scope, f"Access {scope} resources"
         )
 
     return templates.TemplateResponse(
@@ -113,8 +109,8 @@ async def show_consent_screen(
             "scope_descriptions": scope_descriptions,
             "redirect_uri": session["redirect_uri"],
             "state": session.get("state"),
-            "session_token": session_token
-        }
+            "session_token": session_token,
+        },
     )
 
 
@@ -128,7 +124,7 @@ async def process_consent(
     session_service: SessionService = Depends(lambda: SessionService()),
     consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
     oauth2_service: OAuth2Service = Depends(lambda: OAuth2Service()),
-    audit_service: AuditService = Depends(lambda: AuditService())
+    audit_service: AuditService = Depends(lambda: AuditService()),
 ):
     """Process user's consent decision."""
     # Get session
@@ -146,12 +142,9 @@ async def process_consent(
         await audit_service.log_event(
             event_type="oauth2_consent_denied",
             user_id=session["user_id"],
-            metadata={
-                "client_id": session["client_id"],
-                "scopes": session["scope"]
-            },
+            metadata={"client_id": session["client_id"], "scopes": session["scope"]},
             severity="info",
-            ip_address=request.client.host if request.client else None
+            ip_address=request.client.host if request.client else None,
         )
 
         # Redirect with error
@@ -170,7 +163,7 @@ async def process_consent(
             user_id=session["user_id"],
             client_id=session["client_id"],
             scopes=requested_scopes,
-            expires_at=None  # Never expires
+            expires_at=None,  # Never expires
         )
 
     # Log consent
@@ -180,10 +173,10 @@ async def process_consent(
         metadata={
             "client_id": session["client_id"],
             "scopes": requested_scopes,
-            "remembered": should_remember
+            "remembered": should_remember,
         },
         severity="info",
-        ip_address=request.client.host if request.client else None
+        ip_address=request.client.host if request.client else None,
     )
 
     # Create authorization code
@@ -195,9 +188,11 @@ async def process_consent(
         scope=session["scope"],
         code_challenge=session.get("code_challenge"),
         code_challenge_method=session.get("code_challenge_method"),
-        nonce=session.get("nonce")
+        nonce=session.get("nonce"),
     )
-    print(f"DEBUG consent - Auth code created: {auth_code.code}, scope: {auth_code.scope}")
+    print(
+        f"DEBUG consent - Auth code created: {auth_code.code}, scope: {auth_code.scope}"
+    )
 
     # Delete the consent session
     await session_service.delete_consent_session(session_token)

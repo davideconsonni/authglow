@@ -4,8 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.models.password_reset import (
     PasswordResetRequest,
@@ -25,7 +24,7 @@ from authglow.core.password import validate_password_strength
 from authglow.services.password import hash_password, verify_password
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
+
 settings = get_settings()
 templates = Jinja2Templates(directory="authglow/templates")
 

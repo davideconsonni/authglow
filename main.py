@@ -6,7 +6,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 
+from slowapi.middleware import SlowAPIMiddleware
+
 from authglow.core.config import get_settings
+from authglow.core.rate_limit import limiter
 from authglow.api.auth import router as auth_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.api.mfa import router as mfa_router
@@ -27,18 +30,12 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     description="AuthGlow - A lightweight, self-hostable CIAM and OAuth2/OIDC provider.",
-    version="0.1.0"
+    version="0.1.0",
 )
 
-# Add rate limiter to app state
-# Note: Limiter and handler need to be defined or imported properly.
-# Assuming they are available in the context where this runs.
-# from slowapi.errors import RateLimitExceeded
-# from slowapi import Limiter
-# from slowapi.util import get_remote_address
-# limiter = Limiter(key_func=get_remote_address)
-# app.state.limiter = limiter
-# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Wire up rate limiter
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 
 
 # CORS middleware - Configured from environment variables for security
@@ -47,7 +44,9 @@ app.add_middleware(
     allow_origins=settings.get_cors_origins(),
     allow_credentials=settings.cors_allow_credentials,
     allow_methods=settings.get_cors_methods(),
-    allow_headers=[settings.cors_allowed_headers] if settings.cors_allowed_headers != "*" else ["*"],
+    allow_headers=[settings.cors_allowed_headers]
+    if settings.cors_allowed_headers != "*"
+    else ["*"],
 )
 
 # Mount static files
@@ -71,17 +70,12 @@ app.include_router(oidc_router, tags=["OpenID Connect"])
 templates = Jinja2Templates(directory="authglow/templates")
 
 
-
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Landing page."""
     ui_context = settings.get_ui_context()
     return templates.TemplateResponse(
-        "landing.html",
-        {
-            "request": request,
-            **ui_context
-        }
+        "landing.html", {"request": request, **ui_context}
     )
 
 
@@ -93,9 +87,7 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
-        "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug
+        "main:app", host=settings.host, port=settings.port, reload=settings.debug
     )
