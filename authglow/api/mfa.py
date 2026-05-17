@@ -8,7 +8,7 @@ from authglow.models.mfa import (
     MFAEnrollResponse,
     MFAVerifyRequest,
     MFAStatus,
-    TrustedDevice
+    TrustedDevice,
 )
 from authglow.services.storage import UserStorage
 from authglow.services.mfa import MFAService
@@ -44,7 +44,7 @@ def get_jwt_service():
 async def enroll_mfa(
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
-    storage: UserStorage = Depends(get_user_storage)
+    storage: UserStorage = Depends(get_user_storage),
 ):
     """
     Start MFA enrollment process.
@@ -53,7 +53,7 @@ async def enroll_mfa(
     if current_user.mfa_enabled and current_user.mfa_verified:
         raise HTTPException(
             status_code=400,
-            detail="MFA is already enabled. Disable it first to re-enroll."
+            detail="MFA is already enabled. Disable it first to re-enroll.",
         )
 
     # Generate TOTP secret
@@ -75,11 +75,7 @@ async def enroll_mfa(
     # Save backup codes
     await mfa_service.save_backup_codes(current_user.id, backup_codes)
 
-    return MFAEnrollResponse(
-        secret=secret,
-        qr_code=qr_code,
-        backup_codes=backup_codes
-    )
+    return MFAEnrollResponse(secret=secret, qr_code=qr_code, backup_codes=backup_codes)
 
 
 @router.post("/api/mfa/verify", response_model=UserResponse)
@@ -88,7 +84,7 @@ async def verify_mfa_enrollment(
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service)
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """
     Verify MFA enrollment with first TOTP code.
@@ -113,9 +109,7 @@ async def verify_mfa_enrollment(
 
     # Log MFA enabled
     await audit_service.log_event(
-        event_type="mfa_enabled",
-        user_id=current_user.id,
-        email=current_user.email
+        event_type="mfa_enabled", user_id=current_user.id, email=current_user.email
     )
 
     return UserResponse(**current_user.model_dump())
@@ -125,7 +119,7 @@ async def verify_mfa_enrollment(
 async def disable_mfa(
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
-    storage: UserStorage = Depends(get_user_storage)
+    storage: UserStorage = Depends(get_user_storage),
 ):
     """Disable MFA for current user."""
     if not current_user.mfa_enabled:
@@ -146,7 +140,7 @@ async def disable_mfa(
 @router.get("/api/mfa/status", response_model=MFAStatus)
 async def get_mfa_status(
     current_user: User = Depends(get_current_user),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """Get MFA status for current user."""
     backup_codes = await mfa_service.get_backup_codes(current_user.id)
@@ -156,14 +150,14 @@ async def get_mfa_status(
         enabled=current_user.mfa_enabled,
         verified=current_user.mfa_verified,
         backup_codes_remaining=len(backup_codes.codes) if backup_codes else 0,
-        trusted_devices_count=len(trusted_devices)
+        trusted_devices_count=len(trusted_devices),
     )
 
 
 @router.get("/api/mfa/trusted-devices", response_model=List[TrustedDevice])
 async def list_trusted_devices(
     current_user: User = Depends(get_current_user),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """List all trusted devices for current user."""
     return await mfa_service.list_trusted_devices(current_user.id)
@@ -173,7 +167,7 @@ async def list_trusted_devices(
 async def remove_trusted_device(
     device_id: str,
     current_user: User = Depends(get_current_user),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """Remove a trusted device."""
     # Verify device belongs to current user
@@ -193,13 +187,13 @@ async def remove_trusted_device(
 @router.post("/api/mfa/regenerate-backup-codes", response_model=dict)
 async def regenerate_backup_codes(
     current_user: User = Depends(get_current_user),
-    mfa_service: MFAService = Depends(get_mfa_service)
+    mfa_service: MFAService = Depends(get_mfa_service),
 ):
     """Regenerate backup codes (requires MFA to be enabled)."""
     if not current_user.mfa_enabled or not current_user.mfa_verified:
         raise HTTPException(
             status_code=400,
-            detail="MFA must be enabled and verified to regenerate backup codes"
+            detail="MFA must be enabled and verified to regenerate backup codes",
         )
 
     # Generate new backup codes
@@ -210,7 +204,7 @@ async def regenerate_backup_codes(
 
     return {
         "message": "Backup codes regenerated successfully",
-        "backup_codes": backup_codes
+        "backup_codes": backup_codes,
     }
 
 
@@ -221,7 +215,7 @@ async def verify_mfa_login(
     mfa_service: MFAService = Depends(get_mfa_service),
     jwt_service: JWTService = Depends(get_jwt_service),
     audit_service: AuditService = Depends(get_audit_service),
-    request: Request = None
+    request: Request = None,
 ):
     """Verify MFA code during login and return access token."""
     # Decode session token (should be in Authorization header or in body)
@@ -229,7 +223,11 @@ async def verify_mfa_login(
     from typing import Optional as Opt
 
     # Try to get session token from request
-    session_token = request.headers.get("Authorization", "").replace("Bearer ", "") if request else None
+    session_token = (
+        request.headers.get("Authorization", "").replace("Bearer ", "")
+        if request
+        else None
+    )
     if not session_token:
         raise HTTPException(status_code=401, detail="Session token required")
 
@@ -255,13 +253,9 @@ async def verify_mfa_login(
         is_valid = mfa_service.verify_totp(user.mfa_secret, verify_request.code)
     else:
         # Try backup code
-        backup_codes = await mfa_service.get_backup_codes(user.id)
-        if backup_codes and verify_request.code in backup_codes.codes:
+        if await mfa_service.verify_user_backup_code(user.id, verify_request.code):
             is_valid = True
             is_backup_code = True
-            # Remove used backup code
-            backup_codes.codes.remove(verify_request.code)
-            await mfa_service.save_backup_codes(user.id, backup_codes.codes)
 
     if not is_valid:
         await audit_service.log_event(
@@ -269,7 +263,7 @@ async def verify_mfa_login(
             user_id=user.id,
             email=user.email,
             ip_address=request.client.host if request and request.client else None,
-            severity="warning"
+            severity="warning",
         )
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
@@ -283,7 +277,7 @@ async def verify_mfa_login(
         email=user.email,
         ip_address=request.client.host if request and request.client else None,
         user_agent=request.headers.get("user-agent") if request else None,
-        metadata={"backup_code_used": is_backup_code}
+        metadata={"backup_code_used": is_backup_code},
     )
 
     # Return full access token

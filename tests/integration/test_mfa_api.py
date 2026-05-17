@@ -23,14 +23,18 @@ class TestTokenEndpointClientAuth:
 
 
 class TestMFAVerifyLoginBackupCodes:
-    def test_mfa_verify_login_uses_hashed_backup_codes(self):
+    def test_mfa_verify_login_uses_verify_user_backup_code(self):
         from authglow.api.mfa import verify_mfa_login
         import inspect
 
         source = inspect.getsource(verify_mfa_login)
-        assert "backup_codes.codes" in source, (
-            "verify_mfa_login uses `backup_codes.codes` which contains hashed codes, "
-            "making plaintext comparison impossible. Should use mfa_service.verify_user_backup_code()."
+        assert "verify_user_backup_code" in source, (
+            "verify_mfa_login should delegate backup code verification to "
+            "mfa_service.verify_user_backup_code() instead of doing plaintext comparison."
+        )
+        assert "backup_codes.codes" not in source, (
+            "verify_mfa_login should NOT access backup_codes.codes directly — "
+            "codes are bcrypt-hashed and require proper verification."
         )
 
     def test_mfa_service_verify_user_backup_code_works(self, mfa_service):
