@@ -7,6 +7,7 @@ from typing import Optional, List
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_consent import OAuth2Consent
 
@@ -28,6 +29,8 @@ class OAuth2ConsentService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     def _get_consent_path(self, consent_id: str) -> str:
         """Get path for consent file."""
@@ -61,8 +64,7 @@ class OAuth2ConsentService:
 
         # Save consent
         consent_path = self._get_consent_path(consent.consent_id)
-        with self.fs.open(consent_path, "w") as f:
-            json.dump(consent.model_dump(), f, default=str)
+        await self._afs.write_json(consent_path, consent.model_dump())
 
         return consent
 
@@ -77,9 +79,8 @@ class OAuth2ConsentService:
         """
         try:
             consent_path = self._get_consent_path(consent_id)
-            with self.fs.open(consent_path, "r") as f:
-                data = json.load(f)
-                return OAuth2Consent(**data)
+            data = await self._afs.read_json(consent_path)
+            return OAuth2Consent(**data)
         except Exception:
             return None
 
@@ -97,29 +98,28 @@ class OAuth2ConsentService:
         """
         try:
             pattern = self._get_user_consent_pattern(user_id)
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        consent = OAuth2Consent(**data)
+                    data = await self._afs.read_json(file_path)
+                    consent = OAuth2Consent(**data)
 
-                        # Check if matches user and client
-                        if consent.user_id != user_id or consent.client_id != client_id:
-                            continue
+                    # Check if matches user and client
+                    if consent.user_id != user_id or consent.client_id != client_id:
+                        continue
 
-                        # Check if revoked
-                        if consent.revoked:
-                            continue
+                    # Check if revoked
+                    if consent.revoked:
+                        continue
 
-                        # Check if expired
-                        if consent.expires_at and utcnow() > consent.expires_at:
-                            # Auto-delete expired consent
-                            self.fs.rm(file_path)
-                            continue
+                    # Check if expired
+                    if consent.expires_at and utcnow() > consent.expires_at:
+                        # Auto-delete expired consent
+                        await self._afs.rm(file_path)
+                        continue
 
-                        return consent
+                    return consent
 
                 except Exception:
                     continue
@@ -171,8 +171,7 @@ class OAuth2ConsentService:
         # Save updated consent
         consent_path = self._get_consent_path(consent_id)
         try:
-            with self.fs.open(consent_path, "w") as f:
-                json.dump(consent.model_dump(), f, default=str)
+            await self._afs.write_json(consent_path, consent.model_dump())
             return True
         except Exception:
             return False
@@ -204,16 +203,15 @@ class OAuth2ConsentService:
         consents = []
         try:
             pattern = self._get_user_consent_pattern(user_id)
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        consent = OAuth2Consent(**data)
+                    data = await self._afs.read_json(file_path)
+                    consent = OAuth2Consent(**data)
 
-                        if consent.user_id == user_id:
-                            consents.append(consent)
+                    if consent.user_id == user_id:
+                        consents.append(consent)
 
                 except Exception:
                     continue
@@ -234,18 +232,17 @@ class OAuth2ConsentService:
         deleted = 0
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        consent = OAuth2Consent(**data)
+                    data = await self._afs.read_json(file_path)
+                    consent = OAuth2Consent(**data)
 
-                        # Delete if expired
-                        if consent.expires_at and utcnow() > consent.expires_at:
-                            self.fs.rm(file_path)
-                            deleted += 1
+                    # Delete if expired
+                    if consent.expires_at and utcnow() > consent.expires_at:
+                        await self._afs.rm(file_path)
+                        deleted += 1
 
                 except Exception:
                     continue

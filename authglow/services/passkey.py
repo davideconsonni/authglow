@@ -23,6 +23,7 @@ from webauthn.helpers.structs import (
 )
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 
+from authglow.core.async_io import AsyncFileSystem
 from authglow.models.passkey import (
     Passkey,
     PasskeyChallenge,
@@ -51,6 +52,7 @@ class PasskeyService:
         self.rp_name = rp_name
         self.origin = origin
         self.fs = fsspec.core.url_to_fs(storage_path)[0]
+        self._afs = AsyncFileSystem(self.fs)
 
         # Ensure storage directories exist
         self.fs.mkdirs(f"{self.storage_path}/passkeys", exist_ok=True)
@@ -67,13 +69,12 @@ class PasskeyService:
     async def get_user_passkeys(self, user_id: str) -> list[Passkey]:
         """Get all passkeys for a user."""
         try:
-            files = self.fs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
+            files = await self._afs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
             passkeys = []
 
             for file_path in files:
-                with self.fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    passkeys.append(Passkey(**data))
+                data = await self._afs.read_json(file_path)
+                passkeys.append(Passkey(**data))
 
             return sorted(passkeys, key=lambda p: p.created_at, reverse=True)
         except Exception:
@@ -83,8 +84,7 @@ class PasskeyService:
         """Save a passkey."""
         path = self._get_passkey_path(passkey.user_id, passkey.credential_id)
 
-        with self.fs.open(path, "w") as f:
-            json.dump(passkey.model_dump(mode="json"), f, default=str)
+        await self._afs.write_json(path, passkey.model_dump(mode="json"))
 
         return passkey
 
@@ -93,9 +93,8 @@ class PasskeyService:
         path = self._get_passkey_path(user_id, credential_id)
 
         try:
-            with self.fs.open(path, "r") as f:
-                data = json.load(f)
-                return Passkey(**data)
+            data = await self._afs.read_json(path)
+            return Passkey(**data)
         except Exception:
             return None
 
@@ -104,7 +103,7 @@ class PasskeyService:
         path = self._get_passkey_path(user_id, credential_id)
 
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
             return True
         except Exception:
             return False
@@ -123,8 +122,7 @@ class PasskeyService:
         """Save a WebAuthn challenge."""
         path = self._get_challenge_path(challenge.challenge)
 
-        with self.fs.open(path, "w") as f:
-            json.dump(challenge.model_dump(mode="json"), f, default=str)
+        await self._afs.write_json(path, challenge.model_dump(mode="json"))
 
         return challenge
 
@@ -133,16 +131,15 @@ class PasskeyService:
         path = self._get_challenge_path(challenge_str)
 
         try:
-            with self.fs.open(path, "r") as f:
-                data = json.load(f)
-                challenge = PasskeyChallenge(**data)
+            data = await self._afs.read_json(path)
+            challenge = PasskeyChallenge(**data)
 
-                # Check if expired
-                if challenge.expires_at < utcnow():
-                    self.fs.rm(path)  # Clean up expired challenge
-                    return None
+            # Check if expired
+            if challenge.expires_at < utcnow():
+                await self._afs.rm(path)  # Clean up expired challenge
+                return None
 
-                return challenge
+            return challenge
         except Exception:
             return None
 
@@ -150,7 +147,7 @@ class PasskeyService:
         """Delete a challenge after use."""
         path = self._get_challenge_path(challenge_str)
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
         except Exception:
             pass
 

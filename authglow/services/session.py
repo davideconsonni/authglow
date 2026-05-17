@@ -7,6 +7,7 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.session import MFASession
 
@@ -28,6 +29,8 @@ class SessionService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     async def create_mfa_session(
         self,
@@ -54,8 +57,7 @@ class SessionService:
         )
 
         path = f"{self.storage_path}/{session.session_token}.json"
-        with self.fs.open(path, "w") as f:
-            json.dump(session.model_dump(mode="json"), f, indent=2, default=str)
+        await self._afs.write_json(path, session.model_dump(mode="json"))
 
         return session
 
@@ -64,16 +66,15 @@ class SessionService:
         path = f"{self.storage_path}/{session_token}.json"
 
         try:
-            with self.fs.open(path, "r") as f:
-                data = json.load(f)
-                session = MFASession(**data)
+            data = await self._afs.read_json(path)
+            session = MFASession(**data)
 
-                # Check if expired
-                if utcnow() > session.expires_at:
-                    self.fs.rm(path)
-                    return None
+            # Check if expired
+            if utcnow() > session.expires_at:
+                await self._afs.rm(path)
+                return None
 
-                return session
+            return session
 
         except FileNotFoundError:
             return None
@@ -82,7 +83,7 @@ class SessionService:
         """Delete an MFA session."""
         path = f"{self.storage_path}/{session_token}.json"
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
         except FileNotFoundError:
             pass
 
@@ -117,8 +118,7 @@ class SessionService:
         }
 
         path = f"{self.storage_path}/consent_{session_token}.json"
-        with self.fs.open(path, "w") as f:
-            json.dump(session_data, f, indent=2, default=str)
+        await self._afs.write_json(path, session_data)
 
         return session_data
 
@@ -127,16 +127,15 @@ class SessionService:
         path = f"{self.storage_path}/consent_{session_token}.json"
 
         try:
-            with self.fs.open(path, "r") as f:
-                session_data = json.load(f)
+            session_data = await self._afs.read_json(path)
 
-                # Check if expired
-                expires_at = datetime.fromisoformat(session_data["expires_at"])
-                if utcnow() > expires_at:
-                    self.fs.rm(path)
-                    return None
+            # Check if expired
+            expires_at = datetime.fromisoformat(session_data["expires_at"])
+            if utcnow() > expires_at:
+                await self._afs.rm(path)
+                return None
 
-                return session_data
+            return session_data
 
         except FileNotFoundError:
             return None
@@ -145,6 +144,6 @@ class SessionService:
         """Delete a consent session."""
         path = f"{self.storage_path}/consent_{session_token}.json"
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
         except FileNotFoundError:
             pass

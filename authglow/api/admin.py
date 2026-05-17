@@ -651,73 +651,49 @@ async def get_active_sessions(
     total_refresh_tokens = 0
     unique_users = set()
 
-    # Get all refresh tokens
+    # Get all refresh tokens via service layer (async I/O)
     try:
-        import fsspec
+        all_tokens = await refresh_token_service.list_all_tokens(
+            active_only=True, limit=10000, offset=0
+        )
 
-        settings = get_settings()
-        storage_path = f"{settings.storage_path}/refresh_tokens"
-
-        if settings.storage_backend == "file":
-            import os
-
-            os.makedirs(storage_path, exist_ok=True)
-            fs = fsspec.filesystem("file")
-        else:
-            fs = fsspec.filesystem(
-                settings.storage_backend, **settings.get_storage_options()
-            )
-
-        pattern = f"{storage_path}/*.json"
-        files = fs.glob(pattern)
-
-        for file_path in files:
+        for rt in all_tokens:
             try:
-                import json
+                # Skip revoked or expired
+                if rt.revoked or utcnow() > rt.expires_at:
+                    continue
 
-                with fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    from authglow.models.refresh_token import RefreshToken
+                # Get user
+                user = await user_storage.get_user(rt.user_id)
+                if not user:
+                    continue
 
-                    rt = RefreshToken(**data)
+                # Filter by email if specified
+                if email and email.lower() not in user.email.lower():
+                    continue
 
-                    # Skip revoked or expired
-                    if rt.revoked or utcnow() > rt.expires_at:
-                        continue
+                # Filter by type
+                if type != "all" and type != "refresh":
+                    continue
 
-                    # Get user
-                    user = await user_storage.get_user(rt.user_id)
-                    if not user:
-                        continue
+                unique_users.add(rt.user_id)
+                total_refresh_tokens += 1
 
-                    # Filter by email if specified
-                    if email and email.lower() not in user.email.lower():
-                        continue
-
-                    # Filter by type
-                    if type != "all" and type != "refresh":
-                        continue
-
-                    unique_users.add(rt.user_id)
-                    total_refresh_tokens += 1
-
-                    sessions_list.append(
-                        {
-                            "id": rt.token_id,
-                            "type": "refresh",
-                            "user_email": user.email,
-                            "client_id": rt.client_id,
-                            "created_at": rt.created_at.isoformat(),
-                            "expires_at": rt.expires_at.isoformat()
-                            if rt.expires_at
-                            else None,
-                            "last_used_at": rt.used_at.isoformat()
-                            if rt.used_at
-                            else None,
-                            "ip_address": rt.issued_ip,
-                            "scopes": rt.scopes,
-                        }
-                    )
+                sessions_list.append(
+                    {
+                        "id": rt.token_id,
+                        "type": "refresh",
+                        "user_email": user.email,
+                        "client_id": rt.client_id,
+                        "created_at": rt.created_at.isoformat(),
+                        "expires_at": rt.expires_at.isoformat()
+                        if rt.expires_at
+                        else None,
+                        "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
+                        "ip_address": rt.issued_ip,
+                        "scopes": rt.scopes,
+                    }
+                )
 
             except Exception:
                 continue
@@ -785,66 +761,66 @@ async def get_oauth_consents_admin(
 
     consents_list = []
 
-    # Get all consents
+    # Get all consents via service layer (async I/O)
     try:
-        import fsspec
+        all_consents = await consent_service.list_user_consents("")
 
-        settings = get_settings()
-        storage_path = f"{settings.storage_path}/oauth_consents"
+        # Also load consents directly for comprehensive listing
+        from authglow.core.config import get_settings as _get_settings
+        from authglow.core.async_io import AsyncFileSystem
+        import fsspec as _fsspec
 
-        if settings.storage_backend == "file":
-            import os
+        _settings = _get_settings()
+        _storage_path = f"{_settings.storage_path}/oauth_consents"
 
-            os.makedirs(storage_path, exist_ok=True)
-            fs = fsspec.filesystem("file")
+        if _settings.storage_backend == "file":
+            _fs = _fsspec.filesystem("file")
         else:
-            fs = fsspec.filesystem(
-                settings.storage_backend, **settings.get_storage_options()
+            _fs = _fsspec.filesystem(
+                _settings.storage_backend, **_settings.get_storage_options()
             )
+        _afs = AsyncFileSystem(_fs)
 
-        pattern = f"{storage_path}/*.json"
-        files = fs.glob(pattern)
+        pattern = f"{_storage_path}/*.json"
+        files = await _afs.glob(pattern)
 
         for file_path in files:
             try:
-                import json
+                data = await _afs.read_json(file_path)
+                from authglow.models.oauth_consent import OAuth2Consent
 
-                with fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    from authglow.models.oauth_consent import OAuth2Consent
+                consent = OAuth2Consent(**data)
 
-                    consent = OAuth2Consent(**data)
+                # Get user
+                user = await user_storage.get_user(consent.user_id)
+                if not user:
+                    continue
 
-                    # Get user
-                    user = await user_storage.get_user(consent.user_id)
-                    if not user:
-                        continue
+                # Filter by email if specified
+                if email and email.lower() not in user.email.lower():
+                    continue
 
-                    # Filter by email if specified
-                    if email and email.lower() not in user.email.lower():
-                        continue
+                # Get client info
+                client = await client_storage.get_client(consent.client_id)
+                client_name = client.name if client else consent.client_id
 
-                    # Get client info
-                    client = await client_storage.get_client(consent.client_id)
-                    client_name = client.name if client else consent.client_id
-
-                    consents_list.append(
-                        {
-                            "consent_id": consent.consent_id,
-                            "user_email": user.email,
-                            "client_id": consent.client_id,
-                            "client_name": client_name,
-                            "scopes": consent.scopes,
-                            "granted_at": consent.granted_at.isoformat(),
-                            "expires_at": consent.expires_at.isoformat()
-                            if consent.expires_at
-                            else None,
-                            "revoked": consent.revoked,
-                            "revoked_at": consent.revoked_at.isoformat()
-                            if consent.revoked_at
-                            else None,
-                        }
-                    )
+                consents_list.append(
+                    {
+                        "consent_id": consent.consent_id,
+                        "user_email": user.email,
+                        "client_id": consent.client_id,
+                        "client_name": client_name,
+                        "scopes": consent.scopes,
+                        "granted_at": consent.granted_at.isoformat(),
+                        "expires_at": consent.expires_at.isoformat()
+                        if consent.expires_at
+                        else None,
+                        "revoked": consent.revoked,
+                        "revoked_at": consent.revoked_at.isoformat()
+                        if consent.revoked_at
+                        else None,
+                    }
+                )
 
             except Exception:
                 continue

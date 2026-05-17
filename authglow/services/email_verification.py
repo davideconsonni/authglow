@@ -7,6 +7,7 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.user import User
@@ -33,6 +34,8 @@ class EmailVerificationService:
                 self.settings.storage_backend, **self.storage_options
             )
 
+        self._afs = AsyncFileSystem(self.fs)
+
     async def create_verification_token(self, user: User) -> EmailVerificationToken:
         """Create a new email verification token.
 
@@ -46,8 +49,7 @@ class EmailVerificationService:
 
         # Save token
         file_path = f"{self.storage_path}/{token.token}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(token.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, token.model_dump())
 
         return token
 
@@ -62,9 +64,8 @@ class EmailVerificationService:
         """
         try:
             file_path = f"{self.storage_path}/{token}.json"
-            with self.fs.open(file_path, "r") as f:
-                data = json.load(f)
-                return EmailVerificationToken(**data)
+            data = await self._afs.read_json(file_path)
+            return EmailVerificationToken(**data)
         except Exception:
             return None
 
@@ -87,8 +88,7 @@ class EmailVerificationService:
         # Save updated token
         file_path = f"{self.storage_path}/{token}.json"
         try:
-            with self.fs.open(file_path, "w") as f:
-                json.dump(verification_token.model_dump(), f, default=str)
+            await self._afs.write_json(file_path, verification_token.model_dump())
             return True
         except Exception:
             return False
@@ -201,18 +201,17 @@ class EmailVerificationService:
         deleted = 0
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        token = EmailVerificationToken(**data)
+                    data = await self._afs.read_json(file_path)
+                    token = EmailVerificationToken(**data)
 
-                        # Delete if expired
-                        if utcnow() > token.expires_at:
-                            self.fs.rm(file_path)
-                            deleted += 1
+                    # Delete if expired
+                    if utcnow() > token.expires_at:
+                        await self._afs.rm(file_path)
+                        deleted += 1
                 except Exception:
                     continue
         except Exception:

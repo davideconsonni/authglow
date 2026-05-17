@@ -7,6 +7,7 @@ from typing import Optional, List
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 
@@ -28,6 +29,8 @@ class RefreshTokenService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     def _get_token_path(self, token_id: str) -> str:
         """Get path for refresh token file."""
@@ -66,8 +69,7 @@ class RefreshTokenService:
 
         # Save token
         token_path = self._get_token_path(refresh_token.token_id)
-        with self.fs.open(token_path, "w") as f:
-            json.dump(refresh_token.model_dump(), f, default=str)
+        await self._afs.write_json(token_path, refresh_token.model_dump())
 
         return refresh_token
 
@@ -83,16 +85,15 @@ class RefreshTokenService:
         try:
             # Search through all tokens to find matching token string
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        rt = RefreshToken(**data)
+                    data = await self._afs.read_json(file_path)
+                    rt = RefreshToken(**data)
 
-                        if rt.token == token:
-                            return rt
+                    if rt.token == token:
+                        return rt
 
                 except Exception:
                     continue
@@ -113,9 +114,8 @@ class RefreshTokenService:
         """
         try:
             token_path = self._get_token_path(token_id)
-            with self.fs.open(token_path, "r") as f:
-                data = json.load(f)
-                return RefreshToken(**data)
+            data = await self._afs.read_json(token_path)
+            return RefreshToken(**data)
         except Exception:
             return None
 
@@ -180,8 +180,7 @@ class RefreshTokenService:
 
         # Save both tokens
         token_path = self._get_token_path(rt.token_id)
-        with self.fs.open(token_path, "w") as f:
-            json.dump(rt.model_dump(), f, default=str)
+        await self._afs.write_json(token_path, rt.model_dump())
 
         return new_token, None
 
@@ -206,8 +205,7 @@ class RefreshTokenService:
         # Save updated token
         token_path = self._get_token_path(rt.token_id)
         try:
-            with self.fs.open(token_path, "w") as f:
-                json.dump(rt.model_dump(), f, default=str)
+            await self._afs.write_json(token_path, rt.model_dump())
             return True
         except Exception:
             return False
@@ -255,8 +253,7 @@ class RefreshTokenService:
             rt.revoked_reason = "Token family revoked due to security violation"
 
             token_path = self._get_token_path(token_id)
-            with self.fs.open(token_path, "w") as f:
-                json.dump(rt.model_dump(), f, default=str)
+            await self._afs.write_json(token_path, rt.model_dump())
 
             revoked_count += 1
 
@@ -281,35 +278,33 @@ class RefreshTokenService:
         revoked_count = 0
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        rt = RefreshToken(**data)
+                    data = await self._afs.read_json(file_path)
+                    rt = RefreshToken(**data)
 
-                        # Check if matches user
-                        if rt.user_id != user_id:
-                            continue
+                    # Check if matches user
+                    if rt.user_id != user_id:
+                        continue
 
-                        # Check if matches client (if specified)
-                        if client_id and rt.client_id != client_id:
-                            continue
+                    # Check if matches client (if specified)
+                    if client_id and rt.client_id != client_id:
+                        continue
 
-                        # Skip if already revoked
-                        if rt.revoked:
-                            continue
+                    # Skip if already revoked
+                    if rt.revoked:
+                        continue
 
-                        # Revoke token
-                        rt.revoked = True
-                        rt.revoked_at = utcnow()
-                        rt.revoked_reason = "Revoked by user or admin"
+                    # Revoke token
+                    rt.revoked = True
+                    rt.revoked_at = utcnow()
+                    rt.revoked_reason = "Revoked by user or admin"
 
-                        with self.fs.open(file_path, "w") as f_write:
-                            json.dump(rt.model_dump(), f_write, default=str)
+                    await self._afs.write_json(file_path, rt.model_dump())
 
-                        revoked_count += 1
+                    revoked_count += 1
 
                 except Exception:
                     continue
@@ -328,18 +323,17 @@ class RefreshTokenService:
         deleted = 0
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        rt = RefreshToken(**data)
+                    data = await self._afs.read_json(file_path)
+                    rt = RefreshToken(**data)
 
-                        # Delete if expired
-                        if utcnow() > rt.expires_at:
-                            self.fs.rm(file_path)
-                            deleted += 1
+                    # Delete if expired
+                    if utcnow() > rt.expires_at:
+                        await self._afs.rm(file_path)
+                        deleted += 1
 
                 except Exception:
                     continue

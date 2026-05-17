@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import fsspec
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.token import AuthorizationCode
 from authglow.services.oauth_client import OAuth2ClientStorage
@@ -30,6 +31,8 @@ class OAuth2Service:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     def _get_code_path(self, code: str) -> str:
         """Get full path for an authorization code."""
@@ -65,8 +68,7 @@ class OAuth2Service:
         code_path = self._get_code_path(auth_code.code)
         code_data = auth_code.model_dump(mode="json")
 
-        with self.fs.open(code_path, "w") as f:
-            json.dump(code_data, f, indent=2, default=str)
+        await self._afs.write_json(code_path, code_data)
 
         return auth_code
 
@@ -75,21 +77,20 @@ class OAuth2Service:
         code_path = self._get_code_path(code)
 
         try:
-            with self.fs.open(code_path, "r") as f:
-                code_data = json.load(f)
-                auth_code = AuthorizationCode(**code_data)
+            code_data = await self._afs.read_json(code_path)
+            auth_code = AuthorizationCode(**code_data)
 
-                # Check if expired
-                if utcnow() > auth_code.expires_at:
-                    # Delete expired code
-                    self.fs.rm(code_path)
-                    return None
+            # Check if expired
+            if utcnow() > auth_code.expires_at:
+                # Delete expired code
+                await self._afs.rm(code_path)
+                return None
 
-                # Check if already used
-                if auth_code.used:
-                    return None
+            # Check if already used
+            if auth_code.used:
+                return None
 
-                return auth_code
+            return auth_code
 
         except FileNotFoundError:
             return None
@@ -104,8 +105,7 @@ class OAuth2Service:
         code_path = self._get_code_path(code)
         code_data = auth_code.model_dump(mode="json")
 
-        with self.fs.open(code_path, "w") as f:
-            json.dump(code_data, f, indent=2, default=str)
+        await self._afs.write_json(code_path, code_data)
 
         return True
 
@@ -113,7 +113,7 @@ class OAuth2Service:
         """Delete an authorization code."""
         code_path = self._get_code_path(code)
         try:
-            self.fs.rm(code_path)
+            await self._afs.rm(code_path)
         except FileNotFoundError:
             pass
 

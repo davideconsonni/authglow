@@ -1,5 +1,6 @@
 """OAuth2 Client storage and management service."""
 
+import asyncio
 import json
 import secrets
 from pathlib import Path
@@ -25,6 +26,16 @@ class OAuth2ClientStorage:
         """Get path for a client file."""
         return self.storage_path / f"{client_id}.json"
 
+    def _write_json(self, path: Path, data: dict) -> None:
+        """Write JSON to a file (sync helper)."""
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+
+    def _read_json(self, path: Path) -> dict:
+        """Read JSON from a file (sync helper)."""
+        with open(path, "r") as f:
+            return json.load(f)
+
     async def create_client(
         self, client: OAuth2Client, plaintext_secret: str
     ) -> OAuth2Client:
@@ -43,8 +54,9 @@ class OAuth2ClientStorage:
 
         # Save to file
         client_path = self._get_client_path(client.client_id)
-        with open(client_path, "w") as f:
-            json.dump(client.model_dump(mode="json"), f, indent=2, default=str)
+        await asyncio.to_thread(
+            self._write_json, client_path, client.model_dump(mode="json")
+        )
 
         return client
 
@@ -52,19 +64,20 @@ class OAuth2ClientStorage:
         """Get a client by client_id."""
         client_path = self._get_client_path(client_id)
 
-        if not client_path.exists():
+        exists = await asyncio.to_thread(client_path.exists)
+        if not exists:
             return None
 
-        with open(client_path, "r") as f:
-            data = json.load(f)
-            return OAuth2Client(**data)
+        data = await asyncio.to_thread(self._read_json, client_path)
+        return OAuth2Client(**data)
 
     async def update_client(self, client: OAuth2Client) -> OAuth2Client:
         """Update an existing client."""
         client_path = self._get_client_path(client.client_id)
 
-        with open(client_path, "w") as f:
-            json.dump(client.model_dump(mode="json"), f, indent=2, default=str)
+        await asyncio.to_thread(
+            self._write_json, client_path, client.model_dump(mode="json")
+        )
 
         return client
 
@@ -72,10 +85,11 @@ class OAuth2ClientStorage:
         """Delete a client."""
         client_path = self._get_client_path(client_id)
 
-        if not client_path.exists():
+        exists = await asyncio.to_thread(client_path.exists)
+        if not exists:
             return False
 
-        client_path.unlink()
+        await asyncio.to_thread(client_path.unlink)
         return True
 
     async def list_clients(
@@ -84,15 +98,20 @@ class OAuth2ClientStorage:
         """List all OAuth2 clients with pagination."""
         clients = []
 
-        for client_path in sorted(self.storage_path.glob("*.json")):
-            with open(client_path, "r") as f:
-                data = json.load(f)
-                client = OAuth2Client(**data)
+        def _list_and_read():
+            result = []
+            for client_path in sorted(self.storage_path.glob("*.json")):
+                with open(client_path, "r") as f:
+                    data = json.load(f)
+                    client = OAuth2Client(**data)
 
-                if active_only and not client.is_active:
-                    continue
+                    if active_only and not client.is_active:
+                        continue
 
-                clients.append(client)
+                    result.append(client)
+            return result
+
+        clients = await asyncio.to_thread(_list_and_read)
 
         # Apply pagination
         return clients[offset : offset + limit]

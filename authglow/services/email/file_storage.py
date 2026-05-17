@@ -1,8 +1,7 @@
 """File storage email provider - saves emails to JSON files for development."""
 
+import asyncio
 import json
-import os
-from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,6 +25,11 @@ class FileStorageEmailProvider(EmailProvider):
         """
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
+
+    def _write_email(self, file_path: Path, email_data: dict) -> None:
+        """Write email data to a file (sync helper)."""
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(email_data, f, indent=2, ensure_ascii=False)
 
     async def send(self, message: EmailMessage) -> EmailSendResult:
         """Send email by saving to file.
@@ -75,9 +79,8 @@ class FileStorageEmailProvider(EmailProvider):
                 ],
             }
 
-            # Save to file
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(email_data, f, indent=2, ensure_ascii=False)
+            # Save to file (async to avoid blocking event loop)
+            await asyncio.to_thread(self._write_email, file_path, email_data)
 
             return EmailSendResult(
                 success=True, message_id=message_id, provider="file_storage"

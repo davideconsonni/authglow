@@ -7,6 +7,7 @@ from typing import List, Optional, Set
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.rbac import Role, Permission, UserRole
 
@@ -33,22 +34,22 @@ class RBACService:
                 self.settings.storage_backend, **self.storage_options
             )
 
+        self._afs = AsyncFileSystem(self.fs)
+
     # Permission Management
 
     async def create_permission(self, permission: Permission) -> Permission:
         """Create a new permission."""
         file_path = f"{self.permissions_path}/{permission.permission_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(permission.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, permission.model_dump())
         return permission
 
     async def get_permission(self, permission_id: str) -> Optional[Permission]:
         """Get permission by ID."""
         try:
             file_path = f"{self.permissions_path}/{permission_id}.json"
-            with self.fs.open(file_path, "r") as f:
-                data = json.load(f)
-                return Permission(**data)
+            data = await self._afs.read_json(file_path)
+            return Permission(**data)
         except Exception:
             return None
 
@@ -56,15 +57,14 @@ class RBACService:
         """Get permission by name."""
         try:
             pattern = f"{self.permissions_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        perm = Permission(**data)
-                        if perm.name == name:
-                            return perm
+                    data = await self._afs.read_json(file_path)
+                    perm = Permission(**data)
+                    if perm.name == name:
+                        return perm
                 except Exception:
                     continue
             return None
@@ -76,13 +76,12 @@ class RBACService:
         permissions = []
         try:
             pattern = f"{self.permissions_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        permissions.append(Permission(**data))
+                    data = await self._afs.read_json(file_path)
+                    permissions.append(Permission(**data))
                 except Exception:
                     continue
         except Exception:
@@ -94,7 +93,7 @@ class RBACService:
         """Delete a permission."""
         try:
             file_path = f"{self.permissions_path}/{permission_id}.json"
-            self.fs.rm(file_path)
+            await self._afs.rm(file_path)
             return True
         except Exception:
             return False
@@ -104,17 +103,15 @@ class RBACService:
     async def create_role(self, role: Role) -> Role:
         """Create a new role."""
         file_path = f"{self.roles_path}/{role.role_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(role.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, role.model_dump())
         return role
 
     async def get_role(self, role_id: str) -> Optional[Role]:
         """Get role by ID."""
         try:
             file_path = f"{self.roles_path}/{role_id}.json"
-            with self.fs.open(file_path, "r") as f:
-                data = json.load(f)
-                return Role(**data)
+            data = await self._afs.read_json(file_path)
+            return Role(**data)
         except Exception:
             return None
 
@@ -122,15 +119,14 @@ class RBACService:
         """Get role by name."""
         try:
             pattern = f"{self.roles_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        role = Role(**data)
-                        if role.name == name:
-                            return role
+                    data = await self._afs.read_json(file_path)
+                    role = Role(**data)
+                    if role.name == name:
+                        return role
                 except Exception:
                     continue
             return None
@@ -142,13 +138,12 @@ class RBACService:
         roles = []
         try:
             pattern = f"{self.roles_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        roles.append(Role(**data))
+                    data = await self._afs.read_json(file_path)
+                    roles.append(Role(**data))
                 except Exception:
                     continue
         except Exception:
@@ -160,8 +155,7 @@ class RBACService:
         """Update a role."""
         role.updated_at = utcnow()
         file_path = f"{self.roles_path}/{role.role_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(role.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, role.model_dump())
         return role
 
     async def delete_role(self, role_id: str) -> bool:
@@ -172,7 +166,7 @@ class RBACService:
 
         try:
             file_path = f"{self.roles_path}/{role_id}.json"
-            self.fs.rm(file_path)
+            await self._afs.rm(file_path)
             return True
         except Exception:
             return False
@@ -182,24 +176,22 @@ class RBACService:
     async def assign_role_to_user(self, user_role: UserRole) -> UserRole:
         """Assign a role to a user."""
         file_path = f"{self.user_roles_path}/{user_role.assignment_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(user_role.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, user_role.model_dump())
         return user_role
 
     async def remove_role_from_user(self, user_id: str, role_id: str) -> bool:
         """Remove a role from a user."""
         try:
             pattern = f"{self.user_roles_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        ur = UserRole(**data)
-                        if ur.user_id == user_id and ur.role_id == role_id:
-                            self.fs.rm(file_path)
-                            return True
+                    data = await self._afs.read_json(file_path)
+                    ur = UserRole(**data)
+                    if ur.user_id == user_id and ur.role_id == role_id:
+                        await self._afs.rm(file_path)
+                        return True
                 except Exception:
                     continue
             return False
@@ -211,19 +203,18 @@ class RBACService:
         user_roles = []
         try:
             pattern = f"{self.user_roles_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        ur = UserRole(**data)
-                        if ur.user_id == user_id:
-                            # Check if expired
-                            if ur.expires_at and utcnow() > ur.expires_at:
-                                self.fs.rm(file_path)
-                                continue
-                            user_roles.append(ur)
+                    data = await self._afs.read_json(file_path)
+                    ur = UserRole(**data)
+                    if ur.user_id == user_id:
+                        # Check if expired
+                        if ur.expires_at and utcnow() > ur.expires_at:
+                            await self._afs.rm(file_path)
+                            continue
+                        user_roles.append(ur)
                 except Exception:
                     continue
         except Exception:

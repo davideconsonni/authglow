@@ -7,6 +7,7 @@ from typing import List, Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.admin import AuditLogEntry, AuditLogFilter
 
@@ -28,6 +29,8 @@ class AuditService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     def _get_log_path(self, log_id: str) -> str:
         """Get path for a log entry (organized by date)."""
@@ -64,8 +67,7 @@ class AuditService:
         )
 
         path = self._get_log_path(log_entry.id)
-        with self.fs.open(path, "w") as f:
-            json.dump(log_entry.model_dump(mode="json"), f, indent=2, default=str)
+        await self._afs.write_json(path, log_entry.model_dump(mode="json"))
 
         return log_entry
 
@@ -81,13 +83,13 @@ class AuditService:
         try:
             # Get all log files (search recent months first)
             pattern = f"{self.storage_path}/**/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             # Sort by modification time (newest first)
             files_with_time = []
             for file_path in files:
                 try:
-                    info = self.fs.info(file_path)
+                    info = await self._afs.info(file_path)
                     mtime = info.get("mtime", 0)
                     files_with_time.append((file_path, mtime))
                 except:
@@ -101,48 +103,47 @@ class AuditService:
                     break
 
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        log_entry = AuditLogEntry(**data)
+                    data = await self._afs.read_json(file_path)
+                    log_entry = AuditLogEntry(**data)
 
-                        # Apply filters
-                        if filters:
-                            if filters.user_id and log_entry.user_id != filters.user_id:
-                                continue
-                            if (
-                                filters.event_type
-                                and log_entry.event_type.lower()
-                                != filters.event_type.lower()
+                    # Apply filters
+                    if filters:
+                        if filters.user_id and log_entry.user_id != filters.user_id:
+                            continue
+                        if (
+                            filters.event_type
+                            and log_entry.event_type.lower()
+                            != filters.event_type.lower()
+                        ):
+                            continue
+                        if (
+                            filters.severity
+                            and log_entry.severity != filters.severity
+                        ):
+                            continue
+                        if (
+                            filters.start_date
+                            and log_entry.timestamp < filters.start_date
+                        ):
+                            continue
+                        if (
+                            filters.end_date
+                            and log_entry.timestamp > filters.end_date
+                        ):
+                            continue
+                        if filters.search:
+                            search_lower = filters.search.lower()
+                            if not (
+                                (
+                                    log_entry.email
+                                    and search_lower in log_entry.email.lower()
+                                )
+                                or search_lower in log_entry.event_type.lower()
+                                or search_lower in str(log_entry.metadata).lower()
                             ):
                                 continue
-                            if (
-                                filters.severity
-                                and log_entry.severity != filters.severity
-                            ):
-                                continue
-                            if (
-                                filters.start_date
-                                and log_entry.timestamp < filters.start_date
-                            ):
-                                continue
-                            if (
-                                filters.end_date
-                                and log_entry.timestamp > filters.end_date
-                            ):
-                                continue
-                            if filters.search:
-                                search_lower = filters.search.lower()
-                                if not (
-                                    (
-                                        log_entry.email
-                                        and search_lower in log_entry.email.lower()
-                                    )
-                                    or search_lower in log_entry.event_type.lower()
-                                    or search_lower in str(log_entry.metadata).lower()
-                                ):
-                                    continue
 
-                        logs.append(log_entry)
+                    logs.append(log_entry)
 
                 except Exception:
                     continue
@@ -161,22 +162,21 @@ class AuditService:
 
         try:
             pattern = f"{self.storage_path}/**/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        log_entry = AuditLogEntry(**data)
+                    data = await self._afs.read_json(file_path)
+                    log_entry = AuditLogEntry(**data)
 
-                        # Apply date filters
-                        if start_date and log_entry.timestamp < start_date:
-                            continue
-                        if end_date and log_entry.timestamp > end_date:
-                            continue
+                    # Apply date filters
+                    if start_date and log_entry.timestamp < start_date:
+                        continue
+                    if end_date and log_entry.timestamp > end_date:
+                        continue
 
-                        event_type = log_entry.event_type
-                        counts[event_type] = counts.get(event_type, 0) + 1
+                    event_type = log_entry.event_type
+                    counts[event_type] = counts.get(event_type, 0) + 1
 
                 except Exception:
                     continue
@@ -210,45 +210,44 @@ class AuditService:
 
         try:
             pattern = f"{self.storage_path}/**/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        log_entry = AuditLogEntry(**data)
+                    data = await self._afs.read_json(file_path)
+                    log_entry = AuditLogEntry(**data)
 
-                        if log_entry.timestamp < start_date:
-                            continue
+                    if log_entry.timestamp < start_date:
+                        continue
 
-                        date_str = log_entry.timestamp.strftime("%Y-%m-%d")
+                    date_str = log_entry.timestamp.strftime("%Y-%m-%d")
 
-                        # Find matching date in result
-                        for day_data in result:
-                            if day_data["date"] == date_str:
-                                day_data["total"] += 1
+                    # Find matching date in result
+                    for day_data in result:
+                        if day_data["date"] == date_str:
+                            day_data["total"] += 1
 
-                                # Count success logins
-                                if log_entry.event_type == "login_success":
-                                    day_data["success"] += 1
+                            # Count success logins
+                            if log_entry.event_type == "login_success":
+                                day_data["success"] += 1
 
-                                # Count failed logins (separate if, not elif)
-                                if log_entry.event_type == "login_failed":
-                                    day_data["failed"] += 1
+                            # Count failed logins (separate if, not elif)
+                            if log_entry.event_type == "login_failed":
+                                day_data["failed"] += 1
 
-                                # Count new users
-                                if log_entry.event_type == "user_created":
-                                    day_data["new_users"] += 1
+                            # Count new users
+                            if log_entry.event_type == "user_created":
+                                day_data["new_users"] += 1
 
-                                # Count security events
-                                if log_entry.severity in [
-                                    "warning",
-                                    "error",
-                                    "critical",
-                                ]:
-                                    day_data["security"] += 1
+                            # Count security events
+                            if log_entry.severity in [
+                                "warning",
+                                "error",
+                                "critical",
+                            ]:
+                                day_data["security"] += 1
 
-                                break
+                            break
 
                 except Exception:
                     continue
@@ -264,16 +263,15 @@ class AuditService:
 
         try:
             pattern = f"{self.storage_path}/**/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        log_entry = AuditLogEntry(**data)
+                    data = await self._afs.read_json(file_path)
+                    log_entry = AuditLogEntry(**data)
 
-                        if log_entry.timestamp < cutoff_date:
-                            self.fs.rm(file_path)
+                    if log_entry.timestamp < cutoff_date:
+                        await self._afs.rm(file_path)
 
                 except Exception:
                     continue

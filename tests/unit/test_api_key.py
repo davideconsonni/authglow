@@ -82,7 +82,7 @@ class TestAPIKeyPrefixIndex:
             )
         )
         prefix = api_key.key_prefix
-        index_ids = api_key_service._load_prefix_index(prefix)
+        index_ids = _run(api_key_service._load_prefix_index(prefix))
         assert api_key.key_id in index_ids
 
     def test_validate_uses_prefix_index_only(self, api_key_service):
@@ -98,7 +98,7 @@ class TestAPIKeyPrefixIndex:
         assert validated is not None
         assert validated.key_id == api_key.key_id
         prefix = plaintext[:12]
-        index_ids = api_key_service._load_prefix_index(prefix)
+        index_ids = _run(api_key_service._load_prefix_index(prefix))
         assert api_key.key_id in index_ids
 
     def test_validate_invalid_prefix_returns_none_quickly(self, api_key_service):
@@ -111,7 +111,7 @@ class TestAPIKeyPrefixIndex:
             )
         )
         fake_key = "ak_nonexistent_prefix_that_is_12c"
-        index_ids = api_key_service._load_prefix_index(fake_key[:12])
+        index_ids = _run(api_key_service._load_prefix_index(fake_key[:12]))
         assert index_ids == []
         validated = _run(api_key_service.validate_key(fake_key))
         assert validated is None
@@ -126,11 +126,11 @@ class TestAPIKeyPrefixIndex:
             )
         )
         prefix = api_key.key_prefix
-        assert api_key.key_id in api_key_service._load_prefix_index(prefix)
+        assert api_key.key_id in _run(api_key_service._load_prefix_index(prefix))
 
         deleted = _run(api_key_service.delete_key(api_key.key_id))
         assert deleted is True
-        assert api_key_service._load_prefix_index(prefix) == []
+        assert _run(api_key_service._load_prefix_index(prefix)) == []
 
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is None
@@ -146,9 +146,13 @@ class TestAPIKeyPrefixIndex:
         )
         api_key.expires_at = utcnow() - timedelta(days=2)
 
-        file_path = f"{api_key_service.storage_path}/{api_key.key_id}.json"
-        with api_key_service.fs.open(file_path, "w") as f:
-            json.dump(api_key.model_dump(), f, default=str)
+        _run(
+            api_key_service._afs.write_json(
+                f"{api_key_service.storage_path}/{api_key.key_id}.json",
+                api_key.model_dump(),
+                default=str,
+            )
+        )
 
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is None
@@ -173,7 +177,7 @@ class TestAPIKeyPrefixIndex:
         assert api_a.key_prefix != api_b.key_prefix, (
             "Collision extremely unlikely with 12-char prefix from token_urlsafe"
         )
-        prefix_a_ids = api_key_service._load_prefix_index(api_a.key_prefix)
+        prefix_a_ids = _run(api_key_service._load_prefix_index(api_a.key_prefix))
         assert api_a.key_id in prefix_a_ids
         assert api_b.key_id not in prefix_a_ids
 

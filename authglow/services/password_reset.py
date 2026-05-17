@@ -2,12 +2,14 @@
 
 import secrets
 import bcrypt
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List
 import fsspec
 
 from authglow.models.password_reset import PasswordResetToken
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 
 
@@ -24,6 +26,7 @@ class PasswordResetService:
         self.storage_path = storage_path or settings.storage_path
         self.reset_path = f"{self.storage_path}/password_resets"
         self.fs = fsspec.filesystem("file")  # Will auto-detect protocol from path
+        self._afs = AsyncFileSystem(self.fs)
 
     def _get_token_path(self, token_id: str) -> str:
         """Get file path for a token."""
@@ -76,10 +79,9 @@ class PasswordResetService:
 
         # Save token
         token_path = self._get_token_path(reset_token.token_id)
-        self.fs.makedirs(self.reset_path, exist_ok=True)
+        await self._afs.makedirs(self.reset_path, exist_ok=True)
 
-        with self.fs.open(token_path, "w") as f:
-            f.write(reset_token.model_dump_json(indent=2))
+        await self._afs.write_text(token_path, reset_token.model_dump_json(indent=2))
 
         return reset_token, plaintext_token
 
@@ -123,17 +125,16 @@ class PasswordResetService:
         """
         token_path = self._get_token_path(token_id)
 
-        if not self.fs.exists(token_path):
+        if not await self._afs.exists(token_path):
             return False
 
-        with self.fs.open(token_path, "r") as f:
-            token = PasswordResetToken.model_validate_json(f.read())
+        content = await self._afs.read_text(token_path)
+        token = PasswordResetToken.model_validate_json(content)
 
         token.is_used = True
         token.used_at = utcnow()
 
-        with self.fs.open(token_path, "w") as f:
-            f.write(token.model_dump_json(indent=2))
+        await self._afs.write_text(token_path, token.model_dump_json(indent=2))
 
         return True
 
@@ -148,11 +149,11 @@ class PasswordResetService:
         """
         token_path = self._get_token_path(token_id)
 
-        if not self.fs.exists(token_path):
+        if not await self._afs.exists(token_path):
             return None
 
-        with self.fs.open(token_path, "r") as f:
-            return PasswordResetToken.model_validate_json(f.read())
+        content = await self._afs.read_text(token_path)
+        return PasswordResetToken.model_validate_json(content)
 
     async def list_user_tokens(
         self, user_id: str, active_only: bool = True
@@ -166,25 +167,26 @@ class PasswordResetService:
         Returns:
             List of PasswordResetToken objects
         """
-        if not self.fs.exists(self.reset_path):
+        if not await self._afs.exists(self.reset_path):
             return []
 
         tokens = []
-        for file_path in self.fs.ls(self.reset_path):
+        file_list = await self._afs.ls(self.reset_path)
+        for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
 
-            with self.fs.open(file_path, "r") as f:
-                token = PasswordResetToken.model_validate_json(f.read())
+            content = await self._afs.read_text(file_path)
+            token = PasswordResetToken.model_validate_json(content)
 
-                if token.user_id != user_id:
+            if token.user_id != user_id:
+                continue
+
+            if active_only:
+                if token.is_used or utcnow() > token.expires_at:
                     continue
 
-                if active_only:
-                    if token.is_used or utcnow() > token.expires_at:
-                        continue
-
-                tokens.append(token)
+            tokens.append(token)
 
         return sorted(tokens, key=lambda t: t.created_at, reverse=True)
 
@@ -201,22 +203,23 @@ class PasswordResetService:
         Returns:
             List of PasswordResetToken objects
         """
-        if not self.fs.exists(self.reset_path):
+        if not await self._afs.exists(self.reset_path):
             return []
 
         tokens = []
-        for file_path in self.fs.ls(self.reset_path):
+        file_list = await self._afs.ls(self.reset_path)
+        for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
 
-            with self.fs.open(file_path, "r") as f:
-                token = PasswordResetToken.model_validate_json(f.read())
+            content = await self._afs.read_text(file_path)
+            token = PasswordResetToken.model_validate_json(content)
 
-                if active_only:
-                    if token.is_used or utcnow() > token.expires_at:
-                        continue
+            if active_only:
+                if token.is_used or utcnow() > token.expires_at:
+                    continue
 
-                tokens.append(token)
+            tokens.append(token)
 
         # Sort by created_at descending
         tokens.sort(key=lambda t: t.created_at, reverse=True)
@@ -248,16 +251,17 @@ class PasswordResetService:
         Returns:
             Number of tokens deleted
         """
-        if not self.fs.exists(self.reset_path):
+        if not await self._afs.exists(self.reset_path):
             return 0
 
         count = 0
-        for file_path in self.fs.ls(self.reset_path):
+        file_list = await self._afs.ls(self.reset_path)
+        for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
 
-            with self.fs.open(file_path, "r") as f:
-                token = PasswordResetToken.model_validate_json(f.read())
+            content = await self._afs.read_text(file_path)
+            token = PasswordResetToken.model_validate_json(content)
 
             # Delete if used or expired (older than 24 hours after expiration)
             should_delete = token.is_used or utcnow() > token.expires_at + timedelta(
@@ -265,7 +269,7 @@ class PasswordResetService:
             )
 
             if should_delete:
-                self.fs.rm(file_path)
+                await self._afs.rm(file_path)
                 count += 1
 
         return count
@@ -276,7 +280,7 @@ class PasswordResetService:
         Returns:
             Dictionary with stats
         """
-        if not self.fs.exists(self.reset_path):
+        if not await self._afs.exists(self.reset_path):
             return {"total": 0, "active": 0, "expired": 0, "used": 0}
 
         total = 0
@@ -286,12 +290,13 @@ class PasswordResetService:
 
         now = utcnow()
 
-        for file_path in self.fs.ls(self.reset_path):
+        file_list = await self._afs.ls(self.reset_path)
+        for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
 
-            with self.fs.open(file_path, "r") as f:
-                token = PasswordResetToken.model_validate_json(f.read())
+            content = await self._afs.read_text(file_path)
+            token = PasswordResetToken.model_validate_json(content)
 
             total += 1
 

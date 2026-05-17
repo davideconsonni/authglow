@@ -9,6 +9,7 @@ import bcrypt
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKey, APIKeyCreate
 
@@ -35,40 +36,39 @@ class APIKeyService:
                 self.settings.storage_backend, **self.storage_options
             )
 
-    def _load_prefix_index(self, prefix: str) -> List[str]:
+        self._afs = AsyncFileSystem(self.fs)
+
+    async def _load_prefix_index(self, prefix: str) -> List[str]:
         """Load key_ids for a given prefix from the index."""
         index_file = f"{self.index_path}/{prefix}.json"
         try:
-            with self.fs.open(index_file, "r") as f:
-                data = json.load(f)
-                return data.get("key_ids", [])
+            data = await self._afs.read_json(index_file)
+            return data.get("key_ids", [])
         except Exception:
             return []
 
-    def _save_prefix_index(self, api_key: APIKey) -> None:
+    async def _save_prefix_index(self, api_key: APIKey) -> None:
         """Add key_id to the prefix index for O(1) lookups."""
         prefix = api_key.key_prefix
-        existing_ids = self._load_prefix_index(prefix)
+        existing_ids = await self._load_prefix_index(prefix)
         if api_key.key_id not in existing_ids:
             existing_ids.append(api_key.key_id)
         index_file = f"{self.index_path}/{prefix}.json"
-        with self.fs.open(index_file, "w") as f:
-            json.dump({"key_ids": existing_ids}, f)
+        await self._afs.write_json(index_file, {"key_ids": existing_ids})
 
-    def _remove_from_prefix_index(self, prefix: str, key_id: str) -> None:
+    async def _remove_from_prefix_index(self, prefix: str, key_id: str) -> None:
         """Remove a key_id from the prefix index."""
-        existing_ids = self._load_prefix_index(prefix)
+        existing_ids = await self._load_prefix_index(prefix)
         if key_id in existing_ids:
             existing_ids.remove(key_id)
         index_file = f"{self.index_path}/{prefix}.json"
         if not existing_ids:
             try:
-                self.fs.rm(index_file)
+                await self._afs.rm(index_file)
             except Exception:
                 pass
         else:
-            with self.fs.open(index_file, "w") as f:
-                json.dump({"key_ids": existing_ids}, f)
+            await self._afs.write_json(index_file, {"key_ids": existing_ids})
 
     def _generate_api_key(self) -> tuple[str, str, str]:
         """Generate a new API key.
@@ -122,11 +122,10 @@ class APIKeyService:
 
         # Save to storage
         file_path = f"{self.storage_path}/{api_key.key_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(api_key.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
         # Update prefix index
-        self._save_prefix_index(api_key)
+        await self._save_prefix_index(api_key)
 
         return api_key, full_key
 
@@ -134,9 +133,8 @@ class APIKeyService:
         """Get an API key by ID."""
         try:
             file_path = f"{self.storage_path}/{key_id}.json"
-            with self.fs.open(file_path, "r") as f:
-                data = json.load(f)
-                return APIKey(**data)
+            data = await self._afs.read_json(file_path)
+            return APIKey(**data)
         except Exception:
             return None
 
@@ -145,15 +143,14 @@ class APIKeyService:
         keys = []
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        api_key = APIKey(**data)
-                        if api_key.user_id == user_id:
-                            keys.append(api_key)
+                    data = await self._afs.read_json(file_path)
+                    api_key = APIKey(**data)
+                    if api_key.user_id == user_id:
+                        keys.append(api_key)
                 except Exception:
                     continue
         except Exception:
@@ -168,18 +165,17 @@ class APIKeyService:
         keys = []
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        api_key = APIKey(**data)
+                    data = await self._afs.read_json(file_path)
+                    api_key = APIKey(**data)
 
-                        if active_only and not api_key.is_active:
-                            continue
+                    if active_only and not api_key.is_active:
+                        continue
 
-                        keys.append(api_key)
+                    keys.append(api_key)
                 except Exception:
                     continue
         except Exception:
@@ -196,7 +192,7 @@ class APIKeyService:
             return None
 
         prefix = provided_key[:PREFIX_LENGTH]
-        candidate_ids = self._load_prefix_index(prefix)
+        candidate_ids = await self._load_prefix_index(prefix)
 
         for key_id in candidate_ids:
             api_key = await self.get_key(key_id)
@@ -235,8 +231,7 @@ class APIKeyService:
 
         # Save
         file_path = f"{self.storage_path}/{key_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(api_key.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
         return api_key
 
@@ -251,8 +246,7 @@ class APIKeyService:
         api_key.revoked_by = revoked_by
 
         file_path = f"{self.storage_path}/{key_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(api_key.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
         return True
 
@@ -263,9 +257,9 @@ class APIKeyService:
             return False
 
         try:
-            self._remove_from_prefix_index(api_key.key_prefix, key_id)
+            await self._remove_from_prefix_index(api_key.key_prefix, key_id)
             file_path = f"{self.storage_path}/{key_id}.json"
-            self.fs.rm(file_path)
+            await self._afs.rm(file_path)
             return True
         except Exception:
             return False
@@ -287,8 +281,7 @@ class APIKeyService:
 
         # Save
         file_path = f"{self.storage_path}/{key_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(api_key.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
         return True
 
@@ -297,25 +290,24 @@ class APIKeyService:
         deleted = 0
         try:
             pattern = f"{self.storage_path}/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
                 try:
-                    with self.fs.open(file_path, "r") as f:
-                        data = json.load(f)
-                        api_key = APIKey(**data)
+                    data = await self._afs.read_json(file_path)
+                    api_key = APIKey(**data)
 
-                        # Check if expired
-                        if (
-                            api_key.expires_at
-                            and api_key.expires_at < utcnow()
-                            and not api_key.is_active
-                        ):
-                            self._remove_from_prefix_index(
-                                api_key.key_prefix, api_key.key_id
-                            )
-                            self.fs.rm(file_path)
-                            deleted += 1
+                    # Check if expired
+                    if (
+                        api_key.expires_at
+                        and api_key.expires_at < utcnow()
+                        and not api_key.is_active
+                    ):
+                        await self._remove_from_prefix_index(
+                            api_key.key_prefix, api_key.key_id
+                        )
+                        await self._afs.rm(file_path)
+                        deleted += 1
 
                 except Exception:
                     continue

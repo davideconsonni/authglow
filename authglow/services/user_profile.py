@@ -7,6 +7,7 @@ from typing import Optional
 import fsspec
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.services.password import verify_password, hash_password
 from authglow.models.user_profile import (
@@ -40,6 +41,8 @@ class UserProfileService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     # Profile Management
 
@@ -198,8 +201,8 @@ class UserProfileService:
         # Delete user preferences
         try:
             prefs_path = f"{self.preferences_path}/{user_id}.json"
-            if self.fs.exists(prefs_path):
-                self.fs.rm(prefs_path)
+            if await self._afs.exists(prefs_path):
+                await self._afs.rm(prefs_path)
         except Exception:
             pass
 
@@ -214,13 +217,12 @@ class UserProfileService:
         """Get user preferences."""
         try:
             file_path = f"{self.preferences_path}/{user_id}.json"
-            if not self.fs.exists(file_path):
+            if not await self._afs.exists(file_path):
                 # Return default preferences
                 return UserPreferences(user_id=user_id)
 
-            with self.fs.open(file_path, "r") as f:
-                data = json.load(f)
-                return UserPreferences(**data)
+            data = await self._afs.read_json(file_path)
+            return UserPreferences(**data)
         except Exception:
             # Return default preferences on error
             return UserPreferences(user_id=user_id)
@@ -243,8 +245,7 @@ class UserProfileService:
 
         # Save preferences
         file_path = f"{self.preferences_path}/{user_id}.json"
-        with self.fs.open(file_path, "w") as f:
-            json.dump(preferences.model_dump(), f, default=str)
+        await self._afs.write_json(file_path, preferences.model_dump())
 
         return preferences
 

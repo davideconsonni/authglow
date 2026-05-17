@@ -15,6 +15,7 @@ import fsspec
 import bcrypt
 
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 from authglow.models.mfa import BackupCodes, TrustedDevice
 
@@ -38,6 +39,8 @@ class MFAService:
             self.fs = fsspec.filesystem(
                 self.settings.storage_backend, **self.storage_options
             )
+
+        self._afs = AsyncFileSystem(self.fs)
 
     def generate_totp_secret(self) -> str:
         """Generate a new TOTP secret."""
@@ -102,16 +105,14 @@ class MFAService:
         backup_codes = BackupCodes(user_id=user_id, codes=hashed_codes)
 
         path = f"{self.storage_path}/backup_codes/{user_id}.json"
-        with self.fs.open(path, "w") as f:
-            json.dump(backup_codes.model_dump(mode="json"), f, indent=2, default=str)
+        await self._afs.write_json(path, backup_codes.model_dump(mode="json"), indent=2)
 
     async def get_backup_codes(self, user_id: str) -> Optional[BackupCodes]:
         """Get backup codes for a user."""
         path = f"{self.storage_path}/backup_codes/{user_id}.json"
         try:
-            with self.fs.open(path, "r") as f:
-                data = json.load(f)
-                return BackupCodes(**data)
+            data = await self._afs.read_json(path)
+            return BackupCodes(**data)
         except FileNotFoundError:
             return None
 
@@ -127,10 +128,7 @@ class MFAService:
                 # Increment used count but don't remove (multi-use)
                 backup_codes.used_count += 1
                 path = f"{self.storage_path}/backup_codes/{user_id}.json"
-                with self.fs.open(path, "w") as f:
-                    json.dump(
-                        backup_codes.model_dump(mode="json"), f, indent=2, default=str
-                    )
+                await self._afs.write_json(path, backup_codes.model_dump(mode="json"), indent=2)
                 return True
 
         return False
@@ -139,7 +137,7 @@ class MFAService:
         """Delete backup codes for a user."""
         path = f"{self.storage_path}/backup_codes/{user_id}.json"
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
         except FileNotFoundError:
             pass
 
@@ -166,8 +164,7 @@ class MFAService:
         )
 
         path = f"{self.storage_path}/trusted_devices/{device.id}.json"
-        with self.fs.open(path, "w") as f:
-            json.dump(device.model_dump(mode="json"), f, indent=2, default=str)
+        await self._afs.write_json(path, device.model_dump(mode="json"), indent=2)
 
         return device
 
@@ -176,26 +173,22 @@ class MFAService:
         try:
             # List all trusted devices for user
             pattern = f"{self.storage_path}/trusted_devices/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
-                with self.fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    device = TrustedDevice(**data)
+                data = await self._afs.read_json(file_path)
+                device = TrustedDevice(**data)
 
-                    if (
-                        device.user_id == user_id
-                        and device.device_fingerprint == device_fingerprint
-                        and utcnow() < device.expires_at
-                    ):
-                        # Update last used
-                        device.last_used = utcnow()
-                        with self.fs.open(file_path, "w") as f:
-                            json.dump(
-                                device.model_dump(mode="json"), f, indent=2, default=str
-                            )
+                if (
+                    device.user_id == user_id
+                    and device.device_fingerprint == device_fingerprint
+                    and utcnow() < device.expires_at
+                ):
+                    # Update last used
+                    device.last_used = utcnow()
+                    await self._afs.write_json(file_path, device.model_dump(mode="json"), indent=2)
 
-                        return True
+                    return True
 
             return False
         except Exception:
@@ -206,15 +199,14 @@ class MFAService:
         devices = []
         try:
             pattern = f"{self.storage_path}/trusted_devices/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
-                with self.fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    device = TrustedDevice(**data)
+                data = await self._afs.read_json(file_path)
+                device = TrustedDevice(**data)
 
-                    if device.user_id == user_id and utcnow() < device.expires_at:
-                        devices.append(device)
+                if device.user_id == user_id and utcnow() < device.expires_at:
+                    devices.append(device)
 
             return devices
         except Exception:
@@ -224,7 +216,7 @@ class MFAService:
         """Remove a trusted device."""
         path = f"{self.storage_path}/trusted_devices/{device_id}.json"
         try:
-            self.fs.rm(path)
+            await self._afs.rm(path)
             return True
         except FileNotFoundError:
             return False
@@ -233,14 +225,13 @@ class MFAService:
         """Remove all expired trusted devices."""
         try:
             pattern = f"{self.storage_path}/trusted_devices/*.json"
-            files = self.fs.glob(pattern)
+            files = await self._afs.glob(pattern)
 
             for file_path in files:
-                with self.fs.open(file_path, "r") as f:
-                    data = json.load(f)
-                    device = TrustedDevice(**data)
+                data = await self._afs.read_json(file_path)
+                device = TrustedDevice(**data)
 
-                    if utcnow() >= device.expires_at:
-                        self.fs.rm(file_path)
+                if utcnow() >= device.expires_at:
+                    await self._afs.rm(file_path)
         except Exception:
             pass

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import fsspec
 from authglow.models.user import User
 from authglow.core.config import get_settings
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
 
 
@@ -30,6 +31,8 @@ class UserStorage:
                 self.settings.storage_backend, **self.storage_options
             )
 
+        self._afs = AsyncFileSystem(self.fs)
+
     def _get_user_path(self, user_id: str) -> str:
         """Get full path for a user file."""
         return f"{self.storage_path}/{user_id}.json"
@@ -38,20 +41,18 @@ class UserStorage:
         """Get path for email-to-id index."""
         return f"{self.storage_path}/email_index.json"
 
-    def _load_email_index(self) -> dict:
+    async def _load_email_index(self) -> dict:
         """Load email to user_id mapping."""
         index_path = self._get_email_index_path()
         try:
-            with self.fs.open(index_path, "r") as f:
-                return json.load(f)
+            return await self._afs.read_json(index_path)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-    def _save_email_index(self, index: dict):
+    async def _save_email_index(self, index: dict):
         """Save email to user_id mapping."""
         index_path = self._get_email_index_path()
-        with self.fs.open(index_path, "w") as f:
-            json.dump(index, f, indent=2)
+        await self._afs.write_json(index_path, index)
 
     async def create_user(self, user: User) -> User:
         """Create a new user."""
@@ -63,13 +64,12 @@ class UserStorage:
         user_path = self._get_user_path(user.id)
         user_data = user.model_dump(mode="json")
 
-        with self.fs.open(user_path, "w") as f:
-            json.dump(user_data, f, indent=2, default=str)
+        await self._afs.write_json(user_path, user_data)
 
         # Update email index
-        email_index = self._load_email_index()
+        email_index = await self._load_email_index()
         email_index[user.email.lower()] = user.id
-        self._save_email_index(email_index)
+        await self._save_email_index(email_index)
 
         return user
 
@@ -78,15 +78,14 @@ class UserStorage:
         user_path = self._get_user_path(user_id)
 
         try:
-            with self.fs.open(user_path, "r") as f:
-                user_data = json.load(f)
-                return User(**user_data)
+            user_data = await self._afs.read_json(user_path)
+            return User(**user_data)
         except FileNotFoundError:
             return None
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email."""
-        email_index = self._load_email_index()
+        email_index = await self._load_email_index()
         user_id = email_index.get(email.lower())
 
         if user_id:
@@ -99,8 +98,7 @@ class UserStorage:
         user_path = self._get_user_path(user.id)
         user_data = user.model_dump(mode="json")
 
-        with self.fs.open(user_path, "w") as f:
-            json.dump(user_data, f, indent=2, default=str)
+        await self._afs.write_json(user_path, user_data)
 
         return user
 
@@ -111,21 +109,21 @@ class UserStorage:
             return False
 
         # Remove from email index
-        email_index = self._load_email_index()
+        email_index = await self._load_email_index()
         email_index.pop(user.email.lower(), None)
-        self._save_email_index(email_index)
+        await self._save_email_index(email_index)
 
         # Delete user file
         user_path = self._get_user_path(user_id)
         try:
-            self.fs.rm(user_path)
+            await self._afs.rm(user_path)
             return True
         except FileNotFoundError:
             return False
 
     async def list_users(self, limit: int = 100, offset: int = 0) -> List[User]:
         """List all users with pagination."""
-        email_index = self._load_email_index()
+        email_index = await self._load_email_index()
         user_ids = list(email_index.values())[offset : offset + limit]
 
         users = []
