@@ -47,7 +47,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 | M4 | **Timezone handling inconsistente** — `utcnow()` (naive) vs `now(timezone.utc)` (aware). | Tutto il codebase | Creato `authglow/core/datetime.py` con `utcnow()` che ritorna `datetime.now(timezone.utc)`. Sostituiti tutti i `datetime.utcnow()` con `utcnow()` e `default_factory=datetime.utcnow` con `default_factory=utcnow` in modelli Pydantic. Test M4 aggiornato e invertito per verificare assenza di `datetime.utcnow()`. | done | 177 test passano; 1 fail preesistente (oauth2 scope) |
 | M5 | **I/O sincrono in funzioni async** — `fsspec` blocca l'event loop.                               | `authglow/services/storage.py`, `session.py`, `audit.py`, ecc. | Creato `authglow/core/async_io.py` con `AsyncFileSystem` wrapper (`asyncio.to_thread()`). Tutti i 16 file con I/O sincrono convertiti ad async. Test aggiornati. | done | vedi `authglow/core/async_io.py`; 203/204 test passano (1 fail preesistente oauth2 scope) |
 | M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità. | `storage.py`, `refresh_token.py`, `oauth2.py`, ecc. | Due layer di protezione: (1) `AsyncNamedLock` in `core/concurrency.py` per serializzare RMW in-process, (2) `read_json_versioned`/`write_json_versioned` in `core/async_io.py` con CAS ottimistico per cross-process defense-in-depth. Tutti i 12 service con RMW aggiornati. | done | Vedi `authglow/core/concurrency.py` e `authglow/core/async_io.py` |
-| M7 | **Admin carica tutto in memoria** — `limit=10000` utenti e log causa OOM.                        | `authglow/api/admin.py`                                        | Paginare correttamente con query offset/limit, non caricare tutto in memoria.                   | pending |      |
+| M7 | **Admin carica tutto in memoria** — `limit=10000` utenti e log causa OOM.                        | `authglow/api/admin.py`                                        | Paginato correttamente con query offset/limit. `UserStorage.count_users()` e `get_user_stats()` per statistiche senza caricare tutto. `AuditService.get_user_login_counts()` per conteggi per-user. `RefreshTokenService.list_all_tokens()` aggiunto (era mancante, crash runtime). `PaginatedResponse` per risposte paginate. `search_users` usa filtri server-side. Eventuali `limit=10000` rimossi. Setup endpoints usano `count_users()` invece di `list_users`. | done | 234/235 test passano (1 fail preesistente oauth2 scope) |
 | M8 | **Nessun test** — Zero test nel repository.                                                      | —                                                              | Aggiungere almeno test unitari per JWT, OAuth2 flows, MFA, passkey.                             | pending |      |
 
 ## MAINTENANCE — Dipendenze & Tooling
@@ -102,7 +102,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 - [x] M4 — Consistent timezone usage
 - [x] M5 — Async fsspec I/O
 - [x] M6 — Storage race conditions
-- [ ] M7 — Admin pagination
+- [x] M7 — Admin pagination
 - [ ] M8 — Add tests
 - [ ] D1 — Update dependencies
 - [ ] D2 — Evaluate passlib replacement

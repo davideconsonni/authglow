@@ -979,7 +979,7 @@ async def list_users(
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    users = await storage.list_users(limit=limit, offset=offset)
+    users, _ = await storage.list_users(limit=limit, offset=offset)
     return [UserResponse(**user.model_dump()) for user in users]
 
 

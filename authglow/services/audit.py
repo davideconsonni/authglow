@@ -116,20 +116,14 @@ class AuditService:
                             != filters.event_type.lower()
                         ):
                             continue
-                        if (
-                            filters.severity
-                            and log_entry.severity != filters.severity
-                        ):
+                        if filters.severity and log_entry.severity != filters.severity:
                             continue
                         if (
                             filters.start_date
                             and log_entry.timestamp < filters.start_date
                         ):
                             continue
-                        if (
-                            filters.end_date
-                            and log_entry.timestamp > filters.end_date
-                        ):
+                        if filters.end_date and log_entry.timestamp > filters.end_date:
                             continue
                         if filters.search:
                             search_lower = filters.search.lower()
@@ -153,6 +147,39 @@ class AuditService:
 
         except Exception:
             return []
+
+    async def get_user_login_counts(self, user_id: str) -> dict:
+        """Get login success/failure counts for a single user.
+
+        Returns ``{"login_success": int, "login_failed": int}`` without
+        materialising the full log list.
+        """
+        success = 0
+        failed = 0
+
+        try:
+            pattern = f"{self.storage_path}/**/*.json"
+            files = await self._afs.glob(pattern)
+
+            for file_path in files:
+                try:
+                    data = await self._afs.read_json(file_path)
+                    log_entry = AuditLogEntry(**data)
+
+                    if log_entry.user_id != user_id:
+                        continue
+                    if log_entry.event_type == "login_success":
+                        success += 1
+                    elif log_entry.event_type == "login_failed":
+                        failed += 1
+
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
+
+        return {"login_success": success, "login_failed": failed}
 
     async def get_event_counts_by_type(
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None

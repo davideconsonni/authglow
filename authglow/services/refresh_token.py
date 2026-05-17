@@ -358,6 +358,40 @@ class RefreshTokenService:
 
         return revoked_count
 
+    async def list_all_tokens(
+        self, active_only: bool = False, limit: int = 100, offset: int = 0
+    ) -> tuple[list[RefreshToken], int]:
+        """List tokens with optional active-only filter and pagination.
+
+        Returns a tuple of (token_page, total_matching_count).
+        """
+        tokens = []
+        try:
+            pattern = f"{self.storage_path}/*.json"
+            files = await self._afs.glob(pattern)
+
+            for file_path in files:
+                try:
+                    data = await self._afs.read_json(file_path)
+                    rt = RefreshToken(**data)
+
+                    if active_only:
+                        if rt.revoked or utcnow() > rt.expires_at:
+                            continue
+
+                    tokens.append(rt)
+
+                except Exception:
+                    continue
+
+            tokens.sort(key=lambda t: t.created_at, reverse=True)
+            total = len(tokens)
+            page = tokens[offset : offset + limit]
+            return page, total
+
+        except Exception:
+            return [], 0
+
     async def cleanup_expired_tokens(self) -> int:
         """Delete all expired refresh tokens.
 

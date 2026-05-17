@@ -139,18 +139,92 @@ class UserStorage:
             except FileNotFoundError:
                 return False
 
-    async def list_users(self, limit: int = 100, offset: int = 0) -> List[User]:
-        """List all users with pagination."""
+    async def count_users(self) -> int:
+        """Count total number of users from the email index."""
         email_index = await self._load_email_index()
-        user_ids = list(email_index.values())[offset : offset + limit]
+        return len(email_index)
 
-        users = []
-        for user_id in user_ids:
+    async def get_user_stats(self) -> dict:
+        """Compute aggregate user statistics in a single pass.
+
+        Returns counts without keeping all User objects in memory
+        simultaneously — each user object is processed and released.
+        """
+        email_index = await self._load_email_index()
+        now = utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=7)
+        month_start = today_start - timedelta(days=30)
+
+        total = active = mfa = new_today = new_week = new_month = 0
+
+        for user_id in email_index.values():
             user = await self.get_user(user_id)
-            if user:
-                users.append(user)
+            if not user:
+                continue
+            total += 1
+            if user.is_active:
+                active += 1
+            if user.mfa_enabled and user.mfa_verified:
+                mfa += 1
+            if user.created_at >= today_start:
+                new_today += 1
+            if user.created_at >= week_start:
+                new_week += 1
+            if user.created_at >= month_start:
+                new_month += 1
 
-        return users
+        return {
+            "total": total,
+            "active": active,
+            "inactive": total - active,
+            "mfa": mfa,
+            "new_today": new_today,
+            "new_week": new_week,
+            "new_month": new_month,
+        }
+
+    async def list_users(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        mfa_enabled: Optional[bool] = None,
+    ) -> tuple[List[User], int]:
+        """List users with optional server-side filtering and pagination.
+
+        Returns a tuple of (filtered_page, total_matching_count).
+        """
+        email_index = await self._load_email_index()
+        all_user_ids = list(email_index.values())
+
+        filtered = []
+        for uid in all_user_ids:
+            user = await self.get_user(uid)
+            if not user:
+                continue
+
+            if search:
+                sl = search.lower()
+                if not (
+                    sl in user.email.lower()
+                    or (user.first_name and sl in user.first_name.lower())
+                    or (user.last_name and sl in user.last_name.lower())
+                ):
+                    continue
+
+            if is_active is not None and user.is_active != is_active:
+                continue
+
+            if mfa_enabled is not None and user.mfa_enabled != mfa_enabled:
+                continue
+
+            filtered.append(user)
+
+        total = len(filtered)
+        page = filtered[offset : offset + limit]
+        return page, total
 
     async def update_last_login(self, user_id: str):
         """Update user's last login timestamp."""

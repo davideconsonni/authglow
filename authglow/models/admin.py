@@ -1,10 +1,12 @@
 """Admin portal data models."""
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Generic, List, Optional, Dict, Any, TypeVar
 from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
+
+T = TypeVar("T")
 
 
 class DashboardStats(BaseModel):
@@ -119,3 +121,12 @@ class SecurityEvent(BaseModel):
     severity: str
     description: str
     ip_address: Optional[str]
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Generic paginated response wrapper."""
+
+    items: List[Any]
+    total: int
+    limit: int
+    offset: int

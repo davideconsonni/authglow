@@ -19,6 +19,7 @@ from authglow.models.admin import (
     AuditLogEntry,
     AuditLogFilter,
     SecurityEvent,
+    PaginatedResponse,
 )
 from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
@@ -151,26 +152,17 @@ async def get_dashboard_stats(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get dashboard statistics."""
-    # Get all users
-    users = await storage.list_users(limit=10000)
+    stats = await storage.get_user_stats()
+    total_users = stats["total"]
 
-    total_users = len(users)
-    active_users = sum(1 for u in users if u.is_active)
-    inactive_users = total_users - active_users
-    users_with_mfa = sum(1 for u in users if u.mfa_enabled and u.mfa_verified)
-    mfa_percentage = (users_with_mfa / total_users * 100) if total_users > 0 else 0
+    mfa_percentage = (stats["mfa"] / total_users * 100) if total_users > 0 else 0
 
-    # Get new users
+    # Get login stats from audit logs
     now = utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
-    new_users_today = sum(1 for u in users if u.created_at >= today_start)
-    new_users_this_week = sum(1 for u in users if u.created_at >= week_start)
-    new_users_this_month = sum(1 for u in users if u.created_at >= month_start)
-
-    # Get login stats from audit logs
     event_counts_today = await audit_service.get_event_counts_by_type(
         start_date=today_start
     )
@@ -188,13 +180,13 @@ async def get_dashboard_stats(
 
     return DashboardStats(
         total_users=total_users,
-        active_users=active_users,
-        inactive_users=inactive_users,
-        users_with_mfa=users_with_mfa,
+        active_users=stats["active"],
+        inactive_users=stats["inactive"],
+        users_with_mfa=stats["mfa"],
         mfa_percentage=round(mfa_percentage, 2),
-        new_users_today=new_users_today,
-        new_users_this_week=new_users_this_week,
-        new_users_this_month=new_users_this_month,
+        new_users_today=stats["new_today"],
+        new_users_this_week=stats["new_week"],
+        new_users_this_month=stats["new_month"],
         total_logins_today=total_logins_today,
         total_logins_this_week=total_logins_this_week,
         total_logins_this_month=total_logins_this_month,
@@ -213,7 +205,7 @@ async def get_stats_timeseries(
     return await audit_service.get_logs_by_date(days=days)
 
 
-@router.get("/api/admin/users/search", response_model=List[AdminUserDetail])
+@router.get("/api/admin/users/search")
 async def search_users(
     search: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
@@ -224,51 +216,27 @@ async def search_users(
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Search and filter users."""
-    # Get all users (in production, implement database-level filtering)
-    all_users = await storage.list_users(limit=10000)
+    """Search and filter users with server-side pagination."""
+    users, total = await storage.list_users(
+        limit=limit,
+        offset=offset,
+        search=search,
+        is_active=is_active,
+        mfa_enabled=mfa_enabled,
+    )
 
-    # Apply filters
-    filtered_users = []
-    for user in all_users:
-        # Search filter
-        if search:
-            search_lower = search.lower()
-            if not (
-                search_lower in user.email.lower()
-                or (user.first_name and search_lower in user.first_name.lower())
-                or (user.last_name and search_lower in user.last_name.lower())
-            ):
-                continue
-
-        # Active filter
-        if is_active is not None and user.is_active != is_active:
-            continue
-
-        # MFA filter
-        if mfa_enabled is not None and user.mfa_enabled != mfa_enabled:
-            continue
-
-        # Get login counts from audit logs
-        user_logs = await audit_service.get_logs(
-            filters=AuditLogFilter(user_id=user.id), limit=10000
-        )
-
-        login_count = sum(1 for log in user_logs if log.event_type == "login_success")
-        failed_login_count = sum(
-            1 for log in user_logs if log.event_type == "login_failed"
-        )
-
-        filtered_users.append(
+    items = []
+    for user in users:
+        login_counts = await audit_service.get_user_login_counts(user.id)
+        items.append(
             AdminUserDetail(
                 **user.model_dump(),
-                login_count=login_count,
-                failed_login_count=failed_login_count,
+                login_count=login_counts["login_success"],
+                failed_login_count=login_counts["login_failed"],
             )
         )
 
-    # Apply pagination
-    return filtered_users[offset : offset + limit]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/api/admin/users/{user_id}", response_model=AdminUserDetail)
@@ -283,18 +251,12 @@ async def get_user_detail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get login counts
-    user_logs = await audit_service.get_logs(
-        filters=AuditLogFilter(user_id=user_id), limit=10000
-    )
-
-    login_count = sum(1 for log in user_logs if log.event_type == "login_success")
-    failed_login_count = sum(1 for log in user_logs if log.event_type == "login_failed")
+    login_counts = await audit_service.get_user_login_counts(user_id)
 
     return AdminUserDetail(
         **user.model_dump(),
-        login_count=login_count,
-        failed_login_count=failed_login_count,
+        login_count=login_counts["login_success"],
+        failed_login_count=login_counts["login_failed"],
     )
 
 
@@ -640,74 +602,63 @@ async def admin_playground_page(request: Request):
 async def get_active_sessions(
     email: Optional[str] = Query(None),
     type: str = Query("all"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
 ):
-    """Get all active sessions and refresh tokens."""
+    """Get all active sessions and refresh tokens with pagination."""
     refresh_token_service = RefreshTokenService()
     user_storage = UserStorage()
 
+    all_tokens, total_matching = await refresh_token_service.list_all_tokens(
+        active_only=True, limit=limit * 5, offset=0
+    )
+
     sessions_list = []
-    total_sessions = 0
     total_refresh_tokens = 0
     unique_users = set()
 
-    # Get all refresh tokens via service layer (async I/O)
-    try:
-        all_tokens = await refresh_token_service.list_all_tokens(
-            active_only=True, limit=10000, offset=0
+    for rt in all_tokens:
+        if rt.revoked or utcnow() > rt.expires_at:
+            continue
+
+        user = await user_storage.get_user(rt.user_id)
+        if not user:
+            continue
+
+        if email and email.lower() not in user.email.lower():
+            continue
+
+        if type != "all" and type != "refresh":
+            continue
+
+        unique_users.add(rt.user_id)
+        total_refresh_tokens += 1
+
+        sessions_list.append(
+            {
+                "id": rt.token_id,
+                "type": "refresh",
+                "user_email": user.email,
+                "client_id": rt.client_id,
+                "created_at": rt.created_at.isoformat(),
+                "expires_at": rt.expires_at.isoformat() if rt.expires_at else None,
+                "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
+                "ip_address": rt.issued_ip,
+                "scopes": rt.scopes,
+            }
         )
 
-        for rt in all_tokens:
-            try:
-                # Skip revoked or expired
-                if rt.revoked or utcnow() > rt.expires_at:
-                    continue
-
-                # Get user
-                user = await user_storage.get_user(rt.user_id)
-                if not user:
-                    continue
-
-                # Filter by email if specified
-                if email and email.lower() not in user.email.lower():
-                    continue
-
-                # Filter by type
-                if type != "all" and type != "refresh":
-                    continue
-
-                unique_users.add(rt.user_id)
-                total_refresh_tokens += 1
-
-                sessions_list.append(
-                    {
-                        "id": rt.token_id,
-                        "type": "refresh",
-                        "user_email": user.email,
-                        "client_id": rt.client_id,
-                        "created_at": rt.created_at.isoformat(),
-                        "expires_at": rt.expires_at.isoformat()
-                        if rt.expires_at
-                        else None,
-                        "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
-                        "ip_address": rt.issued_ip,
-                        "scopes": rt.scopes,
-                    }
-                )
-
-            except Exception:
-                continue
-
-    except Exception:
-        pass
-
     total_sessions = len(sessions_list)
+    paginated = sessions_list[offset : offset + limit]
 
     return {
-        "sessions": sessions_list,
+        "sessions": paginated,
         "total_sessions": total_sessions,
         "total_refresh_tokens": total_refresh_tokens,
         "unique_users": len(unique_users),
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -752,20 +703,19 @@ async def cleanup_expired_sessions(current_user: User = Depends(require_admin)):
 
 @router.get("/api/admin/oauth-consents")
 async def get_oauth_consents_admin(
-    email: Optional[str] = Query(None), current_user: User = Depends(require_admin)
+    email: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin),
 ):
-    """Get all OAuth2 consents."""
+    """Get all OAuth2 consents with pagination."""
     consent_service = OAuth2ConsentService()
     client_storage = OAuth2ClientStorage()
     user_storage = UserStorage()
 
     consents_list = []
 
-    # Get all consents via service layer (async I/O)
     try:
-        all_consents = await consent_service.list_user_consents("")
-
-        # Also load consents directly for comprehensive listing
         from authglow.core.config import get_settings as _get_settings
         from authglow.core.async_io import AsyncFileSystem
         import fsspec as _fsspec
@@ -791,16 +741,13 @@ async def get_oauth_consents_admin(
 
                 consent = OAuth2Consent(**data)
 
-                # Get user
                 user = await user_storage.get_user(consent.user_id)
                 if not user:
                     continue
 
-                # Filter by email if specified
                 if email and email.lower() not in user.email.lower():
                     continue
 
-                # Get client info
                 client = await client_storage.get_client(consent.client_id)
                 client_name = client.name if client else consent.client_id
 
@@ -828,10 +775,11 @@ async def get_oauth_consents_admin(
     except Exception:
         pass
 
-    # Sort by granted_at descending
     consents_list.sort(key=lambda x: x["granted_at"], reverse=True)
+    total = len(consents_list)
+    paginated = consents_list[offset : offset + limit]
 
-    return consents_list
+    return PaginatedResponse(items=paginated, total=total, limit=limit, offset=offset)
 
 
 @router.post("/api/admin/oauth-consents/{consent_id}/revoke")

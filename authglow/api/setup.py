@@ -33,8 +33,8 @@ async def check_setup_needed(request: Request):
 
     # Count users
     try:
-        users = await storage.list_users(limit=1)
-        needs_setup = len(users) == 0
+        user_count = await storage.count_users()
+        needs_setup = user_count == 0
     except:
         needs_setup = True
 
@@ -54,8 +54,8 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
 
     # Check if any users exist
     try:
-        users = await storage.list_users(limit=1)
-        if len(users) > 0:
+        user_count = await storage.count_users()
+        if user_count > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Setup already completed. Users already exist in the system.",
@@ -113,8 +113,8 @@ async def setup_page(request: Request):
 
     # Check if setup is needed
     try:
-        users = await storage.list_users(limit=1)
-        if len(users) > 0:
+        user_count = await storage.count_users()
+        if user_count > 0:
             # Setup already completed, redirect to login
             return RedirectResponse(url="/login", status_code=302)
     except:

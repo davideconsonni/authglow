@@ -130,14 +130,16 @@ class TestUserCRUD:
                 scopes=["read"],
             )
             asyncio.get_event_loop().run_until_complete(storage.create_user(user))
-        page1 = asyncio.get_event_loop().run_until_complete(
+        page1, total = asyncio.get_event_loop().run_until_complete(
             storage.list_users(limit=3, offset=0)
         )
         assert len(page1) <= 3
-        page2 = asyncio.get_event_loop().run_until_complete(
+        assert total == 5
+        page2, total2 = asyncio.get_event_loop().run_until_complete(
             storage.list_users(limit=3, offset=3)
         )
         assert len(page2) <= 3
+        assert total2 == 5
 
 
 class TestAccountLockout:
