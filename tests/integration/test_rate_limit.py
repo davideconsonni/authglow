@@ -32,6 +32,7 @@ class TestRateLimiterWiring:
             "authglow.api.email_verification",
             "authglow.api.admin",
             "authglow.api.api_key",
+            "authglow.api.setup",
         ]
 
         for mod_name in modules_with_limiter:
@@ -88,3 +89,51 @@ class TestRateLimiterWiring:
         assert SlowAPIMiddleware in middleware_classes, (
             "H2 Bug: SlowAPIMiddleware is not registered in the app middleware stack."
         )
+
+
+class TestSetupRateLimit:
+    """H4: Verify that setup endpoints have rate-limit decorators."""
+
+    def test_setup_module_uses_central_limiter(self):
+        """authglow.api.setup must use the central limiter singleton."""
+        from authglow.api.setup import limiter as setup_limiter
+        from authglow.core.rate_limit import limiter as central_limiter
+
+        assert setup_limiter is central_limiter, (
+            "H4 Bug: setup.py imports its own Limiter instead of the central singleton."
+        )
+
+    def _get_rate_limits_for(self, func, limiter):
+        """Return all SlowAPI rate-limit strings registered for a function."""
+        key = f"{func.__module__}.{func.__name__}"
+        limits = limiter._route_limits.get(key, [])
+        return [str(limit_obj.limit) for limit_obj in limits]
+
+    def test_create_admin_has_rate_limit(self):
+        """POST /api/setup/create-admin must have a @limiter.limit() decorator."""
+        from authglow.api.setup import create_admin_user
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(create_admin_user, limiter)
+        assert len(limits) > 0, (
+            "H4 Bug: create_admin_user has no rate-limit decorator — "
+            "brute force / race condition possible."
+        )
+
+    def test_check_setup_has_rate_limit(self):
+        """GET /api/setup/check must have a @limiter.limit() decorator."""
+        from authglow.api.setup import check_setup_needed
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(check_setup_needed, limiter)
+        assert len(limits) > 0, (
+            "H4 Bug: check_setup_needed has no rate-limit decorator."
+        )
+
+    def test_setup_page_has_rate_limit(self):
+        """GET /setup must have a @limiter.limit() decorator."""
+        from authglow.api.setup import setup_page
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(setup_page, limiter)
+        assert len(limits) > 0, "H4 Bug: setup_page has no rate-limit decorator."
