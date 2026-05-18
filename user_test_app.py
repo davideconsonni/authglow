@@ -10,6 +10,7 @@ Make sure AuthGlow is running on port 8001 first:
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -36,6 +37,205 @@ app.mount(
 INDEX_HTML = (BASE_DIR / "user_test_templates" / "index.html").read_text(
     encoding="utf-8"
 )
+
+
+def _extract_code_from_redirect_url(redirect_url: str) -> dict:
+    parsed = urlparse(redirect_url)
+    params = parse_qs(parsed.query)
+    code = params.get("code", [None])
+    state = params.get("state", [None])
+    error = params.get("error", [None])
+    result = {}
+    if code and code[0]:
+        result["authorization_code"] = code[0]
+    if state and state[0]:
+        result["state"] = state[0]
+    if error and error[0]:
+        result["error"] = error[0]
+        error_desc = params.get("error_description", [None])
+        if error_desc and error_desc[0]:
+            result["error_description"] = error_desc[0]
+    return result
+
+
+@app.post("/auto-oauth2-authorize")
+async def auto_oauth2_authorize(request: Request):
+    """Orchestrate the full OAuth2 authorize + consent flow server-side.
+
+    Accepts JSON body: { email, password, client_id, redirect_uri, scope, state?,
+                         code_challenge?, code_challenge_method? }
+    Returns JSON: { authorization_code, state? } or { error, ... }
+    """
+    body = await request.json()
+    email = body.get("email")
+    password = body.get("password")
+    client_id = body.get("client_id", "default-client-id")
+    redirect_uri = body.get("redirect_uri", "http://localhost:5000/callback")
+    scope = body.get("scope", "openid profile email read")
+    state = body.get("state", "")
+    code_challenge = body.get("code_challenge")
+    code_challenge_method = body.get("code_challenge_method")
+
+    if not email or not password:
+        return JSONResponse(
+            status_code=400, content={"error": "email and password are required"}
+        )
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+        # Step 1: POST /oauth2/authorize with credentials
+        form_data = {
+            "email": email,
+            "password": password,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+        }
+        if state:
+            form_data["state"] = state
+        if code_challenge:
+            form_data["code_challenge"] = code_challenge
+        if code_challenge_method:
+            form_data["code_challenge_method"] = code_challenge_method
+
+        try:
+            auth_resp = await client.post(
+                f"{AUTHGLOW_BASE_URL}/oauth2/authorize",
+                data=form_data,
+            )
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            return JSONResponse(
+                status_code=502, content={"error": f"Cannot reach AuthGlow: {exc}"}
+            )
+
+        # Handle auth errors (401, 400, etc.)
+        if auth_resp.status_code not in (200, 303):
+            try:
+                error_data = auth_resp.json()
+            except Exception:
+                error_data = {"error": auth_resp.text[:500]}
+            return JSONResponse(status_code=auth_resp.status_code, content=error_data)
+
+        # Step 2: Extract session_token from the redirect
+        if auth_resp.status_code == 303:
+            location = auth_resp.headers.get("location", "")
+        elif auth_resp.status_code == 200:
+            # MFA required — auth_resp is an HTML page, not a redirect
+            content_type = auth_resp.headers.get("content-type", "")
+            if "html" in content_type or "mfa" in auth_resp.text.lower():
+                return JSONResponse(
+                    status_code=200,
+                    content={"error": "MFA required", "mfa_required": True},
+                )
+            # If it's JSON, return as-is
+            try:
+                return JSONResponse(status_code=200, content=auth_resp.json())
+            except Exception:
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "content_type": content_type,
+                        "body": auth_resp.text[:2000],
+                    },
+                )
+        else:
+            return JSONResponse(
+                status_code=500, content={"error": "Unexpected auth response"}
+            )
+
+        # Parse session_token from the redirect URL
+        parsed = urlparse(location)
+        qs_params = parse_qs(parsed.query)
+        session_token = qs_params.get("session_token", [None])
+
+        if not session_token or not session_token[0]:
+            # Might be a direct redirect to redirect_uri with code (auto-consent)
+            if parsed.netloc or "code=" in location:
+                result = _extract_code_from_redirect_url(location)
+                if "authorization_code" in result:
+                    return JSONResponse(status_code=200, content=result)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "No session_token in redirect",
+                    "redirect_url": location,
+                },
+            )
+
+        session_token = session_token[0]
+
+        # Step 3: GET /oauth2/consent?session_token=... (check if already consented)
+        try:
+            consent_resp = await client.get(
+                f"{AUTHGLOW_BASE_URL}/oauth2/consent",
+                params={"session_token": session_token},
+            )
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            return JSONResponse(
+                status_code=502, content={"error": f"Cannot reach AuthGlow: {exc}"}
+            )
+
+        # If consent endpoint redirects (user already consented), extract the code
+        if consent_resp.status_code in (301, 302, 303):
+            consent_location = consent_resp.headers.get("location", "")
+            result = _extract_code_from_redirect_url(consent_location)
+            if "authorization_code" in result:
+                return JSONResponse(status_code=200, content=result)
+
+        # Step 4: POST /oauth2/consent to approve (auto-approve)
+        consent_form = {
+            "session_token": session_token,
+            "approved": "true",
+            "remember": "true",
+        }
+
+        try:
+            approve_resp = await client.post(
+                f"{AUTHGLOW_BASE_URL}/oauth2/consent",
+                data=consent_form,
+            )
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            return JSONResponse(
+                status_code=502, content={"error": f"Cannot reach AuthGlow: {exc}"}
+            )
+
+        # Handle errors
+        if approve_resp.status_code not in (200, 303):
+            try:
+                error_data = approve_resp.json()
+            except Exception:
+                error_data = {"error": approve_resp.text[:500]}
+            return JSONResponse(
+                status_code=approve_resp.status_code, content=error_data
+            )
+
+        # Extract the final redirect URL with the authorization code
+        if approve_resp.status_code == 303:
+            final_location = approve_resp.headers.get("location", "")
+            result = _extract_code_from_redirect_url(final_location)
+            if "authorization_code" in result:
+                return JSONResponse(status_code=200, content=result)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "No authorization_code in final redirect",
+                    "redirect_url": final_location,
+                },
+            )
+
+        # 200 response might be an HTML page or JSON
+        content_type = approve_resp.headers.get("content-type", "")
+        if "json" in content_type:
+            try:
+                return JSONResponse(
+                    status_code=approve_resp.status_code, content=approve_resp.json()
+                )
+            except Exception:
+                pass
+
+        return JSONResponse(
+            status_code=approve_resp.status_code,
+            content={"content_type": content_type, "body": approve_resp.text[:2000]},
+        )
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -67,11 +67,11 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
 
 @router.patch("/api/profile/me", response_model=UserProfileResponse)
 async def update_my_profile(
-    profile_update: UserProfileUpdate, current_user_id: str = Depends(get_current_user)
+    profile_update: UserProfileUpdate, current_user: User = Depends(get_current_user)
 ):
     """Update current user's profile."""
     profile_service = UserProfileService()
-    profile = await profile_service.update_user_profile(current_user_id, profile_update)
+    profile = await profile_service.update_user_profile(current_user.id, profile_update)
 
     if not profile:
         raise HTTPException(
@@ -85,7 +85,7 @@ async def update_my_profile(
 async def change_my_password(
     password_request: ChangePasswordRequest,
     request: Request,
-    current_user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Change current user's password."""
     profile_service = UserProfileService()
@@ -94,7 +94,7 @@ async def change_my_password(
     ip_address = request.client.host if request.client else None
 
     success, message = await profile_service.change_password(
-        current_user_id,
+        current_user.id,
         password_request.current_password,
         password_request.new_password,
         ip_address,
@@ -110,7 +110,7 @@ async def change_my_password(
 async def change_my_email(
     email_request: ChangeEmailRequest,
     request: Request,
-    current_user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Change current user's email (requires verification)."""
     profile_service = UserProfileService()
@@ -119,7 +119,7 @@ async def change_my_email(
     ip_address = request.client.host if request.client else None
 
     success, message = await profile_service.change_email(
-        current_user_id, email_request.new_email, email_request.password, ip_address
+        current_user.id, email_request.new_email, email_request.password, ip_address
     )
 
     if not success:
@@ -131,13 +131,13 @@ async def change_my_email(
 @router.delete("/api/profile/me", status_code=status.HTTP_200_OK)
 async def delete_my_account(
     delete_request: DeleteAccountRequest,
-    current_user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete current user's account (permanent)."""
     profile_service = UserProfileService()
 
     success, message = await profile_service.delete_account(
-        current_user_id, delete_request.password, delete_request.confirmation
+        current_user.id, delete_request.password, delete_request.confirmation
     )
 
     if not success:
@@ -147,11 +147,11 @@ async def delete_my_account(
 
 
 @router.post("/api/profile/me/deactivate")
-async def deactivate_my_account(current_user_id: str = Depends(get_current_user)):
+async def deactivate_my_account(current_user: User = Depends(get_current_user)):
     """Deactivate current user's account (can be reactivated)."""
     profile_service = UserProfileService()
 
-    success, message = await profile_service.deactivate_account(current_user_id)
+    success, message = await profile_service.deactivate_account(current_user.id)
 
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -160,11 +160,11 @@ async def deactivate_my_account(current_user_id: str = Depends(get_current_user)
 
 
 @router.post("/api/profile/me/reactivate")
-async def reactivate_my_account(current_user_id: str = Depends(get_current_user)):
+async def reactivate_my_account(current_user: User = Depends(get_current_user)):
     """Reactivate current user's account."""
     profile_service = UserProfileService()
 
-    success, message = await profile_service.reactivate_account(current_user_id)
+    success, message = await profile_service.reactivate_account(current_user.id)
 
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -176,10 +176,10 @@ async def reactivate_my_account(current_user_id: str = Depends(get_current_user)
 
 
 @router.get("/api/profile/me/preferences", response_model=UserPreferences)
-async def get_my_preferences(current_user_id: str = Depends(get_current_user)):
+async def get_my_preferences(current_user: User = Depends(get_current_user)):
     """Get current user's preferences."""
     profile_service = UserProfileService()
-    preferences = await profile_service.get_user_preferences(current_user_id)
+    preferences = await profile_service.get_user_preferences(current_user.id)
 
     return preferences
 
@@ -187,12 +187,12 @@ async def get_my_preferences(current_user_id: str = Depends(get_current_user)):
 @router.patch("/api/profile/me/preferences", response_model=UserPreferences)
 async def update_my_preferences(
     preferences_update: UserPreferencesUpdate,
-    current_user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Update current user's preferences."""
     profile_service = UserProfileService()
     preferences = await profile_service.update_user_preferences(
-        current_user_id, preferences_update
+        current_user.id, preferences_update
     )
 
     return preferences

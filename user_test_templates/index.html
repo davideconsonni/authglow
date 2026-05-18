@@ -545,6 +545,8 @@
         <div class="card-body">
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Begins the OAuth2 authorization flow. Sends credentials and receives an authorization code.</p>
           <div class="form-grid">
+            <div class="field"><label>Email</label><input id="oauth-email" type="text" placeholder="User email"></div>
+            <div class="field"><label>Password</label><input id="oauth-password" type="password" placeholder="User password"></div>
             <div class="field"><label>Client ID</label><input id="oauth-client-id" type="text" value="default-client-id" placeholder="OAuth2 client ID"></div>
             <div class="field"><label>Redirect URI</label><input id="oauth-redirect" type="text" value="http://localhost:5000/callback" placeholder="http://localhost:5000/callback"></div>
             <div class="field"><label>Scope</label><input id="oauth-scope" type="text" value="openid profile email read" placeholder="openid profile email read"></div>
@@ -553,6 +555,7 @@
                 <option value="code">code</option>
               </select>
             </div>
+            <div class="field"><label>PKCE</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="oauth-use-pkce" checked> Use PKCE (S256)</label></div>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" onclick="oauthAuthorize()">Authorize</button>
@@ -571,6 +574,7 @@
           <div class="form-grid">
             <div class="field"><label>Authorization Code</label><input id="oauth-code" type="text" placeholder="Auto-filled from authorize step"></div>
             <div class="field"><label>Client Secret</label><input id="oauth-client-secret" type="text" value="default-client-secret" placeholder="Client secret"></div>
+            <div class="field"><label>Code Verifier (PKCE)</label><input id="oauth-code-verifier" type="text" placeholder="Auto-filled if PKCE was enabled"></div>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" onclick="oauthToken()">Get Token</button>
@@ -745,6 +749,8 @@
         <div class="card-body">
           <div class="form-grid">
             <div class="field"><label>Name</label><input id="rbac-perm-name" type="text" value="documents:read" placeholder="resource:action"></div>
+            <div class="field"><label>Resource</label><input id="rbac-perm-resource" type="text" value="documents" placeholder="e.g. documents"></div>
+            <div class="field"><label>Action</label><input id="rbac-perm-action" type="text" value="read" placeholder="e.g. read"></div>
             <div class="field"><label>Description</label><input id="rbac-perm-desc" type="text" value="Read documents" placeholder="Description"></div>
           </div>
           <div class="btn-row">

@@ -10,7 +10,31 @@ const SESSION_KEYS = {
   mfaSessionToken: 'ag_mfa_session_token',
   oauthCode: 'ag_oauth_code',
   oauthAccessToken: 'ag_oauth_access_token',
+  oauthCodeVerifier: 'ag_oauth_code_verifier',
 };
+
+// ---- PKCE Helpers ----
+function generateCodeVerifier() {
+  var array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64urlEncode(array);
+}
+
+function base64urlEncode(buffer) {
+  var binary = '';
+  var bytes = new Uint8Array(buffer);
+  for (var i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function computeCodeChallenge(verifier) {
+  var encoder = new TextEncoder();
+  var data = encoder.encode(verifier);
+  var hash = await crypto.subtle.digest('SHA-256', data);
+  return base64urlEncode(hash);
+}
 
 // ---- Session Management ----
 function getSession() {
@@ -46,6 +70,10 @@ function updateSessionUI() {
   if (s.accessToken) {
     dot.className = 'status-dot connected';
     info.textContent = s.userEmail || s.userId || 'Logged in';
+    var oauthEmail = document.getElementById('oauth-email');
+    if (oauthEmail && !oauthEmail.value && s.userEmail) {
+      oauthEmail.value = s.userEmail;
+    }
   } else if (s.mfaSessionToken) {
     dot.className = 'status-dot';
     dot.style.background = 'var(--warning)';
@@ -401,19 +429,45 @@ async function createApiKey() {
 
 async function testApiKey() {
   const key = document.getElementById('apikey-test-key').value;
-  const body = { key: key };
-  return await apiCallAndShow('POST', '/api/token/api-key', 'res-apikey-test', body);
+  return await apiCallAndShow('POST', '/api/token/api-key', 'res-apikey-test', null, false, { Authorization: 'Bearer ' + key });
 }
 
 // ---- OAuth2 Flow ----
 async function oauthAuthorize() {
   const s = getSession();
+  const email = document.getElementById('oauth-email').value || s.email || '';
+  const password = document.getElementById('oauth-password').value;
+
+  if (!email || !password) {
+    showToast('Email and password are required for OAuth2 authorize', 'error');
+    return;
+  }
+
+  const usePKCE = document.getElementById('oauth-use-pkce').checked;
+  let codeVerifier = '';
+  let codeChallenge = '';
+  let codeChallengeMethod = '';
+
+  if (usePKCE) {
+    codeVerifier = generateCodeVerifier();
+    codeChallenge = await computeCodeChallenge(codeVerifier);
+    codeChallengeMethod = 'S256';
+    document.getElementById('oauth-code-verifier').value = codeVerifier;
+    setSession({ oauthCodeVerifier: codeVerifier });
+  }
+
   const body = {
+    email: email,
+    password: password,
     client_id: document.getElementById('oauth-client-id').value,
     redirect_uri: document.getElementById('oauth-redirect').value,
     scope: document.getElementById('oauth-scope').value,
-    response_type: document.getElementById('oauth-response-type').value,
   };
+
+  if (usePKCE) {
+    body.code_challenge = codeChallenge;
+    body.code_challenge_method = codeChallengeMethod;
+  }
 
   const btn = event.target.closest('button');
   btn.disabled = true;
@@ -422,8 +476,7 @@ async function oauthAuthorize() {
 
   try {
     const headers = { 'Content-Type': 'application/json' };
-    if (s.accessToken) headers['Authorization'] = 'Bearer ' + s.accessToken;
-    const res = await fetch('/proxy/oauth2/authorize', {
+    const res = await fetch('/auto-oauth2-authorize', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify(body),
@@ -441,15 +494,14 @@ async function oauthAuthorize() {
     btn.disabled = false;
     btn.textContent = 'Authorize';
 
-    if (res.status === 200 || res.status === 302) {
-      const code = data.code || data.authorization_code || '';
-      if (code) {
-        document.getElementById('oauth-code').value = code;
-        setSession({ oauthCode: code });
-        showToast('Authorization code received! Proceed to token exchange.', 'success');
-      } else if (data.consent_required || data.redirect_url) {
-        showToast('Consent required - flow continuing...', 'warning');
-      }
+    if (data.authorization_code) {
+      document.getElementById('oauth-code').value = data.authorization_code;
+      setSession({ oauthCode: data.authorization_code });
+      showToast('Authorization code received! Proceed to token exchange.', 'success');
+    } else if (data.mfa_required) {
+      showToast('MFA is required for this account — complete MFA verification first.', 'warning');
+    } else if (data.error) {
+      showToast('OAuth2 error: ' + (data.error_description || data.error), 'error');
     }
   } catch (err) {
     btn.disabled = false;
@@ -464,6 +516,7 @@ async function oauthToken() {
   const client_id = document.getElementById('oauth-client-id').value;
   const client_secret = document.getElementById('oauth-client-secret').value;
   const redirect_uri = document.getElementById('oauth-redirect').value;
+  const code_verifier = document.getElementById('oauth-code-verifier').value || s.oauthCodeVerifier || '';
 
   const formData = new URLSearchParams();
   formData.append('grant_type', 'authorization_code');
@@ -471,6 +524,9 @@ async function oauthToken() {
   formData.append('client_id', client_id);
   formData.append('client_secret', client_secret);
   formData.append('redirect_uri', redirect_uri);
+  if (code_verifier) {
+    formData.append('code_verifier', code_verifier);
+  }
 
   const btn = event.target.closest('button');
   btn.disabled = true;
@@ -512,7 +568,13 @@ async function oauthToken() {
 }
 
 async function oauthUserInfo() {
-  return await apiCallAndShow('GET', '/oauth2/userinfo', 'res-oauth-userinfo', null, true);
+  const s = getSession();
+  const token = s.oauthAccessToken;
+  if (!token) {
+    showToast('No OAuth2 access token — complete the token exchange first.', 'error');
+    return { status: 0, data: { error: 'No OAuth2 access token' }, time: 0 };
+  }
+  return await apiCallAndShow('GET', '/oauth2/userinfo', 'res-oauth-userinfo', null, false, { Authorization: 'Bearer ' + token });
 }
 
 // ---- OAuth2 Clients ----
@@ -551,6 +613,8 @@ async function adminGetUser() {
 async function createPermission() {
   const body = {
     name: document.getElementById('rbac-perm-name').value,
+    resource: document.getElementById('rbac-perm-resource').value,
+    action: document.getElementById('rbac-perm-action').value,
     description: document.getElementById('rbac-perm-desc').value,
   };
   return await apiCallAndShow('POST', '/api/rbac/permissions', 'res-rbac-perm-create', body, true);
