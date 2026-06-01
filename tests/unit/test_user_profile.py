@@ -68,11 +68,18 @@ class TestChangePassword:
 
         success, msg = asyncio_run(
             user_profile_service.change_password(
-                "profile-user-1", "TestP@ss123!", "NewP@ss456!"
+                "profile-user-1", "TestP@ss123!", "NewP@ss456!", ip_address="10.0.0.1"
             )
         )
         assert success is True
         assert "successfully" in msg.lower()
+        # S7 regression: verify User object + ip passed, not destructured strings
+        user_profile_service.security_service.send_password_changed_alert.assert_called_once()
+        call_args = (
+            user_profile_service.security_service.send_password_changed_alert.call_args
+        )
+        assert call_args[0][0] is user
+        assert call_args[0][1] == "10.0.0.1"
 
     def test_change_password_wrong_current(self, user_profile_service):
         user = _make_user()
@@ -96,6 +103,45 @@ class TestChangePassword:
         )
         assert success is False
         assert "not found" in msg.lower()
+
+    def test_change_password_alert_receives_user_object(self, user_profile_service):
+        """S7 regression: send_password_changed_alert must receive User object, not strings."""
+        from authglow.models.user import User as UserModel
+
+        user = _make_user()
+        user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
+        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.security_service.send_password_changed_alert = AsyncMock()
+
+        asyncio_run(
+            user_profile_service.change_password(
+                "profile-user-1", "TestP@ss123!", "NewP@ss456!"
+            )
+        )
+        call_args = (
+            user_profile_service.security_service.send_password_changed_alert.call_args
+        )
+        passed_user = call_args[0][0]
+        assert isinstance(passed_user, UserModel)
+        assert passed_user.email == "profile1@example.com"
+
+    def test_change_password_alert_without_ip(self, user_profile_service):
+        """S7 regression: ip_address defaults to None when not provided."""
+        user = _make_user()
+        user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
+        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.security_service.send_password_changed_alert = AsyncMock()
+
+        asyncio_run(
+            user_profile_service.change_password(
+                "profile-user-1", "TestP@ss123!", "NewP@ss456!"
+            )
+        )
+        user_profile_service.security_service.send_password_changed_alert.assert_called_once()
+        call_args = (
+            user_profile_service.security_service.send_password_changed_alert.call_args
+        )
+        assert call_args[0][1] is None
 
 
 class TestChangeEmail:

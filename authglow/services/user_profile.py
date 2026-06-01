@@ -129,9 +129,7 @@ class UserProfileService:
             await self.user_storage._write_user(user)
 
         # Send security notification
-        await self.security_service.send_password_changed_alert(
-            user.email, user.first_name or "User", ip_address
-        )
+        await self.security_service.send_password_changed_alert(user, ip_address)
 
         return True, "Password changed successfully"
 

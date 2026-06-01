@@ -11,6 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
+from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.api.auth import router as auth_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.api.mfa import router as mfa_router
@@ -51,6 +52,9 @@ app.add_middleware(
 
 # Security headers middleware - OWASP-recommended response headers
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Request body size limiter - rejects payloads exceeding MAX_REQUEST_BODY_SIZE_MB
+app.add_middleware(MaxBodySizeMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="authglow/static"), name="static")

@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
 
+    # Request Body Size Limit
+    max_request_body_size_mb: int = 10
+
     # Security Headers Settings
     csp_header: str = "default-src 'self'"
     x_frame_options: str = "DENY"

@@ -102,18 +102,27 @@ Usa una sessione per fix, spunta ciò che completi.
     `tests/integration/test_security_headers.py` (presenza header, HSTS condizionale,
     customizzazione, override endpoint, websocket ignorato).
 
-- [ ] **S7 — Bug `change_password`: argomenti errati a `send_password_changed_alert`**
+- [x] **S7 — Bug `change_password`: argomenti errati a `send_password_changed_alert`**
   - File: `authglow/services/user_profile.py`
   - Problema: chiama `self.security_service.send_password_changed_alert(user.email, user.first_name or "User", ip_address)`
     ma il metodo in `security_notifications.py` si aspetta `(user: User, ip_address: str)`.
     Causa errore runtime quando l'alert viene inviato.
   - Fix: passare `(user, ip_address)` invece di `(user.email, user.first_name or "User", ip_address)`.
+  - **Risolto**: Corretto `user_profile.py:132-134` per passare l'oggetto `User` e `ip_address` direttamente.
+    Test: 3 test S7 in `tests/unit/test_user_profile.py` (verifica tipo User in call args, ip_address esplicito, ip_address None di default).
 
-- [ ] **S8 — Nessun limite dimensione body richieste**
+- [x] **S8 — Nessun limite dimensione body richieste**
   - File: `authglow/main.py`
   - Problema: FastAPI/Starlette non impone limiti espliciti. Un attaccante può inviare payload enormi.
   - Fix: aggiungere `request.max_body_size` o middleware che limita `Content-Length` a ~10 MB.
     Opzioni: Starlette `MaximumContentLengthMiddleware` o `nginx` a monte.
+  - **Risolto**: Creato `authglow/middleware/request_body_size.py` (MaxBodySizeMiddleware, ASGI puro).
+    Controlla `Content-Length` header per rejection rapida, pre-legge il body per chunked encoding.
+    Configurabile via `MAX_REQUEST_BODY_SIZE_MB` (default 10 MB). Middleware registrato in `main.py`
+    dopo CORS e security headers.
+    Test: 14 unit + 7 integration in `tests/unit/test_request_body_size.py` e
+    `tests/integration/test_request_body_size.py` (Content-Length rejection, chunked encoding,
+    edge cases, custom limit, response format).
 
 ---
 
@@ -251,8 +260,8 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S4 — CORS credentials+wildcard fix
 - [x] S5 — RSA private key encryption
 - [x] S6 — Security headers middleware
-- [ ] S7 — Bug change_password args
-- [ ] S8 — Request body size limit
+- [x] S7 — Bug change_password args
+- [x] S8 — Request body size limit
 - [ ] S9 — Timing side-channel email lookup
 - [ ] S10 — Audit log PII/GDPR
 - [ ] S11 — HTTPS enforcement
