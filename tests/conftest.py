@@ -18,7 +18,6 @@ def _generate_rsa_keys(
     secret_key: str = "test-secret-key-for-authglow-testing-32chars!",
 ):
     from authglow.core.crypto import encrypt_private_key
-    from authglow.core.config import Settings, get_settings as _orig_get_settings
 
     private_key = rsa.generate_private_key(
         public_exponent=65537, key_size=2048, backend=default_backend()
@@ -36,10 +35,7 @@ def _generate_rsa_keys(
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
-    mock_settings = MagicMock()
-    mock_settings.secret_key = secret_key
-    with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-        encrypted_priv = encrypt_private_key(priv_bytes)
+    encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
     with open(priv_path, "wb") as f:
         f.write(encrypted_priv)
     with open(public_key_path, "wb") as f:

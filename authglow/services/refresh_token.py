@@ -50,6 +50,42 @@ class RefreshTokenService:
         """Get path for refresh token file."""
         return f"{self.storage_path}/{token_id}.json"
 
+    @property
+    def _active_index_path(self) -> str:
+        return f"{self.storage_path}/active_index.json"
+
+    async def _load_active_index(self) -> list[str]:
+        try:
+            data = await self._afs.read_json(self._active_index_path)
+            return data.get("token_ids", [])
+        except Exception:
+            return []
+
+    async def _save_active_index(self, token_ids: list[str]) -> None:
+        if not token_ids:
+            try:
+                await self._afs.rm(self._active_index_path)
+            except Exception:
+                pass
+        else:
+            await self._afs.write_json(
+                self._active_index_path, {"token_ids": token_ids}
+            )
+
+    async def _add_to_active_index(self, token_id: str) -> None:
+        async with self._lock("active_index"):
+            existing = await self._load_active_index()
+            if token_id not in existing:
+                existing.append(token_id)
+            await self._save_active_index(existing)
+
+    async def _remove_from_active_index(self, token_id: str) -> None:
+        async with self._lock("active_index"):
+            existing = await self._load_active_index()
+            if token_id in existing:
+                existing.remove(token_id)
+            await self._save_active_index(existing)
+
     async def _load_prefix_index(self, prefix: str) -> list[str]:
         """Load token_ids for a given prefix from the index."""
         index_file = f"{self.index_path}/{prefix}.json"
@@ -121,6 +157,9 @@ class RefreshTokenService:
         # Update prefix index
         prefix = refresh_token.token[:PREFIX_LENGTH]
         await self._save_prefix_index(prefix, refresh_token.token_id)
+
+        # Update active index
+        await self._add_to_active_index(refresh_token.token_id)
 
         return refresh_token
 
@@ -279,6 +318,9 @@ class RefreshTokenService:
                 except ConcurrentWriteError:
                     continue
 
+                # Old token consumed by rotation — remove from active index
+                await self._remove_from_active_index(rt.token_id)
+
                 return new_token, None
 
             return None, "Concurrent modification - please retry"
@@ -307,6 +349,7 @@ class RefreshTokenService:
             try:
                 await self._afs.write_json(token_path, rt.model_dump())
                 refresh_token_cache.pop(token, None)
+                await self._remove_from_active_index(rt.token_id)
                 return True
             except Exception:
                 return False
@@ -356,6 +399,7 @@ class RefreshTokenService:
 
                 token_path = self._get_token_path(token_id)
                 await self._afs.write_json(token_path, rt.model_dump())
+                await self._remove_from_active_index(token_id)
 
                 revoked_count += 1
 
@@ -412,6 +456,7 @@ class RefreshTokenService:
                             rt.revoked_reason = "Revoked by user or admin"
 
                             await self._afs.write_json(file_path, rt.model_dump())
+                            await self._remove_from_active_index(rt.token_id)
 
                             revoked_count += 1
 
@@ -424,30 +469,60 @@ class RefreshTokenService:
         return revoked_count
 
     async def list_all_tokens(
-        self, active_only: bool = False, limit: int = 100, offset: int = 0
+        self,
+        active_only: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+        user_id: Optional[str] = None,
     ) -> tuple[list[RefreshToken], int]:
         """List tokens with optional active-only filter and pagination.
+
+        When ``active_only=True``, reads the active index file instead of
+        globbing the entire storage directory.  Tokens are loaded only from
+        the active index candidates, then filtered by ``user_id`` (if
+        provided), sorted by creation date descending, and paginated.
+
+        When ``active_only=False``, falls back to the original glob-based
+        approach for backward compatibility.
 
         Returns a tuple of (token_page, total_matching_count).
         """
         tokens = []
         try:
-            pattern = f"{self.storage_path}/*.json"
-            files = await self._afs.glob(pattern)
+            if active_only:
+                active_ids = await self._load_active_index()
 
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    rt = RefreshToken(**data)
+                for token_id in active_ids:
+                    try:
+                        data = await self._afs.read_json(self._get_token_path(token_id))
+                        rt = RefreshToken(**data)
 
-                    if active_only:
                         if rt.revoked or utcnow() > rt.expires_at:
                             continue
+                        if user_id and rt.user_id != user_id:
+                            continue
 
-                    tokens.append(rt)
+                        tokens.append(rt)
+                    except Exception:
+                        continue
+            else:
+                pattern = f"{self.storage_path}/*.json"
+                files = await self._afs.glob(pattern)
 
-                except Exception:
-                    continue
+                for file_path in files:
+                    try:
+                        data = await self._afs.read_json(file_path)
+                        rt = RefreshToken(**data)
+
+                        if active_only:
+                            if rt.revoked or utcnow() > rt.expires_at:
+                                continue
+                        if user_id and rt.user_id != user_id:
+                            continue
+
+                        tokens.append(rt)
+                    except Exception:
+                        continue
 
             tokens.sort(key=lambda t: t.created_at, reverse=True)
             total = len(tokens)
@@ -478,6 +553,7 @@ class RefreshTokenService:
                         await self._afs.rm(file_path)
                         prefix = rt.token[:PREFIX_LENGTH]
                         await self._remove_from_prefix_index(prefix, rt.token_id)
+                        await self._remove_from_active_index(rt.token_id)
                         refresh_token_cache.pop(rt.token, None)
                         deleted += 1
 

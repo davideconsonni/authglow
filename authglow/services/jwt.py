@@ -20,7 +20,9 @@ class JWTService:
         try:
             with open(self.settings.private_key_path, "rb") as f:
                 raw = f.read()
-                self._private_key = decrypt_private_key(raw)
+                self._private_key = decrypt_private_key(
+                    raw, secret_key=self.settings.secret_key
+                )
 
             with open(self.settings.public_key_path, "rb") as f:
                 self._public_key = f.read()

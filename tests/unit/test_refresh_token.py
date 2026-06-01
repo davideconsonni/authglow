@@ -459,3 +459,237 @@ class TestRefreshTokenCache:
             refresh_token_service.get_refresh_token(rt.token)
         )
         assert fetched_after is None
+
+
+class TestRefreshTokenActiveIndex:
+    """Tests for active token index (P4 performance fix)."""
+
+    def test_active_index_created_on_create(self, refresh_token_service):
+        import asyncio
+        import os, json
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-1",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+
+        assert os.path.exists(refresh_token_service._active_index_path)
+        with open(refresh_token_service._active_index_path, "r") as f:
+            idx = json.load(f)
+        assert rt.token_id in idx["token_ids"]
+
+    def test_revoked_token_removed_from_active_index(self, refresh_token_service):
+        import asyncio
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-2",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.revoke_token(rt.token, reason="test revoke")
+        )
+
+        active_ids = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service._load_active_index()
+        )
+        assert rt.token_id not in active_ids
+
+    def test_rotation_updates_active_index(self, refresh_token_service):
+        import asyncio
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-3",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token, client_id="test-client"
+            )
+        )
+        assert new_rt is not None
+        assert error is None
+
+        active_ids = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service._load_active_index()
+        )
+        assert rt.token_id not in active_ids
+        assert new_rt.token_id in active_ids
+
+    def test_cleanup_removes_expired_from_active_index(self, refresh_token_service):
+        import asyncio
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-4",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=-1,
+            )
+        )
+
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.cleanup_expired_tokens()
+        )
+
+        active_ids = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service._load_active_index()
+        )
+        assert rt.token_id not in active_ids
+
+    def test_list_all_tokens_active_only_uses_index_not_glob(
+        self, refresh_token_service
+    ):
+        import asyncio
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-5",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+
+        original_glob = refresh_token_service._afs.glob
+
+        def _glob_must_not_be_called(*args, **kwargs):
+            raise AssertionError("glob() was called — active index NOT used!")
+
+        refresh_token_service._afs.glob = _glob_must_not_be_called
+        try:
+            tokens, total = asyncio.get_event_loop().run_until_complete(
+                refresh_token_service.list_all_tokens(active_only=True)
+            )
+            assert total == 1
+            assert tokens[0].token_id == rt.token_id
+        finally:
+            refresh_token_service._afs.glob = original_glob
+
+    def test_list_all_tokens_active_only_excludes_revoked(self, refresh_token_service):
+        import asyncio
+
+        rt_active = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-6a",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+        rt_revoked = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-6b",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.revoke_token(rt_revoked.token, reason="test")
+        )
+
+        tokens, total = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(active_only=True)
+        )
+        assert total == 1
+        assert tokens[0].token_id == rt_active.token_id
+
+    def test_list_all_tokens_active_only_filters_by_user_id(
+        self, refresh_token_service
+    ):
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-7a",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-7b",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+
+        tokens, total = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(
+                active_only=True, user_id="user-ai-7a"
+            )
+        )
+        assert total == 1
+        assert tokens[0].user_id == "user-ai-7a"
+
+    def test_list_all_tokens_active_only_pagination(self, refresh_token_service):
+        import asyncio
+
+        for i in range(5):
+            asyncio.get_event_loop().run_until_complete(
+                refresh_token_service.create_refresh_token(
+                    user_id=f"user-ai-8-{i}",
+                    client_id="test-client",
+                    scopes=["read"],
+                    expires_in_days=30,
+                )
+            )
+
+        tokens, total = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(active_only=True, limit=2, offset=0)
+        )
+        assert total == 5
+        assert len(tokens) == 2
+
+        tokens2, total2 = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(active_only=True, limit=2, offset=2)
+        )
+        assert total2 == 5
+        assert len(tokens2) == 2
+        page1_ids = {t.token_id for t in tokens}
+        page2_ids = {t.token_id for t in tokens2}
+        assert page1_ids.isdisjoint(page2_ids)
+
+    def test_empty_active_index_returns_empty_list(self, refresh_token_service):
+        import asyncio
+
+        tokens, total = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(active_only=True)
+        )
+        assert tokens == []
+        assert total == 0
+
+    def test_user_id_no_match_returns_empty(self, refresh_token_service):
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-ai-10",
+                client_id="test-client",
+                scopes=["read"],
+                expires_in_days=30,
+            )
+        )
+
+        tokens, total = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.list_all_tokens(
+                active_only=True, user_id="non-existent-user"
+            )
+        )
+        assert tokens == []
+        assert total == 0

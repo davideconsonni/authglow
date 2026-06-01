@@ -98,12 +98,9 @@ class TestRSAKeyEncryption:
         secret = "k" * 32
         os.makedirs(os.path.dirname(priv_path), exist_ok=True)
 
-        mock_settings = MagicMock()
-        mock_settings.secret_key = secret
-        with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-            from authglow.core.config import get_or_generate_keys
+        from authglow.core.config import get_or_generate_keys
 
-            get_or_generate_keys(priv_path, pub_path)
+        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
 
         raw = Path(priv_path).read_bytes()
         assert raw.startswith(b"agk1:"), (
@@ -119,12 +116,9 @@ class TestRSAKeyEncryption:
         secret = "k" * 32
         os.makedirs(os.path.dirname(pub_path), exist_ok=True)
 
-        mock_settings = MagicMock()
-        mock_settings.secret_key = secret
-        with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-            from authglow.core.config import get_or_generate_keys
+        from authglow.core.config import get_or_generate_keys
 
-            get_or_generate_keys(priv_path, pub_path)
+        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
 
         pub_raw = Path(pub_path).read_bytes()
         assert pub_raw.startswith(b"-----BEGIN PUBLIC KEY-----"), (
@@ -141,10 +135,9 @@ class TestRSAKeyEncryption:
         mock_settings = MagicMock()
         mock_settings.secret_key = secret
 
-        with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-            from authglow.core.config import get_or_generate_keys
+        from authglow.core.config import get_or_generate_keys
 
-            get_or_generate_keys(priv_path, pub_path)
+        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
 
         settings = Settings(
             secret_key=secret,
@@ -154,11 +147,12 @@ class TestRSAKeyEncryption:
             public_key_path=pub_path,
         )
 
-        with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-            from authglow.services.jwt import JWTService
+        from authglow.services.jwt import JWTService
 
-            with patch("authglow.services.jwt.get_settings", return_value=settings):
-                svc = JWTService()
+        with patch(
+            "authglow.services.jwt.get_settings", return_value=settings
+        ):
+            svc = JWTService()
 
         token = svc.create_access_token(
             user_id="user-enc", email="enc@example.com", scopes=["read"]
@@ -182,14 +176,12 @@ class TestRSAKeyEncryption:
             encryption_algorithm=serialization.NoEncryption(),
         )
 
-        mock_settings = MagicMock()
-        mock_settings.secret_key = "d" * 32
+        secret = "d" * 32
 
-        with patch("authglow.core.crypto.get_settings", return_value=mock_settings):
-            from authglow.core.crypto import encrypt_private_key, decrypt_private_key
+        from authglow.core.crypto import encrypt_private_key, decrypt_private_key
 
-            encrypted = encrypt_private_key(priv_bytes)
-            decrypted = decrypt_private_key(encrypted)
+        encrypted = encrypt_private_key(priv_bytes, secret_key=secret)
+        decrypted = decrypt_private_key(encrypted, secret_key=secret)
 
         assert decrypted == priv_bytes, "Roundtrip must restore original PEM bytes"
         assert encrypted != priv_bytes, "Encrypted data must differ from plaintext"

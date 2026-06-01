@@ -11,7 +11,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
 
-def get_or_generate_keys(private_key_path: str, public_key_path: str):
+def get_or_generate_keys(
+    private_key_path: str, public_key_path: str, secret_key: str = ""
+):
     """
     Load RSA keys from disk, or generate them if they don't exist.
     Private key is encrypted at rest with AES-256-GCM via SECRET_KEY.
@@ -40,7 +42,7 @@ def get_or_generate_keys(private_key_path: str, public_key_path: str):
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
 
-        encrypted_priv = encrypt_private_key(priv_bytes)
+        encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
         with open(priv_path, "wb") as f:
             f.write(encrypted_priv)
         with open(pub_path, "wb") as f:
@@ -69,7 +71,9 @@ class Settings(BaseSettings):
 
     def __init__(self, **values):
         super().__init__(**values)
-        get_or_generate_keys(self.private_key_path, self.public_key_path)
+        get_or_generate_keys(
+            self.private_key_path, self.public_key_path, self.secret_key
+        )
         if self.cors_allow_credentials and self.cors_allowed_headers == "*":
             warnings.warn(
                 "CORS misconfiguration: cors_allow_credentials=true combined with "

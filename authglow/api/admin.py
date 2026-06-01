@@ -569,31 +569,33 @@ async def get_active_sessions(
     refresh_token_service = RefreshTokenService()
     user_storage = UserStorage()
 
-    all_tokens, total_matching = await refresh_token_service.list_all_tokens(
-        active_only=True, limit=limit * 5, offset=0
+    user_id = None
+    if email:
+        found_user = await user_storage.get_user_by_email(email)
+        if not found_user:
+            return {
+                "sessions": [],
+                "total_sessions": 0,
+                "total_refresh_tokens": 0,
+                "unique_users": 0,
+                "limit": limit,
+                "offset": offset,
+            }
+        user_id = found_user.id
+
+    page_tokens, total_matching = await refresh_token_service.list_all_tokens(
+        active_only=True, limit=limit, offset=offset, user_id=user_id
     )
 
     sessions_list = []
-    total_refresh_tokens = 0
     unique_users = set()
 
-    for rt in all_tokens:
-        if rt.revoked or utcnow() > rt.expires_at:
-            continue
-
+    for rt in page_tokens:
         user = await user_storage.get_user(rt.user_id)
         if not user:
             continue
 
-        if email and email.lower() not in user.email.lower():
-            continue
-
-        if type != "all" and type != "refresh":
-            continue
-
         unique_users.add(rt.user_id)
-        total_refresh_tokens += 1
-
         sessions_list.append(
             {
                 "id": rt.token_id,
@@ -608,13 +610,10 @@ async def get_active_sessions(
             }
         )
 
-    total_sessions = len(sessions_list)
-    paginated = sessions_list[offset : offset + limit]
-
     return {
-        "sessions": paginated,
-        "total_sessions": total_sessions,
-        "total_refresh_tokens": total_refresh_tokens,
+        "sessions": sessions_list,
+        "total_sessions": total_matching,
+        "total_refresh_tokens": total_matching,
         "unique_users": len(unique_users),
         "limit": limit,
         "offset": offset,

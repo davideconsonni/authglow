@@ -247,7 +247,7 @@ Usa una sessione per fix, spunta ciò che completi.
     - Test: 10 test P3 in `tests/unit/test_password_reset_service.py` (O(1) no list_all,
       determinismo, difesa bcrypt, file naming, roundtrip). 31 test totali passano.
 
-- [ ] **P4 — Admin sessions carica 5x page size**
+- [x] **P4 — Admin sessions carica 5x page size**
   - File: `authglow/api/admin.py` (vista admin sessions)
   - Problema: `list_all_tokens(active_only=True, limit=limit*5, offset=0)` carica fino a 5 pagine
     in memoria per filtrare quelli attivi. Spreco di memoria e I/O.
@@ -255,6 +255,19 @@ Usa una sessione per fix, spunta ciò che completi.
     - `refresh_tokens/active_index.json` → lista di `token_id` attivi.
     - Aggiornare l'indice a ogni creazione/rotazione/revoca.
     - `list_all_tokens(active_only=True)` usa direttamente l'indice.
+  - **Risolto**: Creato `_active_index_path` e metodi `_load_active_index()`, `_save_active_index()`,
+    `_add_to_active_index()`, `_remove_from_active_index()` in `refresh_token.py` (stesso pattern
+    del prefix index con lock `"active_index"`). Tutti i punti di modifica token aggiornati:
+    `create_refresh_token()` aggiunge, `validate_and_rotate()` rimuove vecchio/aggiunge nuovo,
+    `revoke_token()` rimuove, `cleanup_expired_tokens()` rimuove, `_revoke_descendants()` rimuove,
+    `revoke_user_tokens()` rimuove. `list_all_tokens(active_only=True)` ora legge `active_index.json`
+    invece di fare glob su tutti i file — carica solo i token attivi e supporta filtraggio per
+    `user_id` (nuovo parametro opzionale). Endpoint `get_active_sessions` in `admin.py` riscritto:
+    rimosso `*5`, l'email viene risolta a `user_id` prima della query, offset/limit reali passati
+    al servizio, filtraggio in-memoria ridondante eliminato. Bug fix: `found_user.user_id` → `found_user.id`.
+    Test: 10 unit in `tests/unit/test_refresh_token.py` + 7 integration in
+    `tests/integration/test_admin_api.py` (active index lifecycle, no-glob, user_id filter,
+    pagination, email filter, no-tokens, revoked exclusion).
 
 - [ ] **P5 — Glob invece di lookup diretto nei consensi**
   - File: `authglow/services/oauth_consent.py:get_user_consent()`
@@ -322,7 +335,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P1 — Refresh token prefix index
 - [x] P2 — Audit log indici mensili
 - [x] P3 — Password reset HMAC lookup
-- [ ] P4 — Admin sessions active_index
+- [x] P4 — Admin sessions active_index
 - [ ] P5 — Consent lookup deterministico
 - [ ] P6 — Caching layer (Phase 5)
 - [ ] P7 — OAuth2ClientStorage AsyncFileSystem

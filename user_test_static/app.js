@@ -117,7 +117,7 @@ function showToast(msg, type) {
 function syntaxHighlight(json) {
   if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
   json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return json.replace(/(".*?")(\s*:)/g, '<span class="key">$1</span>$2')
+  return json.replace(/(^\s*".*?")(\s*:)/gm, '<span class="key">$1</span>$2')
     .replace(/:\s*(".*?")/g, ': <span class="string">$1</span>')
     .replace(/:\s*(\d+\.?\d*)/g, ': <span class="number">$1</span>')
     .replace(/:\s*(true|false)/g, ': <span class="bool">$1</span>')
