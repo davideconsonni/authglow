@@ -31,7 +31,7 @@ async def dashboard_page(request: Request):
     """User dashboard page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        request, "dashboard.html", context={**settings.get_ui_context()}
+        request, "dashboard.html", context={**settings.ui_context}
     )
 
 
@@ -40,7 +40,7 @@ async def profile_page(request: Request):
     """User profile management page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        request, "profile.html", context={**settings.get_ui_context()}
+        request, "profile.html", context={**settings.ui_context}
     )
 
 

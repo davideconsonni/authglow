@@ -60,7 +60,7 @@ async def verify_email_page(request: Request, token: str):
                 "success": True,
                 "message": "Email verified successfully! You can now login.",
                 "login_url": f"{settings.base_url}/login",
-                **settings.get_ui_context(),
+                **settings.ui_context,
             },
         )
     else:
@@ -71,7 +71,7 @@ async def verify_email_page(request: Request, token: str):
                 "success": False,
                 "error": error,
                 "resend_url": f"{settings.base_url}/resend-verification",
-                **settings.get_ui_context(),
+                **settings.ui_context,
             },
         )
 
@@ -157,5 +157,5 @@ async def resend_verification_page(request: Request):
     """Resend verification email page."""
     settings = get_settings()
     return templates.TemplateResponse(
-        request, "resend_verification.html", context={**settings.get_ui_context()}
+        request, "resend_verification.html", context={**settings.ui_context}
     )

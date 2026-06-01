@@ -85,7 +85,7 @@ templates = Jinja2Templates(directory="authglow/templates")
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Landing page."""
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
     return templates.TemplateResponse(request, "landing.html", context={**ui_context})
 
 

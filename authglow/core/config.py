@@ -1,7 +1,7 @@
 """Configuration management for AuthGlow."""
 
 import warnings
-from functools import lru_cache
+from functools import lru_cache, cached_property
 from typing import Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +17,11 @@ def get_or_generate_keys(
     """
     Load RSA keys from disk, or generate them if they don't exist.
     Private key is encrypted at rest with AES-256-GCM via SECRET_KEY.
+
+    Function is not @lru_cache decorated at module level because this is
+    called once from Settings.__init__, which is itself cached via
+    get_settings(). Adding lru_cache here would duplicate the caching
+    and is unnecessary.
     """
     priv_path = Path(private_key_path)
     pub_path = Path(public_key_path)
@@ -172,6 +177,12 @@ class Settings(BaseSettings):
     enforce_https: bool = True
     https_redirect_status: int = 301
 
+    # Cache Settings
+    cache_refresh_token_maxsize: int = 5000
+    cache_refresh_token_ttl: int = 60
+    cache_user_maxsize: int = 2000
+    cache_user_ttl: int = 300
+
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
@@ -283,8 +294,14 @@ class Settings(BaseSettings):
             if header.strip()
         ]
 
-    def get_ui_context(self) -> dict:
-        """Get UI customization context for templates."""
+    @cached_property
+    def ui_context(self) -> dict:
+        """Get UI customization context for templates.
+
+        Computed once per Settings instance (singleton via get_settings()),
+        so the same dict object is returned on every access, avoiding
+        repeated allocations across the 27+ call sites.
+        """
         return {
             "app_name": self.app_name,
             "logo_url": self.ui_logo_url,

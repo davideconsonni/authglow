@@ -285,15 +285,28 @@ Usa una sessione per fix, spunta ciò che completi.
     no-glob su hit/miss, overwrite, revoke O(1), backward compat consent_id, bounded glob,
     auto-delete expired). 25 test totali passano.
 
-- [ ] **P6 — Nessun caching layer (Redis/Memcached)**
-  - File: globale
-  - Problema: ogni richiesta legge da filesystem (o S3/GCS). Con cloud storage la latenza diventa critica.
-  - Fix: pianificato per Phase 5. Aggiungere caching per:
-    - Configurazione UI (`get_ui_context()`)
-    - Chiavi pubbliche JWKS (raramente cambiano)
-    - Sessioni OAuth2 attive
-    - Lookup utente frequenti (read-through cache)
-  - Short-term: `@lru_cache` su `get_ui_context()` e `_ensure_keys_exist()` già esistenti.
+- [x] **P6 — Nessun caching layer (Redis/Memcached)**
+   - File: globale
+   - Problema: ogni richiesta legge da filesystem (o S3/GCS). Con cloud storage la latenza diventa critica.
+   - Fix: pianificato per Phase 5 per Redis/Memcached. **Short-term (questa remediation):**
+     1. `get_ui_context()` convertito in `cached_property` (`functools.cached_property`).
+        Il dizionario UI è computato una volta sola per istanza di Settings (che è un singleton
+        via `get_settings()`), eliminando allocazioni duplicate sui 27+ call site.
+     2. `authglow/core/cache.py` rifattorizzato con `CacheRegistry` a inizializzazione lazy
+        da `Settings`. I `TTLCache` non sono più hardcodati ma leggono `CACHE_REFRESH_TOKEN_MAXSIZE`,
+        `CACHE_REFRESH_TOKEN_TTL`, `CACHE_USER_MAXSIZE`, `CACHE_USER_TTL` da env.
+     3. Proxy `_CacheProxy` per `user_cache` e `refresh_token_cache` — drop-in compatible con
+        l'API precedente (`get`, `pop`, `__setitem__`, `__getitem__`, `__contains__`, `__delitem__`).
+        I servizi `storage.py` e `refresh_token.py` continuano a funzionare senza modifiche.
+     4. `_reset_cache_registry()` per testing.
+     5. Pattern documentato: `functools.lru_cache` per memoization funzioni pure,
+        `cachetools.TTLCache` per data cache con eviction temporale. Due strumenti
+        per due scopi diversi, scelta deliberata.
+   - **Risolto**: Configurazione cache centralizzata in `Settings` (`.env`). `ui_context`
+     come `cached_property`. `CacheRegistry` con proxy trasparenti. Zero overhead aggiuntivo,
+     compatibile con architettura serverless multi-istanza.
+     Test: 14 test in `tests/unit/test_cache.py` (UI context cache hit, valori da Settings,
+     proxy CRUD, registry singleton/reset, indipendenza user/refresh_token).
 
 - [ ] **P7 — OAuth2ClientStorage I/O non uniforme**
   - File: `authglow/services/oauth_client.py`
@@ -346,7 +359,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P3 — Password reset HMAC lookup
 - [x] P4 — Admin sessions active_index
 - [x] P5 — Consent lookup deterministico
-- [ ] P6 — Caching layer (Phase 5)
+- [x] P6 — Caching layer (Phase 5 per Redis, short-term fatto)
 - [ ] P7 — OAuth2ClientStorage AsyncFileSystem
 - [ ] D3 — mypy + ruff config
 - [ ] D4 — JWK key rotation

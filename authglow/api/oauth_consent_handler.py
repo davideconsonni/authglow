@@ -94,7 +94,7 @@ async def show_consent_screen(
     csrf_token_val = await csrf_service.generate_token(csrf_session_id)
 
     # Show consent screen
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
 
     # Build scope descriptions
     scope_descriptions = {}

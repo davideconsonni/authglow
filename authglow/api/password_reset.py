@@ -271,7 +271,7 @@ async def redirect_to_forgot():
 @router.get("/password/forgot", response_class=HTMLResponse)
 async def forgot_password_page(request: Request):
     """Forgot password page."""
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
     return templates.TemplateResponse(
         request, "password_forgot.html", context={**ui_context}
     )
@@ -280,7 +280,7 @@ async def forgot_password_page(request: Request):
 @router.get("/password/reset", response_class=HTMLResponse)
 async def reset_password_page(request: Request, token: str = None):
     """Reset password page with token."""
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
     return templates.TemplateResponse(
         request, "password_reset.html", context={"token": token, **ui_context}
     )

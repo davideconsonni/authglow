@@ -254,7 +254,7 @@ async def authorize(
     csrf_token = await csrf_service.generate_token(session_id)
 
     # Render login page with OAuth2 parameters
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
     response = templates.TemplateResponse(
         request,
         "login.html",
@@ -387,7 +387,7 @@ async def authorize_post(
 
             # Show MFA verification page
             settings = get_settings()
-            ui_context = settings.get_ui_context()
+            ui_context = settings.ui_context
             response = templates.TemplateResponse(
                 request,
                 "mfa_verify.html",
@@ -1019,7 +1019,7 @@ async def login_page(request: Request):
     """Simple login page (non-OAuth)."""
     settings = get_settings()
     return templates.TemplateResponse(
-        request, "simple_login.html", context={**settings.get_ui_context()}
+        request, "simple_login.html", context={**settings.ui_context}
     )
 
 
@@ -1027,7 +1027,7 @@ async def login_page(request: Request):
 async def passkey_management_page(request: Request):
     """Passkey management page."""
     settings = get_settings()
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
     return templates.TemplateResponse(
         request,
         "passkey_manage.html",
@@ -1142,7 +1142,7 @@ async def oauth2_callback(
 ):
     """OAuth2 callback endpoint - displays authorization code for testing."""
     settings = get_settings()
-    ui_context = settings.get_ui_context()
+    ui_context = settings.ui_context
 
     return templates.TemplateResponse(
         request,
