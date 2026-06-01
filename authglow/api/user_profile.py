@@ -1,23 +1,22 @@
 """User profile and account management API endpoints."""
 
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from authglow.models.user import User
-from authglow.models.user_profile import (
-    UserProfileUpdate,
-    ChangePasswordRequest,
-    ChangeEmailRequest,
-    DeleteAccountRequest,
-    UserPreferencesUpdate,
-    UserPreferences,
-    UserProfileResponse,
-)
-from authglow.services.user_profile import UserProfileService
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
+from authglow.models.user import User
+from authglow.models.user_profile import (
+    ChangeEmailRequest,
+    ChangePasswordRequest,
+    DeleteAccountRequest,
+    UserPreferences,
+    UserPreferencesUpdate,
+    UserProfileResponse,
+    UserProfileUpdate,
+)
+from authglow.services.user_profile import UserProfileService
 
 router = APIRouter(tags=["User Profile"])
 templates = Jinja2Templates(directory="authglow/templates")

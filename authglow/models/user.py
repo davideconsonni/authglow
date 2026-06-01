@@ -1,9 +1,10 @@
 """User data models."""
 
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+from typing import List, Optional
 from uuid import uuid4
+
+from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
 

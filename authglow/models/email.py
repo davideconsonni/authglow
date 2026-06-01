@@ -1,8 +1,9 @@
 """Email models and data structures."""
 
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, EmailStr
 
 
 class EmailPriority(str, Enum):

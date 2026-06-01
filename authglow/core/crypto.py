@@ -4,9 +4,9 @@ import base64
 import os
 from typing import Optional
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes
 
 _PREFIX = "ag1:"
 _INFO = b"authglow-totp-encryption-v1"

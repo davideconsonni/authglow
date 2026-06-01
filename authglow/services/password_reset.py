@@ -1,19 +1,19 @@
 """Password reset service for managing reset tokens."""
 
-import secrets
-import bcrypt
-import hmac
 import hashlib
-import asyncio
-from datetime import datetime, timedelta
-from typing import Optional, List
+import hmac
+import secrets
+from datetime import timedelta
+from typing import List, Optional
+
+import bcrypt
 import fsspec
 
-from authglow.models.password_reset import PasswordResetToken
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock, ConcurrentWriteError
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.models.password_reset import PasswordResetToken
 
 
 class PasswordResetService:
@@ -25,7 +25,7 @@ class PasswordResetService:
 
     MAX_CAS_RETRIES = 3
 
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: str | None = None):
         """Initialize the password reset service.
 
         Args:
@@ -170,9 +170,7 @@ class PasswordResetService:
 
                 try:
                     _, version = await self._afs.read_json_versioned(token_path)
-                    await self._afs.write_text(
-                        token_path, token.model_dump_json(indent=2)
-                    )
+                    await self._afs.write_text(token_path, token.model_dump_json(indent=2))
                     return True
                 except ConcurrentWriteError:
                     continue
@@ -305,9 +303,7 @@ class PasswordResetService:
             token = PasswordResetToken.model_validate_json(content)
 
             # Delete if used or expired (older than 24 hours after expiration)
-            should_delete = token.is_used or utcnow() > token.expires_at + timedelta(
-                hours=24
-            )
+            should_delete = token.is_used or utcnow() > token.expires_at + timedelta(hours=24)
 
             if should_delete:
                 await self._afs.rm(file_path)

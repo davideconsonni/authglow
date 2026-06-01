@@ -1,18 +1,19 @@
 """Advanced OAuth2 endpoints (revocation, introspection)."""
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Request, Header
-from fastapi.responses import JSONResponse
-from authglow.core.rate_limit import limiter
-from authglow.core.datetime import utcnow
 
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+
+from authglow.api.auth import _extract_basic_auth, get_current_user
+from authglow.core.datetime import utcnow
+from authglow.core.rate_limit import limiter
 from authglow.models.user import User
-from authglow.services.refresh_token import RefreshTokenService
+from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.oauth2 import OAuth2Service
-from authglow.services.audit import AuditService
+from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
-from authglow.api.auth import get_current_user, _extract_basic_auth
 
 router = APIRouter()
 

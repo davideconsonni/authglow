@@ -1,13 +1,13 @@
 """Session management for MFA flow."""
 
-import json
 import os
 from datetime import datetime, timedelta
 from typing import Optional
+
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.session import MFASession
 
@@ -26,9 +26,7 @@ class SessionService:
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
 
@@ -127,7 +125,7 @@ class SessionService:
         path = f"{self.storage_path}/consent_{session_token}.json"
 
         try:
-            session_data = await self._afs.read_json(path)
+            session_data: dict = await self._afs.read_json(path)
 
             # Check if expired
             expires_at = datetime.fromisoformat(session_data["expires_at"])

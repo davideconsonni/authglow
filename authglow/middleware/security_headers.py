@@ -38,9 +38,7 @@ class SecurityHeadersMiddleware:
 
         _add_header(headers_to_add, "content-security-policy", settings.csp_header)
         _add_header(headers_to_add, "x-frame-options", settings.x_frame_options)
-        _add_header(
-            headers_to_add, "x-content-type-options", settings.x_content_type_options
-        )
+        _add_header(headers_to_add, "x-content-type-options", settings.x_content_type_options)
         _add_header(headers_to_add, "referrer-policy", settings.referrer_policy)
         _add_header(headers_to_add, "x-xss-protection", "0")
         _add_header(
@@ -49,9 +47,7 @@ class SecurityHeadersMiddleware:
             settings.x_permitted_cross_domain_policies,
         )
         if settings.permissions_policy:
-            _add_header(
-                headers_to_add, "permissions-policy", settings.permissions_policy
-            )
+            _add_header(headers_to_add, "permissions-policy", settings.permissions_policy)
 
         if is_production:
             hsts = f"max-age={settings.hsts_max_age}"
@@ -64,10 +60,8 @@ class SecurityHeadersMiddleware:
             return
 
         headers_to_add_bytes = [
-            (name.encode("latin-1"), value.encode("latin-1"))
-            for name, value in headers_to_add
+            (name.encode("latin-1"), value.encode("latin-1")) for name, value in headers_to_add
         ]
-        security_names = {name for name, _ in headers_to_add_bytes}
 
         async def _send(message):
             if message["type"] == "http.response.start":

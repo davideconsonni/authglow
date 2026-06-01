@@ -1,19 +1,18 @@
 """Configuration management for AuthGlow."""
 
 import warnings
-from functools import lru_cache, cached_property
-from typing import Optional
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import cached_property, lru_cache
 from pathlib import Path
+from typing import Optional
+
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def get_or_generate_keys(
-    private_key_path: str, public_key_path: str, secret_key: str = ""
-):
+def get_or_generate_keys(private_key_path: str, public_key_path: str, secret_key: str = ""):
     """
     Load RSA keys from disk, or generate them if they don't exist.
     Private key is encrypted at rest with AES-256-GCM via SECRET_KEY.
@@ -76,9 +75,7 @@ class Settings(BaseSettings):
 
     def __init__(self, **values):
         super().__init__(**values)
-        get_or_generate_keys(
-            self.private_key_path, self.public_key_path, self.secret_key
-        )
+        get_or_generate_keys(self.private_key_path, self.public_key_path, self.secret_key)
         if self.cors_allow_credentials and self.cors_allowed_headers == "*":
             warnings.warn(
                 "CORS misconfiguration: cors_allow_credentials=true combined with "
@@ -160,7 +157,9 @@ class Settings(BaseSettings):
     audit_email_log_level: str = "mask"  # "mask", "hash", "none"
 
     # Security Headers Settings
-    csp_header: str = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    csp_header: str = (
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    )
     x_frame_options: str = "DENY"
     x_content_type_options: str = "nosniff"
     referrer_policy: str = "strict-origin-when-cross-origin"
@@ -242,7 +241,7 @@ class Settings(BaseSettings):
 
     def get_storage_options(self) -> dict:
         """Get storage options based on backend."""
-        options = {}
+        options: dict[str, object] = {}
 
         if self.storage_backend == "s3":
             if self.aws_access_key_id and self.aws_secret_access_key:
@@ -270,29 +269,17 @@ class Settings(BaseSettings):
         """Get CORS allowed origins as a list."""
         if self.cors_allowed_origins == "*":
             return ["*"]
-        return [
-            origin.strip()
-            for origin in self.cors_allowed_origins.split(",")
-            if origin.strip()
-        ]
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     def get_cors_methods(self) -> list:
         """Get CORS allowed methods as a list."""
-        return [
-            method.strip()
-            for method in self.cors_allowed_methods.split(",")
-            if method.strip()
-        ]
+        return [method.strip() for method in self.cors_allowed_methods.split(",") if method.strip()]
 
     def get_cors_headers(self) -> list:
         """Get CORS allowed headers as a list."""
         if self.cors_allowed_headers == "*":
             return ["*"]
-        return [
-            header.strip()
-            for header in self.cors_allowed_headers.split(",")
-            if header.strip()
-        ]
+        return [header.strip() for header in self.cors_allowed_headers.split(",") if header.strip()]
 
     @cached_property
     def ui_context(self) -> dict:

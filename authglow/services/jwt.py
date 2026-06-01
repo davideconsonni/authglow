@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 import jwt
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
 
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_private_key
-from authglow.models.token import TokenData, Token
-from authglow.models.oidc import IDTokenClaims, SCOPE_TO_CLAIMS
+from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
+from authglow.models.token import Token, TokenData
 
 
 class JWTService:
@@ -20,9 +19,7 @@ class JWTService:
         try:
             with open(self.settings.private_key_path, "rb") as f:
                 raw = f.read()
-                self._private_key = decrypt_private_key(
-                    raw, secret_key=self.settings.secret_key
-                )
+                self._private_key = decrypt_private_key(raw, secret_key=self.settings.secret_key)
 
             with open(self.settings.public_key_path, "rb") as f:
                 self._public_key = f.read()
@@ -31,19 +28,18 @@ class JWTService:
 
     def _encode_token(self, payload: dict) -> str:
         """Encode a token payload using the private key."""
-        return jwt.encode(
-            payload, self._private_key, algorithm=self.settings.jwt_algorithm
-        )
+        return jwt.encode(payload, self._private_key, algorithm=self.settings.jwt_algorithm)
 
-    def _decode_token(self, token: str) -> Optional[dict]:
+    def _decode_token(self, token: str) -> Optional[dict[str, Any]]:
         """Decode a token using the public key."""
         try:
-            return jwt.decode(
+            result: dict[str, Any] = jwt.decode(
                 token,
                 self._public_key,
                 algorithms=[self.settings.jwt_algorithm],
                 options={"verify_exp": True},
             )
+            return result
         except jwt.PyJWTError:
             return None
 
@@ -105,12 +101,26 @@ class JWTService:
         if not payload:
             return None
 
+        sub = payload.get("sub")
+        email = payload.get("email")
+        exp_val = payload.get("exp")
+        iat_val = payload.get("iat")
+
+        if not isinstance(sub, str):
+            return None
+        if not isinstance(email, str):
+            return None
+        if not isinstance(exp_val, (int, float)):
+            return None
+        if not isinstance(iat_val, (int, float)):
+            return None
+
         token_data = TokenData(
-            sub=payload.get("sub"),
-            email=payload.get("email"),
+            sub=sub,
+            email=email,
             scopes=payload.get("scopes", []),
-            exp=datetime.fromtimestamp(payload.get("exp"), tz=timezone.utc),
-            iat=datetime.fromtimestamp(payload.get("iat"), tz=timezone.utc),
+            exp=datetime.fromtimestamp(exp_val, tz=timezone.utc),
+            iat=datetime.fromtimestamp(iat_val, tz=timezone.utc),
             token_type=payload.get("token_type", "access"),
         )
 
@@ -147,9 +157,7 @@ class JWTService:
         if nonce:
             id_token_data["nonce"] = nonce
         if auth_time:
-            id_token_data["auth_time"] = int(
-                auth_time.replace(tzinfo=timezone.utc).timestamp()
-            )
+            id_token_data["auth_time"] = int(auth_time.replace(tzinfo=timezone.utc).timestamp())
 
         for scope in scopes:
             if scope in SCOPE_TO_CLAIMS:
@@ -165,9 +173,7 @@ class JWTService:
         if not payload:
             return None
         claims = IDTokenClaims(**payload)
-        if datetime.fromtimestamp(claims.exp, tz=timezone.utc) < datetime.now(
-            timezone.utc
-        ):
+        if datetime.fromtimestamp(claims.exp, tz=timezone.utc) < datetime.now(timezone.utc):
             return None
         return claims
 

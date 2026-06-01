@@ -1,16 +1,16 @@
 """API Key storage and management service."""
 
-import json
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional
+
 import bcrypt
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKey, APIKeyCreate
 
@@ -42,9 +42,7 @@ class APIKeyService:
             os.makedirs(self.index_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -53,8 +51,9 @@ class APIKeyService:
         """Load key_ids for a given prefix from the index."""
         index_file = f"{self.index_path}/{prefix}.json"
         try:
-            data = await self._afs.read_json(index_file)
-            return data.get("key_ids", [])
+            data: dict[str, Any] = await self._afs.read_json(index_file)
+            result: list[str] = data.get("key_ids", [])
+            return result
         except Exception:
             return []
 
@@ -312,6 +311,21 @@ class APIKeyService:
 
             return api_key
 
+    async def update_key(self, key_id: str, updates: dict) -> Optional[APIKey]:
+        """Update an API key's metadata."""
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key:
+                return None
+
+            for field, value in updates.items():
+                if hasattr(api_key, field):
+                    setattr(api_key, field, value)
+
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+            return api_key
+
     async def revoke_key(self, key_id: str, revoked_by: str) -> bool:
         """Revoke an API key."""
         async with self._lock(f"api_key:{key_id}"):
@@ -382,9 +396,7 @@ class APIKeyService:
                         and api_key.expires_at < utcnow()
                         and not api_key.is_active
                     ):
-                        await self._remove_from_prefix_index(
-                            api_key.key_prefix, api_key.key_id
-                        )
+                        await self._remove_from_prefix_index(api_key.key_prefix, api_key.key_id)
                         await self._afs.rm(file_path)
                         deleted += 1
 

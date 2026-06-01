@@ -1,8 +1,9 @@
 """API Key models."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow

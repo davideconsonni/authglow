@@ -25,12 +25,13 @@ class HttpsEnforcementMiddleware:
 
         return get_settings()
 
-    def _is_https(self, scope) -> bool:
+    def _is_https(self, scope: dict) -> bool:
         for name, value in scope.get("headers", []):
-            header_name = name.decode("latin-1").lower()
+            header_name: str = name.decode("latin-1").lower()
             if header_name == "x-forwarded-proto":
-                return value.decode("latin-1") == "https"
-        return scope.get("scheme", "http") == "https"
+                return str(value.decode("latin-1")) == "https"
+        scheme: str = str(scope.get("scheme", "http"))
+        return scheme == "https"
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":

@@ -1,21 +1,22 @@
 """OAuth2 Client Management API endpoints."""
 
-from typing import Annotated, List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from authglow.core.rate_limit import limiter
+from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from authglow.api.auth import get_current_user
+from authglow.core.rate_limit import limiter
 from authglow.models.oauth_client import (
     OAuth2Client,
     OAuth2ClientCreate,
-    OAuth2ClientUpdate,
     OAuth2ClientResponse,
-    OAuth2ClientWithSecret,
     OAuth2ClientSecretRotation,
+    OAuth2ClientUpdate,
+    OAuth2ClientWithSecret,
 )
 from authglow.models.user import User
-from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.audit import AuditService
-from authglow.api.auth import get_current_user
+from authglow.services.oauth_client import OAuth2ClientStorage
 
 router = APIRouter(prefix="/api/oauth-clients")
 

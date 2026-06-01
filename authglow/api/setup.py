@@ -1,16 +1,17 @@
 """Initial setup API endpoints."""
 
-from fastapi import APIRouter, HTTPException, status, Request
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr
-from typing import Optional
 
-from authglow.models.user import User
-from authglow.services.storage import UserStorage
-from authglow.services.password import hash_password, PasswordValidator
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.models.user import User
+from authglow.services.password import PasswordValidator, hash_password
+from authglow.services.storage import UserStorage
 
 router = APIRouter(tags=["Setup"])
 templates = Jinja2Templates(directory="authglow/templates")
@@ -35,14 +36,12 @@ async def check_setup_needed(request: Request):
     try:
         user_count = await storage.count_users()
         needs_setup = user_count == 0
-    except:
+    except Exception:
         needs_setup = True
 
     return {
         "needs_setup": needs_setup,
-        "message": "Initial setup required"
-        if needs_setup
-        else "Setup already completed",
+        "message": "Initial setup required" if needs_setup else "Setup already completed",
     }
 
 
@@ -62,7 +61,7 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
             )
     except HTTPException:
         raise
-    except:
+    except Exception:
         # If error listing users, assume empty and continue
         pass
 
@@ -72,7 +71,7 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Password validation failed: {'; '.join(errors)}",
+            detail=f"Password validation failed: {'; '.join(errors or [])}",
         )
 
     # Check if email already exists (shouldn't happen, but safety check)
@@ -117,10 +116,8 @@ async def setup_page(request: Request):
         if user_count > 0:
             # Setup already completed, redirect to login
             return RedirectResponse(url="/login", status_code=302)
-    except:
+    except Exception:
         pass  # If error, show setup page
 
     settings = get_settings()
-    return templates.TemplateResponse(
-        request, "setup.html", context={**settings.ui_context}
-    )
+    return templates.TemplateResponse(request, "setup.html", context={**settings.ui_context})

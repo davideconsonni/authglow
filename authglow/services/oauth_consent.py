@@ -4,15 +4,15 @@ Consents are stored at {storage_path}/{user_id}/{client_id}.json
 for O(1) direct lookup without glob.
 """
 
-import json
 import os
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_consent import OAuth2Consent
 

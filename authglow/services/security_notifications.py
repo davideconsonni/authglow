@@ -1,11 +1,11 @@
 """Security notifications service."""
 
-from datetime import datetime
 from typing import Optional
-from authglow.models.user import User
-from authglow.services.email.factory import get_email_service
+
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.models.user import User
+from authglow.services.email.factory import get_email_service
 
 
 class SecurityNotificationService:

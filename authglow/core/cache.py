@@ -17,10 +17,9 @@ this provides repeated-read savings per warm instance without introducing
 a distributed-cache dependency (planned for Phase 5 / Redis / Memcached).
 """
 
-from cachetools import TTLCache
-from functools import lru_cache
-from typing import Optional, Dict
+from typing import Dict, Optional
 
+from cachetools import TTLCache
 
 _cache_registry: Optional[Dict[str, "CacheRegistry"]] = None
 

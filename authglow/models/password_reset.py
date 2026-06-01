@@ -2,8 +2,9 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
 from uuid import uuid4
+
+from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
 

@@ -2,39 +2,35 @@
 
 import base64
 import hashlib
-from datetime import datetime
-from typing import Optional, Tuple
+from typing import NoReturn, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from authglow.core.rate_limit import limiter
-from authglow.services.csrf import CSRFTokenService, get_csrf_service, SESSION_ID_COOKIE
 
-from authglow.core.crypto import decrypt_totp_secret
-from authglow.models.user import (
-    User,
-    UserCreate,
-    UserLogin,
-    InviteUser,
-    UserResponse,
-    RegisterUser,
-)
-from authglow.models.token import Token, OAuth2AuthorizationRequest, OAuth2TokenRequest
-from authglow.models.mfa import MFALoginRequest
-from authglow.services.storage import UserStorage
-from authglow.services.password import hash_password, verify_password, PasswordValidator
-from authglow.services.jwt import JWTService
-from authglow.services.oauth2 import OAuth2Service
-from authglow.services.mfa import MFAService
-from authglow.services.session import SessionService
-from authglow.services.audit import AuditService
-from authglow.services.api_key import APIKeyService, APIKeyLockedException
-from authglow.services.email_verification import EmailVerificationService
-from authglow.services.email.factory import get_email_service
-from authglow.services.refresh_token import RefreshTokenService
 from authglow.core.config import get_settings
+from authglow.core.crypto import decrypt_totp_secret
+from authglow.core.rate_limit import limiter
+from authglow.models.token import Token
+from authglow.models.user import (
+    InviteUser,
+    RegisterUser,
+    User,
+    UserResponse,
+)
+from authglow.services.api_key import APIKeyLockedException, APIKeyService
+from authglow.services.audit import AuditService
+from authglow.services.csrf import SESSION_ID_COOKIE, CSRFTokenService, get_csrf_service
+from authglow.services.email.factory import get_email_service
+from authglow.services.email_verification import EmailVerificationService
+from authglow.services.jwt import JWTService
+from authglow.services.mfa import MFAService
+from authglow.services.oauth2 import OAuth2Service
+from authglow.services.password import PasswordValidator, hash_password, verify_password
+from authglow.services.refresh_token import RefreshTokenService
+from authglow.services.session import SessionService
+from authglow.services.storage import UserStorage
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
@@ -237,9 +233,7 @@ async def authorize(
     # Process and validate scopes, handling both space and '+' delimiters
     requested_scopes = scope.replace("+", " ").split() if scope else []
     try:
-        processed_scopes = await oauth2_service.process_scopes(
-            client_id, requested_scopes
-        )
+        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
         validated_scope = " ".join(processed_scopes)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
@@ -327,9 +321,7 @@ async def authorize_post(
     # Process and validate scopes
     requested_scopes = scope.split() if scope else []
     try:
-        processed_scopes = await oauth2_service.process_scopes(
-            client_id, requested_scopes
-        )
+        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
         validated_scope = " ".join(processed_scopes)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
@@ -360,9 +352,7 @@ async def authorize_post(
         # Check if device is trusted
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
-        device_fingerprint = mfa_service.generate_device_fingerprint(
-            user_agent, client_host
-        )
+        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
 
         is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
 
@@ -452,9 +442,7 @@ async def token_endpoint(
 
         auth_code = await oauth2_service.get_authorization_code(code)
         if not auth_code:
-            raise HTTPException(
-                status_code=400, detail="Invalid or expired authorization code"
-            )
+            raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
 
         # --- Client Authentication (RFC 6749 Section 4.1.3) ---
         # Extract client credentials from HTTP Basic Auth (client_secret_basic)
@@ -472,9 +460,7 @@ async def token_endpoint(
             raise HTTPException(status_code=400, detail="Client ID mismatch")
 
         # Determine if client is confidential or public
-        oauth_client = await oauth2_service.client_storage.get_client(
-            resolved_client_id
-        )
+        oauth_client = await oauth2_service.client_storage.get_client(resolved_client_id)
         is_confidential = True  # Default for settings-based fallback client
 
         if oauth_client:
@@ -488,12 +474,8 @@ async def token_endpoint(
                     detail="Client authentication required for confidential clients",
                     headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
                 )
-            if not await oauth2_service.verify_client(
-                resolved_client_id, resolved_client_secret
-            ):
-                raise HTTPException(
-                    status_code=401, detail="Invalid client credentials"
-                )
+            if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+                raise HTTPException(status_code=401, detail="Invalid client credentials")
         else:
             # Public client: validate client_id exists but don't require secret
             if not await oauth2_service.verify_client(resolved_client_id):
@@ -506,23 +488,17 @@ async def token_endpoint(
         # --- PKCE Validation ---
         if auth_code.code_challenge:
             if not code_verifier:
-                raise HTTPException(
-                    status_code=400, detail="Missing code_verifier for PKCE flow"
-                )
+                raise HTTPException(status_code=400, detail="Missing code_verifier for PKCE flow")
 
             # Validate S256 method
             if auth_code.code_challenge_method == "S256":
                 hashed_verifier = hashlib.sha256(code_verifier.encode("utf-8")).digest()
                 recreated_challenge = (
-                    base64.urlsafe_b64encode(hashed_verifier)
-                    .decode("utf-8")
-                    .rstrip("=")
+                    base64.urlsafe_b64encode(hashed_verifier).decode("utf-8").rstrip("=")
                 )
             else:
                 # Per RFC 7636, plain is not recommended. We only support S256.
-                raise HTTPException(
-                    status_code=400, detail="Unsupported code_challenge_method"
-                )
+                raise HTTPException(status_code=400, detail="Unsupported code_challenge_method")
 
             if recreated_challenge != auth_code.code_challenge:
                 raise HTTPException(status_code=401, detail="Invalid code_verifier")
@@ -555,9 +531,7 @@ async def token_endpoint(
         # Final check: ensure the user has the scopes that were approved and are valid for the client
         # OIDC standard scopes (openid, profile, email, phone, address) are always allowed
         oidc_standard_scopes = {"openid", "profile", "email", "phone", "address"}
-        scopes = [
-            s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes
-        ]
+        scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
 
         # Generate JWT access token
         access_token_response = jwt_service.create_token_response(
@@ -611,9 +585,7 @@ async def token_endpoint(
         # Process and validate scopes
         requested_scopes = scope.split() if scope else []
         try:
-            validated_scopes = await oauth2_service.process_scopes(
-                client_id, requested_scopes
-            )
+            validated_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid scope")
 
@@ -628,9 +600,7 @@ async def token_endpoint(
     elif grant_type == "refresh_token":
         # Refresh token flow with rotation
         if not refresh_token or not client_id:
-            raise HTTPException(
-                status_code=400, detail="Missing refresh_token or client_id"
-            )
+            raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
 
         # Validate and rotate refresh token
         new_rt, error = await refresh_token_service.validate_and_rotate(
@@ -641,11 +611,13 @@ async def token_endpoint(
 
         if error:
             raise HTTPException(status_code=401, detail=error)
+        assert new_rt is not None  # help mypy narrow after error check
 
         # Get user
         user = await storage.get_user(new_rt.user_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="Invalid user")
+        assert user is not None  # help mypy narrow after raise
 
         # Generate new JWT access token
         access_token_response = jwt_service.create_token_response(
@@ -675,7 +647,7 @@ async def login_for_access_token(
     user = await storage.get_user_by_email(form_data.username)
 
     # Unified failure handling to prevent user enumeration
-    async def handle_failed_login():
+    async def handle_failed_login() -> NoReturn:
         await audit_service.log_event(
             event_type="login_failed",
             email=form_data.username,
@@ -704,6 +676,7 @@ async def login_for_access_token(
     # Check if user exists and verify password
     if not user or not verify_password(form_data.password, user.hashed_password):
         await handle_failed_login()
+    assert user is not None  # help mypy narrow after NoReturn handler
 
     # Check if account is locked
     if await storage.is_account_locked(user.id):
@@ -971,9 +944,7 @@ async def oauth2_mfa_verify(
     if trust_device:
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
-        device_fingerprint = mfa_service.generate_device_fingerprint(
-            user_agent, client_host
-        )
+        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
         await mfa_service.add_trusted_device(user.id, device_fingerprint, "Browser")
 
     # Delete MFA session
@@ -1018,9 +989,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 async def login_page(request: Request):
     """Simple login page (non-OAuth)."""
     settings = get_settings()
-    return templates.TemplateResponse(
-        request, "simple_login.html", context={**settings.ui_context}
-    )
+    return templates.TemplateResponse(request, "simple_login.html", context={**settings.ui_context})
 
 
 @router.get("/passkeys", response_class=HTMLResponse)
@@ -1037,9 +1006,7 @@ async def passkey_management_page(request: Request):
     )
 
 
-@router.post(
-    "/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def register_user(
     request: Request,
@@ -1061,7 +1028,7 @@ async def register_user(
     if not errors[0]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Password validation failed: {'; '.join(errors[1])}",
+            detail=f"Password validation failed: {'; '.join(errors[1] or [])}",
         )
 
     existing_user = await storage.get_user_by_email(user_data.email)

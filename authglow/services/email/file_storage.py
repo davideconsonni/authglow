@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+from authglow.core.datetime import utcnow
 from authglow.models.email import EmailMessage, EmailSendResult
 from authglow.services.email.base import EmailProvider
-from authglow.core.datetime import utcnow
 
 
 class FileStorageEmailProvider(EmailProvider):

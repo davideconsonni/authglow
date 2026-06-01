@@ -1,19 +1,18 @@
 """OAuth2 Consent Handler - integrates consent into authorization flow."""
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from authglow.core.rate_limit import limiter
 
-from authglow.services.oauth_consent import OAuth2ConsentService
+from authglow.core.config import get_settings
+from authglow.core.rate_limit import limiter
+from authglow.services.audit import AuditService
+from authglow.services.csrf import SESSION_ID_COOKIE, CSRFTokenService, get_csrf_service
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.oauth_client import OAuth2ClientStorage
+from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.session import SessionService
 from authglow.services.storage import UserStorage
-from authglow.services.audit import AuditService
-from authglow.services.csrf import CSRFTokenService, get_csrf_service, SESSION_ID_COOKIE
-from authglow.core.config import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")

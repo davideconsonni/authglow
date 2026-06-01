@@ -1,32 +1,31 @@
 """Admin portal API endpoints."""
 
-from datetime import datetime, timedelta
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from datetime import timedelta
+from typing import List, Optional, TypedDict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from authglow.core.rate_limit import limiter
-from authglow.core.datetime import utcnow
 
-from authglow.models.user import User, UserResponse
-from authglow.models.admin import (
-    DashboardStats,
-    UserStatsTimeSeries,
-    AdminUserDetail,
-    UserFilter,
-    UserUpdate,
-    BulkUserOperation,
-    PaginatedResponse,
-)
-from authglow.services.storage import UserStorage
-from authglow.services.audit import AuditService
-from authglow.services.mfa import MFAService
-from authglow.services.passkey import PasskeyService
-from authglow.services.refresh_token import RefreshTokenService
-from authglow.services.oauth_consent import OAuth2ConsentService
-from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
+from authglow.core.rate_limit import limiter
+from authglow.models.admin import (
+    AdminUserDetail,
+    BulkUserOperation,
+    DashboardStats,
+    PaginatedResponse,
+    UserUpdate,
+)
+from authglow.models.user import User, UserResponse
+from authglow.services.audit import AuditService
+from authglow.services.mfa import MFAService
+from authglow.services.oauth_client import OAuth2ClientStorage
+from authglow.services.oauth_consent import OAuth2ConsentService
+from authglow.services.passkey import PasskeyService
+from authglow.services.refresh_token import RefreshTokenService
+from authglow.services.storage import UserStorage
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")
@@ -74,9 +73,7 @@ async def admin_dashboard(request: Request):
     settings = get_settings()
     ui_context = settings.ui_context
 
-    return templates.TemplateResponse(
-        request, "admin_dashboard.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_dashboard.html", context={**ui_context})
 
 
 @router.get("/admin/users", response_class=HTMLResponse)
@@ -85,9 +82,7 @@ async def admin_users_page(request: Request):
     settings = get_settings()
     ui_context = settings.ui_context
 
-    return templates.TemplateResponse(
-        request, "admin_users.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_users.html", context={**ui_context})
 
 
 @router.get("/admin/audit", response_class=HTMLResponse)
@@ -112,9 +107,7 @@ async def admin_oauth_clients_page(request: Request):
     settings = get_settings()
     ui_context = settings.ui_context
 
-    return templates.TemplateResponse(
-        request, "admin_oauth_clients.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_oauth_clients.html", context={**ui_context})
 
 
 @router.get("/admin/api-keys", response_class=HTMLResponse)
@@ -123,9 +116,7 @@ async def admin_api_keys_page(request: Request):
     settings = get_settings()
     ui_context = settings.ui_context
 
-    return templates.TemplateResponse(
-        request, "admin_api_keys.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_api_keys.html", context={**ui_context})
 
 
 @router.get("/admin/password-resets", response_class=HTMLResponse)
@@ -134,9 +125,7 @@ async def admin_password_resets_page(request: Request):
     settings = get_settings()
     ui_context = settings.ui_context
 
-    return templates.TemplateResponse(
-        request, "admin_password_resets.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_password_resets.html", context={**ui_context})
 
 
 # API Endpoints
@@ -175,9 +164,9 @@ async def get_stats_timeseries(
     current_user: User = Depends(require_admin),
 ):
     """Get time series statistics for charts (delegated to cloud monitoring)."""
-    start_date = utcnow().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ) - timedelta(days=days - 1)
+    start_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=days - 1
+    )
     result = []
     for i in range(days):
         date = start_date + timedelta(days=i)
@@ -440,7 +429,13 @@ async def bulk_user_operation(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Perform bulk operations on users."""
-    results = {"success": 0, "failed": 0, "errors": []}
+
+    class _BulkResults(TypedDict):
+        success: int
+        failed: int
+        errors: list[str]
+
+    results: _BulkResults = {"success": 0, "failed": 0, "errors": []}
 
     for user_id in operation.user_ids:
         try:
@@ -543,9 +538,7 @@ async def admin_oauth_consents_page(request: Request):
 async def admin_rbac_page(request: Request):
     """RBAC management page (auth handled by JS)."""
     settings = get_settings()
-    return templates.TemplateResponse(
-        request, "admin_rbac.html", context={**settings.ui_context}
-    )
+    return templates.TemplateResponse(request, "admin_rbac.html", context={**settings.ui_context})
 
 
 @router.get("/admin/playground", response_class=HTMLResponse)
@@ -633,9 +626,7 @@ async def revoke_refresh_token_admin(
     if not rt:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    success = await refresh_token_service.revoke_token(
-        rt.token, reason="Revoked by admin"
-    )
+    success = await refresh_token_service.revoke_token(rt.token, reason="Revoked by admin")
 
     if success:
         await audit_service.log_event(
@@ -667,16 +658,16 @@ async def get_oauth_consents_admin(
     current_user: User = Depends(require_admin),
 ):
     """Get all OAuth2 consents with pagination."""
-    consent_service = OAuth2ConsentService()
     client_storage = OAuth2ClientStorage()
     user_storage = UserStorage()
 
     consents_list = []
 
     try:
-        from authglow.core.config import get_settings as _get_settings
-        from authglow.core.async_io import AsyncFileSystem
         import fsspec as _fsspec
+
+        from authglow.core.async_io import AsyncFileSystem
+        from authglow.core.config import get_settings as _get_settings
 
         _settings = _get_settings()
         _storage_path = f"{_settings.storage_path}/oauth_consents"
@@ -684,9 +675,7 @@ async def get_oauth_consents_admin(
         if _settings.storage_backend == "file":
             _fs = _fsspec.filesystem("file")
         else:
-            _fs = _fsspec.filesystem(
-                _settings.storage_backend, **_settings.get_storage_options()
-            )
+            _fs = _fsspec.filesystem(_settings.storage_backend, **_settings.get_storage_options())
         _afs = AsyncFileSystem(_fs)
 
         pattern = f"{_storage_path}/*.json"
@@ -707,7 +696,7 @@ async def get_oauth_consents_admin(
                     continue
 
                 client = await client_storage.get_client(consent.client_id)
-                client_name = client.name if client else consent.client_id
+                client_name = client.client_name if client else consent.client_id
 
                 consents_list.append(
                     {
@@ -733,7 +722,7 @@ async def get_oauth_consents_admin(
     except Exception:
         pass
 
-    consents_list.sort(key=lambda x: x["granted_at"], reverse=True)
+    consents_list.sort(key=lambda x: str(x.get("granted_at", "")), reverse=True)
     total = len(consents_list)
     paginated = consents_list[offset : offset + limit]
 

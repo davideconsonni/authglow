@@ -1,25 +1,24 @@
 """User profile and account management service."""
 
-import json
 import os
-from datetime import datetime
 from typing import Optional
+
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
-from authglow.services.password import verify_password, hash_password
 from authglow.models.user_profile import (
-    UserProfileUpdate,
     UserPreferences,
     UserPreferencesUpdate,
     UserProfileResponse,
+    UserProfileUpdate,
 )
-from authglow.services.storage import UserStorage
 from authglow.services.email_verification import EmailVerificationService
+from authglow.services.password import hash_password, verify_password
 from authglow.services.security_notifications import SecurityNotificationService
+from authglow.services.storage import UserStorage
 
 
 class UserProfileService:
@@ -39,9 +38,7 @@ class UserProfileService:
             os.makedirs(self.preferences_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -171,7 +168,8 @@ class UserProfileService:
             await self.user_storage._write_user(user)
 
         # Send verification email to new address
-        await self.email_service.send_verification_email(user_id, new_email)
+        token = await self.email_service.create_verification_token(user)
+        await self.email_service.send_verification_email(user, token.token)
 
         # Send notification to old email
         await self.security_service.send_email_changed_alert(

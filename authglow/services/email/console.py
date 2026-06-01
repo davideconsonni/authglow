@@ -1,13 +1,12 @@
 """Console email provider - prints emails to stdout for development."""
 
 import sys
-from datetime import datetime
-from uuid import uuid4
 from typing import TextIO
+from uuid import uuid4
 
+from authglow.core.datetime import utcnow
 from authglow.models.email import EmailMessage, EmailSendResult
 from authglow.services.email.base import EmailProvider
-from authglow.core.datetime import utcnow
 
 
 class ConsoleEmailProvider(EmailProvider):
@@ -17,7 +16,7 @@ class ConsoleEmailProvider(EmailProvider):
     in a readable way with headers and content.
     """
 
-    def __init__(self, output_stream: TextIO = None, colorize: bool = True):
+    def __init__(self, output_stream: TextIO | None = None, colorize: bool = True):
         """Initialize console email provider.
 
         Args:
@@ -54,15 +53,21 @@ class ConsoleEmailProvider(EmailProvider):
         """
         lines = []
 
+        col_yellow = "\033[33m"
+        col_magenta = "\033[35m"
+        col_green = "\033[32m"
+        col_white_bold = "\033[1;37m"
+        col_cyan_bold = "\033[1;36m"
+
         # Header with colors (use simple text for Windows compatibility)
         lines.append("=" * 80)
-        lines.append(self._colorize("[EMAIL MESSAGE]", "\033[1;36m"))  # Cyan bold
+        lines.append(self._colorize("[EMAIL MESSAGE]", col_cyan_bold))  # Cyan bold
         lines.append("=" * 80)
 
         # Metadata
-        lines.append(f"Message ID: {self._colorize(message_id, '\033[33m')}")  # Yellow
+        lines.append(f"Message ID: {self._colorize(message_id, col_yellow)}")  # Yellow
         lines.append(f"Timestamp:  {utcnow().isoformat()}Z")
-        lines.append(f"Provider:   {self._colorize('console', '\033[35m')}")  # Magenta
+        lines.append(f"Provider:   {self._colorize('console', col_magenta)}")  # Magenta
         lines.append("")
 
         # Headers
@@ -72,10 +77,10 @@ class ConsoleEmailProvider(EmailProvider):
         from_display = message.from_email or "noreply@authglow.local"
         if message.from_name:
             from_display = f"{message.from_name} <{from_display}>"
-        lines.append(f"From:     {self._colorize(from_display, '\033[32m')}")
+        lines.append(f"From:     {self._colorize(from_display, col_green)}")
 
         to_display = ", ".join(message.to)
-        lines.append(f"To:       {self._colorize(to_display, '\033[32m')}")
+        lines.append(f"To:       {self._colorize(to_display, col_green)}")
 
         if message.cc:
             cc_display = ", ".join(message.cc)
@@ -88,9 +93,7 @@ class ConsoleEmailProvider(EmailProvider):
         if message.reply_to:
             lines.append(f"Reply-To: {message.reply_to}")
 
-        lines.append(
-            f"Subject:  {self._colorize(message.subject, '\033[1;37m')}"
-        )  # White bold
+        lines.append(f"Subject:  {self._colorize(message.subject, col_white_bold)}")  # White bold
 
         if message.priority.value != "normal":
             lines.append(f"Priority: {message.priority.value.upper()}")
@@ -122,8 +125,7 @@ class ConsoleEmailProvider(EmailProvider):
             for attachment in message.attachments:
                 size_kb = len(attachment.content) / 1024
                 lines.append(
-                    f"- {attachment.filename} "
-                    f"({attachment.content_type}, {size_kb:.2f} KB)"
+                    f"- {attachment.filename} ({attachment.content_type}, {size_kb:.2f} KB)"
                 )
             lines.append("")
 
@@ -150,9 +152,7 @@ class ConsoleEmailProvider(EmailProvider):
             self.output.write(formatted)
             self.output.flush()
 
-            return EmailSendResult(
-                success=True, message_id=message_id, provider="console"
-            )
+            return EmailSendResult(success=True, message_id=message_id, provider="console")
 
         except Exception as e:
             return EmailSendResult(success=False, error=str(e), provider="console")

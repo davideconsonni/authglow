@@ -1,22 +1,22 @@
 """MFA (TOTP) service for two-factor authentication."""
 
+import base64
 import hashlib
 import hmac
 import io
-import json
 import os
 import secrets
-from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from datetime import timedelta
+from typing import List, Optional
+
+import bcrypt
+import fsspec
 import pyotp
 import qrcode
-import base64
-import fsspec
-import bcrypt
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.mfa import BackupCodes, TrustedDevice
 

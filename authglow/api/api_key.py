@@ -1,28 +1,26 @@
 """API Key management endpoints."""
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from authglow.core.rate_limit import limiter
+from typing import List
 
-from authglow.models.user import User
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+
+from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
+from authglow.core.rate_limit import limiter
 from authglow.models.api_key import (
     APIKeyCreate,
     APIKeyResponse,
-    APIKeyWithSecret,
     APIKeyUpdate,
-    APIKeyUsageStats,
+    APIKeyWithSecret,
 )
+from authglow.models.user import User
 from authglow.services.api_key import APIKeyService
 from authglow.services.audit import AuditService
-from authglow.api.auth import get_current_user, get_api_key_service, get_audit_service
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
 
 
-@router.post(
-    "/api/keys", response_model=APIKeyWithSecret, status_code=status.HTTP_201_CREATED
-)
+@router.post("/api/keys", response_model=APIKeyWithSecret, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/hour")  # Limit API key creation
 async def create_api_key(
     request: Request,
@@ -115,6 +113,8 @@ async def update_api_key(
     # Update
     updates = update_data.model_dump(exclude_none=True)
     updated_key = await api_key_service.update_key(key_id, updates)
+    if not updated_key:
+        raise HTTPException(status_code=404, detail="API key not found after update")
 
     # Log the update
     await audit_service.log_event(
@@ -223,9 +223,7 @@ async def list_all_api_keys(
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    keys = await api_key_service.list_all_keys(
-        limit=limit, offset=offset, active_only=active_only
-    )
+    keys = await api_key_service.list_all_keys(limit=limit, offset=offset, active_only=active_only)
 
     # Enrich with user email
     user_storage = UserStorage()

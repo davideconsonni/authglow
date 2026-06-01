@@ -1,20 +1,18 @@
 """Email verification API endpoints."""
 
-from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from authglow.core.rate_limit import limiter
 
+from authglow.api.auth import get_current_user
+from authglow.core.config import get_settings
+from authglow.core.rate_limit import limiter
 from authglow.models.email_verification import (
     EmailVerificationRequest,
-    ResendVerificationRequest,
 )
 from authglow.models.user import User
-from authglow.services.email_verification import EmailVerificationService
 from authglow.services.audit import AuditService
-from authglow.core.config import get_settings
-from authglow.api.auth import get_current_user
+from authglow.services.email_verification import EmailVerificationService
 
 router = APIRouter()
 templates = Jinja2Templates(directory="authglow/templates")

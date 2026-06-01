@@ -8,17 +8,20 @@ browser cookie (csrf_session_id) to bind tokens to a session.
 import os
 import secrets
 import time
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
+from authglow.core.config import get_settings
+
+if TYPE_CHECKING:
+    from fastapi import Request
 
 SESSION_ID_COOKIE = "csrf_session_id"
 TOKEN_EXPIRY_SECONDS = 1800
 CLEANUP_INTERVAL = 600
-_LAST_CLEANUP = 0
+_LAST_CLEANUP = 0.0
 
 
 class CSRFTokenService:
@@ -38,9 +41,7 @@ class CSRFTokenService:
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
 
@@ -128,12 +129,10 @@ def get_csrf_service() -> CSRFTokenService:
     return CSRFTokenService()
 
 
-def get_or_create_session_id(request) -> str:
+def get_or_create_session_id(request: "Request") -> str:
     """Read csrf_session_id from cookie, or generate a new one."""
-    from fastapi import Request
-    from starlette.responses import Response
 
-    cookie = request.cookies.get(SESSION_ID_COOKIE)
+    cookie: str | None = request.cookies.get(SESSION_ID_COOKIE)
     if cookie:
         return cookie
     return CSRFTokenService._new_session_id()

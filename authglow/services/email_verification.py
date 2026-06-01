@@ -1,19 +1,18 @@
 """Email verification service."""
 
-import json
 import os
-from datetime import datetime
 from typing import Optional
+
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock, ConcurrentWriteError
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.user import User
-from authglow.services.storage import UserStorage
 from authglow.services.email.factory import get_email_service
+from authglow.services.storage import UserStorage
 
 
 class EmailVerificationService:

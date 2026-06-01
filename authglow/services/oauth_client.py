@@ -2,16 +2,16 @@
 
 import os
 import secrets
-from typing import Optional, List
-from datetime import datetime
+from typing import List, Optional
+
 import fsspec
 
+from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
+from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.oauth_client import OAuth2Client
 from authglow.services.password import hash_password, verify_password
-from authglow.core.config import get_settings
-from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock, ConcurrentWriteError
-from authglow.core.datetime import utcnow
 
 
 class OAuth2ClientStorage:

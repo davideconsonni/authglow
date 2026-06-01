@@ -1,7 +1,8 @@
 """Admin portal data models."""
 
 from datetime import datetime
-from typing import Generic, List, Optional, Dict, Any, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
+
 from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow

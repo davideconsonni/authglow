@@ -1,22 +1,22 @@
 """MFA API endpoints."""
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
 
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from authglow.api.auth import get_current_user
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
-from authglow.models.user import User, UserResponse
 from authglow.models.mfa import (
     MFAEnrollResponse,
-    MFAVerifyRequest,
     MFAStatus,
+    MFAVerifyRequest,
     TrustedDevice,
 )
-from authglow.services.storage import UserStorage
-from authglow.services.mfa import MFAService
-from authglow.services.jwt import JWTService
+from authglow.models.user import User, UserResponse
 from authglow.services.audit import AuditService
-from authglow.api.auth import get_current_user
-
+from authglow.services.jwt import JWTService
+from authglow.services.mfa import MFAService
+from authglow.services.storage import UserStorage
 
 router = APIRouter()
 
@@ -218,18 +218,14 @@ async def verify_mfa_login(
     mfa_service: MFAService = Depends(get_mfa_service),
     jwt_service: JWTService = Depends(get_jwt_service),
     audit_service: AuditService = Depends(get_audit_service),
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]
 ):
     """Verify MFA code during login and return access token."""
     # Decode session token (should be in Authorization header or in body)
-    from fastapi import Header
-    from typing import Optional as Opt
 
     # Try to get session token from request
     session_token = (
-        request.headers.get("Authorization", "").replace("Bearer ", "")
-        if request
-        else None
+        request.headers.get("Authorization", "").replace("Bearer ", "") if request else None
     )
     if not session_token:
         raise HTTPException(status_code=401, detail="Session token required")
@@ -253,6 +249,9 @@ async def verify_mfa_login(
 
     if len(verify_request.code) == 6 and verify_request.code.isdigit():
         # Try TOTP
+        if not user.mfa_secret:
+            raise HTTPException(status_code=500, detail="MFA secret not configured")
+
         is_valid = mfa_service.verify_totp(
             decrypt_totp_secret(user.mfa_secret), verify_request.code
         )

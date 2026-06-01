@@ -2,15 +2,17 @@
 
 import json
 import os
-from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import List, Optional
+
 import fsspec
-from authglow.models.user import User
-from authglow.core.config import get_settings
+
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock
-from authglow.core.datetime import utcnow
 from authglow.core.cache import user_cache
+from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
+from authglow.models.user import User
 
 
 class UserStorage:
@@ -37,9 +39,7 @@ class UserStorage:
             self.fs = fsspec.filesystem("file")
         else:
             # For cloud backends (s3, gcs, abfs)
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -56,7 +56,8 @@ class UserStorage:
         """Load email to user_id mapping."""
         index_path = self._get_email_index_path()
         try:
-            return await self._afs.read_json(index_path)
+            result: dict = await self._afs.read_json(index_path)
+            return result
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
@@ -124,7 +125,7 @@ class UserStorage:
         import secrets
 
         key = email.lower()
-        cached = user_cache.get(key)
+        cached: User | None = user_cache.get(key)
         if cached is not None:
             return cached
 
@@ -283,9 +284,7 @@ class UserStorage:
 
                 # Lock account if max attempts exceeded
                 if user.failed_login_attempts >= max_attempts:
-                    user.locked_until = utcnow() + timedelta(
-                        minutes=lockout_duration_minutes
-                    )
+                    user.locked_until = utcnow() + timedelta(minutes=lockout_duration_minutes)
 
                 await self._write_user(user)
                 return user.locked_until

@@ -1,9 +1,9 @@
 """Permission checking decorators and utilities."""
 
-from functools import wraps
 from typing import List, Optional, Union
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from authglow.services.jwt import JWTService
 from authglow.services.rbac import RBACService

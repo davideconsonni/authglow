@@ -14,7 +14,7 @@ write to the same storage backend.
 
 import asyncio
 import json
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from authglow.core.concurrency import ConcurrentWriteError
 

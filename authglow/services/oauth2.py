@@ -1,12 +1,13 @@
 """OAuth2 authorization service."""
 
-import json
-from datetime import datetime, timedelta
-from typing import Optional, List
+from datetime import timedelta
+from typing import List, Optional
+
 import fsspec
-from authglow.core.config import get_settings
+
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock, ConcurrentWriteError
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.token import AuthorizationCode
 from authglow.services.oauth_client import OAuth2ClientStorage

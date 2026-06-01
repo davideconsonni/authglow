@@ -1,38 +1,34 @@
 """Passkey/WebAuthn service for AuthGlow."""
 
 import json
-import secrets
-from datetime import datetime, timedelta
 from typing import Optional
 
 import fsspec
 from webauthn import (
-    generate_registration_options,
-    verify_registration_response,
     generate_authentication_options,
-    verify_authentication_response,
+    generate_registration_options,
     options_to_json,
-)
-from webauthn.helpers.structs import (
-    PublicKeyCredentialDescriptor,
-    AuthenticatorSelectionCriteria,
-    UserVerificationRequirement,
-    ResidentKeyRequirement,
-    AttestationConveyancePreference,
-    AuthenticatorTransport,
+    verify_authentication_response,
+    verify_registration_response,
 )
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
+from webauthn.helpers.structs import (
+    AttestationConveyancePreference,
+    AuthenticatorSelectionCriteria,
+    AuthenticatorTransport,
+    PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
 
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
+from authglow.core.datetime import utcnow
 from authglow.models.passkey import (
     Passkey,
     PasskeyChallenge,
-    PasskeyRegistrationOptions,
-    PasskeyAuthenticationOptions,
 )
 from authglow.models.user import User
-from authglow.core.datetime import utcnow
 
 
 class PasskeyService:
@@ -71,9 +67,7 @@ class PasskeyService:
     async def get_user_passkeys(self, user_id: str) -> list[Passkey]:
         """Get all passkeys for a user."""
         try:
-            files = await self._afs.glob(
-                f"{self.storage_path}/passkeys/{user_id}_*.json"
-            )
+            files = await self._afs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
             passkeys = []
 
             for file_path in files:
@@ -112,9 +106,7 @@ class PasskeyService:
         except Exception:
             return False
 
-    async def update_passkey_usage(
-        self, user_id: str, credential_id: str, sign_count: int
-    ):
+    async def update_passkey_usage(self, user_id: str, credential_id: str, sign_count: int):
         """Update passkey last used time and sign count.
 
         Protected by a named lock to prevent concurrent sign_count corruption.
@@ -297,6 +289,7 @@ class PasskeyService:
             transports=transports,
             aaguid=str(verification.aaguid),
             user_id=challenge.user_id,
+            device_type=None,
             name=name,
             backup_eligible=verification.credential_backed_up,
             backup_state=verification.credential_backed_up,

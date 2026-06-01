@@ -1,27 +1,29 @@
 """Password reset API endpoints."""
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from authglow.core.rate_limit import limiter
-from authglow.models.user import User
-from authglow.models.password_reset import (
-    PasswordResetRequest,
-    PasswordResetConfirm,
-    PasswordResetResponse,
-    PasswordChange,
-    PasswordResetToken,
-)
-from authglow.services.password_reset import PasswordResetService
-from authglow.services.storage import UserStorage
-from authglow.services.audit import AuditService
-from authglow.services.email import EmailService
-from authglow.services.email.factory import get_email_service
+
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.password import validate_password_strength
+from authglow.core.rate_limit import limiter
+from authglow.models.password_reset import (
+    PasswordChange,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    PasswordResetResponse,
+    PasswordResetToken,
+)
+from authglow.models.user import User
+from authglow.services.audit import AuditService
+from authglow.services.email import EmailService
+from authglow.services.email.factory import get_email_service
 from authglow.services.password import hash_password, verify_password
+from authglow.services.password_reset import PasswordResetService
+from authglow.services.storage import UserStorage
 
 router = APIRouter()
 
@@ -168,9 +170,7 @@ async def confirm_password_reset(
     # Get user
     user = await user_storage.get_user(token.user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Hash new password
     hashed_password = hash_password(reset_confirm.new_password)
@@ -211,9 +211,7 @@ async def change_password(
     Requires current password for verification.
     """
     # Verify current password
-    if not verify_password(
-        password_change.current_password, current_user.hashed_password
-    ):
+    if not verify_password(password_change.current_password, current_user.hashed_password):
         await audit_service.log_event(
             event_type="password_change_failed",
             user_id=current_user.id,
@@ -263,22 +261,18 @@ async def change_password(
 @router.get("/password-reset", include_in_schema=False)
 async def redirect_to_forgot():
     """Redirect /password-reset to /password/forgot for user convenience."""
-    return RedirectResponse(
-        url="/password/forgot", status_code=status.HTTP_301_MOVED_PERMANENTLY
-    )
+    return RedirectResponse(url="/password/forgot", status_code=status.HTTP_301_MOVED_PERMANENTLY)
 
 
 @router.get("/password/forgot", response_class=HTMLResponse)
 async def forgot_password_page(request: Request):
     """Forgot password page."""
     ui_context = settings.ui_context
-    return templates.TemplateResponse(
-        request, "password_forgot.html", context={**ui_context}
-    )
+    return templates.TemplateResponse(request, "password_forgot.html", context={**ui_context})
 
 
 @router.get("/password/reset", response_class=HTMLResponse)
-async def reset_password_page(request: Request, token: str = None):
+async def reset_password_page(request: Request, token: str | None = None):
     """Reset password page with token."""
     ui_context = settings.ui_context
     return templates.TemplateResponse(
@@ -299,9 +293,7 @@ async def list_password_resets(
 ):
     """List all password reset tokens (admin only)."""
     if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     tokens = await reset_service.list_all_tokens(
         active_only=active_only, limit=limit, offset=offset
@@ -322,9 +314,7 @@ async def list_user_password_resets(
 ):
     """List password reset tokens for a specific user (admin only)."""
     if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     tokens = await reset_service.list_user_tokens(user_id, active_only=active_only)
     return tokens
@@ -339,9 +329,7 @@ async def revoke_user_password_resets(
 ):
     """Revoke all active password reset tokens for a user (admin only)."""
     if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     count = await reset_service.revoke_user_tokens(user_id)
 
@@ -364,9 +352,7 @@ async def cleanup_password_resets(
 ):
     """Cleanup expired password reset tokens (admin only)."""
     if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     deleted_count = await reset_service.cleanup_expired_tokens()
 
@@ -388,9 +374,7 @@ async def get_password_reset_stats(
 ):
     """Get password reset statistics (admin only)."""
     if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     stats = await reset_service.get_stats()
     return stats

@@ -1,8 +1,8 @@
 """Base email service interface and abstract classes."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from authglow.models.email import EmailMessage, EmailSendResult
 

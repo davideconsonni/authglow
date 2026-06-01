@@ -1,16 +1,16 @@
 """Refresh token service with automatic rotation."""
 
-import json
 import os
-from datetime import datetime, timedelta
-from typing import Optional, List
+from datetime import timedelta
+from typing import Any, List, Optional
+
 import fsspec
 
-from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock, ConcurrentWriteError
-from authglow.core.datetime import utcnow
 from authglow.core.cache import refresh_token_cache
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
+from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 
 PREFIX_LENGTH = 12
@@ -39,9 +39,7 @@ class RefreshTokenService:
             os.makedirs(self.index_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -56,8 +54,9 @@ class RefreshTokenService:
 
     async def _load_active_index(self) -> list[str]:
         try:
-            data = await self._afs.read_json(self._active_index_path)
-            return data.get("token_ids", [])
+            data: dict[str, Any] = await self._afs.read_json(self._active_index_path)
+            result: list[str] = data.get("token_ids", [])
+            return result
         except Exception:
             return []
 
@@ -68,9 +67,7 @@ class RefreshTokenService:
             except Exception:
                 pass
         else:
-            await self._afs.write_json(
-                self._active_index_path, {"token_ids": token_ids}
-            )
+            await self._afs.write_json(self._active_index_path, {"token_ids": token_ids})
 
     async def _add_to_active_index(self, token_id: str) -> None:
         async with self._lock("active_index"):
@@ -90,8 +87,9 @@ class RefreshTokenService:
         """Load token_ids for a given prefix from the index."""
         index_file = f"{self.index_path}/{prefix}.json"
         try:
-            data = await self._afs.read_json(index_file)
-            return data.get("token_ids", [])
+            data: dict[str, Any] = await self._afs.read_json(index_file)
+            result: list[str] = data.get("token_ids", [])
+            return result
         except Exception:
             return []
 
@@ -312,9 +310,7 @@ class RefreshTokenService:
                 try:
                     token_data = rt.model_dump()
                     data, version = await self._afs.read_json_versioned(token_path)
-                    await self._afs.write_json_versioned(
-                        token_path, token_data, version
-                    )
+                    await self._afs.write_json_versioned(token_path, token_data, version)
                 except ConcurrentWriteError:
                     continue
 
@@ -413,9 +409,7 @@ class RefreshTokenService:
 
         return revoked_count
 
-    async def revoke_user_tokens(
-        self, user_id: str, client_id: Optional[str] = None
-    ) -> int:
+    async def revoke_user_tokens(self, user_id: str, client_id: Optional[str] = None) -> int:
         """Revoke all refresh tokens for a user.
 
         Args:
@@ -449,14 +443,14 @@ class RefreshTokenService:
 
                     async with self._lock(f"refresh_token:{rt.token_id}"):
                         # Re-read inside lock
-                        rt = await self.get_refresh_token_by_id(rt.token_id)
-                        if rt and not rt.revoked:
-                            rt.revoked = True
-                            rt.revoked_at = utcnow()
-                            rt.revoked_reason = "Revoked by user or admin"
+                        rt_locked = await self.get_refresh_token_by_id(rt.token_id)
+                        if rt_locked and not rt_locked.revoked:
+                            rt_locked.revoked = True
+                            rt_locked.revoked_at = utcnow()
+                            rt_locked.revoked_reason = "Revoked by user or admin"
 
-                            await self._afs.write_json(file_path, rt.model_dump())
-                            await self._remove_from_active_index(rt.token_id)
+                            await self._afs.write_json(file_path, rt_locked.model_dump())
+                            await self._remove_from_active_index(rt_locked.token_id)
 
                             revoked_count += 1
 

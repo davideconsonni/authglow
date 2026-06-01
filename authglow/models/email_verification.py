@@ -1,8 +1,9 @@
 """Email verification models."""
 
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
-import secrets
+
 from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow

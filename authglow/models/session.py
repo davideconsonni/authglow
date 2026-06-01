@@ -1,8 +1,9 @@
 """Temporary session models for MFA flow."""
 
-from datetime import datetime
-from pydantic import BaseModel, Field
 import secrets
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 

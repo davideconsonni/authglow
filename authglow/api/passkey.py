@@ -1,25 +1,25 @@
 """Passkey/WebAuthn API endpoints for AuthGlow."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from authglow.core.rate_limit import limiter
-from authglow.core.datetime import utcnow
 
+from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
+from authglow.core.rate_limit import limiter
 from authglow.models.passkey import (
-    PasskeyResponse,
-    PasskeyRegistrationVerification,
     PasskeyAuthenticationVerification,
     PasskeyChallenge,
+    PasskeyRegistrationVerification,
+    PasskeyResponse,
 )
 from authglow.models.user import User
-from authglow.services.storage import UserStorage
-from authglow.services.passkey import PasskeyService
 from authglow.services.jwt import JWTService
-from authglow.core.config import get_settings
+from authglow.services.passkey import PasskeyService
+from authglow.services.storage import UserStorage
 
 router = APIRouter(prefix="/api/passkey")
 security = HTTPBearer()
@@ -130,8 +130,8 @@ async def complete_registration(
     """
     try:
         # The challenge is embedded in client_data_json, extract it
-        import json
         import base64
+        import json
 
         client_data = json.loads(
             base64.urlsafe_b64decode(verification.client_data_json + "==")
@@ -236,8 +236,8 @@ async def complete_authentication(
     """
     try:
         # Extract challenge from client_data_json
-        import json
         import base64
+        import json
 
         client_data = json.loads(
             base64.urlsafe_b64decode(verification.client_data_json + "==")

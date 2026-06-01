@@ -1,14 +1,10 @@
 """Email service factory for creating configured email providers."""
 
-from typing import Optional
 from functools import lru_cache
-from authglow.core.config import get_settings
-from .base import EmailProvider, EmailService
+from typing import Optional
 
-from authglow.services.email.base import EmailService, EmailProvider, EmailTemplateRenderer
-from authglow.services.email.console import ConsoleEmailProvider
-from authglow.services.email.file_storage import FileStorageEmailProvider
 from authglow.core.config import get_settings
+from authglow.services.email.base import EmailProvider, EmailService, EmailTemplateRenderer
 
 
 def create_email_provider(provider_name: Optional[str] = None) -> EmailProvider:
@@ -18,10 +14,12 @@ def create_email_provider(provider_name: Optional[str] = None) -> EmailProvider:
 
     if backend == "file_storage":
         from .file_storage import FileStorageEmailProvider
+
         return FileStorageEmailProvider(settings.email_storage_path)
-    
+
     # Default to console
     from .console import ConsoleEmailProvider
+
     return ConsoleEmailProvider()
 
 

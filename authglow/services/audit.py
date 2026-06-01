@@ -8,8 +8,9 @@ retention are handled by the cloud platform.
 
 import hashlib
 import hmac
-import structlog
 from typing import Optional
+
+import structlog
 
 from authglow.core.config import get_settings
 from authglow.models.admin import AuditLogEntry
