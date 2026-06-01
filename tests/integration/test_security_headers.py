@@ -31,7 +31,10 @@ def client_with_test_settings():
 class TestSecurityHeadersOnHealth:
     def test_content_security_policy(self, client_with_test_settings):
         response = client_with_test_settings.get("/health")
-        assert response.headers.get("content-security-policy") == "default-src 'self'"
+        assert (
+            response.headers.get("content-security-policy")
+            == "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+        )
 
     def test_x_frame_options_deny(self, client_with_test_settings):
         response = client_with_test_settings.get("/health")
@@ -181,7 +184,7 @@ class TestHeadersNotOverridden:
 def _make_prod_settings():
     settings = _FakeSettings()
     settings.app_env = "production"
-    settings.csp_header = "default-src 'self'"
+    settings.csp_header = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     settings.x_frame_options = "DENY"
     settings.x_content_type_options = "nosniff"
     settings.referrer_policy = "strict-origin-when-cross-origin"

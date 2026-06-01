@@ -151,7 +151,7 @@ class Settings(BaseSettings):
     audit_email_log_level: str = "mask"  # "mask", "hash", "none"
 
     # Security Headers Settings
-    csp_header: str = "default-src 'self'"
+    csp_header: str = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     x_frame_options: str = "DENY"
     x_content_type_options: str = "nosniff"
     referrer_policy: str = "strict-origin-when-cross-origin"
@@ -159,6 +159,10 @@ class Settings(BaseSettings):
     permissions_policy: str = ""
     hsts_max_age: int = 31536000
     hsts_include_subdomains: bool = True
+
+    # HTTPS Enforcement
+    enforce_https: bool = True
+    https_redirect_status: int = 301
 
     @property
     def is_production(self) -> bool:

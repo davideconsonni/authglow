@@ -12,6 +12,7 @@ from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
+from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 from authglow.api.auth import router as auth_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.api.mfa import router as mfa_router
@@ -55,6 +56,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # Request body size limiter - rejects payloads exceeding MAX_REQUEST_BODY_SIZE_MB
 app.add_middleware(MaxBodySizeMiddleware)
+
+# HTTPS enforcement - redirects HTTP to HTTPS in production
+app.add_middleware(HttpsEnforcementMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="authglow/static"), name="static")

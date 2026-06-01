@@ -88,7 +88,10 @@ class TestSecurityHeadersMiddleware:
         assert response_start["type"] == "http.response.start"
         hdrs = _headers_dict(response_start)
 
-        assert hdrs.get("content-security-policy") == "default-src 'self'"
+        assert (
+            hdrs.get("content-security-policy")
+            == "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+        )
         assert hdrs.get("x-frame-options") == "DENY"
         assert hdrs.get("x-content-type-options") == "nosniff"
         assert hdrs.get("referrer-policy") == "strict-origin-when-cross-origin"
@@ -276,7 +279,7 @@ class TestSecurityHeadersMiddleware:
 def _make_settings(**overrides) -> object:
     settings = _FakeSettings()
     settings.app_env = "development"
-    settings.csp_header = "default-src 'self'"
+    settings.csp_header = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     settings.x_frame_options = "DENY"
     settings.x_content_type_options = "nosniff"
     settings.referrer_policy = "strict-origin-when-cross-origin"

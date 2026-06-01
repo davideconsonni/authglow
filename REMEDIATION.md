@@ -160,12 +160,24 @@ Usa una sessione per fix, spunta ciò che completi.
     User counters per login nel modello. Output JSON stdout cloud-native.
     Test: 16 test in `tests/unit/test_audit.py` (3 logging, 7 masking, 6 architectural).
 
-- [ ] **S11 — No HTTPS enforcement**
-  - File: `authglow/main.py`, `.env`
-  - Problema: l'app non forza HTTPS. In produzione dipende dal reverse proxy (nginx/ALB).
+- [x] **S11 — No HTTPS enforcement**
+  - File: `authglow/main.py`, `.env`, `authglow/core/config.py`, `authglow/middleware/https_enforcement.py`
+  - Problema: l'app non forza HTTPS. In produzione dipende dal reverse proxy.
   - Fix:
-    1. In produzione: middleware `HTTPSRedirectMiddleware` condizionale su `APP_ENV=production`.
-    2. Documentare che in development si usa HTTP, in produzione serve reverse proxy con TLS.
+    1. Aggiunte settings `ENFORCE_HTTPS` (default `true`) e `HTTPS_REDIRECT_STATUS` (default `301`) in `config.py`.
+    2. Creato `authglow/middleware/https_enforcement.py` (ASGI puro, stesso pattern di `SecurityHeadersMiddleware`).
+       Il middleware controlla prima `X-Forwarded-Proto` header (scenario reverse proxy: nginx/ALB), poi `request.url.scheme`
+       (scenario diretto). Attivo solo quando `APP_ENV=production` AND `ENFORCE_HTTPS=true`.
+    3. Registrato in `main.py` dopo `MaxBodySizeMiddleware`.
+    4. Websocket e scope non-HTTP ignorati.
+    5. Documentato in `.env` con sezione `# HTTPS ENFORCEMENT`.
+    6. Redirect preserva path e query string della richiesta originale.
+  - **Risolto**: Middleware `HttpsEnforcementMiddleware` redirect HTTP→HTTPS in produzione.
+    Supporto `X-Forwarded-Proto` per ambienti con reverse proxy (TLS terminato a monte).
+    Disattivabile via `ENFORCE_HTTPS=false`.
+    Test: 16 unit + 16 integration in `tests/unit/test_https_enforcement.py` e
+    `tests/integration/test_https_enforcement.py` (redirect 301/302, no-op in dev,
+    X-Forwarded-Proto, enforce_https=false, path+query preservati, produzione case-insensitive).
 
 - [ ] **S12 — Nessun lockout per brute-force API key**
   - File: `authglow/services/api_key.py`
@@ -280,7 +292,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S8 — Request body size limit
 - [x] S9 — Timing side-channel email lookup
 - [x] S10 — Audit log PII/GDPR
-- [ ] S11 — HTTPS enforcement
+- [x] S11 — HTTPS enforcement
 - [ ] S12 — API key brute-force lockout
 - [ ] P1 — Refresh token prefix index
 - [ ] P2 — Audit log indici mensili
