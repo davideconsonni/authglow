@@ -20,6 +20,10 @@ class APIKey(BaseModel):
     scopes: List[str] = Field(default_factory=list)
     is_active: bool = True
 
+    # Brute-force lockout
+    failed_validation_attempts: int = 0
+    locked_until: Optional[datetime] = None
+
     # Expiration
     expires_at: Optional[datetime] = None
     never_expires: bool = False

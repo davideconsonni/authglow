@@ -10,7 +10,10 @@ from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
+from authglow.core.cache import refresh_token_cache
 from authglow.models.refresh_token import RefreshToken
+
+PREFIX_LENGTH = 12
 
 
 class RefreshTokenService:
@@ -27,11 +30,13 @@ class RefreshTokenService:
         """Initialize refresh token service."""
         self.settings = get_settings()
         self.storage_path = f"{self.settings.storage_path}/refresh_tokens"
+        self.index_path = f"{self.storage_path}/index"
         self.storage_options = self.settings.get_storage_options()
 
         # Initialize filesystem
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
+            os.makedirs(self.index_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
@@ -44,6 +49,39 @@ class RefreshTokenService:
     def _get_token_path(self, token_id: str) -> str:
         """Get path for refresh token file."""
         return f"{self.storage_path}/{token_id}.json"
+
+    async def _load_prefix_index(self, prefix: str) -> list[str]:
+        """Load token_ids for a given prefix from the index."""
+        index_file = f"{self.index_path}/{prefix}.json"
+        try:
+            data = await self._afs.read_json(index_file)
+            return data.get("token_ids", [])
+        except Exception:
+            return []
+
+    async def _save_prefix_index(self, prefix: str, token_id: str) -> None:
+        """Add token_id to the prefix index for O(1) lookups."""
+        async with self._lock(f"prefix_index:{prefix}"):
+            existing_ids = await self._load_prefix_index(prefix)
+            if token_id not in existing_ids:
+                existing_ids.append(token_id)
+            index_file = f"{self.index_path}/{prefix}.json"
+            await self._afs.write_json(index_file, {"token_ids": existing_ids})
+
+    async def _remove_from_prefix_index(self, prefix: str, token_id: str) -> None:
+        """Remove a token_id from the prefix index."""
+        async with self._lock(f"prefix_index:{prefix}"):
+            existing_ids = await self._load_prefix_index(prefix)
+            if token_id in existing_ids:
+                existing_ids.remove(token_id)
+            index_file = f"{self.index_path}/{prefix}.json"
+            if not existing_ids:
+                try:
+                    await self._afs.rm(index_file)
+                except Exception:
+                    pass
+            else:
+                await self._afs.write_json(index_file, {"token_ids": existing_ids})
 
     async def create_refresh_token(
         self,
@@ -80,10 +118,19 @@ class RefreshTokenService:
         token_path = self._get_token_path(refresh_token.token_id)
         await self._afs.write_json(token_path, refresh_token.model_dump())
 
+        # Update prefix index
+        prefix = refresh_token.token[:PREFIX_LENGTH]
+        await self._save_prefix_index(prefix, refresh_token.token_id)
+
         return refresh_token
 
     async def get_refresh_token(self, token: str) -> Optional[RefreshToken]:
-        """Get refresh token by token string.
+        """Get refresh token by token string using prefix index for O(1) lookup.
+
+        Caches ``token -> token_id`` (TTLCache, max 5000 entries, 60s TTL) to
+        skip the prefix-index lookup on hot tokens.  The actual token file is
+        **always** re-read — this guarantees that a revocation by another
+        serverless instance is never hidden behind a stale cache entry.
 
         Args:
             token: Refresh token string
@@ -91,17 +138,34 @@ class RefreshTokenService:
         Returns:
             RefreshToken if found, None otherwise
         """
-        try:
-            # Search through all tokens to find matching token string
-            pattern = f"{self.storage_path}/*.json"
-            files = await self._afs.glob(pattern)
+        token_id = refresh_token_cache.get(token)
+        if token_id is not None:
+            try:
+                token_path = self._get_token_path(token_id)
+                data = await self._afs.read_json(token_path)
+                rt = RefreshToken(**data)
+                if rt.token == token:
+                    return rt
+            except Exception:
+                pass
+            refresh_token_cache.pop(token, None)
+            return None
 
-            for file_path in files:
+        try:
+            prefix = token[:PREFIX_LENGTH]
+            candidate_ids = await self._load_prefix_index(prefix)
+
+            if not candidate_ids:
+                return None
+
+            for candidate_id in candidate_ids:
                 try:
-                    data = await self._afs.read_json(file_path)
+                    token_path = self._get_token_path(candidate_id)
+                    data = await self._afs.read_json(token_path)
                     rt = RefreshToken(**data)
 
                     if rt.token == token:
+                        refresh_token_cache[token] = rt.token_id
                         return rt
 
                 except Exception:
@@ -242,6 +306,7 @@ class RefreshTokenService:
             token_path = self._get_token_path(rt.token_id)
             try:
                 await self._afs.write_json(token_path, rt.model_dump())
+                refresh_token_cache.pop(token, None)
                 return True
             except Exception:
                 return False
@@ -411,6 +476,9 @@ class RefreshTokenService:
                     # Delete if expired
                     if utcnow() > rt.expires_at:
                         await self._afs.rm(file_path)
+                        prefix = rt.token[:PREFIX_LENGTH]
+                        await self._remove_from_prefix_index(prefix, rt.token_id)
+                        refresh_token_cache.pop(rt.token, None)
                         deleted += 1
 
                 except Exception:

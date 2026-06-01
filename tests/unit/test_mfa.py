@@ -75,12 +75,8 @@ class TestBackupCodes:
         import asyncio
 
         codes = mfa_service.generate_backup_codes(5)
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes("user-backup-test", codes)
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            mfa_service.get_backup_codes("user-backup-test")
-        )
+        asyncio.run(mfa_service.save_backup_codes("user-backup-test", codes))
+        result = asyncio.run(mfa_service.get_backup_codes("user-backup-test"))
         assert result is not None
         assert result.user_id == "user-backup-test"
         assert len(result.codes) == 5
@@ -89,12 +85,8 @@ class TestBackupCodes:
         import asyncio
 
         codes = mfa_service.generate_backup_codes(5)
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes("user-hash-test", codes)
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            mfa_service.get_backup_codes("user-hash-test")
-        )
+        asyncio.run(mfa_service.save_backup_codes("user-hash-test", codes))
+        result = asyncio.run(mfa_service.get_backup_codes("user-hash-test"))
         assert result is not None
         for stored_code in result.codes:
             assert stored_code.startswith("$2b$")
@@ -104,13 +96,9 @@ class TestBackupCodes:
 
         codes = mfa_service.generate_backup_codes(5)
         user_id = "user-verify-codes"
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes(user_id, codes)
-        )
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
         first_code = codes[0]
-        is_valid = asyncio.get_event_loop().run_until_complete(
-            mfa_service.verify_user_backup_code(user_id, first_code)
-        )
+        is_valid = asyncio.run(mfa_service.verify_user_backup_code(user_id, first_code))
         assert is_valid
 
     def test_verify_user_backup_code_wrong(self, mfa_service):
@@ -118,10 +106,8 @@ class TestBackupCodes:
 
         codes = mfa_service.generate_backup_codes(5)
         user_id = "user-verify-wrong"
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes(user_id, codes)
-        )
-        is_valid = asyncio.get_event_loop().run_until_complete(
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+        is_valid = asyncio.run(
             mfa_service.verify_user_backup_code(user_id, "WRONGCODE")
         )
         assert not is_valid
@@ -131,15 +117,13 @@ class TestBackupCodes:
 
         codes = mfa_service.generate_backup_codes(5)
         user_id = "user-multi-use"
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes(user_id, codes)
-        )
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
         first_code = codes[0]
-        is_valid1 = asyncio.get_event_loop().run_until_complete(
+        is_valid1 = asyncio.run(
             mfa_service.verify_user_backup_code(user_id, first_code)
         )
         assert is_valid1
-        is_valid2 = asyncio.get_event_loop().run_until_complete(
+        is_valid2 = asyncio.run(
             mfa_service.verify_user_backup_code(user_id, first_code)
         )
         assert is_valid2
@@ -149,15 +133,9 @@ class TestBackupCodes:
 
         codes = mfa_service.generate_backup_codes(5)
         user_id = "user-delete-codes"
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.save_backup_codes(user_id, codes)
-        )
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.delete_backup_codes(user_id)
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            mfa_service.get_backup_codes(user_id)
-        )
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+        asyncio.run(mfa_service.delete_backup_codes(user_id))
+        result = asyncio.run(mfa_service.get_backup_codes(user_id))
         assert result is None
 
 
@@ -186,16 +164,14 @@ class TestDeviceFingerprint:
 
         fp = mfa_service.generate_device_fingerprint("Mozilla/5.0", "192.168.1.1")
         user_id = "user-trusted-test"
-        device = asyncio.get_event_loop().run_until_complete(
+        device = asyncio.run(
             mfa_service.add_trusted_device(user_id, fp, "Test Browser")
         )
         assert device is not None
         assert device.device_fingerprint == fp
         assert device.user_id == user_id
 
-        is_trusted = asyncio.get_event_loop().run_until_complete(
-            mfa_service.is_device_trusted(user_id, fp)
-        )
+        is_trusted = asyncio.run(mfa_service.is_device_trusted(user_id, fp))
         assert is_trusted
 
     def test_trusted_device_real_world_flow(self, mfa_service):
@@ -205,21 +181,15 @@ class TestDeviceFingerprint:
         user_id = "user-real-world-flow"
 
         fp1 = mfa_service.generate_device_fingerprint("Chrome/120", "10.0.0.5")
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.add_trusted_device(user_id, fp1, "Chrome on macOS")
-        )
+        asyncio.run(mfa_service.add_trusted_device(user_id, fp1, "Chrome on macOS"))
 
         fp2 = mfa_service.generate_device_fingerprint("Chrome/120", "10.0.0.5")
         assert fp1 == fp2, "HMAC-SHA256 must be deterministic"
-        is_trusted = asyncio.get_event_loop().run_until_complete(
-            mfa_service.is_device_trusted(user_id, fp2)
-        )
+        is_trusted = asyncio.run(mfa_service.is_device_trusted(user_id, fp2))
         assert is_trusted, "Same device should be recognized as trusted"
 
         fp3 = mfa_service.generate_device_fingerprint("Firefox/121", "10.0.0.5")
-        is_trusted_other = asyncio.get_event_loop().run_until_complete(
-            mfa_service.is_device_trusted(user_id, fp3)
-        )
+        is_trusted_other = asyncio.run(mfa_service.is_device_trusted(user_id, fp3))
         assert not is_trusted_other, "Different device should not be trusted"
 
     def test_trusted_device_expires(self, mfa_service):
@@ -229,7 +199,7 @@ class TestDeviceFingerprint:
 
         fp = mfa_service.generate_device_fingerprint("Mozilla/5.0", "10.0.0.1")
         user_id = "user-expired-device"
-        device = asyncio.get_event_loop().run_until_complete(
+        device = asyncio.run(
             mfa_service.add_trusted_device(user_id, fp, "Expired Browser")
         )
         expired_device = TrustedDevice(**device.model_dump())
@@ -238,18 +208,14 @@ class TestDeviceFingerprint:
         with mfa_service.fs.open(device_path, "w") as f:
             json.dump(expired_device.model_dump(mode="json"), f, indent=2, default=str)
 
-        is_trusted = asyncio.get_event_loop().run_until_complete(
-            mfa_service.is_device_trusted(user_id, fp)
-        )
+        is_trusted = asyncio.run(mfa_service.is_device_trusted(user_id, fp))
         assert not is_trusted, "Expired trusted devices should not be trusted."
 
     def test_untrusted_device(self, mfa_service):
         import asyncio
 
         fp = mfa_service.generate_device_fingerprint("SomeAgent", "1.2.3.4")
-        is_trusted = asyncio.get_event_loop().run_until_complete(
-            mfa_service.is_device_trusted("user-no-device", fp)
-        )
+        is_trusted = asyncio.run(mfa_service.is_device_trusted("user-no-device", fp))
         assert not is_trusted
 
     def test_list_trusted_devices(self, mfa_service):
@@ -259,16 +225,10 @@ class TestDeviceFingerprint:
         fp1 = mfa_service.generate_device_fingerprint("Agent1", "1.1.1.1")
         fp2 = mfa_service.generate_device_fingerprint("Agent2", "2.2.2.2")
 
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.add_trusted_device(user_id, fp1, "Browser 1")
-        )
-        asyncio.get_event_loop().run_until_complete(
-            mfa_service.add_trusted_device(user_id, fp2, "Browser 2")
-        )
+        asyncio.run(mfa_service.add_trusted_device(user_id, fp1, "Browser 1"))
+        asyncio.run(mfa_service.add_trusted_device(user_id, fp2, "Browser 2"))
 
-        devices = asyncio.get_event_loop().run_until_complete(
-            mfa_service.list_trusted_devices(user_id)
-        )
+        devices = asyncio.run(mfa_service.list_trusted_devices(user_id))
         assert len(devices) >= 2
 
     def test_remove_trusted_device(self, mfa_service):
@@ -276,12 +236,8 @@ class TestDeviceFingerprint:
 
         fp = mfa_service.generate_device_fingerprint("Agent3", "3.3.3.3")
         user_id = "user-remove-device"
-        device = asyncio.get_event_loop().run_until_complete(
-            mfa_service.add_trusted_device(user_id, fp, "ToRemove")
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            mfa_service.remove_trusted_device(device.id)
-        )
+        device = asyncio.run(mfa_service.add_trusted_device(user_id, fp, "ToRemove"))
+        result = asyncio.run(mfa_service.remove_trusted_device(device.id))
         assert result
 
 

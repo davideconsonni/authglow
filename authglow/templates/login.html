@@ -82,7 +82,7 @@
 
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
                 <div class="password-hint">{{ password_policy }}</div>
             </div>
 
@@ -93,8 +93,10 @@
             or
         </div>
 
+        <div id="passkey-message" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: 6px; font-size: 14px;"></div>
+
         <button type="button" class="btn btn-outline" onclick="signInWithPasskey()" style="width: 100%;">
-            🔐 Sign in with Passkey
+            Sign in with Passkey
         </button>
 
         <div class="footer">
@@ -131,7 +133,13 @@
 
                 if (!optionsResponse.ok) {
                     const error = await optionsResponse.json();
-                    throw new Error(error.detail || 'Failed to start authentication');
+                    const msg = error.detail || 'Authentication failed';
+                    const msgEl = document.getElementById('passkey-message');
+                    msgEl.textContent = msg;
+                    msgEl.style.display = 'block';
+                    msgEl.style.background = 'var(--error-bg, #fde8e8)';
+                    msgEl.style.color = 'var(--error, #c53030)';
+                    return;
                 }
 
                 const options = await optionsResponse.json();
@@ -183,8 +191,11 @@
                     window.location.href = '/passkeys';  // Redirect to passkey management page
                 }
             } catch (error) {
-                console.error('Passkey authentication error:', error);
-                alert('Passkey authentication failed: ' + error.message);
+                const msgEl = document.getElementById('passkey-message');
+                msgEl.textContent = 'Passkey authentication failed. Please try again or use password login.';
+                msgEl.style.display = 'block';
+                msgEl.style.background = 'var(--error-bg, #fde8e8)';
+                msgEl.style.color = 'var(--error, #c53030)';
             }
         }
 

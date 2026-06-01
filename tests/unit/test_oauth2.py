@@ -6,7 +6,7 @@ class TestAuthorizationCodeLifecycle:
     def test_create_authorization_code(self, oauth2_service):
         import asyncio
 
-        code = asyncio.get_event_loop().run_until_complete(
+        code = asyncio.run(
             oauth2_service.create_authorization_code(
                 client_id="test-client-id",
                 user_id="user-1",
@@ -23,7 +23,7 @@ class TestAuthorizationCodeLifecycle:
     def test_get_authorization_code(self, oauth2_service):
         import asyncio
 
-        code = asyncio.get_event_loop().run_until_complete(
+        code = asyncio.run(
             oauth2_service.create_authorization_code(
                 client_id="test-client-id",
                 user_id="user-2",
@@ -31,9 +31,7 @@ class TestAuthorizationCodeLifecycle:
                 scope="read write",
             )
         )
-        fetched = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.get_authorization_code(code.code)
-        )
+        fetched = asyncio.run(oauth2_service.get_authorization_code(code.code))
         assert fetched is not None
         assert fetched.code == code.code
 
@@ -41,7 +39,7 @@ class TestAuthorizationCodeLifecycle:
         import asyncio
         from datetime import datetime, timedelta
 
-        code = asyncio.get_event_loop().run_until_complete(
+        code = asyncio.run(
             oauth2_service.create_authorization_code(
                 client_id="test-client-id",
                 user_id="user-exp",
@@ -49,15 +47,13 @@ class TestAuthorizationCodeLifecycle:
                 scope="read",
             )
         )
-        fetched = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.get_authorization_code(code.code)
-        )
+        fetched = asyncio.run(oauth2_service.get_authorization_code(code.code))
         assert fetched is not None
 
     def test_authorization_code_single_use(self, oauth2_service):
         import asyncio
 
-        code = asyncio.get_event_loop().run_until_complete(
+        code = asyncio.run(
             oauth2_service.create_authorization_code(
                 client_id="test-client-id",
                 user_id="user-single",
@@ -65,13 +61,9 @@ class TestAuthorizationCodeLifecycle:
                 scope="read",
             )
         )
-        marked = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.mark_code_as_used(code.code)
-        )
+        marked = asyncio.run(oauth2_service.mark_code_as_used(code.code))
         assert marked
-        fetched = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.get_authorization_code(code.code)
-        )
+        fetched = asyncio.run(oauth2_service.get_authorization_code(code.code))
         assert fetched is None
 
     def test_authorization_code_with_pkce(self, oauth2_service):
@@ -83,7 +75,7 @@ class TestAuthorizationCodeLifecycle:
         challenge_bytes = hashlib.sha256(code_verifier.encode()).digest()
         code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode().rstrip("=")
 
-        code = asyncio.get_event_loop().run_until_complete(
+        code = asyncio.run(
             oauth2_service.create_authorization_code(
                 client_id="test-client-id",
                 user_id="user-pkce",
@@ -101,7 +93,7 @@ class TestOAuth2ClientVerification:
     def test_verify_client_with_settings_defaults(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             oauth2_service.verify_client("test-client-id", "test-client-secret")
         )
         assert result is True
@@ -109,7 +101,7 @@ class TestOAuth2ClientVerification:
     def test_verify_client_wrong_secret(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             oauth2_service.verify_client("test-client-id", "wrong-secret")
         )
         assert result is False
@@ -117,15 +109,13 @@ class TestOAuth2ClientVerification:
     def test_verify_client_no_secret(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.verify_client("test-client-id", None)
-        )
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", None))
         assert result is True
 
     def test_verify_client_unknown_client(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             oauth2_service.verify_client("unknown-client", "any-secret")
         )
         assert result is False
@@ -133,7 +123,7 @@ class TestOAuth2ClientVerification:
     def test_verify_redirect_uri_default_client(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             oauth2_service.verify_redirect_uri(
                 "test-client-id", "http://localhost:8000/callback"
             )
@@ -143,7 +133,7 @@ class TestOAuth2ClientVerification:
     def test_verify_redirect_uri_invalid(self, oauth2_service):
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             oauth2_service.verify_redirect_uri(
                 "test-client-id", "https://evil.com/callback"
             )
@@ -155,15 +145,13 @@ class TestOAuth2ScopeProcessing:
     def test_process_scopes_default_client(self, oauth2_service):
         import asyncio
 
-        scopes = asyncio.get_event_loop().run_until_complete(
-            oauth2_service.process_scopes("test-client-id", ["read"])
-        )
+        scopes = asyncio.run(oauth2_service.process_scopes("test-client-id", ["read"]))
         assert "read" in scopes
 
     def test_process_scopes_oidc_standard_always_allowed(self, oauth2_service):
         import asyncio
 
-        scopes = asyncio.get_event_loop().run_until_complete(
+        scopes = asyncio.run(
             oauth2_service.process_scopes(
                 "test-client-id", ["openid", "profile", "email"]
             )
@@ -178,7 +166,7 @@ class TestOAuth2ScopeProcessing:
         oauth2_service.settings.oauth2_reject_unknown_scopes = True
 
         with pytest.raises(ValueError, match="Unauthorized scopes"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 oauth2_service.process_scopes(
                     "test-client-id", ["read", "admin_super_secret"]
                 )

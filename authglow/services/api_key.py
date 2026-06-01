@@ -17,6 +17,15 @@ from authglow.models.api_key import APIKey, APIKeyCreate
 PREFIX_LENGTH = 12
 
 
+class APIKeyLockedException(Exception):
+    """Raised when an API key is temporarily locked due to brute-force attempts."""
+
+    def __init__(self, key_id: str, locked_until: datetime):
+        self.key_id = key_id
+        self.locked_until = locked_until
+        super().__init__(f"API key {key_id} is locked until {locked_until.isoformat()}")
+
+
 class APIKeyService:
     """Service for managing API keys."""
 
@@ -190,12 +199,26 @@ class APIKeyService:
         return keys[offset : offset + limit]
 
     async def validate_key(self, provided_key: str) -> Optional[APIKey]:
-        """Validate an API key using prefix index for O(1) lookup."""
+        """Validate an API key using prefix index for O(1) lookup.
+
+        Raises APIKeyLockedException if any candidate key is locked.
+        Records failed attempts on all candidates on mismatch.
+        Resets failed attempts on successful match.
+        """
         if not provided_key or not provided_key.startswith("ak_"):
             return None
 
         prefix = provided_key[:PREFIX_LENGTH]
         candidate_ids = await self._load_prefix_index(prefix)
+
+        if not candidate_ids:
+            return None
+
+        for key_id in candidate_ids:
+            if await self.is_key_locked(key_id):
+                api_key = await self.get_key(key_id)
+                if api_key and api_key.locked_until:
+                    raise APIKeyLockedException(key_id, api_key.locked_until)
 
         for key_id in candidate_ids:
             api_key = await self.get_key(key_id)
@@ -209,9 +232,59 @@ class APIKeyService:
                 if api_key.expires_at and api_key.expires_at < utcnow():
                     return None
 
+                await self.reset_failed_validations(key_id)
                 return api_key
 
+        for key_id in candidate_ids:
+            await self.record_failed_validation(key_id)
+
         return None
+
+    async def record_failed_validation(self, key_id: str) -> None:
+        """Record a failed API key validation attempt. Locks the key if threshold reached."""
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key or not api_key.is_active:
+                return
+
+            api_key.failed_validation_attempts += 1
+
+            if api_key.failed_validation_attempts >= self.settings.api_key_max_failed_attempts:
+                api_key.locked_until = utcnow() + timedelta(
+                    minutes=self.settings.api_key_lockout_minutes
+                )
+
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+
+    async def is_key_locked(self, key_id: str) -> bool:
+        """Check if an API key is currently locked. Auto-unlocks on expiry."""
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key or not api_key.locked_until:
+                return False
+
+            if utcnow() >= api_key.locked_until:
+                api_key.locked_until = None
+                api_key.failed_validation_attempts = 0
+                file_path = f"{self.storage_path}/{key_id}.json"
+                await self._afs.write_json(file_path, api_key.model_dump(), default=str)
+                return False
+
+            return True
+
+    async def reset_failed_validations(self, key_id: str) -> None:
+        """Reset failed validation attempts and clear lockout."""
+        async with self._lock(f"api_key:{key_id}"):
+            api_key = await self.get_key(key_id)
+            if not api_key:
+                return
+
+            api_key.failed_validation_attempts = 0
+            api_key.locked_until = None
+
+            file_path = f"{self.storage_path}/{key_id}.json"
+            await self._afs.write_json(file_path, api_key.model_dump(), default=str)
 
     async def record_usage(
         self,

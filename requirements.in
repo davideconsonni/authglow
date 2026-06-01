@@ -39,6 +39,7 @@ python-dotenv
 # Utilities
 email-validator
 python-dateutil
+cachetools
 
 # Testing
 pytest

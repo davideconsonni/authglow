@@ -179,25 +179,45 @@ Usa una sessione per fix, spunta ciò che completi.
     `tests/integration/test_https_enforcement.py` (redirect 301/302, no-op in dev,
     X-Forwarded-Proto, enforce_https=false, path+query preservati, produzione case-insensitive).
 
-- [ ] **S12 — Nessun lockout per brute-force API key**
-  - File: `authglow/services/api_key.py`
+- [x] **S12 — Nessun lockout per brute-force API key**
+  - File: `authglow/services/api_key.py`, `authglow/models/api_key.py`, `authglow/core/config.py`, `authglow/api/auth.py`
   - Problema: a differenza del login utente, non c'è protezione brute-force sullo scambio API key → JWT.
     Rate limiting globale c'è (`5/min` su `/api/token/api-key`) ma nessun lockout per key.
-  - Fix: implementare contatore `failed_api_key_attempts` per key (o per IP) con lockout temporaneo.
-    Alternativa: aumentare il rate limit a livello IP con finestre più aggressive.
+  - Fix: implementato contatore `failed_validation_attempts` e `locked_until` sul modello `APIKey` (stesso
+    pattern di `failed_login_attempts` su `User`). Aggiunti 3 metodi a `APIKeyService`:
+    `record_failed_validation(key_id)`, `is_key_locked(key_id)`, `reset_failed_validations(key_id)`.
+    `validate_key()` ora controlla il lockout prima del bcrypt — se la chiave è locked solleva
+    `APIKeyLockedException` senza fare bcrypt. Su fallimento registra il tentativo su tutti i
+    candidati del prefix index. Su successo resetta i contatori. Auto-unlock a scadenza tempo
+    (default 15 minuti) gestito da `is_key_locked()`. L'endpoint `/api/token/api-key` catcha
+    l'eccezione e ritorna HTTP 423 con audit log `api_key_locked`.
+    Settings configurabili: `API_KEY_MAX_FAILED_ATTEMPTS=5`, `API_KEY_LOCKOUT_MINUTES=15`.
+  - **Risolto**: Lockout per-key con auto-unlock, eccezione dedicata, audit log, HTTP 423.
+    Test: 11 test in `tests/unit/test_api_key.py` (incremento contatore, lock dopo max, no lock
+    sotto soglia, auto-unlock, reset, validazione registra fallimenti, eccezione su locked,
+    reset su successo, prefix inesistente, bcrypt errato, retry dopo auto-unlock).
 
 ---
 
 ## HIGH — Performance
 
-- [ ] **P1 — Lookup refresh token O(n) glob + bcrypt**
+- [x] **P1 — Lookup refresh token O(n) glob + bcrypt**
   - File: `authglow/services/refresh_token.py:get_refresh_token()`
   - Problema: per validare UN refresh token, fa glob di TUTTI i file in `refresh_tokens/` e
-    bcrypt-compara ogni token. Con migliaia di token attivi, ogni richiesta fa centinaia di bcrypt.
+    compara ogni token. Con migliaia di token attivi, ogni richiesta fa centinaia di letture file.
   - Fix: aggiungere un prefix index come per le API key:
     - `refresh_tokens/index/{prefix}.json` → lista di `token_id` candidati.
     - Prendere i primi 12 caratteri del token come prefix.
-    - `validate_and_rotate()` carica solo i token_id nel file indice e bcrypt-compara solo quelli.
+    - `get_refresh_token()` e `validate_and_rotate()` caricano solo i token_id nel file indice e confrontano solo quelli.
+  - **Risolto**: Aggiunto `PREFIX_LENGTH = 12` e `self.index_path`. Metodi `_load_prefix_index()`,
+    `_save_prefix_index()`, `_remove_from_prefix_index()` (pattern identico a `APIKeyService`).
+    `create_refresh_token()` aggiorna l'indice. `get_refresh_token()` ora estrae i primi 12 caratteri,
+    legge solo l'indice del prefix per ottenere i candidati, e carica solo quei file (nessun glob).
+    `cleanup_expired_tokens()` rimuove dall'indice alla cancellazione del file.
+    Il revoke NON rimuove dall'indice (il token revocato deve restare trovabile per restituire
+    il messaggio "Token has been revoked").
+    Test: 8 test in `tests/unit/test_refresh_token.py` (indice creato, no glob, prefix sconosciuto,
+    isolamento lookup, collisioni prefix, revoke preserva indice, cleanup rimuove, token revocato trovabile).
 
 - [ ] **P2 — Audit log scan completo su ogni query**
   - File: `authglow/services/audit.py` (`get_logs`, `get_event_counts_by_type`, `get_logs_by_date`, `get_user_login_counts`)
@@ -293,8 +313,8 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S9 — Timing side-channel email lookup
 - [x] S10 — Audit log PII/GDPR
 - [x] S11 — HTTPS enforcement
-- [ ] S12 — API key brute-force lockout
-- [ ] P1 — Refresh token prefix index
+- [x] S12 — API key brute-force lockout
+- [x] P1 — Refresh token prefix index
 - [ ] P2 — Audit log indici mensili
 - [ ] P3 — Password reset HMAC lookup
 - [ ] P4 — Admin sessions active_index

@@ -30,7 +30,7 @@ from authglow.services.oauth2 import OAuth2Service
 from authglow.services.mfa import MFAService
 from authglow.services.session import SessionService
 from authglow.services.audit import AuditService
-from authglow.services.api_key import APIKeyService
+from authglow.services.api_key import APIKeyService, APIKeyLockedException
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.email.factory import get_email_service
 from authglow.services.refresh_token import RefreshTokenService
@@ -784,7 +784,19 @@ async def exchange_api_key_for_token(
     api_key = auth_header.replace("Bearer ", "")
 
     # Validate and get API key data
-    key_data = await api_key_service.validate_key(api_key)
+    try:
+        key_data = await api_key_service.validate_key(api_key)
+    except APIKeyLockedException as e:
+        await audit_service.log_event(
+            event_type="api_key_locked",
+            ip_address=request.client.host if request.client else None,
+            severity="warning",
+            metadata={"key_id": e.key_id},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="API key temporarily locked due to too many failed attempts. Try again later.",
+        )
     if not key_data:
         await audit_service.log_event(
             event_type="api_key_invalid",

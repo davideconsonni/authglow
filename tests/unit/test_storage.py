@@ -297,3 +297,78 @@ class TestTimingLeakProtection:
                 storage.get_user_by_email("never-here@example.com")
             )
             assert not_found is None
+
+
+class TestUserCache:
+    """Tests for in-memory TTL cache on get_user_by_email (P6 performance)."""
+
+    def _create_user(self, storage, email):
+        import asyncio
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        user = User(
+            email=email,
+            hashed_password=hash_password("TestP@ss123!"),
+            scopes=["read"],
+        )
+        return asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+    def test_cache_hit_skips_email_index(self, storage):
+        import asyncio
+
+        self._create_user(storage, "cache-hit@example.com")
+        fetched_1 = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("cache-hit@example.com")
+        )
+        assert fetched_1 is not None
+
+        original_load = storage._load_email_index
+
+        def _load_must_not_be_called(*args, **kwargs):
+            raise AssertionError("_load_email_index() called — cache was NOT hit!")
+
+        storage._load_email_index = _load_must_not_be_called
+        try:
+            fetched_2 = asyncio.get_event_loop().run_until_complete(
+                storage.get_user_by_email("cache-hit@example.com")
+            )
+            assert fetched_2 is not None
+            assert fetched_2.email == "cache-hit@example.com"
+        finally:
+            storage._load_email_index = original_load
+
+    def test_cache_invalidation_on_update(self, storage):
+        import asyncio
+
+        user = self._create_user(storage, "cache-upd@example.com")
+        fetched_1 = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("cache-upd@example.com")
+        )
+        assert fetched_1 is not None
+        assert fetched_1.first_name is None
+
+        user.first_name = "Alice"
+        asyncio.get_event_loop().run_until_complete(storage.update_user(user))
+
+        fetched_2 = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("cache-upd@example.com")
+        )
+        assert fetched_2 is not None
+        assert fetched_2.first_name == "Alice"
+
+    def test_cache_invalidation_on_delete(self, storage):
+        import asyncio
+
+        user = self._create_user(storage, "cache-del@example.com")
+        fetched_1 = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("cache-del@example.com")
+        )
+        assert fetched_1 is not None
+
+        asyncio.get_event_loop().run_until_complete(storage.delete_user(user.id))
+
+        fetched_2 = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("cache-del@example.com")
+        )
+        assert fetched_2 is None

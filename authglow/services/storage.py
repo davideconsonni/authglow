@@ -10,6 +10,7 @@ from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
 from authglow.core.datetime import utcnow
+from authglow.core.cache import user_cache
 
 
 class UserStorage:
@@ -73,6 +74,7 @@ class UserStorage:
         user_path = self._get_user_path(user.id)
         user_data = user.model_dump(mode="json")
         await self._afs.write_json(user_path, user_data)
+        user_cache.pop(user.email.lower(), None)
         return user
 
     async def create_user(self, user: User) -> User:
@@ -108,6 +110,9 @@ class UserStorage:
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email.
 
+        Results are cached (TTLCache, max 2000 entries, 300s TTL) to avoid
+        repeated storage I/O on the same user within the same process.
+
         When ``timing_leak_protection`` is enabled (default), the method
         normalises the I/O profile of the "user not found" path so that
         it resembles the "user found" path (an extra file read attempt),
@@ -118,8 +123,13 @@ class UserStorage:
         import asyncio
         import secrets
 
+        key = email.lower()
+        cached = user_cache.get(key)
+        if cached is not None:
+            return cached
+
         email_index = await self._load_email_index()
-        user_id = email_index.get(email.lower())
+        user_id = email_index.get(key)
 
         result = None
         if user_id:
@@ -133,6 +143,9 @@ class UserStorage:
                     pass
             jitter_ms = secrets.randbelow(50)
             await asyncio.sleep(jitter_ms / 1000.0)
+
+        if result is not None:
+            user_cache[key] = result
 
         return result
 
@@ -157,6 +170,7 @@ class UserStorage:
             user_path = self._get_user_path(user_id)
             try:
                 await self._afs.rm(user_path)
+                user_cache.pop(user.email.lower(), None)
                 return True
             except FileNotFoundError:
                 return False

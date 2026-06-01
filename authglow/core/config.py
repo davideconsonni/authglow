@@ -160,6 +160,10 @@ class Settings(BaseSettings):
     hsts_max_age: int = 31536000
     hsts_include_subdomains: bool = True
 
+    # API Key Brute-Force Lockout
+    api_key_max_failed_attempts: int = 5
+    api_key_lockout_minutes: int = 15
+
     # HTTPS Enforcement
     enforce_https: bool = True
     https_redirect_status: int = 301
