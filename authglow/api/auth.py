@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from authglow.core.rate_limit import limiter
+from authglow.services.csrf import CSRFTokenService, get_csrf_service, SESSION_ID_COOKIE
 
 from authglow.core.crypto import decrypt_totp_secret
 from authglow.models.user import (
@@ -212,6 +213,7 @@ async def authorize(
     code_challenge_method: Optional[str] = None,
     nonce: Optional[str] = None,
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """OAuth2 authorization endpoint - shows login page."""
     settings = get_settings()
@@ -245,9 +247,15 @@ async def authorize(
     if response_type != "code":
         raise HTTPException(status_code=400, detail="Unsupported response_type")
 
+    # CSRF protection: generate session id and token
+    session_id = request.cookies.get(SESSION_ID_COOKIE)
+    if not session_id:
+        session_id = CSRFTokenService._new_session_id()
+    csrf_token = await csrf_service.generate_token(session_id)
+
     # Render login page with OAuth2 parameters
     ui_context = settings.get_ui_context()
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "login.html",
         context={
@@ -260,8 +268,18 @@ async def authorize(
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
             "nonce": nonce,
+            "csrf_token": csrf_token,
         },
     )
+    response.set_cookie(
+        key=SESSION_ID_COOKIE,
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=1800,
+    )
+    return response
 
 
 @router.post("/oauth2/authorize")
@@ -277,12 +295,20 @@ async def authorize_post(
     code_challenge: Optional[str] = Form(None),
     code_challenge_method: Optional[str] = Form(None),
     nonce: Optional[str] = Form(None),
+    csrf_token: str = Form(...),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
+    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Process login and create authorization code (or MFA challenge)."""
+    # CSRF validation
+    if not await csrf_service.validate_token(
+        request.cookies.get(SESSION_ID_COOKIE, ""), csrf_token
+    ):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
     # Verify client and redirect_uri before processing login
     client = await oauth2_service.client_storage.get_client(client_id)
     if not client:
@@ -353,17 +379,33 @@ async def authorize_post(
                 nonce=nonce,
             )
 
+            # Generate CSRF token for MFA form
+            session_id = request.cookies.get(SESSION_ID_COOKIE)
+            if not session_id:
+                session_id = CSRFTokenService._new_session_id()
+            mfa_csrf_token = await csrf_service.generate_token(session_id)
+
             # Show MFA verification page
             settings = get_settings()
             ui_context = settings.get_ui_context()
-            return templates.TemplateResponse(
+            response = templates.TemplateResponse(
                 request,
                 "mfa_verify.html",
                 context={
                     **ui_context,
                     "session_token": mfa_session.session_token,
+                    "csrf_token": mfa_csrf_token,
                 },
             )
+            response.set_cookie(
+                key=SESSION_ID_COOKIE,
+                value=session_id,
+                httponly=True,
+                samesite="lax",
+                secure=False,
+                max_age=1800,
+            )
+            return response
 
     # No MFA required or device trusted - proceed with consent
     await storage.update_last_login(user.id)
@@ -872,12 +914,20 @@ async def oauth2_mfa_verify(
     session_token: str = Form(...),
     code: str = Form(...),
     trust_device: bool = Form(False),
+    csrf_token: str = Form(...),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
+    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Verify MFA code and complete OAuth2 authorization."""
+    # CSRF validation
+    if not await csrf_service.validate_token(
+        request.cookies.get(SESSION_ID_COOKIE, ""), csrf_token
+    ):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
     # Get MFA session
     mfa_session = await session_service.get_mfa_session(session_token)
     if not mfa_session:

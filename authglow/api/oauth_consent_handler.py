@@ -12,6 +12,7 @@ from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.session import SessionService
 from authglow.services.storage import UserStorage
 from authglow.services.audit import AuditService
+from authglow.services.csrf import CSRFTokenService, get_csrf_service, SESSION_ID_COOKIE
 from authglow.core.config import get_settings
 
 router = APIRouter()
@@ -37,6 +38,7 @@ async def show_consent_screen(
     client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
     user_storage: UserStorage = Depends(lambda: UserStorage()),
     consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
+    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Show OAuth2 consent screen."""
     settings = get_settings()
@@ -85,6 +87,12 @@ async def show_consent_screen(
 
         return RedirectResponse(url=redirect_url)
 
+    # CSRF protection: generate session id and token
+    csrf_session_id = request.cookies.get(SESSION_ID_COOKIE)
+    if not csrf_session_id:
+        csrf_session_id = CSRFTokenService._new_session_id()
+    csrf_token_val = await csrf_service.generate_token(csrf_session_id)
+
     # Show consent screen
     ui_context = settings.get_ui_context()
 
@@ -95,7 +103,7 @@ async def show_consent_screen(
             scope, f"Access {scope} resources"
         )
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "oauth_consent.html",
         context={
@@ -110,8 +118,18 @@ async def show_consent_screen(
             "redirect_uri": session["redirect_uri"],
             "state": session.get("state"),
             "session_token": session_token,
+            "csrf_token": csrf_token_val,
         },
     )
+    response.set_cookie(
+        key=SESSION_ID_COOKIE,
+        value=csrf_session_id,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=1800,
+    )
+    return response
 
 
 @router.post("/oauth2/consent")
@@ -121,12 +139,20 @@ async def process_consent(
     session_token: str = Form(...),
     approved: str = Form(...),
     remember: str = Form("false"),
+    csrf_token: str = Form(...),
     session_service: SessionService = Depends(lambda: SessionService()),
     consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
     oauth2_service: OAuth2Service = Depends(lambda: OAuth2Service()),
     audit_service: AuditService = Depends(lambda: AuditService()),
+    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Process user's consent decision."""
+    # CSRF validation
+    if not await csrf_service.validate_token(
+        request.cookies.get(SESSION_ID_COOKIE, ""), csrf_token
+    ):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
     # Get session
     session = await session_service.get_consent_session(session_token)
     if not session:

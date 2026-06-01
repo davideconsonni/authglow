@@ -143,6 +143,7 @@
         <p class="description">Enter the 6-digit code from your authenticator app</p>
 
         <form method="post" action="/oauth2/mfa-verify">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="session_token" value="{{ session_token }}">
 
             <div class="form-group">

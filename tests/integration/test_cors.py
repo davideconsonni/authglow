@@ -1,10 +1,13 @@
 import pytest
 import tempfile
 import os
+import warnings
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+
+from authglow.core.config import Settings as _RealSettings
 
 
 def _generate_test_keys(tmp_dir):
@@ -33,6 +36,65 @@ def _generate_test_keys(tmp_dir):
 
 
 class TestCORSConfiguration:
+    def test_credentials_wildcard_headers_triggers_warning(
+        self, test_keys_dir, tmp_path
+    ):
+        storage_path = str(tmp_path / "data" / "users")
+        os.makedirs(storage_path, exist_ok=True)
+
+        with pytest.warns(UserWarning, match="CORS misconfiguration"):
+            _RealSettings(
+                secret_key="test-secret-key-for-authglow-testing-32chars!",
+                storage_path=storage_path,
+                storage_backend="file",
+                private_key_path=os.path.join(test_keys_dir, "private_key.pem"),
+                public_key_path=os.path.join(test_keys_dir, "public_key.pem"),
+                cors_allow_credentials=True,
+                cors_allowed_headers="*",
+            )
+
+    def test_credentials_explicit_headers_no_warning(self, test_keys_dir, tmp_path):
+        storage_path = str(tmp_path / "data" / "users")
+        os.makedirs(storage_path, exist_ok=True)
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            _RealSettings(
+                secret_key="test-secret-key-for-authglow-testing-32chars!",
+                storage_path=storage_path,
+                storage_backend="file",
+                private_key_path=os.path.join(test_keys_dir, "private_key.pem"),
+                public_key_path=os.path.join(test_keys_dir, "public_key.pem"),
+                cors_allow_credentials=True,
+                cors_allowed_headers="Authorization, Content-Type, X-Requested-With",
+            )
+        cors_warnings = [w for w in record if "CORS misconfiguration" in str(w.message)]
+        assert len(cors_warnings) == 0, (
+            f"Bug S4: CORS warning emitted despite explicit headers. "
+            f"Got warnings: {[str(w.message) for w in cors_warnings]}"
+        )
+
+    def test_no_credentials_wildcard_no_warning(self, test_keys_dir, tmp_path):
+        storage_path = str(tmp_path / "data" / "users")
+        os.makedirs(storage_path, exist_ok=True)
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            _RealSettings(
+                secret_key="test-secret-key-for-authglow-testing-32chars!",
+                storage_path=storage_path,
+                storage_backend="file",
+                private_key_path=os.path.join(test_keys_dir, "private_key.pem"),
+                public_key_path=os.path.join(test_keys_dir, "public_key.pem"),
+                cors_allow_credentials=False,
+                cors_allowed_headers="*",
+            )
+        cors_warnings = [w for w in record if "CORS misconfiguration" in str(w.message)]
+        assert len(cors_warnings) == 0, (
+            f"Bug S4: CORS warning emitted despite credentials=false. "
+            f"Got warnings: {[str(w.message) for w in cors_warnings]}"
+        )
+
     def test_cors_allow_headers_should_be_split(self, test_settings):
         test_settings.cors_allowed_headers = "Content-Type,Authorization,X-API-Key"
         headers = test_settings.get_cors_headers()

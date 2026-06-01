@@ -26,32 +26,47 @@ Usa una sessione per fix, spunta ciò che completi.
   - Problema: endpoint RFC 7662 accessibile senza credenziali. Chiunque può validare token.
   - Fix: richiedere `client_id` + `client_secret` (Basic Auth) o Bearer token per l'accesso.
 
-- [ ] **S2 — Nessuna protezione CSRF sui form POST**
+- [x] **S2 — Nessuna protezione CSRF sui form POST**
   - File: `authglow/api/auth.py`, `authglow/api/oauth_consent_handler.py`, `authglow/api/mfa.py`, tutti i template HTML
   - Problema: login, consent, MFA verify sono POST senza token anti-CSRF. Un sito malevolo può forzare richieste.
   - Fix: generare `csrf_token` nella GET, inserirlo come hidden field nei form, validarlo nella POST corrispondente.
     Usare `secrets.token_urlsafe(32)` memorizzato in una sessione temporanea file-based con scadenza 30 minuti.
+  - **Risolto**: Creato `authglow/services/csrf.py` (CSRFTokenService file-based con scadenza 30 minuti, `secrets.token_urlsafe(32)`).
+    Cookie `csrf_session_id` HttpOnly/SameSite=Lax lega i token alla sessione browser.
+    Protetti i 3 form POST principali: `/oauth2/authorize`, `/oauth2/mfa-verify`, `/oauth2/consent`.
+    Test: 16 test in `tests/unit/test_csrf.py` (service, route validation, security properties).
 
-- [ ] **S3 — Secret key deboli / placeholder in `.env`**
-  - File: `.env:13-14`
-  - Problema: `SECRET_KEY` e `JWT_SECRET_KEY` sono `"your-secret-key-change-in-production-min-32-chars"`.
-    Superano il controllo `min_length=32` ma NON sono chiavi crittografiche.
-  - Fix: generare chiavi reali con `openssl rand -hex 32`. Aggiungere warning all'avvio se le chiavi contengono "change-in-production".
-    NON committare mai `.env` con segreti reali.
+- [x] **S3 — Secret key deboli / placeholder in `.env`**
+  - File: `.env:13`, `authglow/core/config.py`
+  - Problema: `SECRET_KEY` era `"your-secret-key-change-in-production-min-32-chars"`.
+    Superava il controllo `min_length=32` ma non era una chiave crittografica.
+    `JWT_SECRET_KEY` era presente nel file `.env` ma mai utilizzato dal codice Python
+    (JWT usa chiavi RSA da file).
+  - Fix: generata chiave reale con `openssl rand -hex 32`. Rimosso `JWT_SECRET_KEY` inutilizzato
+    da `.env`. Aggiunto `warnings.warn()` all'avvio se `SECRET_KEY` contiene placeholder noti
+    (`change-in-production`, `your-secret`, `your-jwt`, `your-`).
+  - **Risolto**: `SECRET_KEY` sostituito con chiave crittografica generata. Validatore esteso
+    con rilevazione placeholder + warning. `JWT_SECRET_KEY` rimosso da `.env`.
+    Test: 10 test in `tests/unit/test_config.py` (rilevazione placeholder, case-insensitive,
+    validazione lunghezza, chiavi reali, instantiation).
 
-- [ ] **S4 — CORS misconfiguration: credentials + wildcard headers**
+- [x] **S4 — CORS misconfiguration: credentials + wildcard headers**
   - File: `.env:90,96`, `authglow/core/config.py`
   - Problema: `CORS_ALLOW_CREDENTIALS=true` + `CORS_ALLOWED_HEADERS=*`. I browser rifiutano questa combinazione
     (viola lo standard fetch). Headers `*` viene ignorato quando `credentials=true`.
-  - Fix: specificare header esplicitamente (`Authorization, Content-Type, X-Requested-With`) oppure
+  - Fix: specificare header esplicitamente (`Authorization, Content-Type, X-Requested-With, Accept`) oppure
     impostare `CORS_ALLOW_CREDENTIALS=false` se non si usano cookie cross-origin. Aggiungere un warning
     di startup se la combinazione è rilevata.
+  - **Risolto**: Default `cors_allowed_headers` cambiato da `"*"` a `"Authorization, Content-Type, X-Requested-With, Accept"`.
+    Aggiunto check in `Settings.__init__()` che emette `UserWarning` se la combinazione pericolosa viene rilevata.
+    `.env` aggiornato con header espliciti.
+    Test: 3 test S4 in `tests/integration/test_cors.py` (warning triggered, no warning with explicit headers, no warning with credentials=false).
 
 ---
 
 ## HIGH — Sicurezza
 
-- [ ] **S5 — Chiave privata RSA in chiaro su disco**
+- [x] **S5 — Chiave privata RSA in chiaro su disco**
   - File: `authglow/core/config.py`, `data/keys/private_key.pem`
   - Problema: `_generate_rsa_keys()` in `config.py` genera chiavi RSA 2048-bit e le salva senza cifratura
     in `data/keys/`. Se il filesystem viene compromesso, l'attaccante può firmare token arbitrari.
@@ -60,6 +75,13 @@ Usa una sessione per fix, spunta ciò che completi.
     2. In cloud, usare KMS (AWS KMS, GCP KMS, Azure Key Vault).
     3. Caricare chiave da variabili d'ambiente invece che da file.
     4. Short-term: documentare che `data/keys/` deve avere permessi `0600`.
+  - **Risolto**: Aggiunte `encrypt_private_key()` e `decrypt_private_key()` in `authglow/core/crypto.py`
+    con schema AES-256-GCM + HKDF derivato da `SECRET_KEY` (prefisso `agk1:`).
+    `get_or_generate_keys()` in `config.py` ora cifra la private key prima di salvarla su disco.
+    `JWTService.__init__()` decifra la chiave al caricamento.
+    Le chiavi pubbliche restano in chiaro (non sensibili).
+    Test: 4 test S5 in `tests/unit/test_config.py` (cifratura su disco, roundtrip JWT, chiave pubblica in chiaro,
+    verifica che i dati cifrati differiscano dal plaintext).
 
 - [ ] **S6 — Security headers assenti**
   - File: `authglow/main.py`
@@ -216,10 +238,10 @@ Usa una sessione per fix, spunta ciò che completi.
 ## Checklist Rapida per Sessione (da compilare)
 
 - [x] S1 — Introspection endpoint auth
-- [ ] S2 — CSRF protection form
-- [ ] S3 — Secret key hardening
-- [ ] S4 — CORS credentials+wildcard fix
-- [ ] S5 — RSA private key encryption
+- [x] S2 — CSRF protection form
+- [x] S3 — Secret key hardening
+- [x] S4 — CORS credentials+wildcard fix
+- [x] S5 — RSA private key encryption
 - [ ] S6 — Security headers middleware
 - [ ] S7 — Bug change_password args
 - [ ] S8 — Request body size limit

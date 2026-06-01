@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
 from authglow.core.config import get_settings
+from authglow.core.crypto import decrypt_private_key
 from authglow.models.token import TokenData, Token
 from authglow.models.oidc import IDTokenClaims, SCOPE_TO_CLAIMS
 
@@ -16,15 +17,14 @@ class JWTService:
         """Initialize JWT service with settings and RSA keys."""
         self.settings = get_settings()
 
-        # Load raw key bytes/string directly from files
         try:
             with open(self.settings.private_key_path, "rb") as f:
-                self._private_key = f.read()
+                raw = f.read()
+                self._private_key = decrypt_private_key(raw)
 
             with open(self.settings.public_key_path, "rb") as f:
                 self._public_key = f.read()
         except FileNotFoundError as e:
-            # This should not happen if config initialization is correct
             raise RuntimeError(f"Missing RSA key file: {e}")
 
     def _encode_token(self, payload: dict) -> str:
@@ -128,12 +128,10 @@ class JWTService:
         expires_delta: Optional[timedelta] = None,
     ) -> str:
         """Create an OpenID Connect ID Token."""
-        # Use timezone-aware datetime objects to generate correct UTC timestamps
         iat = datetime.now(timezone.utc)
         if expires_delta:
             expire = iat + expires_delta
         else:
-            # 10 minutes is a reasonable lifetime for debugging and production
             expire = iat + timedelta(minutes=10)
 
         id_token_data = {
@@ -142,12 +140,11 @@ class JWTService:
             "aud": client_id,
             "exp": int(expire.timestamp()),
             "iat": int(iat.timestamp()),
-            "token_version": "3.0-fix-timestamp",  # Diagnostic claim
+            "token_version": "3.0-fix-timestamp",
         }
         if nonce:
             id_token_data["nonce"] = nonce
         if auth_time:
-            # Ensure auth_time is timezone-aware (assuming it's a naive UTC datetime)
             id_token_data["auth_time"] = int(
                 auth_time.replace(tzinfo=timezone.utc).timestamp()
             )

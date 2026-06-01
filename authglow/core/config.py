@@ -1,5 +1,6 @@
 """Configuration management for AuthGlow."""
 
+import warnings
 from functools import lru_cache
 from typing import Optional
 from pydantic import Field, field_validator
@@ -13,38 +14,38 @@ from cryptography.hazmat.backends import default_backend
 def get_or_generate_keys(private_key_path: str, public_key_path: str):
     """
     Load RSA keys from disk, or generate them if they don't exist.
+    Private key is encrypted at rest with AES-256-GCM via SECRET_KEY.
     """
     priv_path = Path(private_key_path)
     pub_path = Path(public_key_path)
 
-    # Create directory if it doesn't exist
     priv_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not (priv_path.exists() and pub_path.exists()):
+        from authglow.core.crypto import encrypt_private_key
+
         print("Generating new RSA keys...")
         private_key = rsa.generate_private_key(
             public_exponent=65537, key_size=2048, backend=default_backend()
         )
         public_key = private_key.public_key()
 
-        # Save private key
-        with open(priv_path, "wb") as f:
-            f.write(
-                private_key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption(),
-                )
-            )
+        priv_bytes = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        pub_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
 
-        # Save public key
+        encrypted_priv = encrypt_private_key(priv_bytes)
+        with open(priv_path, "wb") as f:
+            f.write(encrypted_priv)
         with open(pub_path, "wb") as f:
-            f.write(
-                public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                )
-            )
+            f.write(pub_bytes)
+
         print(f"New RSA keys generated and saved to {priv_path.parent}")
 
 
@@ -68,8 +69,16 @@ class Settings(BaseSettings):
 
     def __init__(self, **values):
         super().__init__(**values)
-        # Ensure keys are generated after settings are loaded
         get_or_generate_keys(self.private_key_path, self.public_key_path)
+        if self.cors_allow_credentials and self.cors_allowed_headers == "*":
+            warnings.warn(
+                "CORS misconfiguration: cors_allow_credentials=true combined with "
+                "cors_allowed_headers='*' (wildcard). Browsers reject this combination "
+                "per the Fetch standard — the wildcard is ignored when credentials=true. "
+                "Set cors_allowed_headers to explicit comma-separated headers such as "
+                "'Authorization, Content-Type, X-Requested-With, Accept'.",
+                UserWarning,
+            )
 
     # Server Settings
     host: str = "0.0.0.0"
@@ -127,7 +136,7 @@ class Settings(BaseSettings):
     )
     cors_allow_credentials: bool = True
     cors_allowed_methods: str = "GET,POST,PUT,DELETE,OPTIONS"  # Comma-separated list
-    cors_allowed_headers: str = "*"
+    cors_allowed_headers: str = "Authorization, Content-Type, X-Requested-With, Accept"
 
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
@@ -168,10 +177,21 @@ class Settings(BaseSettings):
 
     @field_validator("secret_key")
     @classmethod
-    def validate_keys(cls, v: str) -> str:
-        """Validate that keys are at least 32 characters."""
+    def validate_secret_key(cls, v: str) -> str:
         if len(v) < 32:
             raise ValueError("Key must be at least 32 characters long")
+        placeholder_markers = [
+            "change-in-production",
+            "your-secret",
+            "your-jwt",
+            "your-",
+        ]
+        if any(marker in v.lower() for marker in placeholder_markers):
+            warnings.warn(
+                "SECRET_KEY appears to be a placeholder (e.g. 'change-in-production'). "
+                "Generate a real cryptographic key with: openssl rand -hex 32",
+                UserWarning,
+            )
         return v
 
     def get_storage_options(self) -> dict:

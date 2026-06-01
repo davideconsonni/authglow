@@ -264,6 +264,7 @@
         </div>
 
         <form id="consentForm" method="POST" action="/oauth2/consent">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="session_token" value="{{ session_token }}">
             <input type="hidden" name="approved" id="approvedInput" value="">
             <input type="hidden" name="remember" id="rememberInput" value="false">
