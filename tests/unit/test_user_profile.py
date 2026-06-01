@@ -51,9 +51,7 @@ class TestUpdateUserProfile:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         update = UserProfileUpdate(first_name="Updated")
-        result = asyncio_run(
-            user_profile_service.update_user_profile("profile-user-1", update)
-        )
+        result = asyncio_run(user_profile_service.update_user_profile("profile-user-1", update))
         assert result is not None
 
 
@@ -75,9 +73,7 @@ class TestChangePassword:
         assert "successfully" in msg.lower()
         # S7 regression: verify User object + ip passed, not destructured strings
         user_profile_service.security_service.send_password_changed_alert.assert_called_once()
-        call_args = (
-            user_profile_service.security_service.send_password_changed_alert.call_args
-        )
+        call_args = user_profile_service.security_service.send_password_changed_alert.call_args
         assert call_args[0][0] is user
         assert call_args[0][1] == "10.0.0.1"
 
@@ -86,9 +82,7 @@ class TestChangePassword:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         success, msg = asyncio_run(
-            user_profile_service.change_password(
-                "profile-user-1", "WrongPass1!", "NewP@ss456!"
-            )
+            user_profile_service.change_password("profile-user-1", "WrongPass1!", "NewP@ss456!")
         )
         assert success is False
         assert "incorrect" in msg.lower()
@@ -97,9 +91,7 @@ class TestChangePassword:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=None)
 
         success, msg = asyncio_run(
-            user_profile_service.change_password(
-                "nonexistent", "OldPass1!", "NewP@ss456!"
-            )
+            user_profile_service.change_password("nonexistent", "OldPass1!", "NewP@ss456!")
         )
         assert success is False
         assert "not found" in msg.lower()
@@ -114,13 +106,9 @@ class TestChangePassword:
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
-            user_profile_service.change_password(
-                "profile-user-1", "TestP@ss123!", "NewP@ss456!"
-            )
+            user_profile_service.change_password("profile-user-1", "TestP@ss123!", "NewP@ss456!")
         )
-        call_args = (
-            user_profile_service.security_service.send_password_changed_alert.call_args
-        )
+        call_args = user_profile_service.security_service.send_password_changed_alert.call_args
         passed_user = call_args[0][0]
         assert isinstance(passed_user, UserModel)
         assert passed_user.email == "profile1@example.com"
@@ -133,14 +121,10 @@ class TestChangePassword:
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
-            user_profile_service.change_password(
-                "profile-user-1", "TestP@ss123!", "NewP@ss456!"
-            )
+            user_profile_service.change_password("profile-user-1", "TestP@ss123!", "NewP@ss456!")
         )
         user_profile_service.security_service.send_password_changed_alert.assert_called_once()
-        call_args = (
-            user_profile_service.security_service.send_password_changed_alert.call_args
-        )
+        call_args = user_profile_service.security_service.send_password_changed_alert.call_args
         assert call_args[0][1] is None
 
 
@@ -148,13 +132,14 @@ class TestChangeEmail:
     def test_change_email_success(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage.get_user_by_email = AsyncMock(
-            return_value=None
-        )
+        user_profile_service.user_storage.get_user_by_email = AsyncMock(return_value=None)
         user_profile_service.user_storage._write_user = AsyncMock()
-        user_profile_service.email_service.send_verification_email = AsyncMock(
-            return_value=True
+        mock_token = MagicMock()
+        mock_token.token = "verify-token-123"
+        user_profile_service.email_service.create_verification_token = AsyncMock(
+            return_value=mock_token
         )
+        user_profile_service.email_service.send_verification_email = AsyncMock(return_value=True)
         user_profile_service.security_service.send_email_changed_alert = AsyncMock(
             return_value=True
         )
@@ -171,9 +156,7 @@ class TestChangeEmail:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         success, msg = asyncio_run(
-            user_profile_service.change_email(
-                "profile-user-1", "new@example.com", "WrongPass1!"
-            )
+            user_profile_service.change_email("profile-user-1", "new@example.com", "WrongPass1!")
         )
         assert success is False
         assert "incorrect" in msg.lower()
@@ -182,14 +165,10 @@ class TestChangeEmail:
         user = _make_user()
         other_user = _make_user(user_id="other", email="taken@example.com")
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage.get_user_by_email = AsyncMock(
-            return_value=other_user
-        )
+        user_profile_service.user_storage.get_user_by_email = AsyncMock(return_value=other_user)
 
         success, msg = asyncio_run(
-            user_profile_service.change_email(
-                "profile-user-1", "taken@example.com", "TestP@ss123!"
-            )
+            user_profile_service.change_email("profile-user-1", "taken@example.com", "TestP@ss123!")
         )
         assert success is False
         assert "in use" in msg.lower()
@@ -202,9 +181,7 @@ class TestDeleteAccount:
         user_profile_service.user_storage.delete_user = AsyncMock()
 
         success, msg = asyncio_run(
-            user_profile_service.delete_account(
-                "profile-user-1", "TestP@ss123!", "DELETE"
-            )
+            user_profile_service.delete_account("profile-user-1", "TestP@ss123!", "DELETE")
         )
         assert success is True
         assert "deleted" in msg.lower()
@@ -214,9 +191,7 @@ class TestDeleteAccount:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         success, msg = asyncio_run(
-            user_profile_service.delete_account(
-                "profile-user-1", "TestP@ss123!", "WRONG"
-            )
+            user_profile_service.delete_account("profile-user-1", "TestP@ss123!", "WRONG")
         )
         assert success is False
         assert "DELETE" in msg
@@ -226,9 +201,7 @@ class TestDeleteAccount:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         success, msg = asyncio_run(
-            user_profile_service.delete_account(
-                "profile-user-1", "WrongPass1!", "DELETE"
-            )
+            user_profile_service.delete_account("profile-user-1", "WrongPass1!", "DELETE")
         )
         assert success is False
         assert "incorrect" in msg.lower()
@@ -240,18 +213,14 @@ class TestAccountStatus:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
         user_profile_service.user_storage._write_user = AsyncMock()
 
-        success, msg = asyncio_run(
-            user_profile_service.deactivate_account("profile-user-1")
-        )
+        success, msg = asyncio_run(user_profile_service.deactivate_account("profile-user-1"))
         assert success is True
         assert user.is_active is False
 
     def test_deactivate_account_not_found(self, user_profile_service):
         user_profile_service.user_storage.get_user = AsyncMock(return_value=None)
 
-        success, msg = asyncio_run(
-            user_profile_service.deactivate_account("nonexistent")
-        )
+        success, msg = asyncio_run(user_profile_service.deactivate_account("nonexistent"))
         assert success is False
 
     def test_reactivate_account(self, user_profile_service):
@@ -260,18 +229,14 @@ class TestAccountStatus:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
         user_profile_service.user_storage._write_user = AsyncMock()
 
-        success, msg = asyncio_run(
-            user_profile_service.reactivate_account("profile-user-1")
-        )
+        success, msg = asyncio_run(user_profile_service.reactivate_account("profile-user-1"))
         assert success is True
         assert user.is_active is True
 
 
 class TestUserPreferences:
     def test_get_default_preferences(self, user_profile_service):
-        prefs = asyncio_run(
-            user_profile_service.get_user_preferences("nonexistent-user")
-        )
+        prefs = asyncio_run(user_profile_service.get_user_preferences("nonexistent-user"))
         assert prefs is not None
         assert prefs.user_id == "nonexistent-user"
         assert prefs.email_notifications is True
@@ -282,8 +247,6 @@ class TestUserPreferences:
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         update = UserPreferencesUpdate(theme="dark", language="it")
-        prefs = asyncio_run(
-            user_profile_service.update_user_preferences("profile-user-1", update)
-        )
+        prefs = asyncio_run(user_profile_service.update_user_preferences("profile-user-1", update))
         assert prefs.theme == "dark"
         assert prefs.language == "it"

@@ -327,10 +327,30 @@ Usa una sessione per fix, spunta ciò che completi.
 
 ## Deployment & Tooling
 
-- [ ] **D3 (ereditato da Phase1) — Attivare type checking / linting**
+- [x] **D3 (ereditato da Phase1) — Attivare type checking / linting**
   - File: `pyproject.toml`
   - Fix: aggiungere config `[tool.mypy]` e `[tool.ruff]` in `pyproject.toml`. Eseguire `mypy authglow/` e `ruff check authglow/`. Fixare gli errori.
     Questo avrebbe intercettato S7 (argomenti errati) staticamente.
+  - **Risolto**: Aggiunte sezioni `[tool.mypy]` e `[tool.ruff]` in `pyproject.toml`.
+    mypy: `strict=false`, `check_untyped_defs=true`, `warn_return_any=true`, `warn_unused_ignores=true`,
+    `ignore_missing_imports` per librerie senza stub (fsspec, cachetools, cryptography, etc.).
+    ruff: target `py311`, regole `F`/`E`/`W`/`I`, line-length 100, `isort` per import ordering.
+    **60 errori mypy risolti** (17 file):
+    - 3 `implicit Optional` (`authglow/services/email/console.py`, `password_reset.py`, `api/oidc.py`)
+    - 2 `union-attr` (`auth.py`: user | None narrowing, `admin.py`: OAuth2Client name)
+    - 7 `arg-type` (`jwt.py`, `oidc.py`, `setup.py`, `auth.py`)
+    - 5 `assignment` (`config.py`, `csrf.py`, `refresh_token.py`, `oidc.py`)
+    - 1 `call-arg` (`passkey.py`: device_type mancante)
+    - 4 `operator`/`attr-defined` (`admin.py`: TypedDict per results, sort key)
+    - 7 `no-any-return` (session.py, api_key.py, https_enforcement.py, storage.py, refresh_token.py)
+    - 10 `union-attr` crittografia (`oidc.py`: isinstance check RSAPublicKey)
+    - 1 `attr-defined` (`api_key.py`: aggiunto metodo `update_key` a `APIKeyService`)
+    - Bug reale intercettato: `user_profile.py:174` passava `(user_id, new_email)` a `send_verification_email(`
+      che si aspetta `(user: User, token: str)` — fix: creato token e passato oggetto User.
+    **142 violazioni ruff (130 fix automatici + 12 manuali)**: rimossi import inutilizzati, bare except
+    → except Exception, backslash escapati in f-string, rimossi import duplicati, variabili inutilizzate.
+    **Test**: 663/663 passano. App si avvia con uvicorn senza errori.
+    `mypy authglow/` → 0 errori. `ruff check authglow/` → 0 violazioni.
 
 - [ ] **D4 — Rotazione chiavi RSA (JWK key rotation)**
   - File: `authglow/services/jwt.py`, `authglow/core/config.py`
@@ -369,6 +389,6 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P5 — Consent lookup deterministico
 - [x] P6 — Caching layer (Phase 5 per Redis, short-term fatto)
 - [x] P7 — OAuth2ClientStorage AsyncFileSystem
-- [ ] D3 — mypy + ruff config
+- [x] D3 — mypy + ruff config
 - [ ] D4 — JWK key rotation
 - [ ] D5 — Backup code rate limit
