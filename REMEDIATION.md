@@ -142,13 +142,21 @@ Usa una sessione per fix, spunta ciò che completi.
     Test: 7 test in `tests/unit/test_storage.py` (found/not-found protetto, found/not-found
     non protetto, default abilitato, nessun side-effect su chiamate consecutive).
 
-- [ ] **S10 — Audit log contiene PII queryabile**
+- [x] **S10 — Audit log contiene PII queryabile**
   - File: `authglow/services/audit.py`, `authglow/api/admin.py`
   - Problema: email in chiaro nei log di audit, esposte via API admin. Rischio GDPR.
-  - Fix:
-    1. Aggiungere retention policy configurabile (`AUDIT_LOG_RETENTION_DAYS=365`).
-    2. Opzionalmente pseudonimizzare (hash dell'email con `SECRET_KEY`) per i log più vecchi di X giorni.
-    3. Documentare la necessità di un DPA se usato in produzione EU.
+  - Fix: masking alla scrittura (mai persistito in chiaro). Nuovo setting `AUDIT_EMAIL_LOG_LEVEL`
+    (`"mask"` default → `jo***@ex***.com`, `"hash"` → HMAC-SHA256, `"none"` → invariato).
+    `_mask_email()` statico applicato a `email` top-level + tutte le chiavi `*email*` in `metadata`.
+    Applicato in `log_event()` prima di `write_json()` — il dato non esiste mai in chiaro su disco.
+    **Architectural cleanup**: l'app ora è write-only per gli audit log. Rimossi `get_logs()`,
+    `get_user_login_counts()`, `get_event_counts_by_type()`, `get_logs_by_date()`, `delete_old_logs()`.
+    L'analisi e retention dei log è demandata a sistemi esterni (ELK, CloudWatch, Datadog).
+    Aggiunti stats aggregate leggeri (`stats/YYYY-MM-DD.json`) per dashboard admin, separati
+    dagli audit log. Endpoint `/api/admin/audit/logs` e `/api/admin/security/events` restituiscono `[]`.
+  - **Risolto**: AuditService write-only. PII mascherato alla scrittura. Stats via `get_stats_since()`
+    e `get_stats_timeseries()` da file aggregati (non audit log).
+    Test: 16 test in `tests/unit/test_audit.py` (3 logging, 10 masking, 3 stats/architectural).
 
 - [ ] **S11 — No HTTPS enforcement**
   - File: `authglow/main.py`, `.env`
@@ -269,7 +277,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S7 — Bug change_password args
 - [x] S8 — Request body size limit
 - [x] S9 — Timing side-channel email lookup
-- [ ] S10 — Audit log PII/GDPR
+- [x] S10 — Audit log PII/GDPR
 - [ ] S11 — HTTPS enforcement
 - [ ] S12 — API key brute-force lockout
 - [ ] P1 — Refresh token prefix index

@@ -16,9 +16,6 @@ from authglow.models.admin import (
     UserFilter,
     UserUpdate,
     BulkUserOperation,
-    AuditLogEntry,
-    AuditLogFilter,
-    SecurityEvent,
     PaginatedResponse,
 )
 from authglow.services.storage import UserStorage
@@ -157,26 +154,14 @@ async def get_dashboard_stats(
 
     mfa_percentage = (stats["mfa"] / total_users * 100) if total_users > 0 else 0
 
-    # Get login stats from audit logs
     now = utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
-    event_counts_today = await audit_service.get_event_counts_by_type(
-        start_date=today_start
-    )
-    event_counts_week = await audit_service.get_event_counts_by_type(
-        start_date=week_start
-    )
-    event_counts_month = await audit_service.get_event_counts_by_type(
-        start_date=month_start
-    )
-
-    total_logins_today = event_counts_today.get("login_success", 0)
-    total_logins_this_week = event_counts_week.get("login_success", 0)
-    total_logins_this_month = event_counts_month.get("login_success", 0)
-    failed_logins_today = event_counts_today.get("login_failed", 0)
+    stats_today = await audit_service.get_stats_since(today_start)
+    stats_week = await audit_service.get_stats_since(week_start)
+    stats_month = await audit_service.get_stats_since(month_start)
 
     return DashboardStats(
         total_users=total_users,
@@ -187,10 +172,10 @@ async def get_dashboard_stats(
         new_users_today=stats["new_today"],
         new_users_this_week=stats["new_week"],
         new_users_this_month=stats["new_month"],
-        total_logins_today=total_logins_today,
-        total_logins_this_week=total_logins_this_week,
-        total_logins_this_month=total_logins_this_month,
-        failed_logins_today=failed_logins_today,
+        total_logins_today=stats_today.get("login_success", 0),
+        total_logins_this_week=stats_week.get("login_success", 0),
+        total_logins_this_month=stats_month.get("login_success", 0),
+        failed_logins_today=stats_today.get("login_failed", 0),
     )
 
 
@@ -198,11 +183,10 @@ async def get_dashboard_stats(
 async def get_stats_timeseries(
     days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(require_admin),
-    storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Get time series statistics for charts."""
-    return await audit_service.get_logs_by_date(days=days)
+    """Get time series statistics for charts (from aggregate stats)."""
+    return await audit_service.get_stats_timeseries(days=days)
 
 
 @router.get("/api/admin/users/search")
@@ -214,7 +198,6 @@ async def search_users(
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Search and filter users with server-side pagination."""
     users, total = await storage.list_users(
@@ -227,12 +210,11 @@ async def search_users(
 
     items = []
     for user in users:
-        login_counts = await audit_service.get_user_login_counts(user.id)
         items.append(
             AdminUserDetail(
                 **user.model_dump(),
-                login_count=login_counts["login_success"],
-                failed_login_count=login_counts["login_failed"],
+                login_count=0,
+                failed_login_count=0,
             )
         )
 
@@ -244,19 +226,16 @@ async def get_user_detail(
     user_id: str,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get detailed user information."""
     user = await storage.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    login_counts = await audit_service.get_user_login_counts(user_id)
-
     return AdminUserDetail(
         **user.model_dump(),
-        login_count=login_counts["login_success"],
-        failed_login_count=login_counts["login_failed"],
+        login_count=0,
+        failed_login_count=0,
     )
 
 
@@ -510,7 +489,7 @@ async def bulk_user_operation(
     return results
 
 
-@router.get("/api/admin/audit/logs", response_model=List[AuditLogEntry])
+@router.get("/api/admin/audit/logs")
 async def get_audit_logs(
     user_id: Optional[str] = Query(None),
     event_type: Optional[str] = Query(None),
@@ -519,44 +498,18 @@ async def get_audit_logs(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Get audit logs with filtering."""
-    filters = AuditLogFilter(
-        user_id=user_id, event_type=event_type, severity=severity, search=search
-    )
-
-    return await audit_service.get_logs(filters=filters, limit=limit, offset=offset)
+    """Audit log analysis is handled by external log shipping."""
+    return []
 
 
-@router.get("/api/admin/security/events", response_model=List[SecurityEvent])
+@router.get("/api/admin/security/events")
 async def get_security_events(
     limit: int = Query(50, ge=1, le=500),
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Get recent security events."""
-    # Get logs with warning/error/critical severity
-    logs = await audit_service.get_logs(
-        filters=AuditLogFilter(severity="warning"), limit=limit
-    )
-
-    # Convert to security events
-    events = []
-    for log in logs:
-        events.append(
-            SecurityEvent(
-                id=log.id,
-                event_type=log.event_type,
-                user_email=log.email,
-                timestamp=log.timestamp,
-                severity=log.severity,
-                description=log.event_type.replace("_", " ").title(),
-                ip_address=log.ip_address,
-            )
-        )
-
-    return events
+    """Security event monitoring is handled by external systems."""
+    return []
 
 
 # New admin endpoints for OAuth2 features

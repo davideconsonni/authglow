@@ -174,55 +174,6 @@ class TestUserStoragePagination:
         assert len(page) == 3
 
 
-class TestAuditLoginCounts:
-    def test_get_user_login_counts(self, audit_service):
-        import asyncio
-
-        asyncio.get_event_loop().run_until_complete(
-            audit_service.log_event(
-                event_type="login_success",
-                user_id="user-count-1",
-                email="user1@example.com",
-            )
-        )
-        asyncio.get_event_loop().run_until_complete(
-            audit_service.log_event(
-                event_type="login_success",
-                user_id="user-count-1",
-                email="user1@example.com",
-            )
-        )
-        asyncio.get_event_loop().run_until_complete(
-            audit_service.log_event(
-                event_type="login_failed",
-                user_id="user-count-1",
-                email="user1@example.com",
-            )
-        )
-        asyncio.get_event_loop().run_until_complete(
-            audit_service.log_event(
-                event_type="login_success",
-                user_id="user-count-2",
-                email="user2@example.com",
-            )
-        )
-
-        counts = asyncio.get_event_loop().run_until_complete(
-            audit_service.get_user_login_counts("user-count-1")
-        )
-        assert counts["login_success"] == 2
-        assert counts["login_failed"] == 1
-
-    def test_get_user_login_counts_empty(self, audit_service):
-        import asyncio
-
-        counts = asyncio.get_event_loop().run_until_complete(
-            audit_service.get_user_login_counts("nonexistent-user")
-        )
-        assert counts["login_success"] == 0
-        assert counts["login_failed"] == 0
-
-
 class TestRefreshTokenListAllTokens:
     def test_list_all_tokens_empty(self, refresh_token_service):
         import asyncio

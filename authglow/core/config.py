@@ -147,6 +147,9 @@ class Settings(BaseSettings):
     # Timing Side-Channel Protection
     timing_leak_protection: bool = True
 
+    # Audit Log Settings
+    audit_email_log_level: str = "mask"  # "mask", "hash", "none"
+
     # Security Headers Settings
     csp_header: str = "default-src 'self'"
     x_frame_options: str = "DENY"

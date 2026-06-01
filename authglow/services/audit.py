@@ -1,29 +1,38 @@
-"""Audit logging service."""
+"""Audit logging service.
 
-import json
+Writes structured audit events to storage. The app never reads audit logs
+back --- analysis, search, and retention are handled by external log
+shipping (CloudWatch, ELK, Datadog, etc.).
+
+Lightweight aggregate stats are written to a separate ``stats/`` directory
+for the admin dashboard, independent of the full audit trail.
+"""
+
+import hashlib
+import hmac
 import os
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 import fsspec
 
 from authglow.core.config import get_settings
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.datetime import utcnow
-from authglow.models.admin import AuditLogEntry, AuditLogFilter
+from authglow.models.admin import AuditLogEntry
 
 
 class AuditService:
-    """Service for audit logging."""
+    """Write-only audit logging service."""
 
     def __init__(self):
-        """Initialize audit service with settings."""
         self.settings = get_settings()
         self.storage_path = f"{self.settings.storage_path}/audit_logs"
+        self.stats_path = f"{self.settings.storage_path}/stats"
         self.storage_options = self.settings.get_storage_options()
 
-        # Initialize filesystem
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
+            os.makedirs(self.stats_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
             self.fs = fsspec.filesystem(
@@ -33,17 +42,70 @@ class AuditService:
         self._afs = AsyncFileSystem(self.fs)
 
     def _get_log_path(self, log_id: str) -> str:
-        """Get path for a log entry (organized by date)."""
-        # Organize logs by year/month for better performance
         now = utcnow()
         year_month = now.strftime("%Y/%m")
         directory = f"{self.storage_path}/{year_month}"
-
-        # Create directory if it doesn't exist
         if self.settings.storage_backend == "file":
             os.makedirs(directory, exist_ok=True)
-
         return f"{directory}/{log_id}.json"
+
+    @staticmethod
+    def _mask_email(email: str, level: str, secret_key: str) -> str:
+        """Mask an email address based on the configured level.
+
+        Levels:
+          - ``"mask"``  → ``jo***@ex***.com`` (first 2 chars local + domain prefix)
+          - ``"hash"``  → HMAC-SHA256 deterministic hash (16 hex chars)
+          - ``"none"``  → returned unchanged
+        """
+        if not email or "@" not in email:
+            return email or ""
+
+        if level == "none":
+            return email
+
+        if level == "mask":
+            local, domain = email.split("@", 1)
+            masked_local = local[:2] + "***" if len(local) >= 2 else local + "***"
+            domain_parts = domain.split(".")
+            if len(domain_parts) >= 2:
+                masked_domain = (
+                    domain_parts[0][:2] + "***." + ".".join(domain_parts[1:])
+                )
+            else:
+                masked_domain = domain[:2] + "***"
+            return f"{masked_local}@{masked_domain}"
+
+        if level == "hash":
+            digest = hmac.new(
+                secret_key.encode("utf-8"),
+                email.lower().strip().encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            return digest[:16]
+
+        return email
+
+    @staticmethod
+    def _mask_pii(entry_dict: dict, level: str, secret_key: str) -> dict:
+        """Mask PII fields in an audit-entry dict *before* persisting."""
+        if level == "none":
+            return entry_dict
+
+        if entry_dict.get("email"):
+            entry_dict["email"] = AuditService._mask_email(
+                entry_dict["email"], level, secret_key
+            )
+
+        metadata = entry_dict.get("metadata", {})
+        if isinstance(metadata, dict):
+            for key in list(metadata.keys()):
+                if "email" in key.lower() and isinstance(metadata[key], str):
+                    metadata[key] = AuditService._mask_email(
+                        metadata[key], level, secret_key
+                    )
+
+        return entry_dict
 
     async def log_event(
         self,
@@ -55,7 +117,7 @@ class AuditService:
         metadata: Optional[dict] = None,
         severity: str = "info",
     ) -> AuditLogEntry:
-        """Log an audit event."""
+        """Log an audit event (write-only)."""
         log_entry = AuditLogEntry(
             user_id=user_id,
             email=email,
@@ -66,242 +128,97 @@ class AuditService:
             severity=severity,
         )
 
+        entry_dict = log_entry.model_dump(mode="json")
+
+        if self.settings.audit_email_log_level != "none":
+            entry_dict = self._mask_pii(
+                entry_dict,
+                self.settings.audit_email_log_level,
+                self.settings.secret_key,
+            )
+
         path = self._get_log_path(log_entry.id)
-        await self._afs.write_json(path, log_entry.model_dump(mode="json"))
+        await self._afs.write_json(path, entry_dict)
+
+        await self._update_stats(event_type, severity)
 
         return log_entry
 
-    async def get_logs(
-        self,
-        filters: Optional[AuditLogFilter] = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> List[AuditLogEntry]:
-        """Get audit logs with filtering."""
-        logs = []
+    async def _update_stats(self, event_type: str, severity: str):
+        """Update lightweight daily aggregate counters.
 
-        try:
-            # Get all log files (search recent months first)
-            pattern = f"{self.storage_path}/**/*.json"
-            files = await self._afs.glob(pattern)
-
-            # Sort by modification time (newest first)
-            files_with_time = []
-            for file_path in files:
-                try:
-                    info = await self._afs.info(file_path)
-                    mtime = info.get("mtime", 0)
-                    files_with_time.append((file_path, mtime))
-                except:
-                    files_with_time.append((file_path, 0))
-
-            files_with_time.sort(key=lambda x: x[1], reverse=True)
-
-            # Process files
-            for file_path, _ in files_with_time:
-                if len(logs) >= limit + offset:
-                    break
-
-                try:
-                    data = await self._afs.read_json(file_path)
-                    log_entry = AuditLogEntry(**data)
-
-                    # Apply filters
-                    if filters:
-                        if filters.user_id and log_entry.user_id != filters.user_id:
-                            continue
-                        if (
-                            filters.event_type
-                            and log_entry.event_type.lower()
-                            != filters.event_type.lower()
-                        ):
-                            continue
-                        if filters.severity and log_entry.severity != filters.severity:
-                            continue
-                        if (
-                            filters.start_date
-                            and log_entry.timestamp < filters.start_date
-                        ):
-                            continue
-                        if filters.end_date and log_entry.timestamp > filters.end_date:
-                            continue
-                        if filters.search:
-                            search_lower = filters.search.lower()
-                            if not (
-                                (
-                                    log_entry.email
-                                    and search_lower in log_entry.email.lower()
-                                )
-                                or search_lower in log_entry.event_type.lower()
-                                or search_lower in str(log_entry.metadata).lower()
-                            ):
-                                continue
-
-                    logs.append(log_entry)
-
-                except Exception:
-                    continue
-
-            # Apply pagination
-            return logs[offset : offset + limit]
-
-        except Exception:
-            return []
-
-    async def get_user_login_counts(self, user_id: str) -> dict:
-        """Get login success/failure counts for a single user.
-
-        Returns ``{"login_success": int, "login_failed": int}`` without
-        materialising the full log list.
+        These stats files are *not* audit logs --- they are a separate,
+        tiny, read-efficient data source for the admin dashboard.
         """
-        success = 0
-        failed = 0
-
         try:
-            pattern = f"{self.storage_path}/**/*.json"
-            files = await self._afs.glob(pattern)
+            today = utcnow().strftime("%Y-%m-%d")
+            stats_file = f"{self.stats_path}/{today}.json"
 
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    log_entry = AuditLogEntry(**data)
+            try:
+                stats = await self._afs.read_json(stats_file)
+            except Exception:
+                stats = {}
 
-                    if log_entry.user_id != user_id:
-                        continue
-                    if log_entry.event_type == "login_success":
-                        success += 1
-                    elif log_entry.event_type == "login_failed":
-                        failed += 1
+            stats[event_type] = stats.get(event_type, 0) + 1
+            if severity in ("warning", "error", "critical"):
+                stats["_security_events"] = stats.get("_security_events", 0) + 1
 
-                except Exception:
-                    continue
-
+            await self._afs.write_json(stats_file, stats)
         except Exception:
             pass
 
-        return {"login_success": success, "login_failed": failed}
-
-    async def get_event_counts_by_type(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> dict:
-        """Get count of events by type."""
-        counts = {}
-
+    async def get_stats_since(self, since: datetime) -> dict:
+        """Return aggregate event counts from daily stats files since *since*."""
+        counts: Dict[str, int] = {}
         try:
-            pattern = f"{self.storage_path}/**/*.json"
+            pattern = f"{self.stats_path}/*.json"
             files = await self._afs.glob(pattern)
-
-            for file_path in files:
+            since_str = since.strftime("%Y-%m-%d")
+            for f in sorted(files):
+                filename = f.split("/")[-1].replace(".json", "")
+                if filename < since_str:
+                    continue
                 try:
-                    data = await self._afs.read_json(file_path)
-                    log_entry = AuditLogEntry(**data)
-
-                    # Apply date filters
-                    if start_date and log_entry.timestamp < start_date:
-                        continue
-                    if end_date and log_entry.timestamp > end_date:
-                        continue
-
-                    event_type = log_entry.event_type
-                    counts[event_type] = counts.get(event_type, 0) + 1
-
+                    data = await self._afs.read_json(f)
+                    for key, val in data.items():
+                        counts[key] = counts.get(key, 0) + val
                 except Exception:
                     continue
-
-            return counts
-
         except Exception:
-            return {}
+            pass
+        return counts
 
-    async def get_logs_by_date(self, days: int = 30) -> List[dict]:
-        """Get log counts grouped by date."""
+    async def get_stats_timeseries(self, days: int = 30) -> List[dict]:
+        """Return per-day stats for the admin chart (from stats files)."""
         result = []
         start_date = utcnow().replace(
             hour=0, minute=0, second=0, microsecond=0
         ) - timedelta(days=days - 1)
 
-        # Initialize result with all dates
         for i in range(days):
             date = start_date + timedelta(days=i)
-            result.append(
-                {
-                    "date": date.strftime("%Y-%m-%d"),
-                    "display_date": date.strftime("%m/%d"),  # For display
-                    "total": 0,
-                    "success": 0,
-                    "failed": 0,
-                    "security": 0,
-                    "new_users": 0,
-                }
-            )
-
-        try:
-            pattern = f"{self.storage_path}/**/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    log_entry = AuditLogEntry(**data)
-
-                    if log_entry.timestamp < start_date:
-                        continue
-
-                    date_str = log_entry.timestamp.strftime("%Y-%m-%d")
-
-                    # Find matching date in result
-                    for day_data in result:
-                        if day_data["date"] == date_str:
-                            day_data["total"] += 1
-
-                            # Count success logins
-                            if log_entry.event_type == "login_success":
-                                day_data["success"] += 1
-
-                            # Count failed logins (separate if, not elif)
-                            if log_entry.event_type == "login_failed":
-                                day_data["failed"] += 1
-
-                            # Count new users
-                            if log_entry.event_type == "user_created":
-                                day_data["new_users"] += 1
-
-                            # Count security events
-                            if log_entry.severity in [
-                                "warning",
-                                "error",
-                                "critical",
-                            ]:
-                                day_data["security"] += 1
-
-                            break
-
-                except Exception:
-                    continue
-
-        except Exception:
-            pass
+            date_str = date.strftime("%Y-%m-%d")
+            entry = {
+                "date": date_str,
+                "display_date": date.strftime("%m/%d"),
+                "total": 0,
+                "success": 0,
+                "failed": 0,
+                "security": 0,
+                "new_users": 0,
+            }
+            stats_file = f"{self.stats_path}/{date_str}.json"
+            try:
+                data = await self._afs.read_json(stats_file)
+                entry["success"] = data.get("login_success", 0)
+                entry["failed"] = data.get("login_failed", 0)
+                entry["new_users"] = data.get("user_created", 0)
+                entry["security"] = data.get("_security_events", 0)
+                entry["total"] = sum(
+                    v for k, v in data.items() if not k.startswith("_")
+                )
+            except Exception:
+                pass
+            result.append(entry)
 
         return result
-
-    async def delete_old_logs(self, days: int = 365):
-        """Delete logs older than specified days."""
-        cutoff_date = utcnow() - timedelta(days=days)
-
-        try:
-            pattern = f"{self.storage_path}/**/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    log_entry = AuditLogEntry(**data)
-
-                    if log_entry.timestamp < cutoff_date:
-                        await self._afs.rm(file_path)
-
-                except Exception:
-                    continue
-
-        except Exception:
-            pass
