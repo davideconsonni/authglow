@@ -269,12 +269,21 @@ Usa una sessione per fix, spunta ciò che completi.
     `tests/integration/test_admin_api.py` (active index lifecycle, no-glob, user_id filter,
     pagination, email filter, no-tokens, revoked exclusion).
 
-- [ ] **P5 — Glob invece di lookup diretto nei consensi**
+- [x] **P5 — Glob invece di lookup diretto nei consensi**
   - File: `authglow/services/oauth_consent.py:get_user_consent()`
   - Problema: `get_user_consent(user_id, client_id)` fa glob di tutti i consensi invece di
     costruire il percorso deterministico `consents/{user_id}/{client_id}.json`.
   - Fix: usare percorso deterministico. Il glob va bene solo per `get_user_consents()` (lista).
     Per il singolo lookup, costruire il path: `f"consents/{user_id}/{client_id}.json"`.
+  - **Risolto**: Layout storage cambiato da `{consent_id}.json` a `{user_id}/{client_id}.json`.
+    `get_user_consent()` ora fa O(1) direct read senza glob. `create_consent()` crea directory
+    utente automaticamente e sovrascrive se stesso user+client esiste.
+    `list_user_consents()` usa glob `{user_id}/*.json` (bounded). `get_consent(consent_id)`
+    e `revoke_consent(consent_id)` (admin) usano scan ricorsivo `**/*.json`.
+    `revoke_user_client_consent()` ora O(1) senza passare da consent_id.
+    Test: 9 test P5 in `tests/unit/test_oauth_consent_service.py` (path deterministico,
+    no-glob su hit/miss, overwrite, revoke O(1), backward compat consent_id, bounded glob,
+    auto-delete expired). 25 test totali passano.
 
 - [ ] **P6 — Nessun caching layer (Redis/Memcached)**
   - File: globale
@@ -336,7 +345,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P2 — Audit log indici mensili
 - [x] P3 — Password reset HMAC lookup
 - [x] P4 — Admin sessions active_index
-- [ ] P5 — Consent lookup deterministico
+- [x] P5 — Consent lookup deterministico
 - [ ] P6 — Caching layer (Phase 5)
 - [ ] P7 — OAuth2ClientStorage AsyncFileSystem
 - [ ] D3 — mypy + ruff config

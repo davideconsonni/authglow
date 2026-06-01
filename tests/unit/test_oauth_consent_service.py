@@ -188,11 +188,170 @@ class TestCleanupExpiredConsents:
                 scopes=["read"],
             )
         )
-        path = f"{oauth_consent_service.storage_path}/{consent.consent_id}.json"
+        path = (
+            f"{oauth_consent_service.storage_path}"
+            f"/{consent.user_id}/{consent.client_id}.json"
+        )
         data = consent.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(days=1)).isoformat()
+        oauth_consent_service.fs.makedirs(
+            f"{oauth_consent_service.storage_path}/{consent.user_id}", exist_ok=True
+        )
         with oauth_consent_service.fs.open(path, "w") as f:
             json.dump(data, f)
 
         deleted = asyncio_run(oauth_consent_service.cleanup_expired_consents())
         assert deleted >= 1
+
+
+class TestP5DeterministicConsentLookup:
+    """P5: get_user_consent() uses O(1) direct path, not glob."""
+
+    def test_get_user_consent_uses_deterministic_path(self, oauth_consent_service):
+        """get_user_consent builds path as {user_id}/{client_id}.json."""
+        consent = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="user-p5", client_id="client-p5", scopes=["read"]
+            )
+        )
+        expected_path = f"{oauth_consent_service.storage_path}/user-p5/client-p5.json"
+        result = asyncio_run(
+            oauth_consent_service.get_user_consent("user-p5", "client-p5")
+        )
+        assert result is not None
+        assert result.user_id == "user-p5"
+        assert result.client_id == "client-p5"
+        assert expected_path == oauth_consent_service._get_consent_path(
+            "user-p5", "client-p5"
+        )
+        assert oauth_consent_service.fs.exists(expected_path)
+
+    def test_get_user_consent_no_glob_on_hit(self, oauth_consent_service):
+        """On a match, get_user_consent does NOT call glob."""
+        asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-hit", client_id="c1", scopes=["read"]
+            )
+        )
+        import authglow.services.oauth_consent as mod
+        from unittest.mock import patch
+
+        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+            result = asyncio_run(oauth_consent_service.get_user_consent("p5-hit", "c1"))
+            assert result is not None
+            mock_glob.assert_not_called()
+
+    def test_get_user_consent_no_glob_on_miss(self, oauth_consent_service):
+        """On a miss, get_user_consent does NOT call glob either."""
+        import authglow.services.oauth_consent as mod
+        from unittest.mock import patch
+
+        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+            result = asyncio_run(
+                oauth_consent_service.get_user_consent("nouser", "noclient")
+            )
+            assert result is None
+            mock_glob.assert_not_called()
+
+    def test_create_consent_deterministic_path(self, oauth_consent_service):
+        """create_consent saves to {user_id}/{client_id}.json."""
+        consent = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-create", client_id="c2", scopes=["read", "write"]
+            )
+        )
+        path = oauth_consent_service._get_consent_path("p5-create", "c2")
+        assert oauth_consent_service.fs.exists(path)
+        data = oauth_consent_service.fs.cat(path)
+        loaded = __import__("json").loads(data)
+        assert loaded["user_id"] == "p5-create"
+        assert loaded["client_id"] == "c2"
+        assert loaded["scopes"] == ["read", "write"]
+
+    def test_create_consent_overwrites_same_user_client(self, oauth_consent_service):
+        """Second create_consent for same user+client overwrites."""
+        first = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-ov", client_id="c-ov", scopes=["read"]
+            )
+        )
+        second = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-ov", client_id="c-ov", scopes=["read", "write"]
+            )
+        )
+        result = asyncio_run(oauth_consent_service.get_user_consent("p5-ov", "c-ov"))
+        assert result is not None
+        assert result.scopes == ["read", "write"]
+
+    def test_revoke_user_client_consent_no_glob(self, oauth_consent_service):
+        """revoke_user_client_consent is O(1), no glob."""
+        asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-rev", client_id="c-rev", scopes=["read"]
+            )
+        )
+        import authglow.services.oauth_consent as mod
+        from unittest.mock import patch
+
+        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+            success = asyncio_run(
+                oauth_consent_service.revoke_user_client_consent("p5-rev", "c-rev")
+            )
+            assert success is True
+            mock_glob.assert_not_called()
+
+    def test_get_consent_by_id_still_works(self, oauth_consent_service):
+        """get_consent(consent_id) still finds consent via scan."""
+        consent = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-byid", client_id="c-byid", scopes=["read"]
+            )
+        )
+        found = asyncio_run(oauth_consent_service.get_consent(consent.consent_id))
+        assert found is not None
+        assert found.consent_id == consent.consent_id
+
+    def test_list_user_consents_bounded_glob(self, oauth_consent_service):
+        """list_user_consents only globs under the user directory."""
+        asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-list", client_id="c-a", scopes=["read"]
+            )
+        )
+        asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-list", client_id="c-b", scopes=["write"]
+            )
+        )
+        asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="other-user", client_id="c-c", scopes=["admin"]
+            )
+        )
+        consents = asyncio_run(oauth_consent_service.list_user_consents("p5-list"))
+        assert len(consents) >= 2
+        assert all(c.user_id == "p5-list" for c in consents)
+
+    def test_consent_expiration_auto_delete(self, oauth_consent_service):
+        """Expired consent is auto-deleted on get_user_consent."""
+        import json
+        from datetime import timedelta
+
+        consent = asyncio_run(
+            oauth_consent_service.create_consent(
+                user_id="p5-exp", client_id="c-exp", scopes=["read"]
+            )
+        )
+        path = oauth_consent_service._get_consent_path("p5-exp", "c-exp")
+        data = consent.model_dump(mode="json")
+        data["expires_at"] = (utcnow() - timedelta(days=1)).isoformat()
+        oauth_consent_service.fs.makedirs(
+            f"{oauth_consent_service.storage_path}/p5-exp", exist_ok=True
+        )
+        with oauth_consent_service.fs.open(path, "w") as f:
+            json.dump(data, f)
+
+        result = asyncio_run(oauth_consent_service.get_user_consent("p5-exp", "c-exp"))
+        assert result is None
+        assert not oauth_consent_service.fs.exists(path)

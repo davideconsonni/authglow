@@ -1,4 +1,8 @@
-"""OAuth2 consent management service."""
+"""OAuth2 consent management service — deterministic storage layout.
+
+Consents are stored at {storage_path}/{user_id}/{client_id}.json
+for O(1) direct lookup without glob.
+"""
 
 import json
 import os
@@ -22,7 +26,6 @@ class OAuth2ConsentService:
         self.storage_path = f"{self.settings.storage_path}/oauth_consents"
         self.storage_options = self.settings.get_storage_options()
 
-        # Initialize filesystem
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
@@ -34,13 +37,31 @@ class OAuth2ConsentService:
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
 
-    def _get_consent_path(self, consent_id: str) -> str:
-        """Get path for consent file."""
-        return f"{self.storage_path}/{consent_id}.json"
+    def _get_consent_path(self, user_id: str, client_id: str) -> str:
+        """Get deterministic path for a user+client consent."""
+        return f"{self.storage_path}/{user_id}/{client_id}.json"
 
-    def _get_user_consent_pattern(self, user_id: str) -> str:
-        """Get glob pattern for user's consents."""
-        return f"{self.storage_path}/*.json"
+    async def _find_consent_by_id(
+        self, consent_id: str
+    ) -> Optional[tuple[OAuth2Consent, str, str]]:
+        """Scan all consents to find one by consent_id.
+
+        Returns (consent, user_id, client_id) or None.
+        Admin-only operation, not on the hot path.
+        """
+        try:
+            files = await self._afs.glob(f"{self.storage_path}/**/*.json")
+            for file_path in files:
+                try:
+                    data = await self._afs.read_json(file_path)
+                    if data.get("consent_id") == consent_id:
+                        consent = OAuth2Consent(**data)
+                        return consent, data["user_id"], data["client_id"]
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return None
 
     async def create_consent(
         self,
@@ -49,7 +70,7 @@ class OAuth2ConsentService:
         scopes: List[str],
         expires_at: Optional[datetime] = None,
     ) -> OAuth2Consent:
-        """Create a new consent record.
+        """Create or overwrite a consent record for a user+client pair.
 
         Args:
             user_id: User ID
@@ -64,14 +85,14 @@ class OAuth2ConsentService:
             user_id=user_id, client_id=client_id, scopes=scopes, expires_at=expires_at
         )
 
-        # Save consent
-        consent_path = self._get_consent_path(consent.consent_id)
+        consent_path = self._get_consent_path(user_id, client_id)
+        await self._afs.makedirs(f"{self.storage_path}/{user_id}", exist_ok=True)
         await self._afs.write_json(consent_path, consent.model_dump())
 
         return consent
 
     async def get_consent(self, consent_id: str) -> Optional[OAuth2Consent]:
-        """Get a consent by ID.
+        """Get a consent by ID (admin operation, scans all consents).
 
         Args:
             consent_id: Consent ID
@@ -79,17 +100,15 @@ class OAuth2ConsentService:
         Returns:
             OAuth2Consent if found, None otherwise
         """
-        try:
-            consent_path = self._get_consent_path(consent_id)
-            data = await self._afs.read_json(consent_path)
-            return OAuth2Consent(**data)
-        except Exception:
-            return None
+        result = await self._find_consent_by_id(consent_id)
+        if result:
+            return result[0]
+        return None
 
     async def get_user_consent(
         self, user_id: str, client_id: str
     ) -> Optional[OAuth2Consent]:
-        """Get existing consent for user and client.
+        """Get existing consent for user and client — O(1) direct path lookup.
 
         Args:
             user_id: User ID
@@ -99,34 +118,18 @@ class OAuth2ConsentService:
             OAuth2Consent if found and valid, None otherwise
         """
         try:
-            pattern = self._get_user_consent_pattern(user_id)
-            files = await self._afs.glob(pattern)
+            consent_path = self._get_consent_path(user_id, client_id)
+            data = await self._afs.read_json(consent_path)
+            consent = OAuth2Consent(**data)
 
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    consent = OAuth2Consent(**data)
+            if consent.revoked:
+                return None
 
-                    # Check if matches user and client
-                    if consent.user_id != user_id or consent.client_id != client_id:
-                        continue
+            if consent.expires_at and utcnow() > consent.expires_at:
+                await self._afs.rm(consent_path)
+                return None
 
-                    # Check if revoked
-                    if consent.revoked:
-                        continue
-
-                    # Check if expired
-                    if consent.expires_at and utcnow() > consent.expires_at:
-                        # Auto-delete expired consent
-                        await self._afs.rm(file_path)
-                        continue
-
-                    return consent
-
-                except Exception:
-                    continue
-
-            return None
+            return consent
 
         except Exception:
             return None
@@ -149,13 +152,12 @@ class OAuth2ConsentService:
         if not consent:
             return False, None
 
-        # Check if all required scopes are granted
         has_all_scopes = all(scope in consent.scopes for scope in required_scopes)
 
         return has_all_scopes, consent
 
     async def revoke_consent(self, consent_id: str) -> bool:
-        """Revoke a consent.
+        """Revoke a consent by ID (admin operation, scans all consents).
 
         Protected by a named lock to prevent concurrent revocation races.
 
@@ -165,16 +167,18 @@ class OAuth2ConsentService:
         Returns:
             True if revoked successfully, False otherwise
         """
-        async with self._lock(f"consent:{consent_id}"):
-            consent = await self.get_consent(consent_id)
-            if not consent:
-                return False
+        result = await self._find_consent_by_id(consent_id)
+        if not result:
+            return False
 
+        consent, user_id, client_id = result
+        lock_key = f"consent:{user_id}:{client_id}"
+
+        async with self._lock(lock_key):
             consent.revoked = True
             consent.revoked_at = utcnow()
 
-            # Save updated consent
-            consent_path = self._get_consent_path(consent_id)
+            consent_path = self._get_consent_path(user_id, client_id)
             try:
                 await self._afs.write_json(consent_path, consent.model_dump())
                 return True
@@ -182,22 +186,32 @@ class OAuth2ConsentService:
                 return False
 
     async def revoke_user_client_consent(self, user_id: str, client_id: str) -> bool:
-        """Revoke all consents for a user and client.
+        """Revoke consent for a specific user+client pair — O(1) direct path.
 
         Args:
             user_id: User ID
             client_id: OAuth2 client ID
 
         Returns:
-            True if at least one consent was revoked
+            True if consent was revoked
         """
         consent = await self.get_user_consent(user_id, client_id)
-        if consent:
-            return await self.revoke_consent(consent.consent_id)
-        return False
+        if not consent:
+            return False
+
+        async with self._lock(f"consent:{user_id}:{client_id}"):
+            consent.revoked = True
+            consent.revoked_at = utcnow()
+
+            consent_path = self._get_consent_path(user_id, client_id)
+            try:
+                await self._afs.write_json(consent_path, consent.model_dump())
+                return True
+            except Exception:
+                return False
 
     async def list_user_consents(self, user_id: str) -> List[OAuth2Consent]:
-        """List all consents for a user.
+        """List all consents for a user (bounded glob under user directory).
 
         Args:
             user_id: User ID
@@ -207,7 +221,7 @@ class OAuth2ConsentService:
         """
         consents = []
         try:
-            pattern = self._get_user_consent_pattern(user_id)
+            pattern = f"{self.storage_path}/{user_id}/*.json"
             files = await self._afs.glob(pattern)
 
             for file_path in files:
@@ -224,7 +238,6 @@ class OAuth2ConsentService:
         except Exception:
             pass
 
-        # Sort by granted_at descending
         consents.sort(key=lambda c: c.granted_at, reverse=True)
         return consents
 
@@ -236,7 +249,7 @@ class OAuth2ConsentService:
         """
         deleted = 0
         try:
-            pattern = f"{self.storage_path}/*.json"
+            pattern = f"{self.storage_path}/**/*.json"
             files = await self._afs.glob(pattern)
 
             for file_path in files:
@@ -244,7 +257,6 @@ class OAuth2ConsentService:
                     data = await self._afs.read_json(file_path)
                     consent = OAuth2Consent(**data)
 
-                    # Delete if expired
                     if consent.expires_at and utcnow() > consent.expires_at:
                         await self._afs.rm(file_path)
                         deleted += 1
