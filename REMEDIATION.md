@@ -128,13 +128,19 @@ Usa una sessione per fix, spunta ciò che completi.
 
 ## MEDIUM — Sicurezza
 
-- [ ] **S9 — Timing side-channel su lookup email**
+- [x] **S9 — Timing side-channel su lookup email**
   - File: `authglow/services/storage.py:get_user_by_email()`
   - Problema: il lookup via `email_index.json` non è constant-time. Un attaccante potrebbe dedurre
     l'esistenza di un'email misurando i tempi di risposta.
   - Fix: parzialmente mitigato dal rate limiting. Per una protezione completa, usare un tempo
     di risposta costante indipendentemente dal risultato (es. aggiungere un `await asyncio.sleep(random_ms)`
     o fare sempre hash lookup anche quando l'email non esiste).
+  - **Risolto**: Aggiunto `timing_leak_protection: bool = True` in `Settings` (default abilitato).
+    `get_user_by_email()` ora normalizza il profilo I/O quando l'email non esiste (simula un file read
+    su path dummy `__timing_padding`) e aggiunge jitter casuale 0-49ms (`secrets.randbelow(50)`)
+    dopo entrambi i percorsi. Quando `timing_leak_protection=false` nessun overhead.
+    Test: 7 test in `tests/unit/test_storage.py` (found/not-found protetto, found/not-found
+    non protetto, default abilitato, nessun side-effect su chiamate consecutive).
 
 - [ ] **S10 — Audit log contiene PII queryabile**
   - File: `authglow/services/audit.py`, `authglow/api/admin.py`
@@ -262,7 +268,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S6 — Security headers middleware
 - [x] S7 — Bug change_password args
 - [x] S8 — Request body size limit
-- [ ] S9 — Timing side-channel email lookup
+- [x] S9 — Timing side-channel email lookup
 - [ ] S10 — Audit log PII/GDPR
 - [ ] S11 — HTTPS enforcement
 - [ ] S12 — API key brute-force lockout

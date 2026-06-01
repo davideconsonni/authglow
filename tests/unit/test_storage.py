@@ -218,3 +218,82 @@ class TestAccountLockout:
         fetched = asyncio.get_event_loop().run_until_complete(storage.get_user(user.id))
         assert fetched.failed_login_attempts == 0
         assert fetched.locked_until is None
+
+
+class TestTimingLeakProtection:
+    def _create_user(self, storage, email):
+        import asyncio
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        user = User(
+            email=email,
+            hashed_password=hash_password("TestP@ss123!"),
+            scopes=["read"],
+        )
+        return asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+    def test_email_found_with_protection_enabled(self, storage):
+        import asyncio
+
+        self._create_user(storage, "timing-test@example.com")
+        result = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("timing-test@example.com")
+        )
+        assert result is not None
+        assert result.email == "timing-test@example.com"
+
+    def test_email_not_found_with_protection_enabled(self, storage):
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("nonexistent-timing@example.com")
+        )
+        assert result is None
+
+    def test_email_not_found_does_not_crash(self, storage):
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("no-such-user@example.com")
+        )
+        assert result is None
+
+    def test_email_found_protection_disabled(self, storage):
+        import asyncio
+
+        self._create_user(storage, "timing-off@example.com")
+        storage.settings.timing_leak_protection = False
+        result = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("timing-off@example.com")
+        )
+        assert result is not None
+        assert result.email == "timing-off@example.com"
+
+    def test_email_not_found_protection_disabled(self, storage):
+        import asyncio
+
+        storage.settings.timing_leak_protection = False
+        result = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("nonexistent-off@example.com")
+        )
+        assert result is None
+
+    def test_protection_defaults_to_enabled(self, storage):
+        assert storage.settings.timing_leak_protection is True
+
+    def test_no_side_effect_on_consecutive_calls(self, storage):
+        import asyncio
+
+        self._create_user(storage, "repeat@example.com")
+        for _ in range(5):
+            found = asyncio.get_event_loop().run_until_complete(
+                storage.get_user_by_email("repeat@example.com")
+            )
+            assert found is not None
+            assert found.email == "repeat@example.com"
+        for _ in range(5):
+            not_found = asyncio.get_event_loop().run_until_complete(
+                storage.get_user_by_email("never-here@example.com")
+            )
+            assert not_found is None

@@ -106,13 +106,35 @@ class UserStorage:
             return None
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email."""
+        """Get user by email.
+
+        When ``timing_leak_protection`` is enabled (default), the method
+        normalises the I/O profile of the "user not found" path so that
+        it resembles the "user found" path (an extra file read attempt),
+        then adds a small random jitter on top to mask residual timing
+        differences.  This prevents an attacker from measuring response
+        times to determine whether an email address is registered.
+        """
+        import asyncio
+        import secrets
+
         email_index = await self._load_email_index()
         user_id = email_index.get(email.lower())
 
+        result = None
         if user_id:
-            return await self.get_user(user_id)
-        return None
+            result = await self.get_user(user_id)
+
+        if self.settings.timing_leak_protection:
+            if result is None:
+                try:
+                    await self._afs.read_json(self._get_user_path("__timing_padding"))
+                except Exception:
+                    pass
+            jitter_ms = secrets.randbelow(50)
+            await asyncio.sleep(jitter_ms / 1000.0)
+
+        return result
 
     async def update_user(self, user: User) -> User:
         """Update an existing user (acquires per-user lock)."""

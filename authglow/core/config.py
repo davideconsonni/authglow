@@ -144,6 +144,9 @@ class Settings(BaseSettings):
     # Request Body Size Limit
     max_request_body_size_mb: int = 10
 
+    # Timing Side-Channel Protection
+    timing_leak_protection: bool = True
+
     # Security Headers Settings
     csp_header: str = "default-src 'self'"
     x_frame_options: str = "DENY"
