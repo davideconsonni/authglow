@@ -22,6 +22,9 @@ webauthn
 # Rate Limiting
 slowapi
 
+# Structured logging (cloud-native)
+structlog
+
 # Storage - fsspec with cloud providers
 fsspec
 s3fs

@@ -146,22 +146,12 @@ async def admin_password_resets_page(request: Request):
 async def get_dashboard_stats(
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Get dashboard statistics."""
     stats = await storage.get_user_stats()
     total_users = stats["total"]
 
     mfa_percentage = (stats["mfa"] / total_users * 100) if total_users > 0 else 0
-
-    now = utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=7)
-    month_start = today_start - timedelta(days=30)
-
-    stats_today = await audit_service.get_stats_since(today_start)
-    stats_week = await audit_service.get_stats_since(week_start)
-    stats_month = await audit_service.get_stats_since(month_start)
 
     return DashboardStats(
         total_users=total_users,
@@ -172,10 +162,10 @@ async def get_dashboard_stats(
         new_users_today=stats["new_today"],
         new_users_this_week=stats["new_week"],
         new_users_this_month=stats["new_month"],
-        total_logins_today=stats_today.get("login_success", 0),
-        total_logins_this_week=stats_week.get("login_success", 0),
-        total_logins_this_month=stats_month.get("login_success", 0),
-        failed_logins_today=stats_today.get("login_failed", 0),
+        total_logins_today=0,
+        total_logins_this_week=0,
+        total_logins_this_month=0,
+        failed_logins_today=0,
     )
 
 
@@ -183,10 +173,26 @@ async def get_dashboard_stats(
 async def get_stats_timeseries(
     days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(require_admin),
-    audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Get time series statistics for charts (from aggregate stats)."""
-    return await audit_service.get_stats_timeseries(days=days)
+    """Get time series statistics for charts (delegated to cloud monitoring)."""
+    start_date = utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ) - timedelta(days=days - 1)
+    result = []
+    for i in range(days):
+        date = start_date + timedelta(days=i)
+        result.append(
+            {
+                "date": date.strftime("%Y-%m-%d"),
+                "display_date": date.strftime("%m/%d"),
+                "total": 0,
+                "success": 0,
+                "failed": 0,
+                "security": 0,
+                "new_users": 0,
+            }
+        )
+    return result
 
 
 @router.get("/api/admin/users/search")
@@ -213,8 +219,8 @@ async def search_users(
         items.append(
             AdminUserDetail(
                 **user.model_dump(),
-                login_count=0,
-                failed_login_count=0,
+                login_count=user.login_count,
+                failed_login_count=user.failed_login_count,
             )
         )
 

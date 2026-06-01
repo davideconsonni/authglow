@@ -1,63 +1,49 @@
 """Audit logging service.
 
-Writes structured audit events to storage. The app never reads audit logs
-back --- analysis, search, and retention are handled by external log
-shipping (CloudWatch, ELK, Datadog, etc.).
-
-Lightweight aggregate stats are written to a separate ``stats/`` directory
-for the admin dashboard, independent of the full audit trail.
+Writes structured audit events to stdout via structlog (JSON),
+compatible with AWS CloudWatch, GCP Cloud Logging, and Azure Monitor.
+The app never reads audit logs back --- analysis, search, and
+retention are handled by the cloud platform.
 """
 
 import hashlib
 import hmac
-import os
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-import fsspec
+import structlog
+from typing import Optional
 
 from authglow.core.config import get_settings
-from authglow.core.async_io import AsyncFileSystem
-from authglow.core.datetime import utcnow
 from authglow.models.admin import AuditLogEntry
+
+if not structlog.is_configured():
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.add_log_level,
+            structlog.processors.JSONRenderer(),
+        ],
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+_audit_log = structlog.get_logger("authglow.audit")
+
+_LEVEL_METHOD = {
+    "info": "info",
+    "warning": "warning",
+    "error": "error",
+    "critical": "error",
+}
 
 
 class AuditService:
-    """Write-only audit logging service."""
+    """Write-only audit logging service via structlog (stdout JSON)."""
 
     def __init__(self):
         self.settings = get_settings()
-        self.storage_path = f"{self.settings.storage_path}/audit_logs"
-        self.stats_path = f"{self.settings.storage_path}/stats"
-        self.storage_options = self.settings.get_storage_options()
-
-        if self.settings.storage_backend == "file":
-            os.makedirs(self.storage_path, exist_ok=True)
-            os.makedirs(self.stats_path, exist_ok=True)
-            self.fs = fsspec.filesystem("file")
-        else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
-
-        self._afs = AsyncFileSystem(self.fs)
-
-    def _get_log_path(self, log_id: str) -> str:
-        now = utcnow()
-        year_month = now.strftime("%Y/%m")
-        directory = f"{self.storage_path}/{year_month}"
-        if self.settings.storage_backend == "file":
-            os.makedirs(directory, exist_ok=True)
-        return f"{directory}/{log_id}.json"
 
     @staticmethod
     def _mask_email(email: str, level: str, secret_key: str) -> str:
-        """Mask an email address based on the configured level.
-
-        Levels:
-          - ``"mask"``  → ``jo***@ex***.com`` (first 2 chars local + domain prefix)
-          - ``"hash"``  → HMAC-SHA256 deterministic hash (16 hex chars)
-          - ``"none"``  → returned unchanged
-        """
         if not email or "@" not in email:
             return email or ""
 
@@ -88,7 +74,6 @@ class AuditService:
 
     @staticmethod
     def _mask_pii(entry_dict: dict, level: str, secret_key: str) -> dict:
-        """Mask PII fields in an audit-entry dict *before* persisting."""
         if level == "none":
             return entry_dict
 
@@ -117,7 +102,7 @@ class AuditService:
         metadata: Optional[dict] = None,
         severity: str = "info",
     ) -> AuditLogEntry:
-        """Log an audit event (write-only)."""
+        """Log an audit event to stdout (JSON via structlog)."""
         log_entry = AuditLogEntry(
             user_id=user_id,
             email=email,
@@ -137,88 +122,8 @@ class AuditService:
                 self.settings.secret_key,
             )
 
-        path = self._get_log_path(log_entry.id)
-        await self._afs.write_json(path, entry_dict)
-
-        await self._update_stats(event_type, severity)
+        event = entry_dict.pop("event_type")
+        log_method = getattr(_audit_log, _LEVEL_METHOD.get(severity, "info"))
+        log_method(event, **entry_dict)
 
         return log_entry
-
-    async def _update_stats(self, event_type: str, severity: str):
-        """Update lightweight daily aggregate counters.
-
-        These stats files are *not* audit logs --- they are a separate,
-        tiny, read-efficient data source for the admin dashboard.
-        """
-        try:
-            today = utcnow().strftime("%Y-%m-%d")
-            stats_file = f"{self.stats_path}/{today}.json"
-
-            try:
-                stats = await self._afs.read_json(stats_file)
-            except Exception:
-                stats = {}
-
-            stats[event_type] = stats.get(event_type, 0) + 1
-            if severity in ("warning", "error", "critical"):
-                stats["_security_events"] = stats.get("_security_events", 0) + 1
-
-            await self._afs.write_json(stats_file, stats)
-        except Exception:
-            pass
-
-    async def get_stats_since(self, since: datetime) -> dict:
-        """Return aggregate event counts from daily stats files since *since*."""
-        counts: Dict[str, int] = {}
-        try:
-            pattern = f"{self.stats_path}/*.json"
-            files = await self._afs.glob(pattern)
-            since_str = since.strftime("%Y-%m-%d")
-            for f in sorted(files):
-                filename = f.split("/")[-1].replace(".json", "")
-                if filename < since_str:
-                    continue
-                try:
-                    data = await self._afs.read_json(f)
-                    for key, val in data.items():
-                        counts[key] = counts.get(key, 0) + val
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        return counts
-
-    async def get_stats_timeseries(self, days: int = 30) -> List[dict]:
-        """Return per-day stats for the admin chart (from stats files)."""
-        result = []
-        start_date = utcnow().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        ) - timedelta(days=days - 1)
-
-        for i in range(days):
-            date = start_date + timedelta(days=i)
-            date_str = date.strftime("%Y-%m-%d")
-            entry = {
-                "date": date_str,
-                "display_date": date.strftime("%m/%d"),
-                "total": 0,
-                "success": 0,
-                "failed": 0,
-                "security": 0,
-                "new_users": 0,
-            }
-            stats_file = f"{self.stats_path}/{date_str}.json"
-            try:
-                data = await self._afs.read_json(stats_file)
-                entry["success"] = data.get("login_success", 0)
-                entry["failed"] = data.get("login_failed", 0)
-                entry["new_users"] = data.get("user_created", 0)
-                entry["security"] = data.get("_security_events", 0)
-                entry["total"] = sum(
-                    v for k, v in data.items() if not k.startswith("_")
-                )
-            except Exception:
-                pass
-            result.append(entry)
-
-        return result

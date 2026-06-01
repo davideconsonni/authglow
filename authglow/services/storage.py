@@ -249,11 +249,12 @@ class UserStorage:
         return page, total
 
     async def update_last_login(self, user_id: str):
-        """Update user's last login timestamp."""
+        """Update user's last login timestamp and increment login counter."""
         async with self._lock(f"user:{user_id}"):
             user = await self.get_user(user_id)
             if user:
                 user.last_login = utcnow()
+                user.login_count = user.login_count + 1
                 await self._write_user(user)
 
     async def record_failed_login(
@@ -264,6 +265,7 @@ class UserStorage:
             user = await self.get_user(user_id)
             if user:
                 user.failed_login_attempts += 1
+                user.failed_login_count = user.failed_login_count + 1
 
                 # Lock account if max attempts exceeded
                 if user.failed_login_attempts >= max_attempts:

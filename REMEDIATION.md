@@ -145,18 +145,20 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] **S10 — Audit log contiene PII queryabile**
   - File: `authglow/services/audit.py`, `authglow/api/admin.py`
   - Problema: email in chiaro nei log di audit, esposte via API admin. Rischio GDPR.
-  - Fix: masking alla scrittura (mai persistito in chiaro). Nuovo setting `AUDIT_EMAIL_LOG_LEVEL`
-    (`"mask"` default → `jo***@ex***.com`, `"hash"` → HMAC-SHA256, `"none"` → invariato).
-    `_mask_email()` statico applicato a `email` top-level + tutte le chiavi `*email*` in `metadata`.
-    Applicato in `log_event()` prima di `write_json()` — il dato non esiste mai in chiaro su disco.
-    **Architectural cleanup**: l'app ora è write-only per gli audit log. Rimossi `get_logs()`,
-    `get_user_login_counts()`, `get_event_counts_by_type()`, `get_logs_by_date()`, `delete_old_logs()`.
-    L'analisi e retention dei log è demandata a sistemi esterni (ELK, CloudWatch, Datadog).
-    Aggiunti stats aggregate leggeri (`stats/YYYY-MM-DD.json`) per dashboard admin, separati
-    dagli audit log. Endpoint `/api/admin/audit/logs` e `/api/admin/security/events` restituiscono `[]`.
-  - **Risolto**: AuditService write-only. PII mascherato alla scrittura. Stats via `get_stats_since()`
-    e `get_stats_timeseries()` da file aggregati (non audit log).
-    Test: 16 test in `tests/unit/test_audit.py` (3 logging, 10 masking, 3 stats/architectural).
+  - Fix: **structlog** (stdout JSON) sostituisce fsspec/AsyncFileSystem.
+    `_mask_email()` applicato prima di emettere l'evento via structlog — la PII non esiste mai
+    in chiaro su disco né nello stream di log. Setting `AUDIT_EMAIL_LOG_LEVEL` controlla il
+    livello (`"mask"` default → `jo***@ex***.com`, `"hash"` → HMAC-SHA256, `"none"`).
+    L'output è JSON compatibile con AWS CloudWatch, GCP Cloud Logging, Azure Monitor.
+    **Write-only**: AuditService non ha metodi di read/delete. L'analisi e retention dei
+    log sono demandate al cloud provider. Rimossi tutti i metodi di lettura/scansione
+    (`get_logs`, `get_user_login_counts`, `get_event_counts_by_type`, `get_logs_by_date`,
+    `delete_old_logs`). Aggiunti `login_count`/`failed_login_count` su `User` per counters
+    per-utente visibili in dashboard admin. Gli aggregati temporali (`total_logins_today`)
+    restituiscono 0 — vanno queryati dal sistema di log del cloud provider.
+  - **Risolto**: AuditService ~80 righe (vs ~224). Solo structlog + masking. Zero fsspec.
+    User counters per login nel modello. Output JSON stdout cloud-native.
+    Test: 16 test in `tests/unit/test_audit.py` (3 logging, 7 masking, 6 architectural).
 
 - [ ] **S11 — No HTTPS enforcement**
   - File: `authglow/main.py`, `.env`

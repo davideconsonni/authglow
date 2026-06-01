@@ -19,6 +19,8 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     last_login: Optional[datetime] = None
+    login_count: int = 0
+    failed_login_count: int = 0
 
     # Additional profile fields
     first_name: Optional[str] = None
