@@ -1,42 +1,45 @@
 """OAuth2 Client storage and management service."""
 
-import asyncio
-import json
+import os
 import secrets
-from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
+import fsspec
 
 from authglow.models.oauth_client import OAuth2Client
 from authglow.services.password import hash_password, verify_password
 from authglow.core.config import get_settings
-from authglow.core.concurrency import named_lock
+from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import named_lock, ConcurrentWriteError
 from authglow.core.datetime import utcnow
 
 
 class OAuth2ClientStorage:
     """Storage for OAuth2 clients."""
 
+    MAX_CAS_RETRIES = 3
+
     def __init__(self):
         """Initialize client storage."""
         settings = get_settings()
-        self.storage_path = Path(settings.storage_path) / "users" / "oauth_clients"
-        self.storage_path.mkdir(parents=True, exist_ok=True)
+        self.settings = settings
+        self.storage_path = f"{self.settings.storage_path}/oauth_clients"
+        self.storage_options = self.settings.get_storage_options()
+
+        if self.settings.storage_backend == "file":
+            os.makedirs(self.storage_path, exist_ok=True)
+            self.fs = fsspec.filesystem("file")
+        else:
+            self.fs = fsspec.filesystem(
+                self.settings.storage_backend, **self.storage_options
+            )
+
+        self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
 
-    def _get_client_path(self, client_id: str) -> Path:
+    def _get_client_path(self, client_id: str) -> str:
         """Get path for a client file."""
-        return self.storage_path / f"{client_id}.json"
-
-    def _write_json(self, path: Path, data: dict) -> None:
-        """Write JSON to a file (sync helper)."""
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2, default=str)
-
-    def _read_json(self, path: Path) -> dict:
-        """Read JSON from a file (sync helper)."""
-        with open(path, "r") as f:
-            return json.load(f)
+        return f"{self.storage_path}/{client_id}.json"
 
     async def create_client(
         self, client: OAuth2Client, plaintext_secret: str
@@ -51,14 +54,10 @@ class OAuth2ClientStorage:
         Returns:
             Created client with hashed secret
         """
-        # Hash the client secret
         client.client_secret = hash_password(plaintext_secret)
 
-        # Save to file
         client_path = self._get_client_path(client.client_id)
-        await asyncio.to_thread(
-            self._write_json, client_path, client.model_dump(mode="json")
-        )
+        await self._afs.write_json(client_path, client.model_dump(mode="json"))
 
         return client
 
@@ -66,32 +65,28 @@ class OAuth2ClientStorage:
         """Get a client by client_id."""
         client_path = self._get_client_path(client_id)
 
-        exists = await asyncio.to_thread(client_path.exists)
+        exists = await self._afs.exists(client_path)
         if not exists:
             return None
 
-        data = await asyncio.to_thread(self._read_json, client_path)
+        data = await self._afs.read_json(client_path)
         return OAuth2Client(**data)
 
     async def update_client(self, client: OAuth2Client) -> OAuth2Client:
         """Update an existing client."""
         client_path = self._get_client_path(client.client_id)
-
-        await asyncio.to_thread(
-            self._write_json, client_path, client.model_dump(mode="json")
-        )
-
+        await self._afs.write_json(client_path, client.model_dump(mode="json"))
         return client
 
     async def delete_client(self, client_id: str) -> bool:
         """Delete a client."""
         client_path = self._get_client_path(client_id)
 
-        exists = await asyncio.to_thread(client_path.exists)
+        exists = await self._afs.exists(client_path)
         if not exists:
             return False
 
-        await asyncio.to_thread(client_path.unlink)
+        await self._afs.rm(client_path)
         return True
 
     async def list_clients(
@@ -100,22 +95,24 @@ class OAuth2ClientStorage:
         """List all OAuth2 clients with pagination."""
         clients = []
 
-        def _list_and_read():
-            result = []
-            for client_path in sorted(self.storage_path.glob("*.json")):
-                with open(client_path, "r") as f:
-                    data = json.load(f)
+        try:
+            pattern = f"{self.storage_path}/*.json"
+            files = sorted(await self._afs.glob(pattern))
+
+            for file_path in files:
+                try:
+                    data = await self._afs.read_json(file_path)
                     client = OAuth2Client(**data)
 
                     if active_only and not client.is_active:
                         continue
 
-                    result.append(client)
-            return result
+                    clients.append(client)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
-        clients = await asyncio.to_thread(_list_and_read)
-
-        # Apply pagination
         return clients[offset : offset + limit]
 
     async def verify_client_secret(
@@ -137,33 +134,69 @@ class OAuth2ClientStorage:
         return redirect_uri in client.redirect_uris
 
     async def update_last_used(self, client_id: str):
-        """Update last used timestamp."""
+        """Update last used timestamp with CAS protection."""
         async with self._lock(f"oauth_client:{client_id}"):
-            client = await self.get_client(client_id)
-            if client:
+            client_path = self._get_client_path(client_id)
+
+            exists = await self._afs.exists(client_path)
+            if not exists:
+                return
+
+            for attempt in range(self.MAX_CAS_RETRIES):
+                data, version = await self._afs.read_json_versioned(client_path)
+                client = OAuth2Client(**data)
                 client.last_used_at = utcnow()
-                await self.update_client(client)
+
+                try:
+                    await self._afs.write_json_versioned(
+                        client_path,
+                        client.model_dump(mode="json"),
+                        version,
+                    )
+                    return
+                except ConcurrentWriteError:
+                    if attempt == self.MAX_CAS_RETRIES - 1:
+                        raise
+                    continue
 
     async def rotate_secret(self, client_id: str) -> str:
         """
-        Rotate client secret.
+        Rotate client secret with CAS protection against concurrent rotations.
 
         Returns:
             New plaintext secret
+
+        Raises:
+            ValueError: If the client is not found
         """
+        client_path = self._get_client_path(client_id)
+        exists = await self._afs.exists(client_path)
+        if not exists:
+            raise ValueError("Client not found")
+
         async with self._lock(f"oauth_client:{client_id}"):
-            client = await self.get_client(client_id)
-            if not client:
-                raise ValueError("Client not found")
+            for attempt in range(self.MAX_CAS_RETRIES):
+                data, version = await self._afs.read_json_versioned(client_path)
+                client = OAuth2Client(**data)
 
-            # Generate new secret
-            new_secret = secrets.token_urlsafe(32)
+                new_secret = secrets.token_urlsafe(32)
+                client.client_secret = hash_password(new_secret)
 
-            # Hash and update
-            client.client_secret = hash_password(new_secret)
-            await self.update_client(client)
+                try:
+                    await self._afs.write_json_versioned(
+                        client_path,
+                        client.model_dump(mode="json"),
+                        version,
+                    )
+                    return new_secret
+                except ConcurrentWriteError:
+                    if attempt == self.MAX_CAS_RETRIES - 1:
+                        raise
+                    continue
 
-        return new_secret
+        raise ConcurrentWriteError(
+            f"Failed to rotate secret for {client_id} after {self.MAX_CAS_RETRIES} attempts"
+        )
 
     def generate_client_secret(self) -> str:
         """Generate a secure random client secret."""
@@ -178,7 +211,6 @@ class OAuth2ClientStorage:
         if not client or not client.is_active:
             return False
 
-        # Check if all requested scopes are in allowed scopes
         return all(scope in client.allowed_scopes for scope in requested_scopes)
 
     async def is_grant_type_allowed(self, client_id: str, grant_type: str) -> bool:

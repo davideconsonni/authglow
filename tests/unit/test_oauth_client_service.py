@@ -1,6 +1,10 @@
+import os
 import pytest
 import asyncio
+from unittest.mock import patch, MagicMock
 from authglow.models.oauth_client import OAuth2Client
+from authglow.core.async_io import AsyncFileSystem
+from authglow.core.concurrency import ConcurrentWriteError
 
 
 def asyncio_run(coro):
@@ -236,3 +240,149 @@ class TestSecretRotation:
         assert len(secret) > 20
         secret2 = oauth_client_storage.generate_client_secret()
         assert secret != secret2
+
+
+class TestAsyncFileSystemMigration:
+    """P7: Verify OAuth2ClientStorage uses AsyncFileSystem instead of pathlib."""
+
+    def test_uses_async_file_system(self, oauth_client_storage):
+        assert isinstance(oauth_client_storage._afs, AsyncFileSystem)
+
+    def test_no_pathlib_in_service_module(self):
+        import inspect
+        from authglow.services import oauth_client as mod
+
+        source = inspect.getsource(mod)
+        assert "pathlib" not in source
+        assert "from pathlib import" not in source
+        assert "Path(" not in source
+
+    def test_storage_path_is_fstring_not_pathlib(self, oauth_client_storage):
+        assert isinstance(oauth_client_storage.storage_path, str)
+        assert not hasattr(oauth_client_storage.storage_path, "glob")
+
+    def test_has_fsspec_filesystem(self, oauth_client_storage):
+        import fsspec
+
+        assert oauth_client_storage.fs is not None
+        assert isinstance(oauth_client_storage.fs, fsspec.spec.AbstractFileSystem)
+
+
+class TestCASConcurrencyProtection:
+    """P7: Verify CAS versioned write protects rotate_secret and update_last_used."""
+
+    def test_rotate_secret_retries_on_version_conflict(self, oauth_client_storage):
+        client = _make_client()
+        asyncio_run(oauth_client_storage.create_client(client, "old-secret"))
+
+        real_write = oauth_client_storage._afs.write_json_versioned
+        call_count = [0]
+
+        async def mock_write_versioned(
+            path, data, expected_version, indent=2, default=None
+        ):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ConcurrentWriteError("version mismatch")
+            return await real_write(
+                path, data, expected_version, indent=indent, default=default
+            )
+
+        with patch.object(
+            oauth_client_storage._afs, "write_json_versioned", mock_write_versioned
+        ):
+            new_secret = asyncio_run(
+                oauth_client_storage.rotate_secret("test-client-1")
+            )
+
+        assert isinstance(new_secret, str)
+        assert call_count[0] == 2
+
+    def test_rotate_secret_exhausts_retries(self, oauth_client_storage):
+        client = _make_client()
+        asyncio_run(oauth_client_storage.create_client(client, "old-secret"))
+
+        def mock_always_fail(path, data, expected_version, indent=2, default=None):
+            raise ConcurrentWriteError("version mismatch")
+
+        with patch.object(
+            oauth_client_storage._afs, "write_json_versioned", mock_always_fail
+        ):
+            with pytest.raises(ConcurrentWriteError):
+                asyncio_run(oauth_client_storage.rotate_secret("test-client-1"))
+
+    def test_update_last_used_retries_on_version_conflict(self, oauth_client_storage):
+        client = _make_client()
+        asyncio_run(oauth_client_storage.create_client(client, "secret"))
+
+        real_write = oauth_client_storage._afs.write_json_versioned
+        call_count = [0]
+
+        async def mock_write_versioned(
+            path, data, expected_version, indent=2, default=None
+        ):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ConcurrentWriteError("version mismatch")
+            return await real_write(
+                path, data, expected_version, indent=indent, default=default
+            )
+
+        with patch.object(
+            oauth_client_storage._afs, "write_json_versioned", mock_write_versioned
+        ):
+            asyncio_run(oauth_client_storage.update_last_used("test-client-1"))
+
+        assert call_count[0] == 2
+
+    def test_update_last_used_skips_nonexistent_client(self, oauth_client_storage):
+        asyncio_run(oauth_client_storage.update_last_used("nonexistent-client"))
+
+
+class TestCloudBackendCompatibility:
+    """P7: Verify service initializes correctly with non-file storage backends."""
+
+    def test_initializes_with_s3_backend(self, test_settings, tmp_path):
+        from authglow.services.oauth_client import OAuth2ClientStorage
+
+        s3_settings = test_settings.model_copy()
+        s3_settings.storage_backend = "s3"
+        s3_settings.storage_path = str(tmp_path / "data" / "s3_users")
+        s3_settings.aws_access_key_id = "test-key"
+        s3_settings.aws_secret_access_key = "test-secret"
+        s3_settings.aws_region = "us-east-1"
+
+        with patch(
+            "authglow.services.oauth_client.get_settings", return_value=s3_settings
+        ):
+            with patch("authglow.services.oauth_client.fsspec.filesystem") as mock_fs:
+                with patch(
+                    "authglow.services.password.get_settings", return_value=s3_settings
+                ):
+                    OAuth2ClientStorage()
+
+        mock_fs.assert_called_once_with(
+            "s3",
+            key="test-key",
+            secret="test-secret",
+            client_kwargs={"region_name": "us-east-1"},
+        )
+
+    def test_initializes_with_gcs_backend(self, test_settings, tmp_path):
+        from authglow.services.oauth_client import OAuth2ClientStorage
+
+        gcs_settings = test_settings.model_copy()
+        gcs_settings.storage_backend = "gcs"
+        gcs_settings.storage_path = str(tmp_path / "data" / "gcs_users")
+        gcs_settings.google_application_credentials = "/path/to/creds.json"
+
+        with patch(
+            "authglow.services.oauth_client.get_settings", return_value=gcs_settings
+        ):
+            with patch("authglow.services.oauth_client.fsspec.filesystem") as mock_fs:
+                with patch(
+                    "authglow.services.password.get_settings", return_value=gcs_settings
+                ):
+                    OAuth2ClientStorage()
+
+        mock_fs.assert_called_once_with("gcs", token="/path/to/creds.json")

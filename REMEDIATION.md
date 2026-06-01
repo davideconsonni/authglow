@@ -308,12 +308,20 @@ Usa una sessione per fix, spunta ciò che completi.
      Test: 14 test in `tests/unit/test_cache.py` (UI context cache hit, valori da Settings,
      proxy CRUD, registry singleton/reset, indipendenza user/refresh_token).
 
-- [ ] **P7 — OAuth2ClientStorage I/O non uniforme**
+- [x] **P7 — OAuth2ClientStorage I/O non uniforme**
   - File: `authglow/services/oauth_client.py`
   - Problema: usa `Path.open()` + `json` direttamente invece dell'`AsyncFileSystem` wrapper usato
     da tutti gli altri servizi. Nessuna protezione CAS/concorrenza.
   - Fix: allineare a `AsyncFileSystem` come gli altri 12 servizi. Aggiungere supporto versioned
     read/write per proteggere da race condition su update client e rotate secret.
+  - **Risolto**: `OAuth2ClientStorage` completamente migrato ad `AsyncFileSystem` (fsspec + `self._afs`).
+    Rimosso `pathlib.Path`, `json.dump/load` sincrono, `asyncio.to_thread()` per I/O.
+    Inizializzazione fsspec con backend detection (`file`, `s3`, `gcs`, `abfs`) come gli altri servizi.
+    `rotate_secret()` e `update_last_used()` ora usano CAS versioned read/write con retry loop
+    (`MAX_CAS_RETRIES=3`, `read_json_versioned`/`write_json_versioned`, `ConcurrentWriteError`).
+    Storage path allineato: `{storage_path}/oauth_clients/` (non più `users/oauth_clients/`).
+    Test: 33 test (23 esistenti + 10 nuovi) in `tests/unit/test_oauth_client_service.py`
+    (AsyncFileSystem migration, no-pathlib, CAS retry/exhaust, skip nonexistent, cloud backends S3/GCS).
 
 ---
 
@@ -360,7 +368,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P4 — Admin sessions active_index
 - [x] P5 — Consent lookup deterministico
 - [x] P6 — Caching layer (Phase 5 per Redis, short-term fatto)
-- [ ] P7 — OAuth2ClientStorage AsyncFileSystem
+- [x] P7 — OAuth2ClientStorage AsyncFileSystem
 - [ ] D3 — mypy + ruff config
 - [ ] D4 — JWK key rotation
 - [ ] D5 — Backup code rate limit

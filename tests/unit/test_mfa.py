@@ -283,46 +283,17 @@ class TestTOTPSecretEncryption:
 
     def test_wrong_key_fails(self):
         from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
-        from unittest.mock import patch
+        from unittest.mock import patch, MagicMock
 
         secret = "JBSWY3DPEHPK3PXP"
         encrypted = encrypt_totp_secret(secret)
 
-        with patch("authglow.core.crypto.get_settings") as mock_settings:
-            mock_settings.return_value.secret_key = "x" + "y" * 63
-            with patch(
-                "authglow.core.crypto.HKDF",
-                side_effect=Exception(
-                    "should not be called in AESGCM.decrypt path directly"
-                ),
-            ):
-                pass
-            try:
-                from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-                from cryptography.hazmat.primitives import hashes
-                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        wrong_settings = MagicMock()
+        wrong_settings.secret_key = "x" + "y" * 63
 
-                alt_settings = mock_settings.return_value
-                hkdf = HKDF(
-                    algorithm=hashes.SHA256(),
-                    length=32,
-                    salt=None,
-                    info=b"authglow-totp-encryption-v1",
-                )
-                wrong_key = hkdf.derive(alt_settings.secret_key.encode())
-                import base64
-
-                raw = base64.b64decode(encrypted[len("ag1:") :])
-                iv = raw[:12]
-                ciphertext = raw[12:]
-                aesgcm = AESGCM(wrong_key)
-                try:
-                    aesgcm.decrypt(iv, ciphertext, b"authglow-totp")
-                    assert False, "Decryption with wrong key should fail"
-                except Exception:
-                    pass
-            except Exception:
-                pass
+        with patch("authglow.core.config.get_settings", return_value=wrong_settings):
+            with pytest.raises(Exception):
+                decrypt_totp_secret(encrypted)
 
     def test_totp_end_to_end_with_encryption(self):
         import pyotp
