@@ -180,7 +180,7 @@ async def confirm_password_reset(
     await user_storage.update_user(user)
 
     # Mark token as used
-    await reset_service.mark_token_used(token.token_id)
+    await reset_service.mark_token_used(token.token_lookup)
 
     # Revoke any other active tokens for this user
     await reset_service.revoke_user_tokens(user.id)

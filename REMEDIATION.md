@@ -219,28 +219,33 @@ Usa una sessione per fix, spunta ciò che completi.
     Test: 8 test in `tests/unit/test_refresh_token.py` (indice creato, no glob, prefix sconosciuto,
     isolamento lookup, collisioni prefix, revoke preserva indice, cleanup rimuove, token revocato trovabile).
 
-- [ ] **P2 — Audit log scan completo su ogni query**
-  - File: `authglow/services/audit.py` (`get_logs`, `get_event_counts_by_type`, `get_logs_by_date`, `get_user_login_counts`)
+- [x] **P2 — Audit log scan completo su ogni query**
+  - File: `authglow/services/audit.py`
   - Problema: ogni query fa glob di TUTTI i file di audit. Su 1 anno di log, centinaia di file JSON.
-    `get_user_login_counts()` è particolarmente lento: carica tutti i log, estrae email, conta.
-  - Fix: creare indici mensili:
-    - `audit/index/YYYY-MM/event_types.json` → mappa `event_type` → conteggio.
-    - `audit/index/YYYY-MM/users.json` → mappa `user_email` → conteggio login.
-    - Aggiornare gli indici in append quando si scrive un evento.
-    - `get_logs` può ancora fare glob ma limitato al mese richiesto (i file sono già organizzati per `YYYY/MM/`).
+  - **WONTFIX** — Risolto architetturalmente da S10: AuditService è diventato write-only via structlog/stdout JSON.
+    Zero fsspec, zero metodi di lettura. I metodi `get_logs`, `get_event_counts_by_type`, `get_logs_by_date`,
+    `get_user_login_counts` non esistono più. L'analisi e query sono delegate al cloud provider.
 
 ---
 
 ## MEDIUM — Performance
 
-- [ ] **P3 — Verifica password reset token O(n) bcrypt**
+- [x] **P3 — Verifica password reset token O(n) bcrypt**
   - File: `authglow/services/password_reset.py:verify_token()`
-  - Problema: per validare UN token, itera tutti i token di reset e fa bcrypt su ciascuno.
-    Con centinaia di token pendenti diventa problematico.
-  - Fix: usare `hmac.digest(SECRET_KEY, token_raw, 'sha256')` come lookup key.
-    Salvare nei metadati del token: `token_hash = hmac_sha256(token_raw)`.
-    Cercare per `token_hash` invece di iterare tutto. Il bcrypt serve ancora per verifica
-    (defense-in-depth) ma si fa 1 bcrypt invece di N.
+  - Problema: per validare UN token, iterava tutti i token di reset e faceva bcrypt su ciascuno.
+    Con centinaia di token pendenti diventava problematico.
+  - Fix: `token_lookup = hmac.new(SECRET_KEY, plaintext, sha256).hexdigest()` usato come
+    lookup key deterministico e come nome file diretto (`password_resets/{token_lookup}.json`).
+    `verify_token()` ora fa 1 file read + 1 bcrypt invece di O(n) file read + O(n) bcrypt.
+    - Aggiunto `token_lookup: str` al modello `PasswordResetToken`.
+    - `_generate_token()` restituisce anche `token_lookup`.
+    - `create_reset_token()` salva il file con nome `{token_lookup}.json` invece di `{uuid}.json`.
+    - `verify_token()` usa HMAC per O(1) direct lookup + bcrypt defense-in-depth.
+    - `mark_token_used()` e `get_token()` accettano `token_lookup` invece di `token_id`.
+    - `revoke_user_tokens()` aggiornato per passare `token.token_lookup`.
+    - API `confirm_password_reset` aggiornata per passare `token.token_lookup`.
+    - Test: 10 test P3 in `tests/unit/test_password_reset_service.py` (O(1) no list_all,
+      determinismo, difesa bcrypt, file naming, roundtrip). 31 test totali passano.
 
 - [ ] **P4 — Admin sessions carica 5x page size**
   - File: `authglow/api/admin.py` (vista admin sessions)
@@ -315,8 +320,8 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S11 — HTTPS enforcement
 - [x] S12 — API key brute-force lockout
 - [x] P1 — Refresh token prefix index
-- [ ] P2 — Audit log indici mensili
-- [ ] P3 — Password reset HMAC lookup
+- [x] P2 — Audit log indici mensili
+- [x] P3 — Password reset HMAC lookup
 - [ ] P4 — Admin sessions active_index
 - [ ] P5 — Consent lookup deterministico
 - [ ] P6 — Caching layer (Phase 5)

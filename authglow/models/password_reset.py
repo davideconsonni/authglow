@@ -12,6 +12,7 @@ class PasswordResetToken(BaseModel):
     """Password reset token model."""
 
     token_id: str = Field(default_factory=lambda: str(uuid4()))
+    token_lookup: str = ""
     user_id: str
     email: EmailStr
     token_hash: str  # Hashed token for security

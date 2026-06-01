@@ -2,6 +2,8 @@
 
 import secrets
 import bcrypt
+import hmac
+import hashlib
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -29,30 +31,34 @@ class PasswordResetService:
         Args:
             storage_path: Path to storage directory (supports s3://, gcs://, etc.)
         """
-        settings = get_settings()
-        self.storage_path = storage_path or settings.storage_path
+        self.settings = get_settings()
+        self.storage_path = storage_path or self.settings.storage_path
         self.reset_path = f"{self.storage_path}/password_resets"
         self.fs = fsspec.filesystem("file")  # Will auto-detect protocol from path
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
 
-    def _get_token_path(self, token_id: str) -> str:
-        """Get file path for a token."""
-        return f"{self.reset_path}/{token_id}.json"
+    def _get_token_path(self, token_lookup: str) -> str:
+        """Get file path for a token by its HMAC lookup key."""
+        return f"{self.reset_path}/{token_lookup}.json"
 
-    def _generate_token(self) -> tuple[str, str]:
+    def _generate_token(self) -> tuple[str, str, str]:
         """Generate a secure random token.
 
         Returns:
-            tuple: (plaintext_token, hashed_token)
+            tuple: (plaintext_token, hashed_token, token_lookup)
         """
-        # Generate 32-byte token (256 bits)
         plaintext = secrets.token_urlsafe(32)
 
-        # Hash the token with bcrypt
         token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
 
-        return plaintext, token_hash
+        token_lookup = hmac.new(
+            self.settings.secret_key.encode(),
+            plaintext.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+        return plaintext, token_hash, token_lookup
 
     async def create_reset_token(
         self,
@@ -74,9 +80,10 @@ class PasswordResetService:
         Returns:
             tuple: (PasswordResetToken, plaintext_token)
         """
-        plaintext_token, token_hash = self._generate_token()
+        plaintext_token, token_hash, token_lookup = self._generate_token()
 
         reset_token = PasswordResetToken(
+            token_lookup=token_lookup,
             user_id=user_id,
             email=email,
             token_hash=token_hash,
@@ -86,7 +93,7 @@ class PasswordResetService:
         )
 
         # Save token
-        token_path = self._get_token_path(reset_token.token_id)
+        token_path = self._get_token_path(reset_token.token_lookup)
         await self._afs.makedirs(self.reset_path, exist_ok=True)
 
         await self._afs.write_text(token_path, reset_token.model_dump_json(indent=2))
@@ -96,47 +103,58 @@ class PasswordResetService:
     async def verify_token(self, plaintext_token: str) -> Optional[PasswordResetToken]:
         """Verify a reset token and return the token object if valid.
 
+        Uses HMAC-SHA256 lookup key for O(1) direct file access instead of
+        listing all active tokens.
+
         Args:
             plaintext_token: The plaintext token to verify
 
         Returns:
             PasswordResetToken if valid, None otherwise
         """
-        # List all tokens
-        tokens = await self.list_all_tokens(active_only=True)
+        token_lookup = hmac.new(
+            self.settings.secret_key.encode(),
+            plaintext_token.encode(),
+            hashlib.sha256,
+        ).hexdigest()
 
-        # Try to match the token
-        for token in tokens:
-            try:
-                if bcrypt.checkpw(plaintext_token.encode(), token.token_hash.encode()):
-                    # Token matches - check if expired or used
-                    if token.is_used:
-                        return None
+        token_path = self._get_token_path(token_lookup)
 
-                    if utcnow() > token.expires_at:
-                        return None
+        if not await self._afs.exists(token_path):
+            return None
 
-                    return token
-            except Exception:
-                continue
+        try:
+            content = await self._afs.read_text(token_path)
+            token = PasswordResetToken.model_validate_json(content)
+        except Exception:
+            return None
 
-        return None
+        if not bcrypt.checkpw(plaintext_token.encode(), token.token_hash.encode()):
+            return None
 
-    async def mark_token_used(self, token_id: str) -> bool:
+        if token.is_used:
+            return None
+
+        if utcnow() > token.expires_at:
+            return None
+
+        return token
+
+    async def mark_token_used(self, token_lookup: str) -> bool:
         """Mark a token as used.
 
         Protected by a named lock and optimistic-concurrency versioning
         to prevent the same token from being used twice.
 
         Args:
-            token_id: Token ID to mark as used
+            token_lookup: HMAC lookup key of the token to mark as used
 
         Returns:
             bool: Success status
         """
-        async with self._lock(f"reset_token:{token_id}"):
+        async with self._lock(f"reset_token:{token_lookup}"):
             for attempt in range(self.MAX_CAS_RETRIES):
-                token_path = self._get_token_path(token_id)
+                token_path = self._get_token_path(token_lookup)
 
                 if not await self._afs.exists(token_path):
                     return False
@@ -161,16 +179,16 @@ class PasswordResetService:
 
             return False
 
-    async def get_token(self, token_id: str) -> Optional[PasswordResetToken]:
-        """Get a token by ID.
+    async def get_token(self, token_lookup: str) -> Optional[PasswordResetToken]:
+        """Get a token by its HMAC lookup key.
 
         Args:
-            token_id: Token ID
+            token_lookup: HMAC lookup key
 
         Returns:
             PasswordResetToken if found, None otherwise
         """
-        token_path = self._get_token_path(token_id)
+        token_path = self._get_token_path(token_lookup)
 
         if not await self._afs.exists(token_path):
             return None
@@ -263,7 +281,7 @@ class PasswordResetService:
         count = 0
 
         for token in tokens:
-            if await self.mark_token_used(token.token_id):
+            if await self.mark_token_used(token.token_lookup):
                 count += 1
 
         return count

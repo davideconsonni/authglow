@@ -102,7 +102,7 @@ class TestVerifyToken:
                 user_id="user-used", email="used@example.com"
             )
         )
-        asyncio_run(password_reset_service.mark_token_used(token.token_id))
+        asyncio_run(password_reset_service.mark_token_used(token.token_lookup))
         found = asyncio_run(password_reset_service.verify_token(plaintext))
         assert found is None
 
@@ -114,7 +114,7 @@ class TestVerifyToken:
         )
         import json
 
-        path = password_reset_service._get_token_path(token.token_id)
+        path = password_reset_service._get_token_path(token.token_lookup)
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
         with password_reset_service.fs.open(path, "w") as f:
@@ -130,7 +130,7 @@ class TestMarkTokenUsed:
                 user_id="user-m1", email="m1@example.com"
             )
         )
-        result = asyncio_run(password_reset_service.mark_token_used(token.token_id))
+        result = asyncio_run(password_reset_service.mark_token_used(token.token_lookup))
         assert result is True
 
     def test_mark_token_used_twice_fails(self, password_reset_service):
@@ -139,13 +139,19 @@ class TestMarkTokenUsed:
                 user_id="user-m2", email="m2@example.com"
             )
         )
-        result1 = asyncio_run(password_reset_service.mark_token_used(token.token_id))
-        result2 = asyncio_run(password_reset_service.mark_token_used(token.token_id))
+        result1 = asyncio_run(
+            password_reset_service.mark_token_used(token.token_lookup)
+        )
+        result2 = asyncio_run(
+            password_reset_service.mark_token_used(token.token_lookup)
+        )
         assert result1 is True
         assert result2 is False
 
     def test_mark_nonexistent_token_fails(self, password_reset_service):
-        result = asyncio_run(password_reset_service.mark_token_used("nonexistent"))
+        result = asyncio_run(
+            password_reset_service.mark_token_used("nonexistent-lookup-key")
+        )
         assert result is False
 
 
@@ -156,12 +162,12 @@ class TestGetToken:
                 user_id="user-get", email="get@example.com"
             )
         )
-        found = asyncio_run(password_reset_service.get_token(token.token_id))
+        found = asyncio_run(password_reset_service.get_token(token.token_lookup))
         assert found is not None
         assert found.user_id == "user-get"
 
     def test_get_token_not_found(self, password_reset_service):
-        found = asyncio_run(password_reset_service.get_token("nonexistent-id"))
+        found = asyncio_run(password_reset_service.get_token("nonexistent-lookup-key"))
         assert found is None
 
 
@@ -230,7 +236,7 @@ class TestCleanupExpiredTokens:
                 user_id="user-cleanup", email="cleanup@example.com"
             )
         )
-        asyncio_run(password_reset_service.mark_token_used(token.token_id))
+        asyncio_run(password_reset_service.mark_token_used(token.token_lookup))
         count = asyncio_run(password_reset_service.cleanup_expired_tokens())
         assert count >= 1
 
@@ -252,3 +258,174 @@ class TestGetStats:
         stats = asyncio_run(password_reset_service.get_stats())
         assert stats["total"] >= 1
         assert stats["active"] >= 1
+
+
+class TestP3HmacLookup:
+    """P3 — O(1) token lookup via HMAC-SHA256.
+
+    Verifies that ``verify_token`` uses a deterministic HMAC lookup key
+    derived from the plaintext token so that a single file read + single
+    bcrypt check replaces the old O(n) glob + bcrypt loop.
+    """
+
+    def test_verify_token_is_o1_not_iterating_all(self, password_reset_service):
+        asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-p3-target", email="target@example.com"
+            )
+        )
+        for i in range(50):
+            asyncio_run(
+                password_reset_service.create_reset_token(
+                    user_id=f"user-p3-{i}", email=f"p3-{i}@example.com"
+                )
+            )
+        tokens, target_plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-p3-verify", email="verify@example.com"
+            )
+        )
+        import time
+
+        start = time.monotonic()
+        found = asyncio_run(password_reset_service.verify_token(target_plaintext))
+        elapsed = time.monotonic() - start
+        assert found is not None
+        assert found.token_id == tokens.token_id
+        assert elapsed < 1.0
+
+    def test_verify_token_direct_lookup_no_list_all(self, password_reset_service):
+        for i in range(30):
+            asyncio_run(
+                password_reset_service.create_reset_token(
+                    user_id=f"user-noise-{i}", email=f"noise-{i}@example.com"
+                )
+            )
+        tokens, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-lookup", email="lookup@example.com"
+            )
+        )
+        original_list_all = password_reset_service.list_all_tokens
+        call_count = [0]
+
+        async def counting_list_all(*args, **kwargs):
+            call_count[0] += 1
+            return await original_list_all(*args, **kwargs)
+
+        password_reset_service.list_all_tokens = counting_list_all
+        try:
+            found = asyncio_run(password_reset_service.verify_token(plaintext))
+        finally:
+            password_reset_service.list_all_tokens = original_list_all
+        assert found is not None
+        assert call_count[0] == 0
+
+    def test_token_lookup_is_stored_in_model(self, password_reset_service):
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-lookup", email="lookup@example.com"
+            )
+        )
+        assert token.token_lookup
+        assert isinstance(token.token_lookup, str)
+        assert len(token.token_lookup) == 64
+        assert all(c in "0123456789abcdef" for c in token.token_lookup)
+
+    def test_token_lookup_deterministic_same_plaintext(self, password_reset_service):
+        import hmac, hashlib
+
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-det", email="det@example.com"
+            )
+        )
+        recomputed = hmac.new(
+            password_reset_service.settings.secret_key.encode(),
+            plaintext.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        assert token.token_lookup == recomputed
+
+    def test_token_lookup_different_for_different_plaintext(self, password_reset_service):
+        t1, p1 = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-a", email="a@example.com"
+            )
+        )
+        t2, p2 = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-b", email="b@example.com"
+            )
+        )
+        assert t1.token_lookup != t2.token_lookup
+        assert p1 != p2
+
+    def test_file_named_after_token_lookup_not_uuid(self, password_reset_service):
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-fn", email="fn@example.com"
+            )
+        )
+        uuid_path = f"{password_reset_service.reset_path}/{token.token_id}.json"
+        lookup_path = f"{password_reset_service.reset_path}/{token.token_lookup}.json"
+        import os
+
+        assert not os.path.exists(uuid_path)
+        assert os.path.exists(lookup_path)
+
+    def test_verify_token_hmac_mismatch_returns_none(self, password_reset_service):
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-hmac", email="hmac@example.com"
+            )
+        )
+        different_plaintext = "completely-different-token-value-not-real"
+        found = asyncio_run(
+            password_reset_service.verify_token(different_plaintext)
+        )
+        assert found is None
+
+    def test_verify_token_nonexistent_lookup_returns_none(self, password_reset_service):
+        import secrets
+
+        fake_plaintext = secrets.token_urlsafe(32)
+        found = asyncio_run(password_reset_service.verify_token(fake_plaintext))
+        assert found is None
+
+    def test_verify_token_uses_bcrypt_defense_in_depth(self, password_reset_service):
+        import bcrypt as _bcrypt
+        import json
+
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-did", email="did@example.com"
+            )
+        )
+        path = password_reset_service._get_token_path(token.token_lookup)
+        with password_reset_service.fs.open(path, "r") as f:
+            data = json.load(f)
+        wrong_hash = _bcrypt.hashpw(b"wrong-plaintext", _bcrypt.gensalt()).decode()
+        data["token_hash"] = wrong_hash
+        with password_reset_service.fs.open(path, "w") as f:
+            json.dump(data, f)
+        found = asyncio_run(password_reset_service.verify_token(plaintext))
+        assert found is None
+
+    def test_verify_token_roundtrip_end_to_end(self, password_reset_service):
+        token, plaintext = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-e2e",
+                email="e2e@example.com",
+                ip_address="10.0.0.1",
+                user_agent="TestAgent/1.0",
+            )
+        )
+        found = asyncio_run(password_reset_service.verify_token(plaintext))
+        assert found is not None
+        assert found.token_id == token.token_id
+        assert found.user_id == "user-e2e"
+        assert found.email == "e2e@example.com"
+        assert found.ip_address == "10.0.0.1"
+        assert found.user_agent == "TestAgent/1.0"
+        assert found.is_used is False
