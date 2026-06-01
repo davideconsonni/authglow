@@ -12,7 +12,7 @@ from authglow.services.jwt import JWTService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.audit import AuditService
 from authglow.services.storage import UserStorage
-from authglow.api.auth import get_current_user
+from authglow.api.auth import get_current_user, _extract_basic_auth
 
 router = APIRouter()
 
@@ -122,19 +122,39 @@ async def introspect_token(
     request: Request,
     token: str = Form(...),
     token_type_hint: Optional[str] = Form(None),
+    client_id: Optional[str] = Form(None),
+    client_secret: Optional[str] = Form(None),
     refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
     jwt_service: JWTService = Depends(get_jwt_service),
     user_storage: UserStorage = Depends(get_user_storage),
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
 ):
     """RFC 7662: Token Introspection Endpoint.
 
     Allows resource servers to query token metadata.
+    Requires client authentication.
 
     https://datatracker.ietf.org/doc/html/rfc7662
     """
-    # NOTE: In a real-world scenario, this endpoint SHOULD be protected
-    # and only accessible to trusted resource servers. For the playground,
-    # we are leaving it open.
+    basic_client_id, basic_client_secret = _extract_basic_auth(request)
+
+    resolved_client_id = client_id or basic_client_id
+    resolved_client_secret = client_secret or basic_client_secret
+
+    if not resolved_client_id or not resolved_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Client authentication required",
+            headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
+        )
+
+    if not await oauth2_service.verify_client(
+        resolved_client_id, resolved_client_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid client credentials",
+        )
 
     # Try as refresh token
     if token_type_hint == "refresh_token" or not token_type_hint:

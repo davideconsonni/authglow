@@ -1,6 +1,11 @@
-# AuthGlow Remediation Plan
+# AuthGlow Remediation Plan — Phase 2
+# Sicurezza & Performance (Post-Phase1)
 
-Questo documento traccia tutti i problemi tecnici e di sicurezza identificati durante la review del codebase. Aggiorna lo stato man mano che procedi.
+Questo documento estende il piano di remediation originale. I problemi CRITICAL/HIGH/MEDIUM di Phase 1
+sono stati risolti (vedi `REMEDIATION.md`). Qui vengono tracciati i problemi di sicurezza e performance
+ancora aperti.
+
+Usa una sessione per fix, spunta ciò che completi.
 
 ---
 
@@ -8,7 +13,7 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 
 - `pending` — Da iniziare
 - `in_progress` — In lavorazione
-- `blocked` — Bloccato da dipendenze o decisioni
+- `blocked` — Bloccato
 - `done` — Completato e verificato
 - `wontfix` — Deciso di non risolvere
 
@@ -16,94 +21,219 @@ Questo documento traccia tutti i problemi tecnici e di sicurezza identificati du
 
 ## CRITICAL — Sicurezza
 
-| #  | Problema                                                                                                                                                         | File/i coinvolti                                                                                        | Azione richiesta                                                                                                         | Stato   | Note |
-|----|------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|---------|------|
-| C1 | **JWT scaduti accettati** — `decode_token()` non valida il claim `exp`.                                                                                          | `authglow/services/jwt.py`                                                                              | Aggiunto `verify_exp: True` esplicito in `_decode_token()`, controllo defense-in-depth in `decode_token()` e `decode_id_token()`.        | done |      |
-| C2 | **MFA trusted device rotto** — Il fingerprint usa `pwd_context.hash(data)[:64]`, distruggendo l'hash bcrypt. Confronto in `is_device_trusted()` fallisce sempre. | `authglow/services/mfa.py`                                                                              | Sostituito bcrypt truncato con HMAC-SHA256 usando `secret_key` dell'app.                                            | done | Fingerprint ora deterministica, confronto `==` funziona correttamente |
-| C3 | **Backup code MFA rotto nell'endpoint standalone** — `code in backup_codes.codes` fallisce perché i codici sono hash bcrypt.                                     | `authglow/api/mfa.py` (verify_mfa_login)                                                                | Sostituito confronto diretto con `mfa_service.verify_user_backup_code()`, come in `auth.py`. Rimossa logica manuale di rimozione codice (gestita dal service). | done |      |
-| C4 | **Token endpoint non autentica il client** — Scambio authorization code senza verificare `client_id`/`client_secret`. | `authglow/api/auth.py` (token_endpoint) | Aggiunto autenticazione client per `authorization_code` grant: verifica `client_id` match con auth code, autenticazione obbligatoria per client confidential (form params + Basic Auth), client pubblici richiedono PKCE. | done | RFC 6749 §4.1.3 |
-| C5 | **Password hashing difettoso per UTF-8 lunghe** — `encode()[:72]` tronca a byte 72 spezzando caratteri multi-byte, causando collisioni.                                | `authglow/services/password.py`, `authglow/api/password_reset.py`                                  | Aggiunto `_prepare_password_bytes()` con troncamento UTF-8 boundary-safe in `password.py`. Sostituiti 4 chiamate dirette `bcrypt` in `password_reset.py` con `hash_password`/`verify_password`. | done | Collisioni UTF-8 eliminate; test verificano boundary-aware truncation |
-| C6 | **Token sensibili usano UUID4** — Non crittograficamente sicuro per bearer tokens.                                                                               | `authglow/models/token.py`, `authglow/models/refresh_token.py`, `authglow/models/email_verification.py`, `authglow/models/session.py`, `authglow/services/session.py`, `authglow/services/oauth2.py` | Sostituito `uuid4()` con `secrets.token_urlsafe(32)` per authorization codes, refresh tokens (token + token_id), email verification tokens, MFA session tokens, consent session tokens. Rimosa import `uuid4` in `oauth2.py`. | done | Esteso scope a MFA session e consent session tokens (anch'essi bearer token sensibili) |
+- [x] **S1 — `/oauth2/introspect` senza autenticazione**
+  - File: `authglow/api/oauth2_advanced.py`
+  - Problema: endpoint RFC 7662 accessibile senza credenziali. Chiunque può validare token.
+  - Fix: richiedere `client_id` + `client_secret` (Basic Auth) o Bearer token per l'accesso.
 
-## HIGH — Sicurezza / Affidabilità
+- [ ] **S2 — Nessuna protezione CSRF sui form POST**
+  - File: `authglow/api/auth.py`, `authglow/api/oauth_consent_handler.py`, `authglow/api/mfa.py`, tutti i template HTML
+  - Problema: login, consent, MFA verify sono POST senza token anti-CSRF. Un sito malevolo può forzare richieste.
+  - Fix: generare `csrf_token` nella GET, inserirlo come hidden field nei form, validarlo nella POST corrispondente.
+    Usare `secrets.token_urlsafe(32)` memorizzato in una sessione temporanea file-based con scadenza 30 minuti.
 
-| #  | Problema                                                                                      | File/i coinvolti                                 | Azione richiesta                                                                              | Stato   | Note |
-|----|-----------------------------------------------------------------------------------------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------|---------|------|
-| H1 | **TOTP secrets in chiaro** — `mfa_secret` è testo base32 non cifrato nel DB. | `authglow/models/user.py`, `authglow/api/mfa.py` | Cifrare TOTP secret con AES-256-GCM usando chiave derivata dall'app secret prima di salvarlo. | done | AES-256-GCM encryption via `authglow/core/crypto.py`. Key derived from `secret_key` via HKDF-SHA256. Format: `ag1:`+base64(iv+ciphertext+tag). Legacy plaintext values pass through for migration. |
-| H2 | **Rate limiter non collegato** — SlowAPI decoratori presenti ma `limiter` non in `app.state`. | `authglow/main.py`, `authglow/api/*.py` | Creato `authglow/core/rate_limit.py` con singleton `Limiter`. Collegato in `main.py` via `app.state.limiter` + `SlowAPIMiddleware`. Sostituiti 9 `Limiter()` locali nei moduli API con import dal singleton. | done | SlowAPIMiddleware registra eccezione 429 automaticamente |
-| H3 | **Validazione API key O(n)** — Carica tutte le key e fa bcrypt su ognuna.                     | `authglow/services/api_key.py`                   | Aggiunto prefix index O(1) in `api_keys/index/<prefix>.json`. `validate_key()` ora estrae il prefix (primi 12 char) e carica solo i key_id candidati. `create_key()`, `delete_key()` e `cleanup_expired_keys()` mantengono l'indice aggiornato. | done | Prefix index in `api_keys/index/`; fallback a lista vuota se prefix non esiste |
-| H4 | **Setup endpoint senza rate limit** — Race condition + brute force possibile.                 | `authglow/api/setup.py`                          | Aggiunto `@limiter.limit()` a tutti e 3 gli endpoint: create-admin 5/min, check 20/min, setup page 20/min. Aggiunto `Request` param dove mancante. Aggiornato test rate_limit per verificare setup module.                    | done |      |
-| H5 | **CORS header parsing bug** — La stringa CSV finisce come singolo elemento.                   | `authglow/main.py:50`, `authglow/core/config.py` | Aggiunto `get_cors_headers()` in Settings (split su `,` con wildcard `*`). Sostituita logica inline in `main.py` con `settings.get_cors_headers()`. Test aggiornato per verificare split corretto e wildcard. | done |      |
-| H6 | **Passkey registration permette duplicati** — `exclude_credentials` è hardcodato `[]`.        | `authglow/services/passkey.py`, `authglow/api/passkey.py` | Aggiunto parametro `user_passkeys` a `generate_registration_options_dict()`, endpoint `begin_registration` ora recupera le passkey esistenti e le passa al metodo. Sostituito `bytes.fromhex` con `base64url_to_bytes` nella costruzione di `exclude_credentials`. | done | Fix include anche la correzione del parsing del credential_id da hex a base64url nella comprehension di exclude_credentials |
-| H7 | **Passkey service: bytes.fromhex su base64url** — Parsing errato del credential_id.           | `authglow/services/passkey.py`                   | Usare `base64url_to_bytes` invece di `bytes.fromhex`.                                         | done | Già corretto come parte di H6; nessun `bytes.fromhex` rimasto. Test verificano assenza e uso corretto di `base64url_to_bytes`. |
+- [ ] **S3 — Secret key deboli / placeholder in `.env`**
+  - File: `.env:13-14`
+  - Problema: `SECRET_KEY` e `JWT_SECRET_KEY` sono `"your-secret-key-change-in-production-min-32-chars"`.
+    Superano il controllo `min_length=32` ma NON sono chiavi crittografiche.
+  - Fix: generare chiavi reali con `openssl rand -hex 32`. Aggiungere warning all'avvio se le chiavi contengono "change-in-production".
+    NON committare mai `.env` con segreti reali.
 
-## MEDIUM — Bug / Architettura
-
-| #  | Problema                                                                                         | File/i coinvolti                                               | Azione richiesta                                                                                | Stato   | Note |
-|----|--------------------------------------------------------------------------------------------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------|------|
-| M1 | **Audit log: filtro event_type usa substring matching** — `"login"` matcha anche `login_failed`. | `authglow/services/audit.py`                                   | Sostituito `in` con confronto esatto case-insensitive (`!=`). Aggiunti 3 test: exact match, no-substring, distinct-prefix. | done | Search field mantiene substring matching (intenzionale) |
-| M2 | **JWTService istanziato a livello modulo** — Triggera generazione chiavi all'import.             | `authglow/core/permissions.py`                                 | Sostituito `jwt_service = JWTService()` con lazy singleton `_get_jwt_service()`. L'istanza viene creata solo alla prima chiamata, non all'import. | done | Test in `tests/unit/test_permissions.py` verificano lazy init, caching e assenza di init a import |
-| M3 | **Router oauth2_advanced non montato** — Revocation/introspection irraggiungibili.               | `authglow/main.py`                                             | Aggiunto `include_router(oauth2_advanced_router)` in `main.py`. | done |      |
-| M4 | **Timezone handling inconsistente** — `utcnow()` (naive) vs `now(timezone.utc)` (aware). | Tutto il codebase | Creato `authglow/core/datetime.py` con `utcnow()` che ritorna `datetime.now(timezone.utc)`. Sostituiti tutti i `datetime.utcnow()` con `utcnow()` e `default_factory=datetime.utcnow` con `default_factory=utcnow` in modelli Pydantic. Test M4 aggiornato e invertito per verificare assenza di `datetime.utcnow()`. | done | 177 test passano; 1 fail preesistente (oauth2 scope) |
-| M5 | **I/O sincrono in funzioni async** — `fsspec` blocca l'event loop.                               | `authglow/services/storage.py`, `session.py`, `audit.py`, ecc. | Creato `authglow/core/async_io.py` con `AsyncFileSystem` wrapper (`asyncio.to_thread()`). Tutti i 16 file con I/O sincrono convertiti ad async. Test aggiornati. | done | vedi `authglow/core/async_io.py`; 203/204 test passano (1 fail preesistente oauth2 scope) |
-| M6 | **Race conditions nello storage** — Pattern read-modify-write senza atomicità. | `storage.py`, `refresh_token.py`, `oauth2.py`, ecc. | Due layer di protezione: (1) `AsyncNamedLock` in `core/concurrency.py` per serializzare RMW in-process, (2) `read_json_versioned`/`write_json_versioned` in `core/async_io.py` con CAS ottimistico per cross-process defense-in-depth. Tutti i 12 service con RMW aggiornati. | done | Vedi `authglow/core/concurrency.py` e `authglow/core/async_io.py` |
-| M7 | **Admin carica tutto in memoria** — `limit=10000` utenti e log causa OOM.                        | `authglow/api/admin.py`                                        | Paginato correttamente con query offset/limit. `UserStorage.count_users()` e `get_user_stats()` per statistiche senza caricare tutto. `AuditService.get_user_login_counts()` per conteggi per-user. `RefreshTokenService.list_all_tokens()` aggiunto (era mancante, crash runtime). `PaginatedResponse` per risposte paginate. `search_users` usa filtri server-side. Eventuali `limit=10000` rimossi. Setup endpoints usano `count_users()` invece di `list_users`. | done | 234/235 test passano (1 fail preesistente oauth2 scope) |
-| M8 | **Nessun test** — Zero test nel repository.                                                      | —                                                              | Aggiunti 12 nuovi file di test unitari per tutti i moduli sorgente senza copertura (session, password_reset, oauth_client, oauth_consent, email_verification, rbac, user_profile, security_notifications, oidc, core/password, email_subsystem) + estensione di test_permissions.py. Fix bug `password_hash` → `hashed_password` in user_profile.py. 436 test totali, 435 passano (1 fail preesistente oauth2 scope). | done | Test coverage da 0% a ~80%+ dei moduli sorgente |
-
-## MAINTENANCE — Dipendenze & Tooling
-
-| #  | Problema                                                                                                                                | Azione richiesta                                       | Stato   | Note                                                                                                                         |
-|----|-----------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------|
-| D1 | **Migrare gestione dipendenze a uv compile** — Creato `requirements.in` top-level; `requirements.txt` ora generato da `uv pip compile`. | Aggiornare `requirements.txt` e testare compatibilità. | done    | `uv pip compile --upgrade requirements.in -o requirements.txt --python-version 3.13 --python-platform linux`. Aggiornati: `python-multipart 0.0.28→0.0.29`, `decorator 5.2.1→5.3.0`. Dockerfile aggiornato a `python:3.13-slim`. 435/436 test passano (1 fail preesistente oauth2 scope). |
-| D2 | **Valutare sostituzione passlib** — Passlib 1.7.4 è ormai unmaintained.                                                                 | Rimuovere passlib e python-jose (entrambe dipendenze morte, zero import nel codebase). Rimpiazzate da bcrypt diretto (già in uso) e PyJWT (già in uso). | done    | 4 pacchetti rimossi: `passlib`, `python-jose`, `ecdsa`, `rsa`. Nessuna modifica al codice sorgente necessaria. 100→96 pacchetti nel lockfile. 435/436 test passano (1 fail preesistente oauth2 scope). |
-| D3 | **Aggiungere type checking / linting** — Assicurarsi che `mypy` e `ruff` passino.                                                       | Aggiungere config in `pyproject.toml` se mancante.     | pending |                                                                                                                              |
+- [ ] **S4 — CORS misconfiguration: credentials + wildcard headers**
+  - File: `.env:90,96`, `authglow/core/config.py`
+  - Problema: `CORS_ALLOW_CREDENTIALS=true` + `CORS_ALLOWED_HEADERS=*`. I browser rifiutano questa combinazione
+    (viola lo standard fetch). Headers `*` viene ignorato quando `credentials=true`.
+  - Fix: specificare header esplicitamente (`Authorization, Content-Type, X-Requested-With`) oppure
+    impostare `CORS_ALLOW_CREDENTIALS=false` se non si usano cookie cross-origin. Aggiungere un warning
+    di startup se la combinazione è rilevata.
 
 ---
 
-## Dipendenze da aggiornare
+## HIGH — Sicurezza
 
-| Pacchetto         | Attuale      | Ultima  | Note                               |
-|-------------------|--------------|---------|------------------------------------|
-| fastapi           | **0.136.1**  | Lockato |                                    |
-| uvicorn           | **0.47.0**   | Lockato |                                    |
-| python-multipart  | **0.0.29**   | Lockato |                                    |
-| pyjwt             | **2.12.1**   | Lockato |                                    |
-| bcrypt            | **5.0.0**    | Lockato | Usato direttamente per password/MFA/API key hashing |
-| cryptography      | **48.0.0**   | Lockato |                                    |
-| webauthn          | **2.7.1**    | Lockato |                                    |
-| fsspec            | **2026.4.0** | Lockato |                                    |
-| s3fs              | **2026.4.0** | Lockato |                                    |
-| gcsfs             | **2026.5.0** | Lockato |                                    |
-| adlfs             | **2026.5.0** | Lockato |                                    |
-| pydantic          | **2.13.4**   | Lockato |                                    |
-| pydantic-settings | **2.14.1**   | Lockato |                                    |
-| python-dotenv     | **1.2.2**    | Lockato |                                    |
+- [ ] **S5 — Chiave privata RSA in chiaro su disco**
+  - File: `authglow/core/config.py`, `data/keys/private_key.pem`
+  - Problema: `_generate_rsa_keys()` in `config.py` genera chiavi RSA 2048-bit e le salva senza cifratura
+    in `data/keys/`. Se il filesystem viene compromesso, l'attaccante può firmare token arbitrari.
+  - Fix opzioni:
+    1. Cifrare la private key a riposo con AES-256-GCM usando `SECRET_KEY` (stesso schema di `crypto.py`).
+    2. In cloud, usare KMS (AWS KMS, GCP KMS, Azure Key Vault).
+    3. Caricare chiave da variabili d'ambiente invece che da file.
+    4. Short-term: documentare che `data/keys/` deve avere permessi `0600`.
+
+- [ ] **S6 — Security headers assenti**
+  - File: `authglow/main.py`
+  - Problema: nessun middleware che aggiunge header di sicurezza.
+  - Fix: aggiungere middleware (o usare libreria come `secure`) per:
+    - `Content-Security-Policy`: `default-src 'self'`
+    - `X-Frame-Options`: `DENY`
+    - `X-Content-Type-Options`: `nosniff`
+    - `Strict-Transport-Security`: `max-age=31536000; includeSubDomains` (solo in produzione)
+    - `Referrer-Policy`: `strict-origin-when-cross-origin`
+    - `X-XSS-Protection`: `0` (deprecato, CSP lo sostituisce)
+
+- [ ] **S7 — Bug `change_password`: argomenti errati a `send_password_changed_alert`**
+  - File: `authglow/services/user_profile.py`
+  - Problema: chiama `self.security_service.send_password_changed_alert(user.email, user.first_name or "User", ip_address)`
+    ma il metodo in `security_notifications.py` si aspetta `(user: User, ip_address: str)`.
+    Causa errore runtime quando l'alert viene inviato.
+  - Fix: passare `(user, ip_address)` invece di `(user.email, user.first_name or "User", ip_address)`.
+
+- [ ] **S8 — Nessun limite dimensione body richieste**
+  - File: `authglow/main.py`
+  - Problema: FastAPI/Starlette non impone limiti espliciti. Un attaccante può inviare payload enormi.
+  - Fix: aggiungere `request.max_body_size` o middleware che limita `Content-Length` a ~10 MB.
+    Opzioni: Starlette `MaximumContentLengthMiddleware` o `nginx` a monte.
 
 ---
 
-## Checklist rapida per sessione
+## MEDIUM — Sicurezza
 
-- [x] C1 — JWT exp validation
-- [x] C2 — MFA trusted device fingerprint
-- [x] C3 — MFA backup code fix
-- [x] C4 — Token endpoint client auth
-- [x] C5 — Password hashing UTF-8 fix
-- [x] C6 — Replace UUID4 with secrets.token_urlsafe
-- [x] H1 — Encrypt TOTP secrets
-- [x] H2 — Wire up SlowAPI limiter
-- [x] H3 — API key O(n) fix
-- [x] H4 — Setup endpoint rate limit
-- [x] H5 — CORS headers parsing
-- [x] H6 — Passkey exclude_credentials
-- [x] H7 — Passkey base64url parsing
-- [x] M1 — Audit log exact event_type match
-- [x] M2 — Lazy JWTService init
-- [x] M3 — Mount oauth2_advanced router
-- [x] M4 — Consistent timezone usage
-- [x] M5 — Async fsspec I/O
-- [x] M6 — Storage race conditions
-- [x] M7 — Admin pagination
-- [x] M8 — Add tests
-- [x] D1 — Update dependencies
-- [x] D2 — Remove passlib + python-jose
-- [ ] D3 — Add lint/typecheck config
+- [ ] **S9 — Timing side-channel su lookup email**
+  - File: `authglow/services/storage.py:get_user_by_email()`
+  - Problema: il lookup via `email_index.json` non è constant-time. Un attaccante potrebbe dedurre
+    l'esistenza di un'email misurando i tempi di risposta.
+  - Fix: parzialmente mitigato dal rate limiting. Per una protezione completa, usare un tempo
+    di risposta costante indipendentemente dal risultato (es. aggiungere un `await asyncio.sleep(random_ms)`
+    o fare sempre hash lookup anche quando l'email non esiste).
+
+- [ ] **S10 — Audit log contiene PII queryabile**
+  - File: `authglow/services/audit.py`, `authglow/api/admin.py`
+  - Problema: email in chiaro nei log di audit, esposte via API admin. Rischio GDPR.
+  - Fix:
+    1. Aggiungere retention policy configurabile (`AUDIT_LOG_RETENTION_DAYS=365`).
+    2. Opzionalmente pseudonimizzare (hash dell'email con `SECRET_KEY`) per i log più vecchi di X giorni.
+    3. Documentare la necessità di un DPA se usato in produzione EU.
+
+- [ ] **S11 — No HTTPS enforcement**
+  - File: `authglow/main.py`, `.env`
+  - Problema: l'app non forza HTTPS. In produzione dipende dal reverse proxy (nginx/ALB).
+  - Fix:
+    1. In produzione: middleware `HTTPSRedirectMiddleware` condizionale su `APP_ENV=production`.
+    2. Documentare che in development si usa HTTP, in produzione serve reverse proxy con TLS.
+
+- [ ] **S12 — Nessun lockout per brute-force API key**
+  - File: `authglow/services/api_key.py`
+  - Problema: a differenza del login utente, non c'è protezione brute-force sullo scambio API key → JWT.
+    Rate limiting globale c'è (`5/min` su `/api/token/api-key`) ma nessun lockout per key.
+  - Fix: implementare contatore `failed_api_key_attempts` per key (o per IP) con lockout temporaneo.
+    Alternativa: aumentare il rate limit a livello IP con finestre più aggressive.
+
+---
+
+## HIGH — Performance
+
+- [ ] **P1 — Lookup refresh token O(n) glob + bcrypt**
+  - File: `authglow/services/refresh_token.py:get_refresh_token()`
+  - Problema: per validare UN refresh token, fa glob di TUTTI i file in `refresh_tokens/` e
+    bcrypt-compara ogni token. Con migliaia di token attivi, ogni richiesta fa centinaia di bcrypt.
+  - Fix: aggiungere un prefix index come per le API key:
+    - `refresh_tokens/index/{prefix}.json` → lista di `token_id` candidati.
+    - Prendere i primi 12 caratteri del token come prefix.
+    - `validate_and_rotate()` carica solo i token_id nel file indice e bcrypt-compara solo quelli.
+
+- [ ] **P2 — Audit log scan completo su ogni query**
+  - File: `authglow/services/audit.py` (`get_logs`, `get_event_counts_by_type`, `get_logs_by_date`, `get_user_login_counts`)
+  - Problema: ogni query fa glob di TUTTI i file di audit. Su 1 anno di log, centinaia di file JSON.
+    `get_user_login_counts()` è particolarmente lento: carica tutti i log, estrae email, conta.
+  - Fix: creare indici mensili:
+    - `audit/index/YYYY-MM/event_types.json` → mappa `event_type` → conteggio.
+    - `audit/index/YYYY-MM/users.json` → mappa `user_email` → conteggio login.
+    - Aggiornare gli indici in append quando si scrive un evento.
+    - `get_logs` può ancora fare glob ma limitato al mese richiesto (i file sono già organizzati per `YYYY/MM/`).
+
+---
+
+## MEDIUM — Performance
+
+- [ ] **P3 — Verifica password reset token O(n) bcrypt**
+  - File: `authglow/services/password_reset.py:verify_token()`
+  - Problema: per validare UN token, itera tutti i token di reset e fa bcrypt su ciascuno.
+    Con centinaia di token pendenti diventa problematico.
+  - Fix: usare `hmac.digest(SECRET_KEY, token_raw, 'sha256')` come lookup key.
+    Salvare nei metadati del token: `token_hash = hmac_sha256(token_raw)`.
+    Cercare per `token_hash` invece di iterare tutto. Il bcrypt serve ancora per verifica
+    (defense-in-depth) ma si fa 1 bcrypt invece di N.
+
+- [ ] **P4 — Admin sessions carica 5x page size**
+  - File: `authglow/api/admin.py` (vista admin sessions)
+  - Problema: `list_all_tokens(active_only=True, limit=limit*5, offset=0)` carica fino a 5 pagine
+    in memoria per filtrare quelli attivi. Spreco di memoria e I/O.
+  - Fix: implementare un indice per token attivi:
+    - `refresh_tokens/active_index.json` → lista di `token_id` attivi.
+    - Aggiornare l'indice a ogni creazione/rotazione/revoca.
+    - `list_all_tokens(active_only=True)` usa direttamente l'indice.
+
+- [ ] **P5 — Glob invece di lookup diretto nei consensi**
+  - File: `authglow/services/oauth_consent.py:get_user_consent()`
+  - Problema: `get_user_consent(user_id, client_id)` fa glob di tutti i consensi invece di
+    costruire il percorso deterministico `consents/{user_id}/{client_id}.json`.
+  - Fix: usare percorso deterministico. Il glob va bene solo per `get_user_consents()` (lista).
+    Per il singolo lookup, costruire il path: `f"consents/{user_id}/{client_id}.json"`.
+
+- [ ] **P6 — Nessun caching layer (Redis/Memcached)**
+  - File: globale
+  - Problema: ogni richiesta legge da filesystem (o S3/GCS). Con cloud storage la latenza diventa critica.
+  - Fix: pianificato per Phase 5. Aggiungere caching per:
+    - Configurazione UI (`get_ui_context()`)
+    - Chiavi pubbliche JWKS (raramente cambiano)
+    - Sessioni OAuth2 attive
+    - Lookup utente frequenti (read-through cache)
+  - Short-term: `@lru_cache` su `get_ui_context()` e `_ensure_keys_exist()` già esistenti.
+
+- [ ] **P7 — OAuth2ClientStorage I/O non uniforme**
+  - File: `authglow/services/oauth_client.py`
+  - Problema: usa `Path.open()` + `json` direttamente invece dell'`AsyncFileSystem` wrapper usato
+    da tutti gli altri servizi. Nessuna protezione CAS/concorrenza.
+  - Fix: allineare a `AsyncFileSystem` come gli altri 12 servizi. Aggiungere supporto versioned
+    read/write per proteggere da race condition su update client e rotate secret.
+
+---
+
+## Deployment & Tooling
+
+- [ ] **D3 (ereditato da Phase1) — Attivare type checking / linting**
+  - File: `pyproject.toml`
+  - Fix: aggiungere config `[tool.mypy]` e `[tool.ruff]` in `pyproject.toml`. Eseguire `mypy authglow/` e `ruff check authglow/`. Fixare gli errori.
+    Questo avrebbe intercettato S7 (argomenti errati) staticamente.
+
+- [ ] **D4 — Rotazione chiavi RSA (JWK key rotation)**
+  - File: `authglow/services/jwt.py`, `authglow/core/config.py`
+  - Problema: le chiavi RSA non hanno meccanismo di rotazione. Se compromesse, tutti i token
+    esistenti diventano non validabili senza downtime.
+  - Fix: aggiungere `kid` (Key ID) nei JWT. Supportare multiple chiavi con `JWKS.keys[]`.
+    La chiave più recente firma, le vecchie verificano. Rotazione periodica (ogni 90 giorni).
+
+- [ ] **D5 — Backup codes: rate limit dedicato**
+  - File: `authglow/services/mfa.py`, `authglow/api/mfa.py` e `auth.py`
+  - Problema: i tentativi di backup code non hanno rate limiter specifico. 10 tentativi
+    (uno per ogni backup code) potrebbero essere provati rapidamente.
+  - Fix: aggiungere `@limiter.limit("3/minute")` sull'endpoint MFA verify che accetta backup code,
+    con contatore tentativi falliti e cooldown di 30 secondi dopo 3 errori.
+
+---
+
+## Checklist Rapida per Sessione (da compilare)
+
+- [x] S1 — Introspection endpoint auth
+- [ ] S2 — CSRF protection form
+- [ ] S3 — Secret key hardening
+- [ ] S4 — CORS credentials+wildcard fix
+- [ ] S5 — RSA private key encryption
+- [ ] S6 — Security headers middleware
+- [ ] S7 — Bug change_password args
+- [ ] S8 — Request body size limit
+- [ ] S9 — Timing side-channel email lookup
+- [ ] S10 — Audit log PII/GDPR
+- [ ] S11 — HTTPS enforcement
+- [ ] S12 — API key brute-force lockout
+- [ ] P1 — Refresh token prefix index
+- [ ] P2 — Audit log indici mensili
+- [ ] P3 — Password reset HMAC lookup
+- [ ] P4 — Admin sessions active_index
+- [ ] P5 — Consent lookup deterministico
+- [ ] P6 — Caching layer (Phase 5)
+- [ ] P7 — OAuth2ClientStorage AsyncFileSystem
+- [ ] D3 — mypy + ruff config
+- [ ] D4 — JWK key rotation
+- [ ] D5 — Backup code rate limit

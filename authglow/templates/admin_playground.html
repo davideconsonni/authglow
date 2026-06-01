@@ -475,11 +475,20 @@
                                     <label for="introspect-token">Token</label>
                                     <textarea id="introspect-token" placeholder="Access or Refresh Token" rows="3"></textarea>
                                 </div>
+                                <div class="form-group">
+                                    <label for="introspect-client-id">Client ID</label>
+                                    <input type="text" id="introspect-client-id" placeholder="default-client-id">
+                                </div>
+                                <div class="form-group">
+                                    <label for="introspect-client-secret">Client Secret</label>
+                                    <input type="password" id="introspect-client-secret" placeholder="default-client-secret">
+                                </div>
                                 <button onclick="introspectToken()">Introspect Token</button>
                             </div>
                             <details class="curl-example">
                                 <summary>Show cURL Example</summary>
                                 <pre>curl -X POST http://localhost:8000/oauth2/introspect \
+  -u "CLIENT_ID:CLIENT_SECRET" \
   -d "token=YOUR_TOKEN"</pre>
                             </details>
                         </div>
@@ -766,7 +775,13 @@
         }
 
         function introspectToken() {
-            simplePostRequest('/oauth2/introspect', { token: document.getElementById('introspect-token').value });
+            const clientId = document.getElementById('introspect-client-id').value || 'default-client-id';
+            const clientSecret = document.getElementById('introspect-client-secret').value || 'default-client-secret';
+            simplePostRequest('/oauth2/introspect', {
+                token: document.getElementById('introspect-token').value,
+                client_id: clientId,
+                client_secret: clientSecret
+            });
         }
 
         function revokeToken() {

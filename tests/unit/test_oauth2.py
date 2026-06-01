@@ -172,35 +172,14 @@ class TestOAuth2ScopeProcessing:
         assert "profile" in scopes
         assert "email" in scopes
 
-    def test_process_scopes_reject_unknown_strict(self):
-        from authglow.core.config import Settings
-        from unittest.mock import patch
+    def test_process_scopes_reject_unknown_strict(self, oauth2_service):
         import asyncio
 
-        strict_settings = Settings(
-            secret_key="test-secret-key-for-authglow-testing-32chars!",
-            storage_path="/tmp/strict_test",
-            storage_backend="file",
-            password_min_length=8,
-            oauth2_reject_unknown_scopes=True,
-        )
-        from authglow.services.oauth2 import OAuth2Service
+        oauth2_service.settings.oauth2_reject_unknown_scopes = True
 
-        with patch(
-            "authglow.services.oauth2.get_settings", return_value=strict_settings
-        ):
-            with patch(
-                "authglow.services.oauth_client.get_settings",
-                return_value=strict_settings,
-            ):
-                with patch(
-                    "authglow.services.password.get_settings",
-                    return_value=strict_settings,
-                ):
-                    svc = OAuth2Service()
-                    with pytest.raises(ValueError, match="Unauthorized scopes"):
-                        asyncio.get_event_loop().run_until_complete(
-                            svc.process_scopes(
-                                "test-client-id", ["read", "admin_super_secret"]
-                            )
-                        )
+        with pytest.raises(ValueError, match="Unauthorized scopes"):
+            asyncio.get_event_loop().run_until_complete(
+                oauth2_service.process_scopes(
+                    "test-client-id", ["read", "admin_super_secret"]
+                )
+            )
