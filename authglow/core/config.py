@@ -141,6 +141,20 @@ class Settings(BaseSettings):
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
 
+    # Security Headers Settings
+    csp_header: str = "default-src 'self'"
+    x_frame_options: str = "DENY"
+    x_content_type_options: str = "nosniff"
+    referrer_policy: str = "strict-origin-when-cross-origin"
+    x_permitted_cross_domain_policies: str = "none"
+    permissions_policy: str = ""
+    hsts_max_age: int = 31536000
+    hsts_include_subdomains: bool = True
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() == "production"
+
     # Passkey/WebAuthn Settings
     passkey_rp_id: str = "localhost"
     passkey_rp_name: str = "AuthGlow"

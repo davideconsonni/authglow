@@ -83,7 +83,7 @@ Usa una sessione per fix, spunta ciò che completi.
     Test: 4 test S5 in `tests/unit/test_config.py` (cifratura su disco, roundtrip JWT, chiave pubblica in chiaro,
     verifica che i dati cifrati differiscano dal plaintext).
 
-- [ ] **S6 — Security headers assenti**
+- [x] **S6 — Security headers assenti**
   - File: `authglow/main.py`
   - Problema: nessun middleware che aggiunge header di sicurezza.
   - Fix: aggiungere middleware (o usare libreria come `secure`) per:
@@ -93,6 +93,14 @@ Usa una sessione per fix, spunta ciò che completi.
     - `Strict-Transport-Security`: `max-age=31536000; includeSubDomains` (solo in produzione)
     - `Referrer-Policy`: `strict-origin-when-cross-origin`
     - `X-XSS-Protection`: `0` (deprecato, CSP lo sostituisce)
+  - **Risolto**: Creato `authglow/middleware/security_headers.py` (middleware ASGI puro, no `BaseHTTPMiddleware`).
+    Headers configurati via `Settings` (`.env`): `CSP_HEADER`, `X_FRAME_OPTIONS`, `X_CONTENT_TYPE_OPTIONS`,
+    `REFERRER_POLICY`, `X_PERMITTED_CROSS_DOMAIN_POLICIES`, `PERMISSIONS_POLICY`, `HSTS_MAX_AGE`,
+    `HSTS_INCLUDE_SUBDOMAINS`. HSTS applicato solo quando `APP_ENV=production` (case-insensitive).
+    Il middleware non sovrascrive header già impostati dall'applicazione.
+    Test: 13 unit + 17 integration in `tests/unit/test_security_headers.py` e
+    `tests/integration/test_security_headers.py` (presenza header, HSTS condizionale,
+    customizzazione, override endpoint, websocket ignorato).
 
 - [ ] **S7 — Bug `change_password`: argomenti errati a `send_password_changed_alert`**
   - File: `authglow/services/user_profile.py`
@@ -242,7 +250,7 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] S3 — Secret key hardening
 - [x] S4 — CORS credentials+wildcard fix
 - [x] S5 — RSA private key encryption
-- [ ] S6 — Security headers middleware
+- [x] S6 — Security headers middleware
 - [ ] S7 — Bug change_password args
 - [ ] S8 — Request body size limit
 - [ ] S9 — Timing side-channel email lookup

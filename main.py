@@ -10,6 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.api.auth import router as auth_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.api.mfa import router as mfa_router
@@ -47,6 +48,9 @@ app.add_middleware(
     allow_methods=settings.get_cors_methods(),
     allow_headers=settings.get_cors_headers(),
 )
+
+# Security headers middleware - OWASP-recommended response headers
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="authglow/static"), name="static")
