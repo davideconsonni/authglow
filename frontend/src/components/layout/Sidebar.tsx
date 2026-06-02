@@ -99,10 +99,13 @@ export function Sidebar() {
               </h3>
             )}
             <ul className="space-y-1">
-              {section.items.map((item) => (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
+                {section.items.map((item) => {
+                    const isTopLevel = ['/dashboard', '/admin'].includes(item.to)
+                    return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={isTopLevel}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
@@ -118,7 +121,7 @@ export function Sidebar() {
                     {!collapsed && <span>{item.label}</span>}
                   </NavLink>
                 </li>
-              ))}
+              )})}
             </ul>
           </div>
         ))}

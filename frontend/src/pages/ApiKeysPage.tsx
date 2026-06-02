@@ -3,6 +3,7 @@ import { Plus, Trash2, Copy, Check, Key, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { CopyButton } from '@/components/shared/CopyButton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 
@@ -161,7 +162,12 @@ export function ApiKeysPage() {
                 {keys.map((k) => (
                   <tr key={k.id} className="hover:bg-surface-2/50">
                     <td className="px-6 py-3 text-sm font-medium text-text-primary">{k.name}</td>
-                    <td className="px-6 py-3"><code className="text-xs text-text-muted">{k.key_prefix}...</code></td>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
+                        {k.key_prefix && <CopyButton text={k.key_prefix} />}
+                      </div>
+                    </td>
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap gap-1">
                         {k.scopes.map((s) => (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Loader2, Save, Shield, Edit, Calendar, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, Save, Shield, Edit } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -18,13 +18,6 @@ interface Role {
   description: string
   permissions: Permission[]
   is_system: boolean
-}
-
-interface UserRole {
-  id: string
-  user_email: string
-  role_name: string
-  expires_at: string | null
 }
 
 export function AdminRbacPage() {
@@ -532,166 +525,155 @@ function UserRoleAssignments({
   const [expiresAt, setExpiresAt] = useState('')
   const [assigning, setAssigning] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
-
-  const { data: assignments, refetch, isLoading } = useApiQuery<UserRole[]>(
-    ['admin-user-roles'],
-    '/api/rbac/user-roles',
-  )
-  const userRoles = Array.isArray(assignments) ? assignments : []
+  const [searchUserId, setSearchUserId] = useState('')
+  const [searched, setSearched] = useState(false)
 
   const { data: allRoles } = useApiQuery<Role[]>(['admin-roles-for-assign'], '/api/rbac/roles')
   const roleOptions = Array.isArray(allRoles) ? allRoles : []
 
+  // Fetch user roles only when searching for a specific user
+  const { data: userRolesRaw, refetch, isLoading } = useApiQuery<any>(
+    searchUserId ? ['user-roles', searchUserId] as string[] : (['user-roles-empty'] as string[]),
+    searchUserId ? `/api/rbac/user-roles/${searchUserId}` : '/api/rbac/user-roles/__none__',
+    { enabled: !!searchUserId },
+  )
+  const userRoles = Array.isArray(userRolesRaw) ? userRolesRaw : []
+
+  const handleSearch = async () => {
+    if (!userEmail.trim()) return
+    try {
+      const res = await api.get<any>(`/api/admin/users/search?q=${encodeURIComponent(userEmail)}&limit=1`)
+      const items = res?.items || (Array.isArray(res) ? res : [])
+      if (items.length > 0) {
+        setSearchUserId(items[0].id)
+        setSearched(true)
+        await refetch()
+      } else {
+        onError('User not found')
+      }
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Failed to find user')
+    }
+  }
+
   const handleAssign = async () => {
-    if (!userEmail || !selectedRole) return
+    if (!searchUserId || !selectedRole) return
     setAssigning(true)
     try {
-      const body: Record<string, unknown> = {
-        user_email: userEmail,
-        role_id: selectedRole,
-      }
-      if (expiresAt) {
-        body.expires_at = expiresAt
-      }
+      const body: Record<string, unknown> = { user_email: userEmail, role_id: selectedRole }
+      if (expiresAt) body.expires_at = expiresAt
       await api.post('/api/rbac/user-roles', body)
-      setUserEmail('')
-      setSelectedRole('')
-      setExpiresAt('')
-      onSuccess('Role assigned successfully.')
+      setSelectedRole(''); setExpiresAt('')
+      onSuccess('Role assigned.')
       await refetch()
     } catch (err: unknown) {
       onError(err instanceof Error ? err.message : 'Failed to assign role')
-    } finally {
-      setAssigning(false)
-    }
+    } finally { setAssigning(false) }
   }
 
   const handleRevoke = async () => {
     if (!revokeId) return
     try {
-      await api.delete(`/api/rbac/user-roles/${revokeId}`)
+      await api.delete(`/api/rbac/user-roles/${searchUserId}/${revokeId}`)
       setRevokeId(null)
       onSuccess('Assignment revoked.')
       await refetch()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to revoke assignment')
+      onError(err instanceof Error ? err.message : 'Failed to revoke')
     }
   }
 
   return (
     <div>
       <h2 className="mb-4 text-lg font-semibold text-text-primary">User Role Assignments</h2>
+      <p className="mb-4 text-xs text-text-muted">Search for a user, see their assigned roles, and manage assignments.</p>
 
-      <div className="mb-6 rounded-2xl border border-surface-2 bg-surface-1 p-4">
+      <div className="mb-4 rounded-2xl border border-surface-2 bg-surface-1 p-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[180px]">
+          <div className="flex-1 min-w-[200px]">
             <label className="mb-1 block text-xs font-medium text-text-muted">User email</label>
             <input
               value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
+              onChange={e => { setUserEmail(e.target.value); setSearchUserId(''); setSearched(false) }}
               placeholder="user@example.com"
-              type="email"
               className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
             />
           </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="mb-1 block text-xs font-medium text-text-muted">Role</label>
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
-            >
-              <option value="">Select a role...</option>
-              {roleOptions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="w-40">
-            <label className="mb-1 flex items-center gap-1 text-xs font-medium text-text-muted">
-              <Calendar size={12} />
-              Expires (optional)
-            </label>
-            <input
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-              type="date"
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
-            />
-          </div>
-          <button
-            onClick={handleAssign}
-            disabled={assigning || !userEmail || !selectedRole}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 h-[42px]"
-          >
-            {assigning ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            Assign
+          <button onClick={handleSearch} disabled={!userEmail.trim()} className="rounded-xl bg-brand-violet/10 px-4 py-2.5 text-sm font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-50">
+            Search
           </button>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-8 text-center">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" />
-        </div>
-      ) : userRoles.length === 0 ? (
-        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center">
-          <Shield className="mx-auto h-6 w-6 text-text-muted" />
-          <h3 className="mt-3 text-sm font-semibold text-text-primary">No role assignments</h3>
-          <p className="mt-1 text-xs text-text-muted">
-            Assign roles to users to grant permissions.
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-surface-2">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-2">
-              {userRoles.map((ur) => (
-                <tr key={ur.id} className="hover:bg-surface-2/50">
-                  <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email}</td>
-                  <td className="px-6 py-3">
-                    <span className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">
-                      {ur.role_name}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">
-                    {ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}
-                  </td>
-                  <td className="px-6 py-3">
-                    <button
-                      onClick={() => setRevokeId(ur.id)}
-                      className="text-text-muted hover:text-semantic-error transition-colors"
-                      title="Revoke assignment"
-                    >
-                      <X size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {searched && searchUserId && (
+        <>
+          <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-surface-2 bg-surface-1 p-4">
+            <div className="flex-1 min-w-[180px]">
+              <label className="mb-1 block text-xs font-medium text-text-muted">Assign role</label>
+              <select
+                value={selectedRole}
+                onChange={e => setSelectedRole(e.target.value)}
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+              >
+                <option value="">Select a role...</option>
+                {roleOptions.map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Expires (optional)</label>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={e => setExpiresAt(e.target.value)}
+                className="rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleAssign}
+              disabled={assigning || !selectedRole}
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50"
+            >
+              {assigning ? <Loader2 size={14} className="animate-spin" /> : null}
+              Assign
+            </button>
+          </div>
 
-      <ConfirmDialog
-        open={!!revokeId}
-        title="Revoke Assignment"
-        message="This will remove the role from the user. They will lose all permissions granted by this role."
-        confirmLabel="Revoke"
-        variant="danger"
-        onConfirm={handleRevoke}
-        onCancel={() => setRevokeId(null)}
-      />
+          {isLoading ? (
+            <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-violet" /></div>
+          ) : userRoles.length === 0 ? (
+            <div className="rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center">
+              <Shield className="mx-auto h-6 w-6 text-text-muted" />
+              <p className="mt-2 text-sm text-text-muted">No roles assigned to this user.</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-surface-2">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                    <th className="px-6 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-2">
+                  {userRoles.map((ur: any) => (
+                    <tr key={ur.id || ur.role_id}>
+                      <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email || userEmail}</td>
+                      <td className="px-6 py-3 text-sm text-text-secondary">{ur.role_name || ur.role_id || '-'}</td>
+                      <td className="px-6 py-3 text-sm text-text-muted">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
+                      <td className="px-6 py-3">
+                        <button onClick={() => setRevokeId(ur.role_id)} className="text-text-muted hover:text-semantic-error" title="Revoke"><Trash2 size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

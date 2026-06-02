@@ -213,3 +213,4 @@ nul
 /frontend/node_modules/
 /frontend/dist/
 ./backend/.idea
+./frontend/.playwright-data

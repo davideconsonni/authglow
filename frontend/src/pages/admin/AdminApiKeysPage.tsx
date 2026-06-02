@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { CopyButton } from '@/components/shared/CopyButton'
 import { formatDateTime } from '@/lib/utils'
 
 interface ApiKeyData {
@@ -219,7 +220,10 @@ export function AdminApiKeysPage() {
                   <td className="px-6 py-3 text-sm text-text-primary">{k.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{k.name}</td>
                   <td className="px-6 py-3">
-                    <code className="text-xs text-text-muted">{k.key_prefix}...</code>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono text-text-secondary">{k.key_prefix}</code>
+                      <CopyButton text={k.key_prefix} />
+                    </div>
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex flex-wrap gap-1">

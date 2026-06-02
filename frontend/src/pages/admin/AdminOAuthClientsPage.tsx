@@ -26,13 +26,12 @@ interface ClientType {
   icon: typeof Globe
   grant_types: string[]
   confidential: boolean
-  needsRedirectUri: boolean
 }
 
 const CLIENT_TYPES: ClientType[] = [
-  { id: 'web', label: 'Web Application', desc: 'Backend server that users log into via browser', icon: Globe, grant_types: ['authorization_code'], confidential: true, needsRedirectUri: true },
-  { id: 'service', label: 'Service / API', desc: 'Machine-to-machine, no user involved', icon: Cog, grant_types: ['client_credentials'], confidential: true, needsRedirectUri: false },
-  { id: 'mobile', label: 'Mobile / SPA', desc: 'No backend, PKCE secured authentication', icon: Smartphone, grant_types: ['authorization_code'], confidential: false, needsRedirectUri: true },
+  { id: 'web', label: 'Web Application', desc: 'Backend server that users log into via browser', icon: Globe, grant_types: ['authorization_code'], confidential: true },
+  { id: 'service', label: 'Service / API', desc: 'Machine-to-machine, no user involved', icon: Cog, grant_types: ['client_credentials'], confidential: true },
+  { id: 'mobile', label: 'Mobile / SPA', desc: 'No backend, PKCE secured authentication', icon: Smartphone, grant_types: ['authorization_code'], confidential: false },
 ]
 
 function friendlyError(raw: string): string {
@@ -70,8 +69,7 @@ export function AdminOAuthClientsPage() {
 
   const selectType = (ct: ClientType) => {
     setClientType(ct)
-    if (!ct.needsRedirectUri) setRedirectUris([])
-    else setRedirectUris([''])
+    setRedirectUris([''])
     setRefreshToken(ct.grant_types.includes('authorization_code'))
     setFormErrors({})
   }
@@ -97,10 +95,8 @@ export function AdminOAuthClientsPage() {
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = 'Application name is required.'
-    if (clientType?.needsRedirectUri) {
-      const uris = redirectUris.map(u => u.trim()).filter(Boolean)
-      if (uris.length === 0) errs.redirect_uris = 'Add at least one redirect URI.'
-    }
+    const uris = redirectUris.map(u => u.trim()).filter(Boolean)
+    if (uris.length === 0) errs.redirect_uris = 'Add at least one redirect URI.'
     setFormErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -109,7 +105,7 @@ export function AdminOAuthClientsPage() {
     if (!clientType || !validateForm()) return
     setSaving(true); setError('')
     try {
-      const uris = clientType.needsRedirectUri ? redirectUris.map(u => u.trim()).filter(Boolean) : []
+      const uris = redirectUris.map(u => u.trim()).filter(Boolean)
       const scopesList = scopes.split(',').map(s => s.trim()).filter(Boolean)
       const grantTypes = refreshToken && !clientType.grant_types.includes('refresh_token')
         ? [...clientType.grant_types, 'refresh_token'] : clientType.grant_types
@@ -173,7 +169,7 @@ export function AdminOAuthClientsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Grant Types</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Redirect URIs</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Status</th>
                 <th className="px-6 py-3" />
@@ -183,7 +179,22 @@ export function AdminOAuthClientsPage() {
               {clients.map((c, idx) => (
                 <tr key={c.client_id || idx} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3 text-sm font-medium text-text-primary">{clientDisplayName(c)}</td>
-                  <td className="px-6 py-3"><code className="text-xs text-text-muted">{c.client_id.slice(0, 16)}...</code></td>
+                  <td className="px-6 py-3">
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono text-text-secondary">{c.client_id}</code>
+                      <CopyButton text={c.client_id} />
+                    </div>
+                  </td>
+                  <td className="px-6 py-3">
+                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                      {(c.redirect_uris || []).slice(0, 2).map(u => (
+                        <span key={u} className="truncate rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] font-mono text-text-secondary" title={u}>
+                          {u.length > 25 ? u.slice(0, 25) + '...' : u}
+                        </span>
+                      ))}
+                      {(c.redirect_uris || []).length > 2 && <span className="text-[10px] text-text-muted">+{c.redirect_uris.length - 2} more</span>}
+                    </div>
+                  </td>
                   <td className="px-6 py-3"><div className="flex flex-wrap gap-1">{clientGrantTypes(c).map(g => <span key={g} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{g}</span>)}</div></td>
                   <td className="px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
                   <td className="px-6 py-3">
@@ -271,21 +282,19 @@ export function AdminOAuthClientsPage() {
                   {formErrors.name && <p className="mt-1 text-xs text-semantic-error">{formErrors.name}</p>}
                 </div>
 
-                {clientType.needsRedirectUri && (
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-secondary">Redirect URIs <span className="text-semantic-error">*</span></label>
-                    <div className="space-y-2">
-                      {redirectUris.map((uri, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/callback${redirectUris.length > 1 ? ` ${i+1}` : ''}`} className="flex-1 rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 font-mono" />
-                          {redirectUris.length > 1 && <button onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={14} /></button>}
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={addRedirectUri} className="mt-2 text-xs text-brand-violet hover:text-brand-blue font-medium">+ Add another URI</button>
-                    {formErrors.redirect_uris && <p className="mt-1 text-xs text-semantic-error">{formErrors.redirect_uris}</p>}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-secondary">Redirect URIs <span className="text-semantic-error">*</span></label>
+                  <div className="space-y-2">
+                    {redirectUris.map((uri, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/callback${redirectUris.length > 1 ? ` ${i+1}` : ''}`} className="flex-1 rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 font-mono" />
+                        {redirectUris.length > 1 && <button onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={14} /></button>}
+                      </div>
+                    ))}
                   </div>
-                )}
+                  <button onClick={addRedirectUri} className="mt-2 text-xs text-brand-violet hover:text-brand-blue font-medium">+ Add another URI</button>
+                  {formErrors.redirect_uris && <p className="mt-1 text-xs text-semantic-error">{formErrors.redirect_uris}</p>}
+                </div>
 
                 {/* Advanced toggle */}
                 <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex w-full items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-secondary transition-colors">

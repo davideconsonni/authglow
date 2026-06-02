@@ -76,6 +76,7 @@ export function ChangePasswordForm() {
               <div className="relative">
                 <input
                   type={show ? 'text' : 'password'}
+                  autoComplete={field === 'current_password' ? 'current-password' : 'new-password'}
                   {...register(field)}
                   placeholder={placeholder}
                   className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
@@ -91,6 +92,7 @@ export function ChangePasswordForm() {
           <label className="block text-xs text-text-secondary mb-1">Confirm new password</label>
           <input
             type="password"
+            autoComplete="new-password"
             {...register('confirm_password')}
             placeholder="Confirm new password"
             className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"

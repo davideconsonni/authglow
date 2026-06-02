@@ -8,7 +8,6 @@ import { PasskeyManager } from '@/components/profile/PasskeyManager'
 import { ChangePasswordForm } from '@/components/profile/ChangePasswordForm'
 import { ChangeEmailForm } from '@/components/profile/ChangeEmailForm'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { Section } from '@/components/shared/Section'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -25,87 +24,65 @@ export function SecurityPage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <PageHeader
         title="Security"
-        description="Manage authentication, MFA, passkeys, and credentials for your account."
+        description="Two-factor authentication, passkeys, and credentials."
       />
 
-      {/* MFA Status */}
-      <Section
-        title="Two-Factor Authentication (MFA)"
-        description="Add an extra layer of security by requiring a code from your authenticator app."
-        actions={
-          <button
-            onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
-              user?.mfa_enabled
-                ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
-                : 'bg-gradient-cta text-white shadow-glow-violet hover:scale-[1.02] active:scale-[0.98]'
-            }`}
-          >
-            {user?.mfa_enabled ? (showMfaSetup ? 'Hide' : 'Manage MFA') : (showMfaSetup ? 'Cancel' : 'Enable MFA')}
-          </button>
-        }
-      >
-        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-              user?.mfa_enabled ? 'bg-semantic-success/10' : 'bg-surface-2'
-            }`}>
-              <Shield size={24} className={user?.mfa_enabled ? 'text-semantic-success' : 'text-text-muted'} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* COLUMN 1: MFA + Backup Codes */}
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-text-primary">Two-Factor Authentication</h2>
+              <button
+                onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                  user?.mfa_enabled
+                    ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
+                    : 'bg-gradient-cta text-white shadow-glow-violet'
+                }`}
+              >
+                {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}
+              </button>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-text-primary">
-                MFA is {user?.mfa_enabled ? 'enabled' : 'not enabled'}
-              </h3>
-              <p className="text-xs text-text-muted mt-0.5">
-                {user?.mfa_enabled
-                  ? 'Your account is protected with two-factor authentication.'
-                  : 'Enable MFA to protect your account from unauthorized access.'}
-              </p>
+            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
+              <Shield size={20} className={user?.mfa_enabled ? 'text-semantic-success' : 'text-text-muted'} />
+              <div className="flex-1">
+                <p className="text-sm text-text-primary">MFA is {user?.mfa_enabled ? 'enabled' : 'not enabled'}</p>
+                <p className="text-xs text-text-muted">
+                  {user?.mfa_enabled ? 'Account protected with authenticator app codes.' : 'Add protection with Google Authenticator or similar app.'}
+                </p>
+              </div>
+              <StatusBadge status={!!user?.mfa_enabled} trueLabel="On" falseLabel="Off" />
             </div>
-            <StatusBadge
-              status={!!user?.mfa_enabled}
-              trueLabel="Protected"
-              falseLabel="Not protected"
-              trueClass="bg-semantic-success/10 text-semantic-success"
-              falseClass="bg-semantic-warning/10 text-semantic-warning"
-            />
+            {showMfaSetup && <div className="mt-4 border-t border-surface-2 pt-4"><MFAEnrollment /></div>}
           </div>
 
-          {showMfaSetup && (
-            <div className="border-t border-surface-2 pt-6">
-              <MFAEnrollment />
+          {backupCodes.length > 0 && (
+            <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+              <h2 className="text-sm font-semibold text-text-primary mb-4">Backup Codes</h2>
+              <BackupCodes codes={backupCodes} onRegenerate={handleCodesRegenerated} />
             </div>
           )}
         </div>
-      </Section>
 
-      {/* Backup Codes (only when MFA active + codes available) */}
-      {backupCodes.length > 0 && (
-        <Section title="Backup Codes" description="One-time recovery codes. Store them safely.">
-          <BackupCodes codes={backupCodes} onRegenerate={handleCodesRegenerated} />
-        </Section>
-      )}
+        {/* COLUMN 2: Passkeys + Trusted Devices */}
+        <div className="space-y-6">
+          <PasskeyManager />
+          <TrustedDevices />
+        </div>
+      </div>
 
-      {/* Passkeys */}
-      <Section title="Passkeys" description="Passwordless authentication with biometrics or security keys.">
-        <PasskeyManager />
-      </Section>
-
-      {/* Trusted Devices */}
-      <Section title="Trusted Devices" description="Devices that can skip MFA after successful verification.">
-        <TrustedDevices />
-      </Section>
-
-      {/* Credentials */}
-      <Section title="Credentials" description="Update your password and email address.">
+      {/* Credentials — full width, two columns */}
+      <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+        <h2 className="text-sm font-semibold text-text-primary mb-4">Credentials</h2>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ChangePasswordForm />
           <ChangeEmailForm />
         </div>
-      </Section>
+      </div>
     </div>
   )
 }

@@ -101,7 +101,7 @@ function DashCard({ icon: Icon, label, value, color, onClick, action }: {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-text-muted">{label}</p>
-          <p className="text-lg font-bold text-text-primary">{value}</p>
+          <p className="text-lg font-bold text-text-primary truncate">{value}</p>
         </div>
         {action && (
           <ArrowRight size={16} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
