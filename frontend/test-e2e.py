@@ -82,7 +82,7 @@ with sync_playwright() as p:
     body_text = page.text_content("body")
     check("URL is /dashboard", page.url == f"{BASE_URL}/dashboard")
     check("has sidebar", page.locator("aside").first.is_visible())
-    check("shows 'Dashboard Page'", "Dashboard Page" in body_text)
+    check("shows dashboard content", "Dashboard" in body_text)
     check("has 'AuthGlow' brand", "AuthGlow" in body_text)
     check("has admin sections (Users link)", "Users" in body_text)
     check("has user avatar in topbar", "Admin User" in body_text)

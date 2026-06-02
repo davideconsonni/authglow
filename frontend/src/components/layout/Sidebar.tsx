@@ -24,7 +24,6 @@ import { useAuth } from '@/hooks/useAuth'
 interface NavSection {
   label: string
   items: NavItem[]
-  adminOnly?: boolean
 }
 
 interface NavItem {
@@ -38,11 +37,11 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useAuth()
 
-  const isAdmin = user?.roles?.includes('admin') || user?.scopes?.includes('admin')
+  const isAdmin = user?.scopes?.includes('admin')
 
   const sections: NavSection[] = [
     {
-      label: 'Main',
+      label: 'Account',
       items: [
         { label: 'Dashboard', icon: LayoutDashboard, to: ROUTES.DASHBOARD },
         { label: 'Profile', icon: User, to: ROUTES.PROFILE },
@@ -51,25 +50,25 @@ export function Sidebar() {
         { label: 'API Keys', icon: Key, to: ROUTES.API_KEYS },
       ],
     },
-    {
+  ]
+
+  if (isAdmin) {
+    sections.push({
       label: 'Administration',
-      adminOnly: true,
       items: [
-        { label: 'Admin Dashboard', icon: Settings, to: ROUTES.ADMIN.DASHBOARD },
+        { label: 'Overview', icon: Settings, to: ROUTES.ADMIN.DASHBOARD },
         { label: 'Users', icon: Users, to: ROUTES.ADMIN.USERS },
         { label: 'OAuth Clients', icon: Server, to: ROUTES.ADMIN.OAUTH_CLIENTS },
         { label: 'Sessions', icon: Activity, to: ROUTES.ADMIN.SESSIONS },
         { label: 'Consents', icon: FileCheck, to: ROUTES.ADMIN.CONSENTS },
-        { label: 'RBAC', icon: Lock, to: ROUTES.ADMIN.RBAC },
         { label: 'API Keys', icon: Key, to: ROUTES.ADMIN.API_KEYS },
+        { label: 'RBAC', icon: Lock, to: ROUTES.ADMIN.RBAC },
         { label: 'JWK Keys', icon: Shield, to: ROUTES.ADMIN.JWK_KEYS },
         { label: 'Password Resets', icon: Lock, to: ROUTES.ADMIN.PASSWORD_RESETS },
         { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
       ],
-    },
-  ]
-
-  const visibleSections = sections.filter((s) => !s.adminOnly || isAdmin)
+    })
+  }
 
   const sidebarContent = (
     <div
@@ -92,7 +91,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 space-y-6">
-        {visibleSections.map((section) => (
+        {sections.map((section) => (
           <div key={section.label} className="px-3">
             {!collapsed && (
               <h3 className="mb-2 px-4 text-xs font-semibold tracking-wider text-text-muted uppercase">

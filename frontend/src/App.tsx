@@ -11,29 +11,37 @@ import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
 import { OAuthConsentPage } from '@/pages/OAuthConsentPage'
 import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
 import { SecurityPage } from '@/pages/SecurityPage'
+import { DashboardPage } from '@/pages/DashboardPage'
+import { ProfilePage } from '@/pages/ProfilePage'
+import { SessionsPage } from '@/pages/SessionsPage'
+import { ApiKeysPage } from '@/pages/ApiKeysPage'
+import { SetupPage } from '@/pages/SetupPage'
+import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
+import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
+import { AdminOAuthClientsPage } from '@/pages/admin/AdminOAuthClientsPage'
+import { AdminSessionsPage } from '@/pages/admin/AdminSessionsPage'
+import { AdminConsentsPage } from '@/pages/admin/AdminConsentsPage'
+import { AdminApiKeysPage } from '@/pages/admin/AdminApiKeysPage'
+import { AdminRbacPage } from '@/pages/admin/AdminRbacPage'
+import { AdminJwkKeysPage } from '@/pages/admin/AdminJwkKeysPage'
+import { AdminPasswordResetsPage } from '@/pages/admin/AdminPasswordResetsPage'
+import { AdminPlaygroundPage } from '@/pages/admin/AdminPlaygroundPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      retry: 1,
-    },
+    queries: { staleTime: 1000 * 60 * 5, retry: 1 },
   },
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  if (!isAuthenticated) {
-    return <Navigate to={ROUTES.AUTH.LOGIN} replace />
-  }
+  if (!isAuthenticated) return <Navigate to={ROUTES.AUTH.LOGIN} replace />
   return <>{children}</>
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  if (isAuthenticated) {
-    return <Navigate to={ROUTES.DASHBOARD} replace />
-  }
+  if (isAuthenticated) return <Navigate to={ROUTES.DASHBOARD} replace />
   return <>{children}</>
 }
 
@@ -42,77 +50,31 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route
-            path={ROUTES.AUTH.LOGIN}
-            element={
-              <GuestRoute>
-                <LoginPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path={ROUTES.AUTH.REGISTER}
-            element={
-              <GuestRoute>
-                <RegisterPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path={ROUTES.AUTH.FORGOT_PASSWORD}
-            element={
-              <GuestRoute>
-                <ForgotPasswordPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path={ROUTES.AUTH.RESET_PASSWORD}
-            element={
-              <GuestRoute>
-                <ResetPasswordPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path={ROUTES.AUTH.MFA_VERIFY}
-            element={<MFAVerifyPage />}
-          />
-          <Route
-            path={ROUTES.AUTH.VERIFY_EMAIL}
-            element={<EmailVerifiedPage />}
-          />
-          <Route
-            path={ROUTES.OAUTH_CONSENT}
-            element={<OAuthConsentPage />}
-          />
-          <Route
-            path={ROUTES.SETUP}
-            element={<div>Setup Page</div>}
-          />
+          <Route path={ROUTES.AUTH.LOGIN} element={<GuestRoute><LoginPage /></GuestRoute>} />
+          <Route path={ROUTES.AUTH.REGISTER} element={<GuestRoute><RegisterPage /></GuestRoute>} />
+          <Route path={ROUTES.AUTH.FORGOT_PASSWORD} element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
+          <Route path={ROUTES.AUTH.RESET_PASSWORD} element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
+          <Route path={ROUTES.AUTH.MFA_VERIFY} element={<MFAVerifyPage />} />
+          <Route path={ROUTES.AUTH.VERIFY_EMAIL} element={<EmailVerifiedPage />} />
+          <Route path={ROUTES.OAUTH_CONSENT} element={<OAuthConsentPage />} />
+          <Route path={ROUTES.SETUP} element={<SetupPage />} />
 
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          >
-            <Route path={ROUTES.DASHBOARD} element={<div>Dashboard Page</div>} />
-            <Route path={ROUTES.PROFILE} element={<div>Profile Page</div>} />
+          <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
             <Route path={ROUTES.SECURITY} element={<SecurityPage />} />
-            <Route path={ROUTES.SESSIONS} element={<div>Sessions Page</div>} />
-            <Route path={ROUTES.API_KEYS} element={<div>API Keys Page</div>} />
-            <Route path={ROUTES.ADMIN.DASHBOARD} element={<div>Admin Dashboard Page</div>} />
-            <Route path={ROUTES.ADMIN.USERS} element={<div>Admin Users Page</div>} />
-            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<div>Admin OAuth Clients Page</div>} />
-            <Route path={ROUTES.ADMIN.SESSIONS} element={<div>Admin Sessions Page</div>} />
-            <Route path={ROUTES.ADMIN.CONSENTS} element={<div>Admin Consents Page</div>} />
-            <Route path={ROUTES.ADMIN.API_KEYS} element={<div>Admin API Keys Page</div>} />
-            <Route path={ROUTES.ADMIN.RBAC} element={<div>Admin RBAC Page</div>} />
-            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<div>Admin JWK Keys Page</div>} />
-            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<div>Admin Password Resets Page</div>} />
-            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<div>Admin Playground Page</div>} />
+            <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
+            <Route path={ROUTES.API_KEYS} element={<ApiKeysPage />} />
+            <Route path={ROUTES.ADMIN.DASHBOARD} element={<AdminDashboardPage />} />
+            <Route path={ROUTES.ADMIN.USERS} element={<AdminUsersPage />} />
+            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<AdminOAuthClientsPage />} />
+            <Route path={ROUTES.ADMIN.SESSIONS} element={<AdminSessionsPage />} />
+            <Route path={ROUTES.ADMIN.CONSENTS} element={<AdminConsentsPage />} />
+            <Route path={ROUTES.ADMIN.API_KEYS} element={<AdminApiKeysPage />} />
+            <Route path={ROUTES.ADMIN.RBAC} element={<AdminRbacPage />} />
+            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<AdminJwkKeysPage />} />
+            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<AdminPasswordResetsPage />} />
+            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<AdminPlaygroundPage />} />
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />

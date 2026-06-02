@@ -208,11 +208,11 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 > **Specifiche** da [`FEATURES.md` §3] e [`DESIGN.md` §19].  
 > Passkeys visualmente promosse con glow accent e icona sicurezza.
 
-- [ ] **4.1** Installare `@simplewebauthn/browser`
-- [ ] **4.2** `PasskeyManager.tsx` — lista passkey registrate (dispositivo, tipo, transports, data creazione, ultimo uso)
-- [ ] **4.3** Bottone "Aggiungi Passkey" → `POST /api/passkey/register/begin` → `startRegistration()` → `POST /api/passkey/register/complete`
-- [ ] **4.4** `LoginForm` integrato: pulsante "Accedi con Passkey" → `POST /api/passkey/auth/begin` → `startAuthentication()` → JWT
-- [ ] **4.5** Rimozione passkey con conferma dialog
+- [x] **4.1** Installare `@simplewebauthn/browser`
+- [x] **4.2** `PasskeyManager.tsx` — lista passkey registrate (dispositivo, tipo, transports, data creazione, ultimo uso)
+- [x] **4.3** Bottone "Aggiungi Passkey" → `POST /api/passkey/register/begin` → `startRegistration()` → `POST /api/passkey/register/complete`
+- [x] **4.4** `LoginForm` integrato: pulsante "Accedi con Passkey" → `POST /api/passkey/auth/begin` → `startAuthentication()` → JWT
+- [x] **4.5** Rimozione passkey con conferma dialog
 
 ---
 
@@ -232,9 +232,9 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 > **Specifiche** da [`FEATURES.md` §18].
 
-- [ ] **6.1** `SetupPage.tsx` — step 1: `GET /api/setup/check`; se setup già fatto → redirect a login
-- [ ] **6.2** `SetupWizard.tsx` — form email + password admin; validazione password policy; submit → `POST /api/setup/create-admin`
-- [ ] **6.3** Conferma creazione → messaggio success + link a login
+- [x] **6.1** `SetupPage.tsx` — step 1: `GET /api/setup/check`; se setup già fatto → redirect a login
+- [x] **6.2** `SetupWizard.tsx` — form email + password admin; validazione password policy; submit → `POST /api/setup/create-admin`
+- [x] **6.3** Conferma creazione → messaggio success + link a login
 
 ---
 
@@ -242,13 +242,13 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 > **Specifiche** da [`FEATURES.md` §13] e [`DESIGN.md` §20–21].
 
-- [ ] **7.1** `DashboardPage.tsx` — cards: ultimo accesso, stato MFA, sessioni attive, numero API keys; quick actions
-- [ ] **7.2** `ProfilePage.tsx` — form profilo (nome, cognome, avatar URL) con `PATCH /api/profile/me`
-- [ ] **7.3** `ChangePasswordForm.tsx` — password corrente + nuova + conferma; `POST /api/profile/me/change-password`
-- [ ] **7.4** `ChangeEmailForm.tsx` — nuova email + password conferma; `POST /api/profile/me/change-email`
-- [ ] **7.5** `SessionsPage.tsx` — `SessionList` tabella sessioni attive (client, IP, data); bottone revoca singolo + revoca tutti
-- [ ] **7.6** `ApiKeysPage.tsx` — `ApiKeyList` CRUD: crea (nome, scopes, scadenza), lista, revoca, elimina; key in chiaro mostrata solo alla creazione in dialog copia
-- [ ] **7.7** Preferenze utente: `PATCH /api/profile/me/preferences` (tema sempre dark per spec)
+- [x] **7.1** `DashboardPage.tsx` — cards: ultimo accesso, stato MFA, sessioni attive, numero API keys; quick actions
+- [x] **7.2** `ProfilePage.tsx` — form profilo (nome, cognome, avatar URL) con `PATCH /api/profile/me`
+- [x] **7.3** `ChangePasswordForm.tsx` — password corrente + nuova + conferma; `POST /api/profile/me/change-password`
+- [x] **7.4** `ChangeEmailForm.tsx` — nuova email + password conferma; `POST /api/profile/me/change-email`
+- [x] **7.5** `SessionsPage.tsx` — `SessionList` tabella sessioni attive (client, IP, data); bottone revoca singolo + revoca tutti
+- [x] **7.6** `ApiKeysPage.tsx` — `ApiKeyList` CRUD: crea (nome, scopes, scadenza), lista, revoca, elimina; key in chiaro mostrata solo alla creazione in dialog copia
+- [x] **7.7** Preferenze utente: `PATCH /api/profile/me/preferences` (tema sempre dark per spec)
 
 ---
 
@@ -256,29 +256,29 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 > **Specifiche** da [`FEATURES.md` §12].
 
-- [ ] **8.1** `AdminDashboardPage.tsx` — `StatsOverview` (cards: utenti totali, attivi, MFA%, nuovi oggi/settimana/mese) + `StatsTimeseries` (grafico nuovi utenti 30gg con Recharts)
-- [ ] **8.2** `AdminUsersPage.tsx` — ricerca (email, nome), filtri (is_active, mfa_enabled), paginazione server-side
-- [ ] **8.3** `UserTable.tsx` — colonne: nome, email, MFA, attivo, data creazione, azioni
-- [ ] **8.4** `UserDetail.tsx` — drawer/dialog con dettaglio utente: info, scopes, stato MFA, passkeys count, ruoli; azioni: modifica, attiva/disattiva, reset MFA, elimina
-- [ ] **8.5** Bulk operations: seleziona utenti → attiva, disattiva, assegna scope, elimina; dialog conferma con report successi/fallimenti
+- [x] **8.1** `AdminDashboardPage.tsx` — `StatsOverview` (cards: utenti totali, attivi, MFA%, nuovi oggi/settimana/mese) + `StatsTimeseries` (grafico nuovi utenti 30gg con Recharts)
+- [x] **8.2** `AdminUsersPage.tsx` — ricerca (email, nome), filtri (is_active, mfa_enabled), paginazione server-side
+- [x] **8.3** `UserTable.tsx` — colonne: nome, email, MFA, attivo, data creazione, azioni
+- [x] **8.4** `UserDetail.tsx` — drawer/dialog con dettaglio utente: info, scopes, stato MFA, passkeys count, ruoli; azioni: modifica, attiva/disattiva, reset MFA, elimina
+- [x] **8.5** Bulk operations: seleziona utenti → attiva, disattiva, assegna scope, elimina; dialog conferma con report successi/fallimenti
 
 ---
 
 ## Fase 9 — Admin OAuth2 Clients
 
-- [ ] **9.1** `AdminOAuthClientsPage.tsx` — tabella client con colonne: nome, client_id, tipo (confidential/public), redirect URIs, grant types, attivo
-- [ ] **9.2** `OAuthClientForm.tsx` — dialog creazione/modifica client: tutti i campi da `FEATURES.md` §7
-- [ ] **9.3** Rotazione secret: bottone → `POST /api/oauth-clients/{id}/rotate-secret` → mostra nuovo secret una volta sola
-- [ ] **9.4** Attiva/disattiva client con toggle; elimina con conferma
+- [x] **9.1** `AdminOAuthClientsPage.tsx` — tabella client con colonne: nome, client_id, tipo (confidential/public), redirect URIs, grant types, attivo
+- [x] **9.2** `OAuthClientForm.tsx` — dialog creazione/modifica client: tutti i campi da `FEATURES.md` §7
+- [x] **9.3** Rotazione secret: bottone → `POST /api/oauth-clients/{id}/rotate-secret` → mostra nuovo secret una volta sola
+- [x] **9.4** Attiva/disattiva client con toggle; elimina con conferma
 
 ---
 
 ## Fase 10 — Admin Sessioni, Consensi, API Keys, Password Resets
 
-- [ ] **10.1** `AdminSessionsPage.tsx` — tabella sessioni con filtro email, revoca singola, cleanup massivo
-- [ ] **10.2** `AdminConsentsPage.tsx` — tabella consensi con filtro email, revoca
-- [ ] **10.3** `AdminApiKeysPage.tsx` — tabella globale API keys, filtro utente, cleanup scadute
-- [ ] **10.4** `AdminPasswordResetsPage.tsx` — tabella token reset, statistiche, revoca per utente, cleanup
+- [x] **10.1** `AdminSessionsPage.tsx` — tabella sessioni con filtro email, revoca singola, cleanup massivo
+- [x] **10.2** `AdminConsentsPage.tsx` — tabella consensi con filtro email, revoca
+- [x] **10.3** `AdminApiKeysPage.tsx` — tabella globale API keys, filtro utente, cleanup scadute
+- [x] **10.4** `AdminPasswordResetsPage.tsx` — tabella token reset, statistiche, revoca per utente, cleanup
 
 ---
 
@@ -286,18 +286,18 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 > **Specifiche** da [`FEATURES.md` §11].
 
-- [ ] **11.1** `AdminRbacPage.tsx` — tre tab: Permissions, Roles, User Assignments
-- [ ] **11.2** `PermissionTable.tsx` — CRUD permessi (`name`, `description`)
-- [ ] **11.3** `RoleTable.tsx` — CRUD ruoli (`name`, `description`, `permissions` multi-select)
-- [ ] **11.4** Assegnazione ruoli agli utenti: cerca utente, seleziona ruolo, opzionale scadenza
-- [ ] **11.5** Vista permessi effettivi per utente (unione ruoli)
+- [x] **11.1** `AdminRbacPage.tsx` — tre tab: Permissions, Roles, User Assignments
+- [x] **11.2** `PermissionTable.tsx` — CRUD permessi (`name`, `description`)
+- [x] **11.3** `RoleTable.tsx` — CRUD ruoli (`name`, `description`, `permissions` multi-select)
+- [x] **11.4** Assegnazione ruoli agli utenti: cerca utente, seleziona ruolo, opzionale scadenza
+- [x] **11.5** Vista permessi effettivi per utente (unione ruoli)
 
 ---
 
 ## Fase 12 — Admin JWK Keys e Playground
 
-- [ ] **12.1** `AdminJwkKeysPage.tsx` — tabella chiavi JWK: kid, status (active/verifying/revoked), created_at, algoritmo; azioni: ruota, revoca
-- [ ] **12.2** `AdminPlaygroundPage.tsx` — console interattiva per testare endpoint OAuth2/OIDC (simile a quello del vecchio admin HTML ma in React)
+- [x] **12.1** `AdminJwkKeysPage.tsx` — tabella chiavi JWK: kid, status (active/verifying/revoked), created_at, algoritmo; azioni: ruota, revoca
+- [x] **12.2** `AdminPlaygroundPage.tsx` — console interattiva per testare endpoint OAuth2/OIDC (simile a quello del vecchio admin HTML ma in React)
 
 ---
 
@@ -305,28 +305,28 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 > **Specifiche** da [`DESIGN.md` §13,24-25,28-29].
 
-- [ ] **13.1** Tutti gli **empty states**: icona Lucide + spiegazione + CTA primario (es. "Nessun utente ancora. Invita il primo.")
-- [ ] **13.2** Tutti gli **error states**: messaggi friendly, mai stack traces; retry button dove appropriato
-- [ ] **13.3** **Loading skeletons**: per card, tabelle, form (usando `animate-pulse` con colori surface)
-- [ ] **13.4** **Animazioni Framer Motion**:
+- [x] **13.1** Tutti gli **empty states**: icona Lucide + spiegazione + CTA primario (es. "Nessun utente ancora. Invita il primo.")
+- [x] **13.2** Tutti gli **error states**: messaggi friendly, mai stack traces; retry button dove appropriato
+- [x] **13.3** **Loading skeletons**: per card, tabelle, form (usando `animate-pulse` con colori surface)
+- [x] **13.4** **Animazioni Framer Motion**:
   - Page transitions: fade + slide-y 8px, 500ms `ease-out`
   - Stagger children per liste (cards, tabelle) con `staggerChildren: 0.05`
   - Button hover: scale(1.02), active: scale(0.98)
   - Card hover: elevate glow shadow
   - Dialog/Sheet: slide-in da destra/basso
-- [ ] **13.5** **Responsive**: desktop-first con breakpoint sm:640, md:768, lg:1024, xl:1280, 2xl:1536
+- [x] **13.5** **Responsive**: desktop-first con breakpoint sm:640, md:768, lg:1024, xl:1280, 2xl:1536
   - Sidebar → drawer su `<md`
   - Tabelle → stacked cards su `<lg`
   - Auth pages → single column su `<md`
   - PageHeader → wrap su mobile
-- [ ] **13.6** **Accessibilità WCAG AA**:
+- [x] **13.6** **Accessibilità WCAG AA**:
   - Focus ring visibile su tutti gli elementi interattivi (`ring-2 ring-brand-violet`)
   - `aria-label` su icone e pulsanti icon-only
   - `role="alert"` su messaggi errore form
   - Keyboard navigation: Tab/Shift+Tab, Enter/Space per attivare, Escape per chiudere dialog
   - Screen reader: descrizioni per tabelle, grafici, stati vuoti
-- [ ] **13.7** Aggiungere `VITE_API_URL=http://localhost:8000` al `.env` o `.env.example` del frontend
-- [ ] **13.8** Verificare build produzione: `npm run build` senza errori
+- [x] **13.7** Aggiungere `VITE_API_URL=http://localhost:8000` al `.env` o `.env.example` del frontend
+- [x] **13.8** Verificare build produzione: `npm run build` senza errori
 
 ---
 

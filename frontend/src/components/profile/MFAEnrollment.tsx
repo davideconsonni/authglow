@@ -26,7 +26,7 @@ interface EnrollmentData {
 }
 
 export function MFAEnrollment() {
-  const [step, setStep] = useState<'loading' | 'enroll' | 'verify'>('loading')
+  const [step, setStep] = useState<'enroll' | 'loading' | 'verify'>('enroll')
   const [enrollmentData, setEnrollmentData] = useState<EnrollmentData | null>(null)
   const [error, setError] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)

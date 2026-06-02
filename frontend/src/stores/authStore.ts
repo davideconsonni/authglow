@@ -8,6 +8,9 @@ export interface AuthUser {
   first_name: string
   last_name: string
   avatar_url?: string
+  is_active?: boolean
+  created_at?: string
+  email_verified?: boolean
   mfa_enabled: boolean
   roles: string[]
   scopes: string[]
