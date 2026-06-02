@@ -132,7 +132,7 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:block">{sidebarContent}</aside>
+      <aside className="hidden md:block" data-testid="sidebar">{sidebarContent}</aside>
 
       {/* Mobile sidebar overlay */}
       {isMobileOpen && (

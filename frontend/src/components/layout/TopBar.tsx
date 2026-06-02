@@ -43,6 +43,7 @@ export function TopBar() {
             </button>
             <button
               onClick={handleLogout}
+              data-testid="logout-btn"
               className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-semantic-error hover:bg-surface-2 transition-colors rounded-b-xl"
             >
               <LogOut size={16} />

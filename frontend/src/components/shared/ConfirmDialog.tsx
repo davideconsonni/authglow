@@ -25,8 +25,8 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} data-testid="confirm-dialog-backdrop" />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet" data-testid="confirm-dialog">
         <div className="flex items-start gap-4">
           <div
             className={`rounded-xl p-2 ${
@@ -46,12 +46,14 @@ export function ConfirmDialog({
         <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onCancel}
+            data-testid="confirm-dialog-cancel"
             className="rounded-xl bg-surface-2 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
+            data-testid="confirm-dialog-confirm"
             className={`rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors ${
               variant === 'danger'
                 ? 'bg-semantic-error hover:bg-semantic-error/90'

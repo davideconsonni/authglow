@@ -32,7 +32,7 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
             ))}
           </nav>
         )}
-        <h1 className="text-2xl font-bold text-text-primary">{title}</h1>
+        <h1 className="text-2xl font-bold text-text-primary" data-testid="page-title">{title}</h1>
         {description && <p className="text-sm text-text-muted">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-3">{actions}</div>}

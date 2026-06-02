@@ -144,7 +144,7 @@ export function AdminOAuthClientsPage() {
         title="OAuth Clients"
         description="Applications that authenticate users through AuthGlow."
         actions={
-          <button onClick={() => { resetForm(); setShowCreate(true) }} className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]">
+          <button onClick={() => { resetForm(); setShowCreate(true) }} data-testid="create-oauth-client-btn" className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]">
             <Plus size={16} /> Create Client
           </button>
         }
@@ -206,7 +206,7 @@ export function AdminOAuthClientsPage() {
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
                       <button onClick={() => handleRotate(c.client_id)} className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
-                      <button onClick={() => setDeleteId(c.client_id || idx.toString())} className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
+                      <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -222,7 +222,7 @@ export function AdminOAuthClientsPage() {
       {secretModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setSecretModal(null); setNewClientId('') }} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="client-created-secret">
             <h3 className="text-lg font-semibold text-text-primary">{newClientId ? 'Client Created' : 'New Secret'}</h3>
             {newClientId && <p className="text-xs text-text-muted">Client ID: <code className="text-text-secondary">{newClientId}</code></p>}
             <p className="text-xs text-semantic-warning">Copy this secret now. You will not be able to see it again.</p>
@@ -230,7 +230,7 @@ export function AdminOAuthClientsPage() {
               <code className="flex-1 break-all text-sm text-text-primary">{secretModal}</code>
               <CopyButton text={secretModal} label="Copy" />
             </div>
-            <button onClick={() => { setSecretModal(null); setNewClientId('') }} className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
+            <button onClick={() => { setSecretModal(null); setNewClientId('') }} data-testid="client-created-done" className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
           </div>
         </div>
       )}
@@ -250,6 +250,7 @@ export function AdminOAuthClientsPage() {
                   <button
                     key={ct.id}
                     onClick={() => selectType(ct)}
+                    data-testid={`client-type-${ct.id}`}
                     className="flex w-full items-center gap-4 rounded-xl border border-surface-2 bg-bg-secondary p-4 text-left transition-all hover:border-brand-violet/40 hover:bg-surface-1"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-violet/10">
@@ -278,7 +279,7 @@ export function AdminOAuthClientsPage() {
 
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-text-secondary">Name <span className="text-semantic-error">*</span></label>
-                  <input value={name} onChange={e => { setName(e.target.value); setFormErrors({...formErrors, name: ''}) }} placeholder="My Application" className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" autoFocus />
+                  <input value={name} onChange={e => { setName(e.target.value); setFormErrors({...formErrors, name: ''}) }} placeholder="My Application" data-testid="client-name-input" className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" autoFocus />
                   {formErrors.name && <p className="mt-1 text-xs text-semantic-error">{formErrors.name}</p>}
                 </div>
 
@@ -287,7 +288,7 @@ export function AdminOAuthClientsPage() {
                   <div className="space-y-2">
                     {redirectUris.map((uri, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/callback${redirectUris.length > 1 ? ` ${i+1}` : ''}`} className="flex-1 rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 font-mono" />
+                        <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/callback${redirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-uri-input-${i}`} className="flex-1 rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 font-mono" />
                         {redirectUris.length > 1 && <button onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={14} /></button>}
                       </div>
                     ))}
@@ -325,7 +326,7 @@ export function AdminOAuthClientsPage() {
 
                 <div className="flex gap-3 pt-1">
                   <button onClick={() => { setShowCreate(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-                  <button onClick={handleCreate} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
+                  <button onClick={handleCreate} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Create
                   </button>

@@ -96,6 +96,7 @@ export function ApiKeysPage() {
         actions={
           <button
             onClick={() => setShowCreate(true)}
+            data-testid="create-api-key-btn"
             className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus size={16} />
@@ -112,7 +113,7 @@ export function ApiKeysPage() {
           <div className="absolute inset-0 bg-black/50" onClick={closeCreate} />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
             {newKey ? (
-              <div className="space-y-4 text-center">
+              <div className="space-y-4 text-center" data-testid="key-created-display">
                 <h3 className="text-lg font-semibold text-text-primary">API Key Created</h3>
                 <p className="text-xs text-semantic-warning">Copy this key now. It will not be shown again.</p>
                 <div className="flex items-center gap-2 rounded-xl bg-surface-2 p-3">
@@ -121,19 +122,19 @@ export function ApiKeysPage() {
                     {copied ? <Check size={16} className="text-semantic-success" /> : <Copy size={16} />}
                   </button>
                 </div>
-                <button onClick={closeCreate} className="rounded-xl bg-gradient-cta px-6 py-2 text-sm font-semibold text-white">
+                <button onClick={closeCreate} data-testid="key-created-done" className="rounded-xl bg-gradient-cta px-6 py-2 text-sm font-semibold text-white">
                   Done
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4" data-testid="create-key-modal">
                 <h3 className="text-lg font-semibold text-text-primary">Create API Key</h3>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
-                <input value={newScopes} onChange={(e) => setNewScopes(e.target.value)} placeholder="Scopes (comma-separated)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" data-testid="key-name-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <input value={newScopes} onChange={(e) => setNewScopes(e.target.value)} placeholder="Scopes (comma-separated)" data-testid="key-scopes-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <div className="flex gap-3">
                   <button onClick={closeCreate} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-                  <button onClick={handleCreate} disabled={creating} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  <button onClick={handleCreate} disabled={creating} data-testid="key-create-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
                     {creating ? <Loader2 size={16} className="animate-spin" /> : null}
                     Create
                   </button>
@@ -160,7 +161,7 @@ export function ApiKeysPage() {
               </thead>
               <tbody className="divide-y divide-surface-2">
                 {keys.map((k) => (
-                  <tr key={k.id} className="hover:bg-surface-2/50">
+                  <tr key={k.id} className="hover:bg-surface-2/50" data-testid="api-key-row">
                     <td className="px-6 py-3 text-sm font-medium text-text-primary">{k.name}</td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
@@ -180,7 +181,7 @@ export function ApiKeysPage() {
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => setRevokeId(k.id)} className="text-text-muted hover:text-text-secondary transition-colors" aria-label="Revoke key" title="Revoke">
+                        <button onClick={() => setRevokeId(k.id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-text-secondary transition-colors" aria-label="Revoke key" title="Revoke">
                           <Key size={14} />
                         </button>
                         <button onClick={() => setDeleteId(k.id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">

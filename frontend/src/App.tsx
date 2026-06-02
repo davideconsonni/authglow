@@ -1,8 +1,11 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
+import { LoadingState } from '@/components/shared/LoadingState'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
+
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
@@ -10,22 +13,46 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
 import { OAuthConsentPage } from '@/pages/OAuthConsentPage'
 import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
-import { SecurityPage } from '@/pages/SecurityPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { SessionsPage } from '@/pages/SessionsPage'
 import { ApiKeysPage } from '@/pages/ApiKeysPage'
 import { SetupPage } from '@/pages/SetupPage'
-import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
-import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
-import { AdminOAuthClientsPage } from '@/pages/admin/AdminOAuthClientsPage'
-import { AdminSessionsPage } from '@/pages/admin/AdminSessionsPage'
-import { AdminConsentsPage } from '@/pages/admin/AdminConsentsPage'
-import { AdminApiKeysPage } from '@/pages/admin/AdminApiKeysPage'
-import { AdminRbacPage } from '@/pages/admin/AdminRbacPage'
-import { AdminJwkKeysPage } from '@/pages/admin/AdminJwkKeysPage'
-import { AdminPasswordResetsPage } from '@/pages/admin/AdminPasswordResetsPage'
-import { AdminPlaygroundPage } from '@/pages/admin/AdminPlaygroundPage'
+
+const SecurityPage = lazy(() =>
+  import('@/pages/SecurityPage').then((m) => ({ default: m.SecurityPage })),
+)
+
+const AdminDashboardPage = lazy(() =>
+  import('@/pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
+)
+const AdminUsersPage = lazy(() =>
+  import('@/pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
+)
+const AdminOAuthClientsPage = lazy(() =>
+  import('@/pages/admin/AdminOAuthClientsPage').then((m) => ({ default: m.AdminOAuthClientsPage })),
+)
+const AdminSessionsPage = lazy(() =>
+  import('@/pages/admin/AdminSessionsPage').then((m) => ({ default: m.AdminSessionsPage })),
+)
+const AdminConsentsPage = lazy(() =>
+  import('@/pages/admin/AdminConsentsPage').then((m) => ({ default: m.AdminConsentsPage })),
+)
+const AdminApiKeysPage = lazy(() =>
+  import('@/pages/admin/AdminApiKeysPage').then((m) => ({ default: m.AdminApiKeysPage })),
+)
+const AdminRbacPage = lazy(() =>
+  import('@/pages/admin/AdminRbacPage').then((m) => ({ default: m.AdminRbacPage })),
+)
+const AdminJwkKeysPage = lazy(() =>
+  import('@/pages/admin/AdminJwkKeysPage').then((m) => ({ default: m.AdminJwkKeysPage })),
+)
+const AdminPasswordResetsPage = lazy(() =>
+  import('@/pages/admin/AdminPasswordResetsPage').then((m) => ({ default: m.AdminPasswordResetsPage })),
+)
+const AdminPlaygroundPage = lazy(() =>
+  import('@/pages/admin/AdminPlaygroundPage').then((m) => ({ default: m.AdminPlaygroundPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +72,10 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function LazyFallback() {
+  return <LoadingState />
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -62,19 +93,19 @@ function App() {
           <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
-            <Route path={ROUTES.SECURITY} element={<SecurityPage />} />
+            <Route path={ROUTES.SECURITY} element={<Suspense fallback={<LazyFallback />}><SecurityPage /></Suspense>} />
             <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
             <Route path={ROUTES.API_KEYS} element={<ApiKeysPage />} />
-            <Route path={ROUTES.ADMIN.DASHBOARD} element={<AdminDashboardPage />} />
-            <Route path={ROUTES.ADMIN.USERS} element={<AdminUsersPage />} />
-            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<AdminOAuthClientsPage />} />
-            <Route path={ROUTES.ADMIN.SESSIONS} element={<AdminSessionsPage />} />
-            <Route path={ROUTES.ADMIN.CONSENTS} element={<AdminConsentsPage />} />
-            <Route path={ROUTES.ADMIN.API_KEYS} element={<AdminApiKeysPage />} />
-            <Route path={ROUTES.ADMIN.RBAC} element={<AdminRbacPage />} />
-            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<AdminJwkKeysPage />} />
-            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<AdminPasswordResetsPage />} />
-            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<AdminPlaygroundPage />} />
+            <Route path={ROUTES.ADMIN.DASHBOARD} element={<Suspense fallback={<LazyFallback />}><AdminDashboardPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.USERS} element={<Suspense fallback={<LazyFallback />}><AdminUsersPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<Suspense fallback={<LazyFallback />}><AdminOAuthClientsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.SESSIONS} element={<Suspense fallback={<LazyFallback />}><AdminSessionsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.CONSENTS} element={<Suspense fallback={<LazyFallback />}><AdminConsentsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.API_KEYS} element={<Suspense fallback={<LazyFallback />}><AdminApiKeysPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.RBAC} element={<Suspense fallback={<LazyFallback />}><AdminRbacPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<Suspense fallback={<LazyFallback />}><AdminJwkKeysPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense>} />
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
