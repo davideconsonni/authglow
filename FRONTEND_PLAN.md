@@ -194,12 +194,12 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 > **Specifiche** da [`FEATURES.md` §2] e [`DESIGN.md` §18].  
 > Flusso: login → `mfa_required` → MFA page → verify → dashboard.
 
-- [ ] **3.1** `MFAVerifyForm.tsx` — 6 input singoli con auto-focus/auto-tab; supporta anche backup codes (8+ caratteri)
-- [ ] **3.2** `MFAVerifyPage.tsx` — icona sicurezza + form; riceve `session_token` via query; gestisce lockout (3 tentativi, countdown 30s)
-- [ ] **3.3** `SecurityPage.tsx` — hub sicurezza personale: sezioni MFA, backup codes, trusted devices, passkeys, password change
-- [ ] **3.4** `MFAEnrollment.tsx` — step 1: mostra QR code (base64 dal backend) + secret text + 10 backup codes da copiare/salvare; step 2: verifica con primo codice TOTP
-- [ ] **3.5** `BackupCodes.tsx` — lista codici rimanenti (mascherati), bottone rigenera, download, copia
-- [ ] **3.6** `TrustedDevices.tsx` — tabella dispositivi (nome, data, IP), bottone rimuovi
+- [x] **3.1** `MFAVerifyForm.tsx` — 6 input singoli con auto-focus/auto-tab; supporta anche backup codes (8+ caratteri)
+- [x] **3.2** `MFAVerifyPage.tsx` — icona sicurezza + form; riceve `session_token` via query; gestisce lockout (3 tentativi, countdown 30s)
+- [x] **3.3** `SecurityPage.tsx` — hub sicurezza personale: sezioni MFA, backup codes, trusted devices, passkeys, password change
+- [x] **3.4** `MFAEnrollment.tsx` — step 1: mostra QR code (base64 dal backend) + secret text + 10 backup codes da copiare/salvare; step 2: verifica con primo codice TOTP
+- [x] **3.5** `BackupCodes.tsx` — lista codici rimanenti (mascherati), bottone rigenera, download, copia
+- [x] **3.6** `TrustedDevices.tsx` — tabella dispositivi (nome, data, IP), bottone rimuovi
 
 ---
 
@@ -221,10 +221,10 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 > **Specifiche** da [`FEATURES.md` §8] e [`DESIGN.md` §17].  
 > Layout stand-alone (no sidebar), stile auth pages.
 
-- [ ] **5.1** `OAuthConsentPage.tsx` — riceve `session_token` via query
-- [ ] **5.2** `GET /api/oauth2/consent/check` — se già consented → redirect automatico con auth code
-- [ ] **5.3** `ConsentScreen.tsx` — header: logo/nome client + icona sicurezza; body: descrizione client, scope list con icone e descrizioni human-readable; footer: checkbox "Remember", bottoni "Approva" (gradient) / "Nega" (outlined)
-- [ ] **5.4** Risposta API consent: approved → redirect URL con auth code; denied → redirect con error
+- [x] **5.1** `OAuthConsentPage.tsx` — riceve `session_token` via query
+- [x] **5.2** `GET /api/oauth2/consent/check` — se già consented → redirect automatico con auth code
+- [x] **5.3** `ConsentScreen.tsx` — header: logo/nome client + icona sicurezza; body: descrizione client, scope list con icone e descrizioni human-readable; footer: checkbox "Remember", bottoni "Approva" (gradient) / "Nega" (outlined)
+- [x] **5.4** Risposta API consent: approved → redirect URL con auth code; denied → redirect con error
 
 ---
 

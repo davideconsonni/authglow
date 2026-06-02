@@ -51,19 +51,20 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true })
         try {
-          const response = await api.post<{
+          const response = await api.postForm<{
             access_token: string
             refresh_token?: string
+            token_type: string
             mfa_required?: boolean
+            session_token?: string
           }>('/api/token', {
             username: email,
             password,
-            grant_type: 'password',
           })
 
           if (response.mfa_required) {
             set({ isLoading: false })
-            return { mfa_required: true }
+            return { mfa_required: true, session_token: response.session_token } as unknown as { mfa_required: boolean; session_token: string }
           }
 
           set({
@@ -75,9 +76,10 @@ export const useAuthStore = create<AuthStore>()(
 
           await get().fetchCurrentUser()
           return {} as AuthUser
-        } catch {
+        } catch (err) {
           set({ isLoading: false })
-          throw new Error('Login failed')
+          const message = err instanceof Error ? err.message : 'Login failed'
+          throw new Error(message)
         }
       },
 

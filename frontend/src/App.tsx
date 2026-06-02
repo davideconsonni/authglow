@@ -8,6 +8,9 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
+import { OAuthConsentPage } from '@/pages/OAuthConsentPage'
+import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
+import { SecurityPage } from '@/pages/SecurityPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,7 +76,7 @@ function App() {
           />
           <Route
             path={ROUTES.AUTH.MFA_VERIFY}
-            element={<div>MFA Verify Page</div>}
+            element={<MFAVerifyPage />}
           />
           <Route
             path={ROUTES.AUTH.VERIFY_EMAIL}
@@ -81,7 +84,7 @@ function App() {
           />
           <Route
             path={ROUTES.OAUTH_CONSENT}
-            element={<div>OAuth Consent Page</div>}
+            element={<OAuthConsentPage />}
           />
           <Route
             path={ROUTES.SETUP}
@@ -97,7 +100,7 @@ function App() {
           >
             <Route path={ROUTES.DASHBOARD} element={<div>Dashboard Page</div>} />
             <Route path={ROUTES.PROFILE} element={<div>Profile Page</div>} />
-            <Route path={ROUTES.SECURITY} element={<div>Security Page</div>} />
+            <Route path={ROUTES.SECURITY} element={<SecurityPage />} />
             <Route path={ROUTES.SESSIONS} element={<div>Sessions Page</div>} />
             <Route path={ROUTES.API_KEYS} element={<div>API Keys Page</div>} />
             <Route path={ROUTES.ADMIN.DASHBOARD} element={<div>Admin Dashboard Page</div>} />
