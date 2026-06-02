@@ -3,8 +3,6 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
@@ -28,7 +26,6 @@ from authglow.services.storage import UserStorage
 router = APIRouter()
 
 settings = get_settings()
-templates = Jinja2Templates(directory="authglow/templates")
 
 
 def get_reset_service() -> PasswordResetService:
@@ -253,31 +250,6 @@ async def change_password(
     )
 
     return {"message": "Password changed successfully"}
-
-
-# UI endpoints
-
-
-@router.get("/password-reset", include_in_schema=False)
-async def redirect_to_forgot():
-    """Redirect /password-reset to /password/forgot for user convenience."""
-    return RedirectResponse(url="/password/forgot", status_code=status.HTTP_301_MOVED_PERMANENTLY)
-
-
-@router.get("/password/forgot", response_class=HTMLResponse)
-async def forgot_password_page(request: Request):
-    """Forgot password page."""
-    ui_context = settings.ui_context
-    return templates.TemplateResponse(request, "password_forgot.html", context={**ui_context})
-
-
-@router.get("/password/reset", response_class=HTMLResponse)
-async def reset_password_page(request: Request, token: str | None = None):
-    """Reset password page with token."""
-    ui_context = settings.ui_context
-    return templates.TemplateResponse(
-        request, "password_reset.html", context={"token": token, **ui_context}
-    )
 
 
 # Admin endpoints

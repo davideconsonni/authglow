@@ -11,24 +11,6 @@ from authglow.core.cache import (
 from authglow.core.config import Settings
 
 
-class TestUIContextCache:
-    def test_same_object_on_repeated_calls(self, test_settings):
-        ctx1 = test_settings.ui_context
-        ctx2 = test_settings.ui_context
-        assert ctx1 is ctx2
-
-    def test_cache_hit_avoids_rebuild(self, test_settings):
-        ctx1 = test_settings.ui_context
-        ctx1["app_name"] = "Mutated"
-        ctx2 = test_settings.ui_context
-        assert ctx2["app_name"] == "Mutated"
-
-    def test_cached_property_works_across_instances(self, test_settings):
-        ctx = test_settings.ui_context
-        assert isinstance(ctx, dict)
-        assert "app_name" in ctx
-
-
 class TestCacheRegistry:
     def test_singleton_returns_same_dict(self, test_settings):
         with patch("authglow.core.config.get_settings", return_value=test_settings):

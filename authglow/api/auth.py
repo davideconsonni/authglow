@@ -5,9 +5,7 @@ import hashlib
 from typing import NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.templating import Jinja2Templates
 
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_totp_secret
@@ -21,7 +19,6 @@ from authglow.models.user import (
 )
 from authglow.services.api_key import APIKeyLockedException, APIKeyService
 from authglow.services.audit import AuditService
-from authglow.services.csrf import SESSION_ID_COOKIE, CSRFTokenService, get_csrf_service
 from authglow.services.email.factory import get_email_service
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
@@ -34,7 +31,6 @@ from authglow.services.storage import UserStorage
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
-templates = Jinja2Templates(directory="authglow/templates")
 
 
 def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]:
@@ -197,87 +193,8 @@ async def get_current_user(
 # OAuth2 Authorization Code Flow Endpoints
 
 
-@router.get("/oauth2/authorize", response_class=HTMLResponse)
-async def authorize(
-    request: Request,
-    response_type: str,
-    client_id: str,
-    redirect_uri: str,
-    scope: Optional[str] = "read",
-    state: Optional[str] = None,
-    code_challenge: Optional[str] = None,
-    code_challenge_method: Optional[str] = None,
-    nonce: Optional[str] = None,
-    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
-    csrf_service: CSRFTokenService = Depends(get_csrf_service),
-):
-    """OAuth2 authorization endpoint - shows login page."""
-    settings = get_settings()
-
-    # Verify client
-    client = await oauth2_service.client_storage.get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=400, detail="Invalid client_id")
-
-    # Enforce PKCE if required by the client
-    if client.require_pkce and not code_challenge:
-        raise HTTPException(
-            status_code=400,
-            detail="PKCE is required for this client, but code_challenge was not provided.",
-        )
-
-    # Verify redirect_uri is registered for this client
-    if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
-        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
-
-    # Process and validate scopes, handling both space and '+' delimiters
-    requested_scopes = scope.replace("+", " ").split() if scope else []
-    try:
-        processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
-        validated_scope = " ".join(processed_scopes)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid scope")
-
-    if response_type != "code":
-        raise HTTPException(status_code=400, detail="Unsupported response_type")
-
-    # CSRF protection: generate session id and token
-    session_id = request.cookies.get(SESSION_ID_COOKIE)
-    if not session_id:
-        session_id = CSRFTokenService._new_session_id()
-    csrf_token = await csrf_service.generate_token(session_id)
-
-    # Render login page with OAuth2 parameters
-    ui_context = settings.ui_context
-    response = templates.TemplateResponse(
-        request,
-        "login.html",
-        context={
-            **ui_context,
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "scope": validated_scope,
-            "state": state,
-            "password_policy": PasswordValidator().get_policy_description(),
-            "code_challenge": code_challenge,
-            "code_challenge_method": code_challenge_method,
-            "nonce": nonce,
-            "csrf_token": csrf_token,
-        },
-    )
-    response.set_cookie(
-        key=SESSION_ID_COOKIE,
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        max_age=1800,
-    )
-    return response
-
-
 @router.post("/oauth2/authorize")
-@limiter.limit("10/minute")  # Max 10 authorization attempts per minute per IP
+@limiter.limit("10/minute")
 async def authorize_post(
     request: Request,
     email: str = Form(...),
@@ -289,26 +206,17 @@ async def authorize_post(
     code_challenge: Optional[str] = Form(None),
     code_challenge_method: Optional[str] = Form(None),
     nonce: Optional[str] = Form(None),
-    csrf_token: str = Form(...),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
-    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Process login and create authorization code (or MFA challenge)."""
-    # CSRF validation
-    if not await csrf_service.validate_token(
-        request.cookies.get(SESSION_ID_COOKIE, ""), csrf_token
-    ):
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
-
     # Verify client and redirect_uri before processing login
     client = await oauth2_service.client_storage.get_client(client_id)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
-    # Enforce PKCE if required by the client
     if client.require_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
@@ -318,7 +226,6 @@ async def authorize_post(
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
-    # Process and validate scopes
     requested_scopes = scope.split() if scope else []
     try:
         processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
@@ -326,15 +233,12 @@ async def authorize_post(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
 
-    # Authenticate user
     user = await storage.get_user_by_email(email)
     if not user or not verify_password(password, user.hashed_password):
-        # Record failed login attempt if user exists
         if user:
             await storage.record_failed_login(user.id)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Check if account is locked
     if await storage.is_account_locked(user.id):
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -344,20 +248,15 @@ async def authorize_post(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
-    # Reset failed login attempts on successful authentication
     await storage.reset_failed_login_attempts(user.id)
 
-    # Check if MFA is required
     if user.mfa_enabled and user.mfa_verified:
-        # Check if device is trusted
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
         device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
-
         is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
 
         if not is_trusted:
-            # Require MFA - create temporary session
             mfa_session = await session_service.create_mfa_session(
                 user_id=user.id,
                 client_id=client_id,
@@ -369,38 +268,13 @@ async def authorize_post(
                 nonce=nonce,
             )
 
-            # Generate CSRF token for MFA form
-            session_id = request.cookies.get(SESSION_ID_COOKIE)
-            if not session_id:
-                session_id = CSRFTokenService._new_session_id()
-            mfa_csrf_token = await csrf_service.generate_token(session_id)
+            return {
+                "mfa_required": True,
+                "session_token": mfa_session.session_token,
+            }
 
-            # Show MFA verification page
-            settings = get_settings()
-            ui_context = settings.ui_context
-            response = templates.TemplateResponse(
-                request,
-                "mfa_verify.html",
-                context={
-                    **ui_context,
-                    "session_token": mfa_session.session_token,
-                    "csrf_token": mfa_csrf_token,
-                },
-            )
-            response.set_cookie(
-                key=SESSION_ID_COOKIE,
-                value=session_id,
-                httponly=True,
-                samesite="lax",
-                secure=False,
-                max_age=1800,
-            )
-            return response
-
-    # No MFA required or device trusted - proceed with consent
     await storage.update_last_login(user.id)
 
-    # Create consent session and redirect to consent screen
     consent_session = await session_service.create_consent_session(
         user_id=user.id,
         client_id=client_id,
@@ -412,9 +286,10 @@ async def authorize_post(
         nonce=nonce,
     )
 
-    # Redirect to consent screen
-    consent_url = f"/oauth2/consent?session_token={consent_session['session_token']}"
-    return RedirectResponse(url=consent_url, status_code=303)
+    return {
+        "consent_required": True,
+        "consent_url": f"/oauth2/consent?session_token={consent_session['session_token']}",
+    }
 
 
 @router.post("/oauth2/token", response_model=Token)
@@ -900,38 +775,25 @@ async def oauth2_mfa_verify(
     session_token: str = Form(...),
     code: str = Form(...),
     trust_device: bool = Form(False),
-    csrf_token: str = Form(...),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
-    csrf_service: CSRFTokenService = Depends(get_csrf_service),
 ):
     """Verify MFA code and complete OAuth2 authorization."""
-    # CSRF validation
-    if not await csrf_service.validate_token(
-        request.cookies.get(SESSION_ID_COOKIE, ""), csrf_token
-    ):
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
-
-    # Get MFA session
     mfa_session = await session_service.get_mfa_session(session_token)
     if not mfa_session:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    # Get user
     user = await storage.get_user(mfa_session.user_id)
     if not user or not user.mfa_enabled or not user.mfa_verified:
         raise HTTPException(status_code=400, detail="MFA not properly configured")
 
-    # Verify code (try TOTP first, then backup code)
     is_valid = False
 
-    # Try TOTP
     if user.mfa_secret and len(code) == 6:
         is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), code)
 
-    # Try backup code if TOTP failed
     if not is_valid and len(code) >= 8:
         try:
             is_valid = await mfa_service.verify_user_backup_code(user.id, code)
@@ -945,20 +807,16 @@ async def oauth2_mfa_verify(
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
-    # MFA verified successfully
     await storage.update_last_login(user.id)
 
-    # Trust device if requested
     if trust_device:
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
         device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
         await mfa_service.add_trusted_device(user.id, device_fingerprint, "Browser")
 
-    # Delete MFA session
     await session_service.delete_mfa_session(session_token)
 
-    # Process and validate scopes before creating the authorization code
     requested_scopes = mfa_session.scope.split() if mfa_session.scope else []
     try:
         processed_scopes = await oauth2_service.process_scopes(
@@ -968,7 +826,6 @@ async def oauth2_mfa_verify(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
 
-    # Create authorization code
     auth_code = await oauth2_service.create_authorization_code(
         client_id=mfa_session.client_id,
         user_id=user.id,
@@ -979,39 +836,20 @@ async def oauth2_mfa_verify(
         nonce=mfa_session.nonce,
     )
 
-    # Redirect with authorization code
     redirect_url = f"{mfa_session.redirect_uri}?code={auth_code.code}"
     if mfa_session.state:
         redirect_url += f"&state={mfa_session.state}"
 
-    return RedirectResponse(url=redirect_url, status_code=303)
+    return {
+        "authorization_code": auth_code.code,
+        "redirect_url": redirect_url,
+    }
 
 
 @router.get("/api/users/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """Get current user info."""
     return UserResponse(**current_user.model_dump())
-
-
-@router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    """Simple login page (non-OAuth)."""
-    settings = get_settings()
-    return templates.TemplateResponse(request, "simple_login.html", context={**settings.ui_context})
-
-
-@router.get("/passkeys", response_class=HTMLResponse)
-async def passkey_management_page(request: Request):
-    """Passkey management page."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-    return templates.TemplateResponse(
-        request,
-        "passkey_manage.html",
-        context={
-            **ui_context,
-        },
-    )
 
 
 @router.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -1105,27 +943,3 @@ async def list_users(
 
     users, _ = await storage.list_users(limit=limit, offset=offset)
     return [UserResponse(**user.model_dump()) for user in users]
-
-
-# OAuth2 Callback endpoint (for testing)
-@router.get("/callback", response_class=HTMLResponse)
-async def oauth2_callback(
-    request: Request,
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
-):
-    """OAuth2 callback endpoint - displays authorization code for testing."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(
-        request,
-        "callback.html",
-        context={
-            **ui_context,
-            "code": code,
-            "state": state,
-            "error": error,
-        },
-    )

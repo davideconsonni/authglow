@@ -3,18 +3,14 @@
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr
 
-from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.services.password import PasswordValidator, hash_password
 from authglow.services.storage import UserStorage
 
 router = APIRouter(tags=["Setup"])
-templates = Jinja2Templates(directory="authglow/templates")
 
 
 class CreateAdminRequest(BaseModel):
@@ -32,7 +28,6 @@ async def check_setup_needed(request: Request):
     """Check if initial setup is needed."""
     storage = UserStorage()
 
-    # Count users
     try:
         user_count = await storage.count_users()
         needs_setup = user_count == 0
@@ -51,7 +46,6 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
     """Create the initial administrator user."""
     storage = UserStorage()
 
-    # Check if any users exist
     try:
         user_count = await storage.count_users()
         if user_count > 0:
@@ -62,10 +56,8 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
     except HTTPException:
         raise
     except Exception:
-        # If error listing users, assume empty and continue
         pass
 
-    # Validate password
     validator = PasswordValidator()
     is_valid, errors = validator.validate(admin_request.password)
     if not is_valid:
@@ -74,7 +66,6 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
             detail=f"Password validation failed: {'; '.join(errors or [])}",
         )
 
-    # Check if email already exists (shouldn't happen, but safety check)
     existing_user = await storage.get_user_by_email(admin_request.email)
     if existing_user:
         raise HTTPException(
@@ -82,7 +73,6 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
             detail="User with this email already exists",
         )
 
-    # Create admin user
     admin_user = User(
         email=admin_request.email,
         hashed_password=hash_password(admin_request.password),
@@ -90,7 +80,7 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
         last_name=admin_request.last_name,
         scopes=["read", "write", "admin"],
         is_active=True,
-        email_verified=True,  # Auto-verify first admin
+        email_verified=True,
         is_invited=False,
     )
 
@@ -101,23 +91,3 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
         "user_id": admin_user.id,
         "email": admin_user.email,
     }
-
-
-# Setup page route (on root, not under /api)
-@router.get("/setup", response_class=HTMLResponse, include_in_schema=False)
-@limiter.limit("20/minute")
-async def setup_page(request: Request):
-    """Initial setup page."""
-    storage = UserStorage()
-
-    # Check if setup is needed
-    try:
-        user_count = await storage.count_users()
-        if user_count > 0:
-            # Setup already completed, redirect to login
-            return RedirectResponse(url="/login", status_code=302)
-    except Exception:
-        pass  # If error, show setup page
-
-    settings = get_settings()
-    return templates.TemplateResponse(request, "setup.html", context={**settings.ui_context})

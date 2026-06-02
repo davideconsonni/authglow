@@ -1,11 +1,8 @@
 """User profile and account management API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 
 from authglow.api.auth import get_current_user
-from authglow.core.config import get_settings
 from authglow.models.user import User
 from authglow.models.user_profile import (
     ChangeEmailRequest,
@@ -19,31 +16,6 @@ from authglow.models.user_profile import (
 from authglow.services.user_profile import UserProfileService
 
 router = APIRouter(tags=["User Profile"])
-templates = Jinja2Templates(directory="authglow/templates")
-
-
-# Profile Page
-
-
-@router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
-    """User dashboard page."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "dashboard.html", context={**settings.ui_context}
-    )
-
-
-@router.get("/profile", response_class=HTMLResponse)
-async def profile_page(request: Request):
-    """User profile management page."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "profile.html", context={**settings.ui_context}
-    )
-
-
-# Profile API Endpoints
 
 
 @router.get("/api/profile/me", response_model=UserProfileResponse)
@@ -53,13 +25,9 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     profile = await profile_service.get_user_profile(current_user.id)
 
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    # current_user already has the correct scopes from JWT (filtered in get_current_user)
     profile.scopes = current_user.scopes
-    # roles field comes from the profile itself, not from current_user
 
     return profile
 
@@ -73,9 +41,7 @@ async def update_my_profile(
     profile = await profile_service.update_user_profile(current_user.id, profile_update)
 
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     return profile
 
@@ -89,7 +55,6 @@ async def change_my_password(
     """Change current user's password."""
     profile_service = UserProfileService()
 
-    # Get IP address
     ip_address = request.client.host if request.client else None
 
     success, message = await profile_service.change_password(
@@ -114,7 +79,6 @@ async def change_my_email(
     """Change current user's email (requires verification)."""
     profile_service = UserProfileService()
 
-    # Get IP address
     ip_address = request.client.host if request.client else None
 
     success, message = await profile_service.change_email(
@@ -171,9 +135,6 @@ async def reactivate_my_account(current_user: User = Depends(get_current_user)):
     return {"message": message}
 
 
-# User Preferences Endpoints
-
-
 @router.get("/api/profile/me/preferences", response_model=UserPreferences)
 async def get_my_preferences(current_user: User = Depends(get_current_user)):
     """Get current user's preferences."""
@@ -190,8 +151,6 @@ async def update_my_preferences(
 ):
     """Update current user's preferences."""
     profile_service = UserProfileService()
-    preferences = await profile_service.update_user_preferences(
-        current_user.id, preferences_update
-    )
+    preferences = await profile_service.update_user_preferences(current_user.id, preferences_update)
 
     return preferences

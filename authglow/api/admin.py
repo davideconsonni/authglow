@@ -5,8 +5,6 @@ from datetime import timedelta
 from typing import List, Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
@@ -30,7 +28,6 @@ from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
-templates = Jinja2Templates(directory="authglow/templates")
 
 
 def get_user_storage():
@@ -64,54 +61,6 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
-
-
-# Dashboard Pages
-
-
-@router.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request):
-    """Admin dashboard page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(request, "admin_dashboard.html", context={**ui_context})
-
-
-@router.get("/admin/users", response_class=HTMLResponse)
-async def admin_users_page(request: Request):
-    """User management page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(request, "admin_users.html", context={**ui_context})
-
-
-@router.get("/admin/oauth-clients", response_class=HTMLResponse)
-async def admin_oauth_clients_page(request: Request):
-    """OAuth2 clients management page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(request, "admin_oauth_clients.html", context={**ui_context})
-
-
-@router.get("/admin/api-keys", response_class=HTMLResponse)
-async def admin_api_keys_page(request: Request):
-    """API keys management page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(request, "admin_api_keys.html", context={**ui_context})
-
-
-@router.get("/admin/password-resets", response_class=HTMLResponse)
-async def admin_password_resets_page(request: Request):
-    """Password resets management page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(request, "admin_password_resets.html", context={**ui_context})
 
 
 # API Endpoints
@@ -466,43 +415,6 @@ async def bulk_user_operation(
     return results
 
 
-# New admin endpoints for OAuth2 features
-
-
-@router.get("/admin/sessions", response_class=HTMLResponse)
-async def admin_sessions_page(request: Request):
-    """Active sessions management page (auth handled by JS)."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "admin_sessions.html", context={**settings.ui_context}
-    )
-
-
-@router.get("/admin/oauth-consents", response_class=HTMLResponse)
-async def admin_oauth_consents_page(request: Request):
-    """OAuth2 consents management page (auth handled by JS)."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "admin_oauth_consents.html", context={**settings.ui_context}
-    )
-
-
-@router.get("/admin/rbac", response_class=HTMLResponse)
-async def admin_rbac_page(request: Request):
-    """RBAC management page (auth handled by JS)."""
-    settings = get_settings()
-    return templates.TemplateResponse(request, "admin_rbac.html", context={**settings.ui_context})
-
-
-@router.get("/admin/playground", response_class=HTMLResponse)
-async def admin_playground_page(request: Request):
-    """API Playground page for testing OAuth2/OIDC flows (auth handled by JS)."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "admin_playground.html", context={**settings.ui_context}
-    )
-
-
 @router.get("/api/admin/sessions")
 async def get_active_sessions(
     email: Optional[str] = Query(None),
@@ -708,15 +620,6 @@ async def revoke_consent_admin(
 
 
 # --- JWK Key Management ---
-
-
-@router.get("/admin/jwk-keys", response_class=HTMLResponse)
-async def admin_jwk_keys_page(request: Request):
-    """JWK key management page (auth handled by JS)."""
-    settings = get_settings()
-    return templates.TemplateResponse(
-        request, "admin_jwk_keys.html", context={**settings.ui_context}
-    )
 
 
 @router.get("/api/admin/jwk-keys")

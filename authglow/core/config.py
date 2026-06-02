@@ -4,7 +4,7 @@ import json
 import os
 import warnings
 from datetime import datetime, timedelta, timezone
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from typing import Any, Dict, Optional
 
 from cryptography.hazmat.backends import default_backend
@@ -281,24 +281,6 @@ class Settings(BaseSettings):
     # Registration
     allow_public_registration: bool = True
 
-    # UI Customization
-    ui_logo_url: Optional[str] = (
-        "/static/images/authglow_full_dark.png"  # Dark logo for light backgrounds
-    )
-    ui_logo_dark_url: Optional[str] = (
-        "/static/images/authglow_full_light.png"  # Light logo for dark backgrounds
-    )
-    ui_primary_color: str = "#3498DB"
-    ui_secondary_color: str = "#FF3366"
-    ui_background_color: str = "#F8F8F8"
-    ui_background_dark: str = "#1A1A1A"
-    ui_text_color: str = "#2C3E50"
-    ui_text_dark: str = "#F0F0F0"
-    ui_company_name: str = "AuthGlow"
-    ui_support_email: str = "support@example.com"
-    ui_privacy_policy_url: Optional[str] = None
-    ui_terms_of_service_url: Optional[str] = None
-
     # OAuth2 Settings
     oauth2_authorization_code_expire_minutes: int = 10
     oauth2_client_id: str = "default-client-id"
@@ -456,30 +438,6 @@ class Settings(BaseSettings):
         if self.cors_allowed_headers == "*":
             return ["*"]
         return [header.strip() for header in self.cors_allowed_headers.split(",") if header.strip()]
-
-    @cached_property
-    def ui_context(self) -> dict:
-        """Get UI customization context for templates.
-
-        Computed once per Settings instance (singleton via get_settings()),
-        so the same dict object is returned on every access, avoiding
-        repeated allocations across the 27+ call sites.
-        """
-        return {
-            "app_name": self.app_name,
-            "logo_url": self.ui_logo_url,
-            "logo_dark_url": self.ui_logo_dark_url,
-            "primary_color": self.ui_primary_color,
-            "secondary_color": self.ui_secondary_color,
-            "background_color": self.ui_background_color,
-            "background_dark": self.ui_background_dark,
-            "text_color": self.ui_text_color,
-            "text_dark": self.ui_text_dark,
-            "company_name": self.ui_company_name,
-            "support_email": self.ui_support_email,
-            "privacy_policy_url": self.ui_privacy_policy_url,
-            "terms_of_service_url": self.ui_terms_of_service_url,
-        }
 
 
 @lru_cache

@@ -1,10 +1,7 @@
 """Main FastAPI application for AuthGlow."""
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.templating import Jinja2Templates
 
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -28,7 +25,6 @@ from authglow.api.setup import router as setup_router
 from authglow.api.oauth_consent_handler import router as consent_router
 from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 
-# Load settings. Key generation is now handled within the Settings class.
 settings = get_settings()
 
 app = FastAPI(
@@ -40,12 +36,9 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.enable_docs else None,
 )
 
-# Wire up rate limiter
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
-
-# CORS middleware - Configured from environment variables for security
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins(),
@@ -54,20 +47,11 @@ app.add_middleware(
     allow_headers=settings.get_cors_headers(),
 )
 
-# Security headers middleware - OWASP-recommended response headers
 app.add_middleware(SecurityHeadersMiddleware)
-
-# Request body size limiter - rejects payloads exceeding MAX_REQUEST_BODY_SIZE_MB
 app.add_middleware(MaxBodySizeMiddleware)
-
-# HTTPS enforcement - redirects HTTP to HTTPS in production
 app.add_middleware(HttpsEnforcementMiddleware)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="authglow/static"), name="static")
-
-# Include routers
-app.include_router(setup_router, tags=["Setup"])  # Setup first for priority
+app.include_router(setup_router, tags=["Setup"])
 app.include_router(auth_router, tags=["Authentication"])
 app.include_router(mfa_router, tags=["MFA"])
 app.include_router(admin_router, tags=["Admin"])
@@ -82,19 +66,14 @@ app.include_router(user_profile_router, tags=["User Profile"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
 app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 
-templates = Jinja2Templates(directory="authglow/templates")
 
-
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    """Landing page."""
-    ui_context = settings.ui_context
-    return templates.TemplateResponse(request, "landing.html", context={**ui_context})
+@app.get("/")
+async def root():
+    return {"status": "ok", "app": "AuthGlow API"}
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {"status": "healthy"}
 
 
