@@ -514,7 +514,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | `/oauth2/mfa-verify` | POST | — | MFA verification during OAuth2 flow |
 | `/.well-known/openid-configuration` | GET | OIDC | Discovery metadata |
 | `/.well-known/jwks.json` | GET | 7517 | JWK Set |
-| `/oauth2/register` | — | 7591 | (Declared in discovery, not implemented) |
+| `/oauth2/register` | POST | 7591 | Dynamic Client Registration |
 
 ---
 

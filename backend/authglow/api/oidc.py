@@ -2,16 +2,23 @@
 
 import base64
 import os
+from typing import List, Optional
+from urllib.parse import urlparse
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
 from authglow.core.config import get_settings
+from authglow.core.rate_limit import limiter
+from authglow.models.oauth_client import OAuth2Client
 from authglow.models.oidc import JWKSResponse, OpenIDConfiguration, UserInfoResponse
+from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
+from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oidc import OIDCService
 
 router = APIRouter(tags=["OpenID Connect"])
@@ -294,4 +301,146 @@ async def logout_post(credentials: HTTPAuthorizationCredentials = Depends(securi
     return {
         "message": "Logged out successfully",
         "note": "Please delete access and refresh tokens on the client side",
+    }
+
+
+# --- Dynamic Client Registration (RFC 7591) ---
+
+
+class ClientRegistrationRequest(BaseModel):
+    """RFC 7591 Dynamic Client Registration request.
+
+    https://datatracker.ietf.org/doc/html/rfc7591
+    """
+
+    redirect_uris: List[str] = Field(..., min_length=1)
+    client_name: Optional[str] = Field(None, max_length=100)
+    client_uri: Optional[str] = None
+    logo_uri: Optional[str] = None
+    tos_uri: Optional[str] = None
+    policy_uri: Optional[str] = None
+    contacts: Optional[List[str]] = None
+    scope: Optional[str] = None
+    grant_types: Optional[List[str]] = None
+    response_types: Optional[List[str]] = None
+    token_endpoint_auth_method: Optional[str] = "client_secret_basic"
+    software_statement: Optional[str] = None
+
+
+def _validate_redirect_uri(uri: str) -> None:
+    """Validate a redirect URI per RFC 7591 / OAuth2 best practices.
+
+    Allows https always and http only for localhost loopback (RFC 8252).
+    """
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
+
+    if scheme == "https":
+        return
+    if scheme == "http" and host in ("localhost", "127.0.0.1", "::1"):
+        return
+    if scheme in ("http", "https"):
+        raise ValueError(
+            f"redirect_uri '{uri}' must use https (http is only allowed for localhost)"
+        )
+    raise ValueError(f"redirect_uri '{uri}' has invalid scheme '{scheme}'")
+
+
+@router.post("/oauth2/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")
+async def register_oauth_client(
+    request: Request,
+    payload: ClientRegistrationRequest,
+    storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
+    audit_service: AuditService = Depends(lambda: AuditService()),
+):
+    """OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591).
+
+    Creates a new OAuth2 client dynamically. The plaintext client_secret is
+    returned ONLY in this response and cannot be retrieved later.
+    """
+    for uri in payload.redirect_uris:
+        try:
+            _validate_redirect_uri(uri)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
+
+    allowed_grant_types = (
+        payload.grant_types
+        if payload.grant_types is not None
+        else ["authorization_code", "refresh_token"]
+    )
+    invalid_grants = [
+        g
+        for g in allowed_grant_types
+        if g not in ("authorization_code", "implicit", "refresh_token", "client_credentials")
+    ]
+    if invalid_grants:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported grant_type(s): {invalid_grants}",
+        )
+
+    allowed_scopes = payload.scope.split() if payload.scope else ["read"]
+
+    is_confidential = payload.token_endpoint_auth_method != "none"
+
+    plaintext_secret = storage.generate_client_secret()
+
+    client = OAuth2Client(
+        client_name=payload.client_name or "Dynamically Registered Client",
+        client_secret=plaintext_secret,
+        redirect_uris=payload.redirect_uris,
+        allowed_scopes=allowed_scopes,
+        grant_types=allowed_grant_types,
+        is_confidential=is_confidential,
+        require_pkce=not is_confidential,
+        require_consent=True,
+        client_uri=payload.client_uri,
+        logo_uri=payload.logo_uri,
+        terms_uri=payload.tos_uri,
+        privacy_uri=payload.policy_uri,
+        description=None,
+        homepage_uri=payload.client_uri,
+    )
+
+    await storage.create_client(client, plaintext_secret)
+
+    issued_at = int(client.created_at.timestamp())
+
+    try:
+        await audit_service.log_event(
+            event_type="oauth_client_dynamic_registration",
+            user_id=None,
+            email=None,
+            metadata={
+                "client_id": client.client_id,
+                "client_name": client.client_name,
+                "grant_types": allowed_grant_types,
+            },
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
+
+    return {
+        "client_id": client.client_id,
+        "client_id_issued_at": issued_at,
+        "client_secret": plaintext_secret,
+        "client_secret_expires_at": 0,
+        "redirect_uris": client.redirect_uris,
+        "client_name": client.client_name,
+        "client_uri": payload.client_uri,
+        "logo_uri": payload.logo_uri,
+        "tos_uri": payload.tos_uri,
+        "policy_uri": payload.policy_uri,
+        "contacts": payload.contacts or [],
+        "scope": " ".join(allowed_scopes),
+        "grant_types": client.grant_types,
+        "response_types": payload.response_types or ["code"],
+        "token_endpoint_auth_method": payload.token_endpoint_auth_method,
     }
