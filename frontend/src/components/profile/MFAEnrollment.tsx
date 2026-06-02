@@ -20,7 +20,7 @@ const verifySchema = z.object({
 type VerifyFormData = z.infer<typeof verifySchema>
 
 interface EnrollmentData {
-  qr_code_base64: string
+  qr_code: string
   secret: string
   backup_codes: string[]
 }
@@ -131,7 +131,7 @@ export function MFAEnrollment() {
 
         <div className="mt-4 flex justify-center rounded-2xl bg-white p-4">
           <img
-            src={`data:image/png;base64,${enrollmentData.qr_code_base64}`}
+            src={enrollmentData.qr_code}
             alt="MFA QR Code"
             className="h-48 w-48"
           />

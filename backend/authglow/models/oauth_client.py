@@ -85,6 +85,7 @@ class OAuth2ClientUpdate(BaseModel):
     redirect_uris: Optional[List[str]] = None
     allowed_scopes: Optional[List[str]] = None
     grant_types: Optional[List[str]] = None
+    is_confidential: Optional[bool] = None
 
     require_pkce: Optional[bool] = None
     require_consent: Optional[bool] = None

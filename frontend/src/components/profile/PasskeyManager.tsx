@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDateTime } from '@/lib/utils'
 
 interface Passkey {
-  id: string
+  credential_id: string
   name: string
   device_type: string
   transports: string[]
@@ -115,7 +115,7 @@ export function PasskeyManager() {
             const Icon = DEVICE_ICONS[pk.device_type] || DEVICE_ICONS.default
             return (
               <div
-                key={pk.id}
+                key={pk.credential_id}
                 className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
@@ -139,7 +139,7 @@ export function PasskeyManager() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setDeleteId(pk.id)}
+                  onClick={() => setDeleteId(pk.credential_id)}
                   className="text-text-muted hover:text-semantic-error transition-colors"
                   aria-label={`Remove passkey ${pk.name}`}
                 >

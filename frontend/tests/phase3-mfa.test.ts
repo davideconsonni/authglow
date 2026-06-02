@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -47,6 +47,24 @@ describe('Fase 3 — MFA (TOTP, Backup Codes, Trusted Devices)', () => {
     it('MFAEnrollment è importabile', async () => {
       const mod = await import(resolve(SRC, 'components', 'profile', 'MFAEnrollment.tsx'))
       expect(mod.MFAEnrollment).toBeDefined()
+    })
+
+    it('usa il campo qr_code (non qr_code_base64) per matchare il backend', () => {
+      const source = readFileSync(resolve(SRC, 'components', 'profile', 'MFAEnrollment.tsx'), 'utf-8')
+      expect(source).toContain('qr_code: string')
+      expect(source).toContain('enrollmentData.qr_code')
+      expect(source).not.toContain('qr_code_base64')
+    })
+
+    it('usa enrollmentData.qr_code direttamente come src (backend ritorna già il data URL completo)', () => {
+      const source = readFileSync(resolve(SRC, 'components', 'profile', 'MFAEnrollment.tsx'), 'utf-8')
+      expect(source).toContain('src={enrollmentData.qr_code}')
+      expect(source).not.toContain('data:image/png;base64,${enrollmentData.qr_code}')
+    })
+
+    it('chiama /api/mfa/enroll', () => {
+      const source = readFileSync(resolve(SRC, 'components', 'profile', 'MFAEnrollment.tsx'), 'utf-8')
+      expect(source).toContain("'/api/mfa/enroll'")
     })
   })
 

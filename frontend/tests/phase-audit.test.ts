@@ -59,6 +59,121 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
       const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminOAuthClientsPage.tsx'), 'utf-8')
       expect(source).toContain("'Update'")
     })
+
+    it('modal in edit mode NON rende null (regression bug fix)', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminOAuthClientsPage.tsx'), 'utf-8')
+      expect(source).not.toMatch(/editClientId \? null : !clientType/)
+    })
+  })
+
+  describe('AdminOAuthClientsPage — Redesign (Quick start + full form)', () => {
+    const source = () => readFileSync(resolve(SRC, 'pages', 'admin', 'AdminOAuthClientsPage.tsx'), 'utf-8')
+
+    it('esiste e ha il redesign con TEMPLATES', () => {
+      expect(existsSync(resolve(SRC, 'pages', 'admin', 'AdminOAuthClientsPage.tsx'))).toBe(true)
+      const s = source()
+      expect(s).toContain('TEMPLATES')
+      expect(s).toContain('applyTemplate')
+    })
+
+    it('espone 3 quick start template (web, service, mobile)', () => {
+      const s = source()
+      expect(s).toContain("id: 'web'")
+      expect(s).toContain("id: 'service'")
+      expect(s).toContain("id: 'mobile'")
+      expect(s).toContain('data-testid={`template-${t.id}`}')
+    })
+
+    it('Service template ha client_credentials + refresh_token (no redirect_uris)', () => {
+      const s = source()
+      const serviceMatch = s.match(/id: 'service'[\s\S]*?show_redirect_uris: (\w+)/)
+      expect(serviceMatch).toBeTruthy()
+      expect(serviceMatch![1]).toBe('false')
+      expect(s).toMatch(/id: 'service'[\s\S]*?grant_types: \['client_credentials', 'refresh_token'\]/)
+    })
+
+    it('Mobile template ha authorization_code + public + PKCE required', () => {
+      const s = source()
+      expect(s).toMatch(/id: 'mobile'[\s\S]*?grant_types: \['authorization_code', 'refresh_token'\]/)
+      expect(s).toMatch(/id: 'mobile'[\s\S]*?is_confidential: false/)
+      expect(s).toMatch(/id: 'mobile'[\s\S]*?require_pkce: true/)
+    })
+
+    it('redirect_uris è mostrato SOLO se authorization_code è checked', () => {
+      const s = source()
+      expect(s).toContain('showRedirectUris')
+      expect(s).toContain('grantTypes.includes(\'authorization_code\')')
+    })
+
+    it('PKCE è locked a true per public client', () => {
+      const s = source()
+      expect(s).toMatch(/isConfidential \? requirePkce : true/)
+      expect(s).toMatch(/disabled=\{!isConfidential\}/)
+    })
+
+    it('auth_method è disabilitato per public client', () => {
+      const s = source()
+      expect(s).toMatch(/disabled=\{!isConfidential\}/)
+    })
+
+    it('breaking change warning mostrato in edit se cambiano grant_types o is_confidential', () => {
+      const s = source()
+      expect(s).toContain('showBreakingChangeWarning')
+      expect(s).toContain('data-testid="breaking-change-warning"')
+      expect(s).toContain('originalGrantTypes')
+      expect(s).toContain('originalIsConfidential')
+    })
+
+    it('validazione: almeno un grant_type richiesto', () => {
+      const s = source()
+      expect(s).toMatch(/grantTypes\.length === 0.*Select at least one grant type/)
+    })
+
+    it('validazione: redirect_uris richiesti SOLO con authorization_code', () => {
+      const s = source()
+      expect(s).toMatch(/grantTypes\.includes\(.authorization_code.\)[\s\S]*?redirect_uris.*required/)
+    })
+
+    it('invia allowed_scopes (NON scopes) al backend', () => {
+      const s = source()
+      expect(s).toContain('allowed_scopes:')
+      expect(s).not.toMatch(/scopes:\s*scopesList/)
+    })
+
+    it('invia is_confidential in create e update', () => {
+      const s = source()
+      expect(s).toContain('is_confidential: isConfidential')
+    })
+
+    it('invia token_endpoint_auth_method', () => {
+      const s = source()
+      expect(s).toContain('token_endpoint_auth_method: authMethod')
+    })
+
+    it('invia description, homepage_uri, logo_uri, terms_uri, privacy_uri', () => {
+      const s = source()
+      expect(s).toContain('description:')
+      expect(s).toContain('homepage_uri:')
+      expect(s).toContain('logo_uri:')
+      expect(s).toContain('terms_uri:')
+      expect(s).toContain('privacy_uri:')
+    })
+
+    it('invia access_token_lifetime e refresh_token_lifetime', () => {
+      const s = source()
+      expect(s).toContain('access_token_lifetime:')
+      expect(s).toContain('refresh_token_lifetime:')
+    })
+
+    it('campo description presente nel form', () => {
+      const s = source()
+      expect(s).toContain('setDescription(')
+    })
+
+    it('campo access_token_lifetime ha hint sui bounds (300-86400)', () => {
+      const s = source()
+      expect(s).toMatch(/300.*86400/)
+    })
   })
 
   describe('PasskeyLoginButton', () => {
@@ -112,6 +227,14 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
       expect(source).toContain('credential_id: regResult.id')
       expect(source).toContain('client_data_json: regResult.response.clientDataJSON')
       expect(source).toContain('attestation_object: regResult.response.attestationObject')
+    })
+
+    it('usa credential_id (NON id) per matchare il backend PasskeyResponse', () => {
+      const source = readFileSync(resolve(SRC, 'components', 'profile', 'PasskeyManager.tsx'), 'utf-8')
+      expect(source).toContain('credential_id: string')
+      expect(source).toContain('key={pk.credential_id}')
+      expect(source).toContain('setDeleteId(pk.credential_id)')
+      expect(source).not.toMatch(/key=\{pk\.id\}/)
     })
   })
 
