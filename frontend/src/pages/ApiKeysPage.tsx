@@ -160,8 +160,8 @@ export function ApiKeysPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-2">
-                {keys.map((k) => (
-                  <tr key={k.id} className="hover:bg-surface-2/50" data-testid="api-key-row">
+                {keys.map((k, i) => (
+                  <tr key={k.id || i} className="hover:bg-surface-2/50" data-testid="api-key-row">
                     <td className="px-6 py-3 text-sm font-medium text-text-primary">{k.name}</td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">

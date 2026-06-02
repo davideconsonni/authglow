@@ -90,7 +90,7 @@ export function ClientCredentialsFlow() {
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client Secret *</label>
-              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
             </div>
           </div>
           <div>
