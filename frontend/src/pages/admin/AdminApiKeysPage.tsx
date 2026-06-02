@@ -215,8 +215,8 @@ export function AdminApiKeysPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-2">
-              {keys.map((k) => (
-                <tr key={k.id} className={`hover:bg-surface-2/50 ${k.is_revoked ? 'opacity-50' : ''}`}>
+              {keys.map((k, i) => (
+                <tr key={k.id || `key-${i}`} className={`hover:bg-surface-2/50 ${k.is_revoked ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-3 text-sm text-text-primary">{k.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{k.name}</td>
                   <td className="px-6 py-3">
@@ -227,9 +227,9 @@ export function AdminApiKeysPage() {
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {k.scopes?.map((s) => (
+                      {k.scopes?.map((s, si) => (
                         <span
-                          key={s}
+                          key={`${s}-${si}`}
                           className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary"
                         >
                           {s}

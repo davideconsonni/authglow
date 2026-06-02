@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield } from 'lucide-react'
+import { Shield, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { MFAEnrollment } from '@/components/profile/MFAEnrollment'
 import { BackupCodes } from '@/components/profile/BackupCodes'
@@ -8,6 +8,7 @@ import { PasskeyManager } from '@/components/profile/PasskeyManager'
 import { ChangePasswordForm } from '@/components/profile/ChangePasswordForm'
 import { ChangeEmailForm } from '@/components/profile/ChangeEmailForm'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -15,6 +16,8 @@ export function SecurityPage() {
   const { user, fetchCurrentUser } = useAuth()
   const [backupCodes, setBackupCodes] = useState<string[]>([])
   const [showMfaSetup, setShowMfaSetup] = useState(false)
+  const [disableMfa, setDisableMfa] = useState(false)
+  const [error, setError] = useState('')
 
   const handleCodesRegenerated = async () => {
     try {
@@ -23,29 +26,48 @@ export function SecurityPage() {
     } catch {}
   }
 
+  const handleDisableMfa = async () => {
+    setError('')
+    try {
+      await api.delete('/api/mfa/disable')
+      setDisableMfa(false)
+      await fetchCurrentUser()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to disable MFA')
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Security"
-        description="Two-factor authentication, passkeys, and credentials."
-      />
+      <PageHeader title="Security" description="Two-factor authentication, passkeys, and credentials." />
+
+      {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* COLUMN 1: MFA + Backup Codes */}
         <div className="space-y-6">
           <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-text-primary">Two-Factor Authentication</h2>
-              <button
-                onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                  user?.mfa_enabled
-                    ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
-                    : 'bg-gradient-cta text-white shadow-glow-violet'
-                }`}
-              >
-                {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}
-              </button>
+              <div className="flex items-center gap-2">
+                {user?.mfa_enabled && (
+                  <button
+                    onClick={() => setDisableMfa(true)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium border border-semantic-error/30 text-semantic-error hover:bg-semantic-error/10 transition-colors"
+                  >
+                    Disable
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    user?.mfa_enabled && !disableMfa
+                      ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
+                      : 'bg-gradient-cta text-white shadow-glow-violet'
+                  }`}
+                >
+                  {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
               <Shield size={20} className={user?.mfa_enabled ? 'text-semantic-success' : 'text-text-muted'} />
@@ -68,14 +90,12 @@ export function SecurityPage() {
           )}
         </div>
 
-        {/* COLUMN 2: Passkeys + Trusted Devices */}
         <div className="space-y-6">
           <PasskeyManager />
           <TrustedDevices />
         </div>
       </div>
 
-      {/* Credentials — full width, two columns */}
       <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
         <h2 className="text-sm font-semibold text-text-primary mb-4">Credentials</h2>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -83,6 +103,16 @@ export function SecurityPage() {
           <ChangeEmailForm />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={disableMfa}
+        title="Disable Two-Factor Authentication"
+        message="Are you sure? Your account will be less secure without MFA. You can re-enable it at any time."
+        confirmLabel="Disable MFA"
+        variant="danger"
+        onConfirm={handleDisableMfa}
+        onCancel={() => setDisableMfa(false)}
+      />
     </div>
   )
 }

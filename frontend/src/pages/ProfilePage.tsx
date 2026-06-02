@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight } from 'lucide-react'
+import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight, AlertTriangle } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Section } from '@/components/shared/Section'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDateTime } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
 
@@ -38,6 +39,9 @@ export function ProfilePage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [deactivateDialog, setDeactivateDialog] = useState(false)
+  const [deleteDialog, setDeleteDialog] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
 
   const { data: profile } = useApiQuery<UserProfile>(['profile-full-v2'], '/api/users/me')
 
@@ -64,6 +68,36 @@ export function ProfilePage() {
   }
 
   const p = profile || user
+
+  const handleDeactivate = async () => {
+    try {
+      await api.post('/api/profile/me/deactivate')
+      setDeactivateDialog(false)
+      await fetchCurrentUser()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const handleReactivate = async () => {
+    setReactivating(true)
+    try {
+      await api.post('/api/profile/me/reactivate')
+      await fetchCurrentUser()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    } finally { setReactivating(false) }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await api.delete('/api/profile/me')
+      setDeleteDialog(false)
+      // Auth store will handle redirect on next API call
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
 
   return (
     <div className="space-y-10">
@@ -222,6 +256,56 @@ export function ProfilePage() {
           </div>
         </div>
       </Section>
+
+      {/* Danger Zone */}
+      <Section title="Danger Zone" description="Irreversible account actions. Please be careful.">
+        <div className="rounded-2xl border border-semantic-error/20 bg-surface-1 p-6 space-y-4">
+          {p?.is_active ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Deactivate Account</p>
+                <p className="text-xs text-text-muted">Temporarily disable your account. You can reactivate it later.</p>
+              </div>
+              <button
+                onClick={() => setDeactivateDialog(true)}
+                className="rounded-xl border border-semantic-warning/30 px-4 py-2 text-xs font-medium text-semantic-warning hover:bg-semantic-warning/10 transition-colors"
+              >
+                Deactivate
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Account Inactive</p>
+                <p className="text-xs text-text-muted">Your account is currently deactivated.</p>
+              </div>
+              <button
+                onClick={handleReactivate}
+                disabled={reactivating}
+                className="rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50"
+              >
+                {reactivating ? 'Reactivating...' : 'Reactivate'}
+              </button>
+            </div>
+          )}
+
+          <div className="border-t border-surface-2 pt-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-semantic-error">Delete Account</p>
+              <p className="text-xs text-text-muted">Permanently delete your account and all associated data. This cannot be undone.</p>
+            </div>
+            <button
+              onClick={() => setDeleteDialog(true)}
+              className="rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors"
+            >
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </Section>
+
+      <ConfirmDialog open={deactivateDialog} title="Deactivate Account" message="You will be logged out and your account will be inaccessible until reactivated by an administrator." confirmLabel="Deactivate" variant="danger" onConfirm={handleDeactivate} onCancel={() => setDeactivateDialog(false)} />
+      <ConfirmDialog open={deleteDialog} title="Delete Account" message="This will permanently delete your account, data, API keys, and all associated information. This action CANNOT be undone." confirmLabel="Delete Forever" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteDialog(false)} />
     </div>
   )
 }

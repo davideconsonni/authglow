@@ -43,6 +43,9 @@ export function AdminUsersPage() {
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', first_name: '', last_name: '', scopes: '' })
   const [inviting, setInviting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null)
+  const [bulking, setBulking] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -112,7 +115,7 @@ export function AdminUsersPage() {
       const scopes = inviteForm.scopes
         ? inviteForm.scopes.split(',').map((s) => s.trim()).filter(Boolean)
         : []
-      await api.post('/api/admin/users', {
+      await api.post('/api/users/invite', {
         email: inviteForm.email,
         first_name: inviteForm.first_name,
         last_name: inviteForm.last_name,
@@ -127,6 +130,38 @@ export function AdminUsersPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    setSelected(next)
+  }
+
+  const toggleSelectAll = () => {
+    if (selected.size === users.length) setSelected(new Set())
+    else setSelected(new Set(users.map(u => u.id)))
+  }
+
+  const handleBulkAction = async () => {
+    if (selected.size === 0 || !bulkAction) return
+    setBulking(true); setError('')
+    try {
+      const ids = Array.from(selected)
+      if (bulkAction === 'delete') {
+        for (const id of ids) await api.delete(`/api/admin/users/${id}`)
+      } else {
+        await api.post('/api/admin/users/bulk', {
+          user_ids: ids,
+          action: bulkAction === 'activate' ? 'activate' : 'deactivate',
+        })
+      }
+      setSelected(new Set()); setBulkAction(null)
+      setSuccess(`${bulkAction === 'delete' ? 'Deleted' : bulkAction === 'activate' ? 'Activated' : 'Deactivated'} ${ids.length} user${ids.length !== 1 ? 's' : ''}.`)
+      await refetch()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Bulk action failed')
+    } finally { setBulking(false) }
   }
 
   return (
@@ -196,10 +231,35 @@ export function AdminUsersPage() {
         </div>
       ) : (
         <>
+          {selected.size > 0 && (
+            <div className="mb-3 flex items-center gap-3 rounded-xl bg-brand-violet/10 border border-brand-violet/20 px-4 py-3">
+              <span className="text-sm text-brand-violet font-medium">{selected.size} selected</span>
+              <div className="flex gap-2 ml-auto">
+                <button onClick={() => setBulkAction('activate')} disabled={bulking} className="rounded-lg bg-semantic-success/10 px-3 py-1 text-xs font-medium text-semantic-success hover:bg-semantic-success/20 disabled:opacity-50">
+                  Activate
+                </button>
+                <button onClick={() => setBulkAction('deactivate')} disabled={bulking} className="rounded-lg bg-semantic-warning/10 px-3 py-1 text-xs font-medium text-semantic-warning hover:bg-semantic-warning/20 disabled:opacity-50">
+                  Deactivate
+                </button>
+                <button onClick={() => setBulkAction('delete')} disabled={bulking} className="rounded-lg bg-semantic-error/10 px-3 py-1 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 disabled:opacity-50">
+                  Delete
+                </button>
+                <button onClick={() => { setSelected(new Set()); setBulkAction(null) }} className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-text-secondary hover:bg-surface-3">
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-surface-2">
                 <tr>
+                  <th className="px-4 py-3 w-10">
+                    <button onClick={toggleSelectAll} className="rounded p-0.5 text-text-muted hover:text-text-primary">
+                      {selected.size === users.length && users.length > 0 ? '✓' : '☐'}
+                    </button>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">MFA</th>
@@ -211,7 +271,12 @@ export function AdminUsersPage() {
               </thead>
               <tbody className="divide-y divide-surface-2">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-surface-2/50">
+                  <tr key={u.id} className={`hover:bg-surface-2/50 ${selected.has(u.id) ? 'bg-brand-violet/5' : ''}`}>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleSelect(u.id)} className="rounded p-0.5 text-text-muted hover:text-text-primary">
+                        {selected.has(u.id) ? '✓' : '☐'}
+                      </button>
+                    </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
                         <UserAvatar first={u.first_name} last={u.last_name} />

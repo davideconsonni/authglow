@@ -674,6 +674,16 @@ function UserRoleAssignments({
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={!!revokeId}
+        title="Revoke Role Assignment"
+        message="The user will lose all permissions granted by this role."
+        confirmLabel="Revoke"
+        variant="danger"
+        onConfirm={handleRevoke}
+        onCancel={() => setRevokeId(null)}
+      />
     </div>
   )
 }
