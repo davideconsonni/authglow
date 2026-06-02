@@ -9,58 +9,58 @@
 <body>
   <nav id="sidebar">
     <div class="sidebar-header">
-      <h1>AuthGlow Playground</h1>
-      <p>Test all API features interactively</p>
+      <h1><span class="brand-glow">AuthGlow</span> <span class="brand-sub">Playground</span></h1>
+      <p>Enterprise Identity Testing Suite</p>
     </div>
 
     <div class="sidebar-nav">
       <div class="nav-section">Getting Started</div>
       <a class="nav-item active" data-section="setup" onclick="showSection('setup')">
-        <span class="icon">&#9881;</span> Setup
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></span> Setup
       </a>
 
       <div class="nav-section">Authentication</div>
       <a class="nav-item" data-section="auth" onclick="showSection('auth')">
-        <span class="icon">&#128274;</span> Login / Register
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Login / Register
       </a>
       <a class="nav-item" data-section="mfa" onclick="showSection('mfa')">
-        <span class="icon">&#128256;</span> MFA (TOTP)
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span> MFA (TOTP)
       </a>
       <a class="nav-item" data-section="passkeys" onclick="showSection('passkeys')">
-        <span class="icon">&#128273;</span> Passkeys
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span> Passkeys
       </a>
       <a class="nav-item" data-section="password-reset" onclick="showSection('password-reset')">
-        <span class="icon">&#128260;</span> Password Reset
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="m22 6-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 6"/></svg></span> Password Reset
       </a>
       <a class="nav-item" data-section="email" onclick="showSection('email')">
-        <span class="icon">&#9993;</span> Email Verification
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 3 3 5-5"/></svg></span> Email Verification
       </a>
 
       <div class="nav-section">User</div>
       <a class="nav-item" data-section="profile" onclick="showSection('profile')">
-        <span class="icon">&#128100;</span> Profile
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span> Profile
       </a>
       <a class="nav-item" data-section="apikeys" onclick="showSection('apikeys')">
-        <span class="icon">&#128277;</span> API Keys
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></span> API Keys
       </a>
 
       <div class="nav-section">OAuth2 / OIDC</div>
       <a class="nav-item" data-section="oauth2" onclick="showSection('oauth2')">
-        <span class="icon">&#128272;</span> OAuth2 Flow
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> OAuth2 Flow
       </a>
       <a class="nav-item" data-section="oauth-clients" onclick="showSection('oauth-clients')">
-        <span class="icon">&#127968;</span> OAuth2 Clients
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span> OAuth2 Clients
       </a>
       <a class="nav-item" data-section="oidc" onclick="showSection('oidc')">
-        <span class="icon">&#128269;</span> OIDC Discovery
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> OIDC Discovery
       </a>
 
       <div class="nav-section">Admin</div>
       <a class="nav-item" data-section="admin" onclick="showSection('admin')">
-        <span class="icon">&#128202;</span> Dashboard
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Dashboard
       </a>
       <a class="nav-item" data-section="rbac" onclick="showSection('rbac')">
-        <span class="icon">&#128736;</span> RBAC
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4-.9-.3"/><path d="m15.2 13.9-.9-.3"/><path d="m16.6 18.7.3-.9"/><path d="m19.1 12.2-.6-1.1"/><path d="m19.6 18.7-.4-1"/><path d="m16.8 12.3-.4-1"/><path d="m14.3 16.6 1 .5"/><path d="m20.7 13.8 1 .5"/></svg></span> RBAC
       </a>
     </div>
 
@@ -87,7 +87,7 @@
           <span class="method method-GET">GET</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Checks whether any users exist in the system. If no users exist, you need to create an admin first.</p>
+          <p class="help-text">Checks whether any users exist in the system. If no users exist, you need to create an admin first.</p>
           <div class="btn-row">
             <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/setup/check','res-setup-check')">Check Setup</button>
           </div>
@@ -146,7 +146,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Authenticates via <code>/api/token</code> and stores the access token in session for subsequent requests.</p>
+          <p class="help-text">Authenticates via <code>/api/token</code> and stores the access token in session for subsequent requests.</p>
           <div class="form-grid">
             <div class="field"><label>Email (username)</label><input id="login-email" type="email" value="admin@example.com" placeholder="user@example.com"></div>
             <div class="field"><label>Password</label><input id="login-password" type="text" value="AdminP@ss123!" placeholder="Password"></div>
@@ -164,7 +164,7 @@
           <span class="method method-GET">GET</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Uses the stored access token to fetch current user info via <code>/api/users/me</code>.</p>
+          <p class="help-text">Uses the stored access token to fetch current user info via <code>/api/users/me</code>.</p>
           <div class="btn-row">
             <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/users/me','res-auth-me',null,true)">Get My Info</button>
           </div>
@@ -197,7 +197,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Starts MFA enrollment. Returns a QR code and TOTP secret.</p>
+          <p class="help-text">Starts MFA enrollment. Returns a QR code and TOTP secret.</p>
           <div class="btn-row">
             <button class="btn btn-primary" onclick="mfaEnrollIntercept()">Enroll MFA</button>
           </div>
@@ -245,7 +245,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">First do a normal login to get a session token, then submit the TOTP code.</p>
+          <p class="help-text">First do a normal login to get a session token, then submit the TOTP code.</p>
           <div class="form-grid single" style="max-width:300px;">
             <div class="field"><label>TOTP Code</label><input id="mfa-login-code" type="text" placeholder="6-digit code" style="letter-spacing:4px;font-size:18px;"></div>
           </div>
@@ -281,7 +281,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Click "Start Registration" to begin the WebAuthn ceremony. Your browser will prompt you to create a passkey (fingerprint, face, PIN, etc.).</p>
+          <p class="help-text">Click "Start Registration" to begin the WebAuthn ceremony. Your browser will prompt you to create a passkey (fingerprint, face, PIN, etc.).</p>
           <div class="form-grid single" style="max-width:300px;">
             <div class="field"><label>Passkey Name</label><input id="pk-name" type="text" value="My Passkey" placeholder="Name for this passkey"></div>
           </div>
@@ -299,7 +299,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Enter your email and authenticate with a registered passkey. Returns an access token on success.</p>
+          <p class="help-text">Enter your email and authenticate with a registered passkey. Returns an access token on success.</p>
           <div class="form-grid single" style="max-width:400px;">
             <div class="field"><label>Email</label><input id="pk-auth-email" type="email" placeholder="user@example.com"></div>
           </div>
@@ -543,7 +543,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Begins the OAuth2 authorization flow. Sends credentials and receives an authorization code.</p>
+          <p class="help-text">Begins the OAuth2 authorization flow. Sends credentials and receives an authorization code.</p>
           <div class="form-grid">
             <div class="field"><label>Email</label><input id="oauth-email" type="text" placeholder="User email"></div>
             <div class="field"><label>Password</label><input id="oauth-password" type="password" placeholder="User password"></div>
@@ -570,7 +570,7 @@
           <span class="method method-POST">POST</span>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Exchanges the authorization code for an access token. Code auto-filled from authorize step.</p>
+          <p class="help-text">Exchanges the authorization code for an access token. Code auto-filled from authorize step.</p>
           <div class="form-grid">
             <div class="field"><label>Authorization Code</label><input id="oauth-code" type="text" placeholder="Auto-filled from authorize step"></div>
             <div class="field"><label>Client Secret</label><input id="oauth-client-secret" type="text" value="default-client-secret" placeholder="Client secret"></div>
@@ -857,21 +857,21 @@
     </div>
   </main>
 
-  <script src="/test-static/app.js?v=2"></script>
+  <script src="/test-static/app.js?v=3"></script>
 
   <!-- MFA Modal -->
-  <div id="mfa-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:none;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-      <h3 style="margin:0 0 8px;color:var(--text);font-size:18px;">MFA Verification Required</h3>
-      <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;">Enter the 6-digit code from your authenticator app.</p>
-      <div style="display:flex;flex-direction:column;gap:12px;">
-        <input id="mfa-modal-code" type="text" placeholder="000000" maxlength="8" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:12px 16px;color:var(--text);font-size:24px;text-align:center;letter-spacing:8px;outline:none;" autofocus>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-primary" style="flex:1;" onclick="submitMfaModal()">Verify</button>
-          <button class="btn btn-outline" style="flex:0 0 auto;" onclick="closeMfaModal()">Cancel</button>
-        </div>
-        <div id="mfa-modal-error" style="display:none;color:var(--error);font-size:13px;text-align:center;"></div>
+  <div id="mfa-modal">
+    <div class="mfa-modal-card">
+      <h3>MFA Verification Required</h3>
+      <p class="mfa-modal-desc">Enter the 6-digit code from your authenticator app.</p>
+      <div class="field">
+        <input id="mfa-modal-code" type="text" placeholder="000000" maxlength="8" autofocus>
       </div>
+      <div class="mfa-modal-actions">
+        <button class="btn btn-primary" style="flex:1;" onclick="submitMfaModal()">Verify</button>
+        <button class="btn btn-outline" onclick="closeMfaModal()">Cancel</button>
+      </div>
+      <div class="mfa-modal-error" id="mfa-modal-error"></div>
     </div>
   </div>
 </body>

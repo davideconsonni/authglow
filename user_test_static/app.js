@@ -75,8 +75,7 @@ function updateSessionUI() {
       oauthEmail.value = s.userEmail;
     }
   } else if (s.mfaSessionToken) {
-    dot.className = 'status-dot';
-    dot.style.background = 'var(--warning)';
+    dot.className = 'status-dot pending';
     info.textContent = 'MFA pending...';
   } else {
     dot.className = 'status-dot disconnected';
@@ -101,16 +100,16 @@ function showToast(msg, type) {
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
-    container.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
     document.body.appendChild(container);
   }
   const toast = document.createElement('div');
-  const colors = { info: 'var(--primary-bg)', success: 'var(--success-bg)', error: 'var(--error-bg)', warning: 'var(--warning-bg)' };
-  const textColors = { info: 'var(--primary)', success: 'var(--success)', error: 'var(--error)', warning: 'var(--warning)' };
-  toast.style.cssText = 'padding:10px 18px;border-radius:6px;font-size:13px;font-weight:600;background:' + (colors[type] || colors.info) + ';color:' + (textColors[type] || textColors.info) + ';border:1px solid ' + (textColors[type] || textColors.info) + '30;animation:fadeIn .2s;';
+  toast.className = 'toast ' + type;
   toast.textContent = msg;
   container.appendChild(toast);
-  setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
+  setTimeout(function() {
+    toast.style.animation = 'toastOut .3s forwards';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 3000);
 }
 
 // ---- JSON Syntax Highlighting ----
@@ -868,14 +867,14 @@ async function deletePasskey() {
 // ---- MFA Modal ----
 function showMfaModal() {
   var modal = document.getElementById('mfa-modal');
-  modal.style.display = 'flex';
+  modal.classList.add('visible');
   document.getElementById('mfa-modal-code').value = '';
   document.getElementById('mfa-modal-error').style.display = 'none';
   setTimeout(function() { document.getElementById('mfa-modal-code').focus(); }, 100);
 }
 
 function closeMfaModal() {
-  document.getElementById('mfa-modal').style.display = 'none';
+  document.getElementById('mfa-modal').classList.remove('visible');
 }
 
 async function submitMfaModal() {
@@ -909,7 +908,7 @@ async function submitMfaModal() {
 // Handle Enter key in modal
 document.addEventListener('keydown', function(e) {
   var modal = document.getElementById('mfa-modal');
-  if (modal.style.display === 'flex' && e.key === 'Enter') {
+  if (modal.classList.contains('visible') && e.key === 'Enter') {
     submitMfaModal();
   }
 });
@@ -932,37 +931,38 @@ async function loadJwkKeys() {
     return;
   }
 
-  var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-  html += '<thead><tr style="border-bottom:1px solid var(--border);">';
-  html += '<th style="text-align:left;padding:8px;">KID</th>';
-  html += '<th style="text-align:left;padding:8px;">Status</th>';
-  html += '<th style="text-align:left;padding:8px;">Created</th>';
-  html += '<th style="text-align:center;padding:8px;">Actions</th>';
+  var html = '<table class="table-compact">';
+  html += '<thead><tr>';
+  html += '<th>KID</th>';
+  html += '<th>Status</th>';
+  html += '<th>Created</th>';
+  html += '<th style="text-align:center;">Actions</th>';
   html += '</tr></thead><tbody>';
 
   for (var i = 0; i < keys.length; i++) {
     var k = keys[i];
-    var badge = '';
-    if (k.status === 'active') badge = '<span style="background:#d4edda;color:#155724;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Active</span>';
-    else if (k.status === 'verifying') badge = '<span style="background:#fff3cd;color:#856404;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Verifying</span>';
-    else if (k.status === 'revoked') badge = '<span style="background:#f8d7da;color:#721c24;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Revoked</span>';
-    else badge = '<span style="background:var(--border);color:var(--text);padding:2px 10px;border-radius:12px;font-size:11px;">' + (k.status || '?') + '</span>';
+    var badgeClass = 'badge-pill';
+    var badgeLabel = k.status || '?';
+    if (k.status === 'active') badgeClass += ' active';
+    else if (k.status === 'verifying') badgeClass += ' verifying';
+    else if (k.status === 'revoked') badgeClass += ' revoked';
+    else badgeClass += ' unknown';
 
     var createdAt = k.created_at ? new Date(k.created_at).toLocaleString() : '&mdash;';
     var actions = '';
     if (k.status === 'verifying') {
-      actions = '<button class="btn btn-danger" style="font-size:0.75rem;padding:4px 10px;" onclick="revokeJwkKey(\'' + escapeHtml(k.kid) + '\')">Revoke</button>';
+      actions = '<button class="btn btn-danger btn-sm" data-kid="' + escapeHtml(k.kid) + '" onclick="revokeJwkKey(this.getAttribute(\'data-kid\'))">Revoke</button>';
     } else if (k.status === 'active') {
       actions = '<span style="color:var(--text-muted);font-size:11px;">Current signer</span>';
     } else {
       actions = '<span style="color:var(--text-muted);font-size:11px;">&mdash;</span>';
     }
 
-    html += '<tr style="border-bottom:1px solid var(--border);">';
-    html += '<td style="padding:8px;font-family:monospace;font-size:12px;">' + escapeHtml(k.kid) + (k.kid === activeKid ? ' &larr;' : '') + '</td>';
-    html += '<td style="padding:8px;">' + badge + '</td>';
-    html += '<td style="padding:8px;">' + createdAt + '</td>';
-    html += '<td style="padding:8px;text-align:center;">' + actions + '</td>';
+    html += '<tr>';
+    html += '<td style="font-family:var(--font-mono);font-size:12px;">' + escapeHtml(k.kid) + (k.kid === activeKid ? ' &larr;' : '') + '</td>';
+    html += '<td><span class="' + badgeClass + '">' + badgeLabel + '</span></td>';
+    html += '<td>' + createdAt + '</td>';
+    html += '<td style="text-align:center;">' + actions + '</td>';
     html += '</tr>';
   }
 

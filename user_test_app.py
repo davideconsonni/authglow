@@ -362,8 +362,7 @@ if __name__ == "__main__":
     import uvicorn
 
     print()
-    print("  ========================================")
-    print("  AuthGlow Test Playground")
+    print("  \033[35mAuthGlow\033[0m Test Playground")
     print("  ========================================")
     print(f"  Playground:  http://localhost:{PLAYGROUND_PORT}")
     print(f"  AuthGlow:    {AUTHGLOW_BASE_URL}")
