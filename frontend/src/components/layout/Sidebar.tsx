@@ -38,7 +38,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useAuth()
 
-  const isAdmin = user?.roles?.includes('admin')
+  const isAdmin = user?.roles?.includes('admin') || user?.scopes?.includes('admin')
 
   const sections: NavSection[] = [
     {

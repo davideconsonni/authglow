@@ -10,6 +10,7 @@ export interface AuthUser {
   avatar_url?: string
   mfa_enabled: boolean
   roles: string[]
+  scopes: string[]
   permissions: string[]
 }
 
