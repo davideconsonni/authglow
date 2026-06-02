@@ -147,22 +147,22 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 
 ## Fase 1 — Fondamenta e Design System
 
-- [ ] **1.1** Installare Tailwind CSS + postcss + autoprefixer
-- [ ] **1.2** Installare shadcn/ui (`npx shadcn@latest init`) e i componenti base: Button, Input, Card, Dialog, DropdownMenu, Tabs, Table, Popover, Tooltip, Command, Drawer
-- [ ] **1.3** Configurare `tailwind.config.ts` con tutti i design token colori (bg, surface, brand, semantic, text)
-- [ ] **1.4** Scrivere `styles/globals.css` con `@tailwind` directives, CSS custom properties, scrollbar dark, classi `glow-*`
-- [ ] **1.5** Creare `lib/constants.ts` (API base URL, route path constanti) e `lib/utils.ts` (formatters, helpers)
-- [ ] **1.6** Creare `lib/api.ts`: wrapper fetch con base URL, interceptor per Bearer token, gestione 401 → logout
-- [ ] **1.7** Creare `stores/authStore.ts` (Zustand): token, user, isAuthenticated, login(), logout(), refresh()
-- [ ] **1.8** Creare `hooks/useAuth.ts`: hook per accedere allo store e esporre login/logout/currentUser
-- [ ] **1.9** Creare `hooks/useApi.ts`: hook generico per TanStack Query (useQuery, useMutation wrappers)
-- [ ] **1.10** Installare React Router e configurare in `App.tsx`: layout route (protette con `AppShell`, pubbliche standalone)
-- [ ] **1.11** Creare `components/layout/AppShell.tsx` — sidebar floating + topbar + area contenuto con `<Outlet />`
-- [ ] **1.12** Creare `components/layout/Sidebar.tsx` — navigazione con icone Lucide, sezioni (Dashboard, Profile, Security, Admin), collassabile su mobile
-- [ ] **1.13** Creare `components/layout/TopBar.tsx` — user avatar, dropdown menu (profile, logout)
-- [ ] **1.14** Creare `components/layout/PageHeader.tsx` — titolo, breadcrumb, slot azioni destra
-- [ ] **1.15** Creare `components/shared/LoadingState.tsx`, `ErrorState.tsx`, `EmptyState.tsx`, `ConfirmDialog.tsx`
-- [ ] **1.16** Creare `.env` frontend con `VITE_API_URL=http://localhost:8000`
+- [x] **1.1** Installare Tailwind CSS + postcss + autoprefixer
+- [x] **1.2** Installare shadcn/ui (`npx shadcn@latest init`) e i componenti base: Button, Input, Card, Dialog, DropdownMenu, Tabs, Table, Popover, Tooltip, Command, Drawer
+- [x] **1.3** Configurare `tailwind.config.ts` con tutti i design token colori (bg, surface, brand, semantic, text)
+- [x] **1.4** Scrivere `styles/globals.css` con `@tailwind` directives, CSS custom properties, scrollbar dark, classi `glow-*`
+- [x] **1.5** Creare `lib/constants.ts` (API base URL, route path constanti) e `lib/utils.ts` (formatters, helpers)
+- [x] **1.6** Creare `lib/api.ts`: wrapper fetch con base URL, interceptor per Bearer token, gestione 401 → logout
+- [x] **1.7** Creare `stores/authStore.ts` (Zustand): token, user, isAuthenticated, login(), logout(), refresh()
+- [x] **1.8** Creare `hooks/useAuth.ts`: hook per accedere allo store e esporre login/logout/currentUser
+- [x] **1.9** Creare `hooks/useApi.ts`: hook generico per TanStack Query (useQuery, useMutation wrappers)
+- [x] **1.10** Installare React Router e configurare in `App.tsx`: layout route (protette con `AppShell`, pubbliche standalone)
+- [x] **1.11** Creare `components/layout/AppShell.tsx` — sidebar floating + topbar + area contenuto con `<Outlet />`
+- [x] **1.12** Creare `components/layout/Sidebar.tsx` — navigazione con icone Lucide, sezioni (Dashboard, Profile, Security, Admin), collassabile su mobile
+- [x] **1.13** Creare `components/layout/TopBar.tsx` — user avatar, dropdown menu (profile, logout)
+- [x] **1.14** Creare `components/layout/PageHeader.tsx` — titolo, breadcrumb, slot azioni destra
+- [x] **1.15** Creare `components/shared/LoadingState.tsx`, `ErrorState.tsx`, `EmptyState.tsx`, `ConfirmDialog.tsx`
+- [x] **1.16** Creare `.env` frontend con `VITE_API_URL=http://localhost:8000`
 
 ---
 

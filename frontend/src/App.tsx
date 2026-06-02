@@ -1,9 +1,124 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AppShell } from '@/components/layout/AppShell'
+import { ROUTES } from '@/lib/constants'
+import { useAuth } from '@/hooks/useAuth'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    },
+  },
+})
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+  if (!isAuthenticated) {
+    return <Navigate to={ROUTES.AUTH.LOGIN} replace />
+  }
+  return <>{children}</>
+}
+
+function GuestRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+  if (isAuthenticated) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />
+  }
+  return <>{children}</>
+}
+
 function App() {
   return (
-    <div>
-      <h1>AuthGlow</h1>
-      <p>Ready for development.</p>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          {/* Public / auth routes */}
+          <Route
+            path={ROUTES.AUTH.LOGIN}
+            element={
+              <GuestRoute>
+                <div>Login Page</div>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path={ROUTES.AUTH.REGISTER}
+            element={
+              <GuestRoute>
+                <div>Register Page</div>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path={ROUTES.AUTH.FORGOT_PASSWORD}
+            element={
+              <GuestRoute>
+                <div>Forgot Password Page</div>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path={ROUTES.AUTH.RESET_PASSWORD}
+            element={
+              <GuestRoute>
+                <div>Reset Password Page</div>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path={ROUTES.AUTH.MFA_VERIFY}
+            element={
+              <GuestRoute>
+                <div>MFA Verify Page</div>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path={ROUTES.AUTH.VERIFY_EMAIL}
+            element={<div>Email Verified Page</div>}
+          />
+          <Route
+            path={ROUTES.OAUTH_CONSENT}
+            element={<div>OAuth Consent Page</div>}
+          />
+          <Route
+            path={ROUTES.SETUP}
+            element={<div>Setup Page</div>}
+          />
+
+          {/* Protected routes with AppShell layout */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route path={ROUTES.DASHBOARD} element={<div>Dashboard Page</div>} />
+            <Route path={ROUTES.PROFILE} element={<div>Profile Page</div>} />
+            <Route path={ROUTES.SECURITY} element={<div>Security Page</div>} />
+            <Route path={ROUTES.SESSIONS} element={<div>Sessions Page</div>} />
+            <Route path={ROUTES.API_KEYS} element={<div>API Keys Page</div>} />
+            <Route path={ROUTES.ADMIN.DASHBOARD} element={<div>Admin Dashboard Page</div>} />
+            <Route path={ROUTES.ADMIN.USERS} element={<div>Admin Users Page</div>} />
+            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<div>Admin OAuth Clients Page</div>} />
+            <Route path={ROUTES.ADMIN.SESSIONS} element={<div>Admin Sessions Page</div>} />
+            <Route path={ROUTES.ADMIN.CONSENTS} element={<div>Admin Consents Page</div>} />
+            <Route path={ROUTES.ADMIN.API_KEYS} element={<div>Admin API Keys Page</div>} />
+            <Route path={ROUTES.ADMIN.RBAC} element={<div>Admin RBAC Page</div>} />
+            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<div>Admin JWK Keys Page</div>} />
+            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<div>Admin Password Resets Page</div>} />
+            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<div>Admin Playground Page</div>} />
+          </Route>
+
+          {/* Root redirect */}
+          <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+          <Route path="*" element={<div>Not Found</div>} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
