@@ -55,9 +55,9 @@ class MFAEnrollResponse(BaseModel):
 
 
 class MFAVerifyRequest(BaseModel):
-    """Request to verify TOTP code."""
+    """Request to verify TOTP or backup code."""
 
-    code: str = Field(..., min_length=6, max_length=6)
+    code: str = Field(..., min_length=6, max_length=9)
 
 
 class MFALoginRequest(BaseModel):
@@ -66,6 +66,15 @@ class MFALoginRequest(BaseModel):
     session_token: str  # Temporary session token from first auth step
     code: str = Field(..., min_length=6, max_length=8)  # TOTP or backup code
     trust_device: bool = False
+
+
+class BackupCodeAttempt(BaseModel):
+    """Tracks failed backup code verification attempts for rate limiting."""
+
+    user_id: str
+    failed_attempts: int = 0
+    locked_until: Optional[datetime] = None
+    last_attempt_at: datetime = Field(default_factory=utcnow)
 
 
 class MFAStatus(BaseModel):

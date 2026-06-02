@@ -15,8 +15,9 @@ from authglow.models.mfa import (
 from authglow.models.user import User, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
-from authglow.services.mfa import MFAService
+from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.storage import UserStorage
+from authglow.core.rate_limit import limiter
 
 router = APIRouter()
 
@@ -212,6 +213,7 @@ async def regenerate_backup_codes(
 
 
 @router.post("/api/mfa/verify-login")
+@limiter.limit("3/minute")
 async def verify_mfa_login(
     verify_request: MFAVerifyRequest,
     storage: UserStorage = Depends(get_user_storage),
@@ -257,9 +259,16 @@ async def verify_mfa_login(
         )
     else:
         # Try backup code
-        if await mfa_service.verify_user_backup_code(user.id, verify_request.code):
-            is_valid = True
-            is_backup_code = True
+        try:
+            if await mfa_service.verify_user_backup_code(user.id, verify_request.code):
+                is_valid = True
+                is_backup_code = True
+        except BackupCodeLockedException as e:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many backup code attempts. Retry after {e.retry_after_seconds} seconds.",
+                headers={"Retry-After": str(e.retry_after_seconds)},
+            )
 
     if not is_valid:
         await audit_service.log_event(

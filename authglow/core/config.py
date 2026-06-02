@@ -341,6 +341,10 @@ class Settings(BaseSettings):
     api_key_max_failed_attempts: int = 5
     api_key_lockout_minutes: int = 15
 
+    # Backup Code Brute-Force Lockout
+    backup_code_max_failed_attempts: int = 3
+    backup_code_lockout_seconds: int = 30
+
     # HTTPS Enforcement
     enforce_https: bool = True
     https_redirect_status: int = 301

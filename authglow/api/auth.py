@@ -25,7 +25,7 @@ from authglow.services.csrf import SESSION_ID_COOKIE, CSRFTokenService, get_csrf
 from authglow.services.email.factory import get_email_service
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
-from authglow.services.mfa import MFAService
+from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.password import PasswordValidator, hash_password, verify_password
 from authglow.services.refresh_token import RefreshTokenService
@@ -894,6 +894,7 @@ async def invite_user(
 
 
 @router.post("/oauth2/mfa-verify")
+@limiter.limit("3/minute")
 async def oauth2_mfa_verify(
     request: Request,
     session_token: str = Form(...),
@@ -932,7 +933,14 @@ async def oauth2_mfa_verify(
 
     # Try backup code if TOTP failed
     if not is_valid and len(code) >= 8:
-        is_valid = await mfa_service.verify_user_backup_code(user.id, code)
+        try:
+            is_valid = await mfa_service.verify_user_backup_code(user.id, code)
+        except BackupCodeLockedException as e:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many backup code attempts. Retry after {e.retry_after_seconds} seconds.",
+                headers={"Retry-After": str(e.retry_after_seconds)},
+            )
 
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid MFA code")

@@ -107,9 +107,7 @@ class TestBackupCodes:
         codes = mfa_service.generate_backup_codes(5)
         user_id = "user-verify-wrong"
         asyncio.run(mfa_service.save_backup_codes(user_id, codes))
-        is_valid = asyncio.run(
-            mfa_service.verify_user_backup_code(user_id, "WRONGCODE")
-        )
+        is_valid = asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONGCODE"))
         assert not is_valid
 
     def test_verify_user_backup_code_multi_use(self, mfa_service):
@@ -119,13 +117,9 @@ class TestBackupCodes:
         user_id = "user-multi-use"
         asyncio.run(mfa_service.save_backup_codes(user_id, codes))
         first_code = codes[0]
-        is_valid1 = asyncio.run(
-            mfa_service.verify_user_backup_code(user_id, first_code)
-        )
+        is_valid1 = asyncio.run(mfa_service.verify_user_backup_code(user_id, first_code))
         assert is_valid1
-        is_valid2 = asyncio.run(
-            mfa_service.verify_user_backup_code(user_id, first_code)
-        )
+        is_valid2 = asyncio.run(mfa_service.verify_user_backup_code(user_id, first_code))
         assert is_valid2
 
     def test_delete_backup_codes(self, mfa_service):
@@ -164,9 +158,7 @@ class TestDeviceFingerprint:
 
         fp = mfa_service.generate_device_fingerprint("Mozilla/5.0", "192.168.1.1")
         user_id = "user-trusted-test"
-        device = asyncio.run(
-            mfa_service.add_trusted_device(user_id, fp, "Test Browser")
-        )
+        device = asyncio.run(mfa_service.add_trusted_device(user_id, fp, "Test Browser"))
         assert device is not None
         assert device.device_fingerprint == fp
         assert device.user_id == user_id
@@ -199,9 +191,7 @@ class TestDeviceFingerprint:
 
         fp = mfa_service.generate_device_fingerprint("Mozilla/5.0", "10.0.0.1")
         user_id = "user-expired-device"
-        device = asyncio.run(
-            mfa_service.add_trusted_device(user_id, fp, "Expired Browser")
-        )
+        device = asyncio.run(mfa_service.add_trusted_device(user_id, fp, "Expired Browser"))
         expired_device = TrustedDevice(**device.model_dump())
         expired_device.expires_at = utcnow() - timedelta(days=1)
         device_path = f"{mfa_service.storage_path}/trusted_devices/{device.id}.json"
@@ -241,7 +231,180 @@ class TestDeviceFingerprint:
         assert result
 
 
-class TestTOTPSecretEncryption:
+class TestBackupCodeLockout:
+    def test_failed_attempts_increments(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-increment"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        result1 = asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG1"))
+        assert not result1
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts is not None
+        assert attempts.failed_attempts == 1
+
+        result2 = asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG2"))
+        assert not result2
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts.failed_attempts == 2
+
+    def test_locked_after_max_failures(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-max"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        for i in range(mfa_service.settings.backup_code_max_failed_attempts):
+            asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
+
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts.failed_attempts == mfa_service.settings.backup_code_max_failed_attempts
+        assert attempts.locked_until is not None
+
+    def test_raises_exception_when_locked(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-exception"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        max_attempts = mfa_service.settings.backup_code_max_failed_attempts
+        for i in range(max_attempts):
+            asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
+
+        from authglow.services.mfa import BackupCodeLockedException
+
+        with pytest.raises(BackupCodeLockedException) as exc_info:
+            asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONGA"))
+        assert exc_info.value.user_id == user_id
+        assert exc_info.value.retry_after_seconds > 0
+
+    def test_no_lock_below_threshold(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-below"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        threshold = mfa_service.settings.backup_code_max_failed_attempts
+        for i in range(threshold - 1):
+            result = asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
+            assert not result
+
+        from authglow.services.mfa import BackupCodeLockedException
+
+        try:
+            asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONGLAST"))
+        except BackupCodeLockedException:
+            assert True
+
+    def test_success_resets_counter(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-reset"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG1"))
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts.failed_attempts == 1
+
+        result = asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
+        assert result
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts is None
+
+    def test_lockout_resets_after_success_then_retry(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-retry-after-reset"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG1"))
+        asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG2"))
+
+        result = asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
+        assert result
+
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts is None
+
+        asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts is None
+
+    def test_locked_until_stored(self, mfa_service):
+        import asyncio
+
+        codes = mfa_service.generate_backup_codes(5)
+        user_id = "lockout-stored"
+        asyncio.run(mfa_service.save_backup_codes(user_id, codes))
+
+        for i in range(mfa_service.settings.backup_code_max_failed_attempts):
+            asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
+
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts.locked_until is not None
+        from datetime import datetime, timezone, timedelta
+
+        expected = utcnow() + timedelta(seconds=mfa_service.settings.backup_code_lockout_seconds)
+        diff = abs((attempts.locked_until - expected).total_seconds())
+        assert diff < 5
+
+    def test_no_lockout_when_no_backup_codes(self, mfa_service):
+        import asyncio
+
+        user_id = "lockout-no-codes"
+        result = asyncio.run(mfa_service.verify_user_backup_code(user_id, "ANYCODE"))
+        assert not result
+
+        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert attempts is None
+
+    def test_backup_code_attempts_file_crud(self, mfa_service):
+        """Verify the CRUD cycle for BackupCodeAttempt files."""
+        import asyncio
+        from authglow.models.mfa import BackupCodeAttempt
+
+        user_id = "attempt-crud"
+        a1 = BackupCodeAttempt(user_id=user_id, failed_attempts=2)
+        asyncio.run(mfa_service._save_backup_code_attempts(a1))
+
+        loaded = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert loaded is not None
+        assert loaded.failed_attempts == 2
+        assert loaded.user_id == user_id
+
+        asyncio.run(mfa_service._reset_backup_code_attempts(user_id))
+        loaded2 = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        assert loaded2 is None
+
+
+class TestMFAVerifyRequestModel:
+    def test_mfa_verify_request_accepts_nine_char_code(self):
+        from authglow.models.mfa import MFAVerifyRequest
+
+        req = MFAVerifyRequest(code="ABCD-1234")
+        assert req.code == "ABCD-1234"
+
+    def test_mfa_verify_request_rejects_too_short(self):
+        from authglow.models.mfa import MFAVerifyRequest
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            MFAVerifyRequest(code="12345")
+
+    def test_mfa_verify_request_rejects_too_long(self):
+        from authglow.models.mfa import MFAVerifyRequest
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            MFAVerifyRequest(code="ABCD-12345")
+
     def test_encrypt_produces_ciphertext(self):
         from authglow.core.crypto import encrypt_totp_secret
 

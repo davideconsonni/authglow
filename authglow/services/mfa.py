@@ -18,7 +18,19 @@ from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
-from authglow.models.mfa import BackupCodes, TrustedDevice
+from authglow.models.mfa import BackupCodeAttempt, BackupCodes, TrustedDevice
+
+
+class BackupCodeLockedException(Exception):
+    """Raised when backup code verification is locked due to too many failures."""
+
+    def __init__(self, user_id: str, retry_after_seconds: int):
+        self.user_id = user_id
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(
+            f"Backup code verification locked for user {user_id}. "
+            f"Retry after {retry_after_seconds} seconds."
+        )
 
 
 class MFAService:
@@ -34,12 +46,11 @@ class MFAService:
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
             os.makedirs(f"{self.storage_path}/backup_codes", exist_ok=True)
+            os.makedirs(f"{self.storage_path}/backup_code_attempts", exist_ok=True)
             os.makedirs(f"{self.storage_path}/trusted_devices", exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -79,9 +90,7 @@ class MFAService:
         codes = []
         for _ in range(count):
             # Generate 8-character code (easier to type than full random)
-            code = "".join(
-                secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(8)
-            )
+            code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(8))
             # Format as XXXX-XXXX for readability
             formatted = f"{code[:4]}-{code[4:]}"
             codes.append(formatted)
@@ -122,25 +131,78 @@ class MFAService:
         """Verify a backup code for a user (multi-use).
 
         Protected by a named lock to prevent concurrent backup code
-        verification from corrupting the used_count.
+        verification from corrupting the used_count. Enforces per-user
+        brute-force lockout after consecutive failures.
+
+        Raises ``BackupCodeLockedException`` if the user is locked out.
         """
         async with self._lock(f"backup_codes:{user_id}"):
+            # --- Lockout check ---
+            attempts = await self._get_backup_code_attempts(user_id)
+            if attempts and attempts.locked_until:
+                if utcnow() < attempts.locked_until:
+                    remaining = max(
+                        1,
+                        int((attempts.locked_until - utcnow()).total_seconds()),
+                    )
+                    raise BackupCodeLockedException(user_id, remaining)
+                # Lockout expired — reset
+                await self._reset_backup_code_attempts(user_id)
+
             backup_codes = await self.get_backup_codes(user_id)
             if not backup_codes:
                 return False
 
-            # Check against all codes
             for hashed_code in backup_codes.codes:
                 if self.verify_backup_code(code, hashed_code):
-                    # Increment used count but don't remove (multi-use)
+                    await self._reset_backup_code_attempts(user_id)
                     backup_codes.used_count += 1
                     path = f"{self.storage_path}/backup_codes/{user_id}.json"
-                    await self._afs.write_json(
-                        path, backup_codes.model_dump(mode="json"), indent=2
-                    )
+                    await self._afs.write_json(path, backup_codes.model_dump(mode="json"), indent=2)
                     return True
 
+            # Failure
+            await self._record_backup_code_failure(user_id)
             return False
+
+    async def _get_backup_code_attempts(self, user_id: str) -> Optional[BackupCodeAttempt]:
+        """Get backup code attempt tracking for a user."""
+        path = f"{self.storage_path}/backup_code_attempts/{user_id}.json"
+        try:
+            data = await self._afs.read_json(path)
+            return BackupCodeAttempt(**data)
+        except FileNotFoundError:
+            return None
+
+    async def _save_backup_code_attempts(self, attempts: BackupCodeAttempt):
+        """Save backup code attempt tracking."""
+        path = f"{self.storage_path}/backup_code_attempts/{attempts.user_id}.json"
+        await self._afs.write_json(path, attempts.model_dump(mode="json"), indent=2)
+
+    async def _record_backup_code_failure(self, user_id: str):
+        """Record a failed backup code attempt and lock out if threshold reached."""
+        existing = await self._get_backup_code_attempts(user_id)
+        if existing is None:
+            attempts = BackupCodeAttempt(user_id=user_id, failed_attempts=1)
+        else:
+            attempts = existing
+            attempts.failed_attempts += 1
+        attempts.last_attempt_at = utcnow()
+
+        if attempts.failed_attempts >= self.settings.backup_code_max_failed_attempts:
+            attempts.locked_until = utcnow() + timedelta(
+                seconds=self.settings.backup_code_lockout_seconds
+            )
+
+        await self._save_backup_code_attempts(attempts)
+
+    async def _reset_backup_code_attempts(self, user_id: str):
+        """Reset backup code attempt tracking (on successful verification)."""
+        path = f"{self.storage_path}/backup_code_attempts/{user_id}.json"
+        try:
+            await self._afs.rm(path)
+        except FileNotFoundError:
+            pass
 
     async def delete_backup_codes(self, user_id: str):
         """Delete backup codes for a user."""
