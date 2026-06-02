@@ -3,6 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
+import { LoginPage } from '@/pages/auth/LoginPage'
+import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,12 +39,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public / auth routes */}
           <Route
             path={ROUTES.AUTH.LOGIN}
             element={
               <GuestRoute>
-                <div>Login Page</div>
+                <LoginPage />
               </GuestRoute>
             }
           />
@@ -47,7 +51,7 @@ function App() {
             path={ROUTES.AUTH.REGISTER}
             element={
               <GuestRoute>
-                <div>Register Page</div>
+                <RegisterPage />
               </GuestRoute>
             }
           />
@@ -55,7 +59,7 @@ function App() {
             path={ROUTES.AUTH.FORGOT_PASSWORD}
             element={
               <GuestRoute>
-                <div>Forgot Password Page</div>
+                <ForgotPasswordPage />
               </GuestRoute>
             }
           />
@@ -63,21 +67,17 @@ function App() {
             path={ROUTES.AUTH.RESET_PASSWORD}
             element={
               <GuestRoute>
-                <div>Reset Password Page</div>
+                <ResetPasswordPage />
               </GuestRoute>
             }
           />
           <Route
             path={ROUTES.AUTH.MFA_VERIFY}
-            element={
-              <GuestRoute>
-                <div>MFA Verify Page</div>
-              </GuestRoute>
-            }
+            element={<div>MFA Verify Page</div>}
           />
           <Route
             path={ROUTES.AUTH.VERIFY_EMAIL}
-            element={<div>Email Verified Page</div>}
+            element={<EmailVerifiedPage />}
           />
           <Route
             path={ROUTES.OAUTH_CONSENT}
@@ -88,7 +88,6 @@ function App() {
             element={<div>Setup Page</div>}
           />
 
-          {/* Protected routes with AppShell layout */}
           <Route
             element={
               <ProtectedRoute>
@@ -113,7 +112,6 @@ function App() {
             <Route path={ROUTES.ADMIN.PLAYGROUND} element={<div>Admin Playground Page</div>} />
           </Route>
 
-          {/* Root redirect */}
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
           <Route path="*" element={<div>Not Found</div>} />
         </Routes>

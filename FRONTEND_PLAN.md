@@ -171,21 +171,21 @@ Elevation: Level 0–4 (`DESIGN.md` §9). Glassmorphism: subtle blur + subtle tr
 > **Specifiche** da [`FEATURES.md` §1] e [`DESIGN.md` §17].  
 > Layout auth: brand column sinistra + form destra (desktop), stacked (mobile).
 
-- [ ] **2.1** `LoginForm.tsx` — campi email, password; React Hook Form + Zod
-- [ ] **2.2** `LoginPage.tsx` — brand column (logo, tagline) + `LoginForm`; supporta `?redirect=` query param
-- [ ] **2.3** Gestione risposta API login:
+- [x] **2.1** `LoginForm.tsx` — campi email, password; React Hook Form + Zod
+- [x] **2.2** `LoginPage.tsx` — brand column (logo, tagline) + `LoginForm`; supporta `?redirect=` query param
+- [x] **2.3** Gestione risposta API login:
   - Successo token → salva in `authStore`, redirect alla dashboard
   - `mfa_required` → redirect a `/auth/mfa-verify?session_token=...`
   - `consent_required` → redirect a `/oauth/consent?session_token=...` (per flussi OAuth2)
   - Errore 401 → messaggio form (account lockout dopo N tentativi)
   - Errore 423 → "Account temporaneamente bloccato"
-- [ ] **2.4** `RegisterForm.tsx` — campi nome, cognome, email, password, conferma password; password meter visivo (policy da FEATURES.md)
-- [ ] **2.5** `RegisterPage.tsx` — layout auth, form, link "Hai già un account?"
-- [ ] **2.6** `ForgotPasswordForm.tsx` — campo email, submit → sempre messaggio "Se l'email esiste hai ricevuto un link" (anti-enumeration)
-- [ ] **2.7** `ForgotPasswordPage.tsx` — layout auth con form
-- [ ] **2.8** `ResetPasswordForm.tsx` — token da query string, campi nuova password + conferma
-- [ ] **2.9** `ResetPasswordPage.tsx` — layout auth; token valido → form, invalido/scaduto → messaggio errore
-- [ ] **2.10** `EmailVerifiedPage.tsx` — pagina standalone; token valido → success, invalido → errore con link re-send
+- [x] **2.4** `RegisterForm.tsx` — campi nome, cognome, email, password, conferma password; password meter visivo (policy da FEATURES.md)
+- [x] **2.5** `RegisterPage.tsx` — layout auth, form, link "Hai già un account?"
+- [x] **2.6** `ForgotPasswordForm.tsx` — campo email, submit → sempre messaggio "Se l'email esiste hai ricevuto un link" (anti-enumeration)
+- [x] **2.7** `ForgotPasswordPage.tsx` — layout auth con form
+- [x] **2.8** `ResetPasswordForm.tsx` — token da query string, campi nuova password + conferma
+- [x] **2.9** `ResetPasswordPage.tsx` — layout auth; token valido → form, invalido/scaduto → messaggio errore
+- [x] **2.10** `EmailVerifiedPage.tsx` — pagina standalone; token valido → success, invalido → errore con link re-send
 
 ---
 
