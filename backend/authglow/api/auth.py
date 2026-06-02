@@ -517,6 +517,7 @@ async def login_for_access_token(
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     audit_service: AuditService = Depends(get_audit_service),
+    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
     """Direct token endpoint (username/password)."""
     user = await storage.get_user_by_email(form_data.username)
@@ -605,7 +606,23 @@ async def login_for_access_token(
         user_agent=request.headers.get("user-agent"),
     )
 
-    return jwt_service.create_token_response(user.id, user.email, user.scopes)
+    # Generate JWT token response (without refresh token from JWT service)
+    token_response = jwt_service.create_token_response(
+        user.id, user.email, user.scopes, include_refresh=False
+    )
+
+    # Create persistent refresh token in storage so sessions are tracked
+    rt = await refresh_token_service.create_refresh_token(
+        user_id=user.id,
+        client_id="password_grant",
+        scopes=user.scopes,
+        issued_ip=request.client.host if request.client else None,
+        expires_in_days=30,
+    )
+
+    token_response.refresh_token = rt.token
+
+    return token_response
 
 
 @router.post("/api/token/api-key")

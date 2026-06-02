@@ -72,9 +72,17 @@ export function SessionsPage() {
         <div className="py-8 text-center text-text-muted">Loading sessions...</div>
       ) : !sessions || sessions.length === 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-12 text-center">
-          <Monitor className="mx-auto h-8 w-8 text-text-muted" />
-          <h3 className="mt-3 text-sm font-semibold text-text-primary">No active sessions</h3>
-          <p className="mt-1 text-xs text-text-muted">Your current and past sessions will appear here.</p>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2">
+            <Monitor size={24} className="text-text-muted" />
+          </div>
+          <h3 className="mt-4 text-sm font-semibold text-text-primary">No active sessions</h3>
+          <p className="mt-2 max-w-sm mx-auto text-xs text-text-muted">
+            Session tracking is available for OAuth2 client applications. Direct login sessions
+            are managed via your browser's authentication token and do not appear here.
+          </p>
+          <p className="mt-3 text-xs text-text-muted">
+            If you logged in through an OAuth2 application, those sessions will appear here.
+          </p>
         </div>
       ) : (
         <div className="rounded-2xl border border-surface-2 bg-surface-1">
