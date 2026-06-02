@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">Verify Your Email</h1>
+    </div>
+
+    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hello{% if user_name %} {{ user_name }}{% endif %},
+        </p>
+
+        <p style="font-size: 14px; color: #666; margin-bottom: 25px;">
+            Welcome to <strong>{{ company_name }}</strong>! Please verify your email address to complete your account setup.
+        </p>
+
+        <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 25px;">
+            <p style="margin: 0; font-size: 14px; color: #666;">
+                Click the button below to verify your email. This link will expire in <strong>{{ expires_hours }} hours</strong>.
+            </p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ verification_url }}"
+               style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                Verify Email
+            </a>
+        </div>
+
+        <p style="font-size: 13px; color: #999; margin-bottom: 15px;">
+            Or copy and paste this link into your browser:
+        </p>
+
+        <p style="background: #f5f5f5; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px; color: #667eea; word-break: break-all;">
+            {{ verification_url }}
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+            <strong>Why verify your email?</strong>
+        </p>
+
+        <ul style="font-size: 13px; color: #666; padding-left: 20px;">
+            <li>Secure your account and enable password recovery</li>
+            <li>Receive important notifications and updates</li>
+            <li>Access all features of {{ company_name }}</li>
+        </ul>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+        <p style="font-size: 13px; color: #666;">
+            If you didn't create an account with {{ company_name }}, you can safely ignore this email.
+        </p>
+
+        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center;">
+            This email was sent from <strong>{{ company_name }}</strong><br>
+            If you have questions, please contact your administrator.
+        </p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuthGlow Test Playground</title>
+  <link rel="stylesheet" href="/test-static/style.css">
+</head>
+<body>
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <h1><span class="brand-glow">AuthGlow</span> <span class="brand-sub">Playground</span></h1>
+      <p>Enterprise Identity Testing Suite</p>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section">Getting Started</div>
+      <a class="nav-item active" data-section="setup" onclick="showSection('setup')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></span> Setup
+      </a>
+
+      <div class="nav-section">Authentication</div>
+      <a class="nav-item" data-section="auth" onclick="showSection('auth')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Login / Register
+      </a>
+      <a class="nav-item" data-section="mfa" onclick="showSection('mfa')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span> MFA (TOTP)
+      </a>
+      <a class="nav-item" data-section="passkeys" onclick="showSection('passkeys')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span> Passkeys
+      </a>
+      <a class="nav-item" data-section="password-reset" onclick="showSection('password-reset')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="m22 6-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 6"/></svg></span> Password Reset
+      </a>
+      <a class="nav-item" data-section="email" onclick="showSection('email')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 3 3 5-5"/></svg></span> Email Verification
+      </a>
+
+      <div class="nav-section">User</div>
+      <a class="nav-item" data-section="profile" onclick="showSection('profile')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span> Profile
+      </a>
+      <a class="nav-item" data-section="apikeys" onclick="showSection('apikeys')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></span> API Keys
+      </a>
+
+      <div class="nav-section">OAuth2 / OIDC</div>
+      <a class="nav-item" data-section="oauth2" onclick="showSection('oauth2')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> OAuth2 Flow
+      </a>
+      <a class="nav-item" data-section="oauth-clients" onclick="showSection('oauth-clients')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span> OAuth2 Clients
+      </a>
+      <a class="nav-item" data-section="oidc" onclick="showSection('oidc')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> OIDC Discovery
+      </a>
+
+      <div class="nav-section">Admin</div>
+      <a class="nav-item" data-section="admin" onclick="showSection('admin')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Dashboard
+      </a>
+      <a class="nav-item" data-section="rbac" onclick="showSection('rbac')">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4-.9-.3"/><path d="m15.2 13.9-.9-.3"/><path d="m16.6 18.7.3-.9"/><path d="m19.1 12.2-.6-1.1"/><path d="m19.6 18.7-.4-1"/><path d="m16.8 12.3-.4-1"/><path d="m14.3 16.6 1 .5"/><path d="m20.7 13.8 1 .5"/></svg></span> RBAC
+      </a>
+    </div>
+
+    <div class="session-panel" id="session-panel">
+      <div class="label"><span class="status-dot disconnected" id="conn-dot"></span> Session</div>
+      <div class="value" id="session-info">Not logged in</div>
+    </div>
+
+    <div class="global-actions">
+      <button class="btn btn-outline btn-sm" onclick="clearSession()" title="Clear all saved tokens and state">Reset Session</button>
+      <button class="btn btn-outline btn-sm" onclick="checkHealth()" title="Check if AuthGlow server is reachable">Health Check</button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- ===================== SETUP ===================== -->
+    <div class="section active" id="section-setup">
+      <h2 class="section-title">Setup</h2>
+      <p class="section-desc">Check if initial setup is needed and create the first admin user.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Check Setup Status</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Checks whether any users exist in the system. If no users exist, you need to create an admin first.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/setup/check','res-setup-check')">Check Setup</button>
+          </div>
+          <div class="response-area" id="res-setup-check"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Create Admin User</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Email</label><input id="setup-email" type="email" value="admin@example.com" placeholder="admin@example.com"></div>
+            <div class="field"><label>Password</label><input id="setup-password" type="text" value="AdminP@ss123!" placeholder="Min 8 chars, upper, lower, digit, special"></div>
+            <div class="field"><label>First Name</label><input id="setup-first" type="text" value="Admin" placeholder="Optional"></div>
+            <div class="field"><label>Last Name</label><input id="setup-last" type="text" value="User" placeholder="Optional"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createAdmin()">Create Admin</button>
+          </div>
+          <div class="response-area" id="res-setup-create"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== AUTH ===================== -->
+    <div class="section" id="section-auth">
+      <h2 class="section-title">Authentication</h2>
+      <p class="section-desc">Register users, log in, and retrieve current user info.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Register User</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Email</label><input id="reg-email" type="email" value="testuser@example.com" placeholder="user@example.com"></div>
+            <div class="field"><label>Password</label><input id="reg-password" type="text" value="TestP@ss123!" placeholder="Password"></div>
+            <div class="field"><label>First Name</label><input id="reg-first" type="text" value="Test" placeholder="Optional"></div>
+            <div class="field"><label>Last Name</label><input id="reg-last" type="text" value="User" placeholder="Optional"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="registerUser()">Register</button>
+            <button class="btn btn-outline" onclick="inviteUser()">Invite User (Admin)</button>
+          </div>
+          <div class="response-area" id="res-auth-register"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Login (Username/Password)</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Authenticates via <code>/api/token</code> and stores the access token in session for subsequent requests.</p>
+          <div class="form-grid">
+            <div class="field"><label>Email (username)</label><input id="login-email" type="email" value="admin@example.com" placeholder="user@example.com"></div>
+            <div class="field"><label>Password</label><input id="login-password" type="text" value="AdminP@ss123!" placeholder="Password"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="loginUser()">Login</button>
+          </div>
+          <div class="response-area" id="res-auth-login"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Get Current User</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Uses the stored access token to fetch current user info via <code>/api/users/me</code>.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/users/me','res-auth-me',null,true)">Get My Info</button>
+          </div>
+          <div class="response-area" id="res-auth-me"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List Users (Admin)</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/users','res-auth-list',null,true)">List All Users</button>
+          </div>
+          <div class="response-area" id="res-auth-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MFA ===================== -->
+    <div class="section" id="section-mfa">
+      <h2 class="section-title">MFA (TOTP)</h2>
+      <p class="section-desc">Enroll, verify, and test TOTP-based multi-factor authentication.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Enroll MFA</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Starts MFA enrollment. Returns a QR code and TOTP secret.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="mfaEnrollIntercept()">Enroll MFA</button>
+          </div>
+          <div id="mfa-qr-container" style="margin-top:12px;display:none;">
+            <p style="font-size:11px;color:var(--text-muted);">Scan this QR code with your authenticator app:</p>
+            <img id="mfa-qr-img" style="max-width:200px;border-radius:8px;border:1px solid var(--border);" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Secret: <code id="mfa-secret-display"></code></p>
+          </div>
+          <div class="response-area" id="res-mfa-enroll"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Verify MFA Enrollment</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:300px;">
+            <div class="field"><label>TOTP Code</label><input id="mfa-verify-code" type="text" placeholder="6-digit code from authenticator" style="letter-spacing:4px;font-size:18px;"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="verifyMFA()">Verify Enrollment</button>
+          </div>
+          <div class="response-area" id="res-mfa-verify"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>MFA Status</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/mfa/status','res-mfa-status',null,true)">Check Status</button>
+          </div>
+          <div class="response-area" id="res-mfa-status"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Login with MFA</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">First do a normal login to get a session token, then submit the TOTP code.</p>
+          <div class="form-grid single" style="max-width:300px;">
+            <div class="field"><label>TOTP Code</label><input id="mfa-login-code" type="text" placeholder="6-digit code" style="letter-spacing:4px;font-size:18px;"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="loginWithMFA()">Login with MFA</button>
+          </div>
+          <div class="response-area" id="res-mfa-login"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Disable MFA</h3>
+          <span class="method method-DELETE">DELETE</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-danger" onclick="apiCallAndShow('DELETE','/api/mfa/disable','res-mfa-disable',null,true)">Disable MFA</button>
+          </div>
+          <div class="response-area" id="res-mfa-disable"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== PASSKEYS ===================== -->
+    <div class="section" id="section-passkeys">
+      <h2 class="section-title">Passkeys (WebAuthn)</h2>
+      <p class="section-desc">Register and authenticate with passkeys. Requires a logged-in user and HTTPS (or localhost).</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Register Passkey</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Click "Start Registration" to begin the WebAuthn ceremony. Your browser will prompt you to create a passkey (fingerprint, face, PIN, etc.).</p>
+          <div class="form-grid single" style="max-width:300px;">
+            <div class="field"><label>Passkey Name</label><input id="pk-name" type="text" value="My Passkey" placeholder="Name for this passkey"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="passkeyRegister()">Start Registration</button>
+            <button class="btn btn-outline" style="display:none" id="pk-complete-btn" onclick="passkeyCompleteRegistration()">Complete Registration</button>
+          </div>
+          <div class="response-area" id="res-pk-reg-begin"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Authenticate with Passkey</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Enter your email and authenticate with a registered passkey. Returns an access token on success.</p>
+          <div class="form-grid single" style="max-width:400px;">
+            <div class="field"><label>Email</label><input id="pk-auth-email" type="email" placeholder="user@example.com"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="passkeyAuthenticate()">Authenticate</button>
+          </div>
+          <div class="response-area" id="res-pk-auth"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List Passkeys</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/passkey/list','res-pk-list',null,true)">List Passkeys</button>
+          </div>
+          <div class="response-area" id="res-pk-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Delete Passkey</h3>
+          <span class="method method-DELETE">DELETE</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:500px;">
+            <div class="field"><label>Credential ID</label><input id="pk-del-id" type="text" placeholder="Paste credential ID from list"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-danger" onclick="deletePasskey()">Delete Passkey</button>
+          </div>
+          <div class="response-area" id="res-pk-delete"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== PASSWORD RESET ===================== -->
+    <div class="section" id="section-password-reset">
+      <h2 class="section-title">Password Reset</h2>
+      <p class="section-desc">Request a password reset token and confirm the reset.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Request Reset</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:400px;">
+            <div class="field"><label>Email</label><input id="pwreset-email" type="email" value="admin@example.com" placeholder="user@example.com"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="requestPasswordReset()">Request Reset</button>
+          </div>
+          <div class="response-area" id="res-pwreset-request"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Confirm Reset</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Token (from reset email/file)</label><input id="pwreset-token" type="text" placeholder="Paste token from response above"></div>
+            <div class="field"><label>New Password</label><input id="pwreset-newpw" type="text" value="NewP@ss456!" placeholder="New password"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="confirmPasswordReset()">Confirm Reset</button>
+          </div>
+          <div class="response-area" id="res-pwreset-confirm"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== EMAIL VERIFICATION ===================== -->
+    <div class="section" id="section-email">
+      <h2 class="section-title">Email Verification</h2>
+      <p class="section-desc">Verify email addresses and resend verification emails.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Verify Email</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:400px;">
+            <div class="field"><label>Verification Token</label><input id="email-token" type="text" placeholder="Paste token from email"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="verifyEmail()">Verify</button>
+          </div>
+          <div class="response-area" id="res-email-verify"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Resend Verification</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('POST','/api/email/resend-verification','res-email-resend',null,true)">Resend</button>
+          </div>
+          <div class="response-area" id="res-email-resend"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== PROFILE ===================== -->
+    <div class="section" id="section-profile">
+      <h2 class="section-title">User Profile</h2>
+      <p class="section-desc">View and update your profile, change password, manage preferences.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>View Profile</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/profile/me','res-profile-me',null,true)">Get Profile</button>
+          </div>
+          <div class="response-area" id="res-profile-me"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Update Profile</h3>
+          <span class="method method-PATCH">PATCH</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>First Name</label><input id="prof-first" type="text" placeholder="First name"></div>
+            <div class="field"><label>Last Name</label><input id="prof-last" type="text" placeholder="Last name"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="updateProfile()">Update</button>
+          </div>
+          <div class="response-area" id="res-profile-update"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Change Password</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Current Password</label><input id="prof-oldpw" type="text" value="AdminP@ss123!" placeholder="Current password"></div>
+            <div class="field"><label>New Password</label><input id="prof-newpw" type="text" value="NewP@ss456!" placeholder="New password"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
+          </div>
+          <div class="response-area" id="res-profile-chpw"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Preferences</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/profile/me/preferences','res-profile-prefs',null,true)">Get Preferences</button>
+          </div>
+          <div class="response-area" id="res-profile-prefs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== API KEYS ===================== -->
+    <div class="section" id="section-apikeys">
+      <h2 class="section-title">API Keys</h2>
+      <p class="section-desc">Create, list, and manage API keys for programmatic access.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Create API Key</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Name</label><input id="apikey-name" type="text" value="test-key" placeholder="Key name"></div>
+            <div class="field"><label>Scopes (comma-separated)</label><input id="apikey-scopes" type="text" value="read,write" placeholder="read,write"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createApiKey()">Create Key</button>
+          </div>
+          <div class="response-area" id="res-apikey-create"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List API Keys</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/keys','res-apikey-list',null,true)">List Keys</button>
+          </div>
+          <div class="response-area" id="res-apikey-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Test API Key Auth</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:500px;">
+            <div class="field"><label>API Key</label><input id="apikey-test-key" type="text" placeholder="Paste the key from 'Create Key' response"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="testApiKey()">Test Key</button>
+          </div>
+          <div class="response-area" id="res-apikey-test"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== OAUTH2 FLOW ===================== -->
+    <div class="section" id="section-oauth2">
+      <h2 class="section-title">OAuth2 Authorization Flow</h2>
+      <p class="section-desc">Test the full OAuth2 Authorization Code flow with PKCE.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>OAuth2 Authorize</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Begins the OAuth2 authorization flow. Sends credentials and receives an authorization code.</p>
+          <div class="form-grid">
+            <div class="field"><label>Email</label><input id="oauth-email" type="text" placeholder="User email"></div>
+            <div class="field"><label>Password</label><input id="oauth-password" type="password" placeholder="User password"></div>
+            <div class="field"><label>Client ID</label><input id="oauth-client-id" type="text" value="default-client-id" placeholder="OAuth2 client ID"></div>
+            <div class="field"><label>Redirect URI</label><input id="oauth-redirect" type="text" value="http://localhost:5000/callback" placeholder="http://localhost:5000/callback"></div>
+            <div class="field"><label>Scope</label><input id="oauth-scope" type="text" value="openid profile email read" placeholder="openid profile email read"></div>
+            <div class="field"><label>Response Type</label>
+              <select id="oauth-response-type">
+                <option value="code">code</option>
+              </select>
+            </div>
+            <div class="field"><label>PKCE</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="oauth-use-pkce" checked> Use PKCE (S256)</label></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="oauthAuthorize()">Authorize</button>
+          </div>
+          <div class="response-area" id="res-oauth-authorize"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Exchange Code for Token</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <p class="help-text">Exchanges the authorization code for an access token. Code auto-filled from authorize step.</p>
+          <div class="form-grid">
+            <div class="field"><label>Authorization Code</label><input id="oauth-code" type="text" placeholder="Auto-filled from authorize step"></div>
+            <div class="field"><label>Client Secret</label><input id="oauth-client-secret" type="text" value="default-client-secret" placeholder="Client secret"></div>
+            <div class="field"><label>Code Verifier (PKCE)</label><input id="oauth-code-verifier" type="text" placeholder="Auto-filled if PKCE was enabled"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="oauthToken()">Get Token</button>
+          </div>
+          <div class="response-area" id="res-oauth-token"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Get User Info (OIDC)</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="oauthUserInfo()">Get User Info</button>
+          </div>
+          <div class="response-area" id="res-oauth-userinfo"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== OAUTH2 CLIENTS ===================== -->
+    <div class="section" id="section-oauth-clients">
+      <h2 class="section-title">OAuth2 Clients</h2>
+      <p class="section-desc">Create, list, and manage OAuth2 client applications (requires admin).</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Create OAuth2 Client</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Client Name</label><input id="oclient-name" type="text" value="My Test App" placeholder="Application name"></div>
+            <div class="field"><label>Redirect URIs (comma-separated)</label><input id="oclient-redirects" type="text" value="http://localhost:5000/callback" placeholder="http://localhost:5000/callback"></div>
+            <div class="field"><label>Allowed Scopes (space-separated)</label><input id="oclient-scopes" type="text" value="openid profile email read" placeholder="e.g. openid profile email read write"></div>
+            <div class="field"><label>Confidential Client</label>
+              <label class="checkbox-label" style="display:inline-flex;align-items:center;gap:8px;margin-top:4px;">
+                <input id="oclient-confidential" type="checkbox" checked> Confidential (server-side app, can keep a secret)
+              </label>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createOAuthClient()">Create Client</button>
+          </div>
+          <div class="response-area" id="res-oclient-create"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List OAuth2 Clients</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/oauth-clients','res-oclient-list',null,true)">List All Clients</button>
+            <button class="btn btn-outline" onclick="apiCallAndShow('GET','/api/oauth-clients?active_only=true','res-oclient-list',null,true)">Active Only</button>
+          </div>
+          <div class="response-area" id="res-oclient-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Manage Client</h3>
+          <span class="method method-POST|DELETE">POST | DELETE</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid" style="grid-template-columns: 1fr auto auto auto;">
+            <div class="field"><label>Client ID</label><input id="oclient-mgr-id" type="text" placeholder="Paste client_id from list or create"></div>
+            <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:2px;">
+              <button class="btn btn-warning" onclick="deactivateOAuthClient()">Deactivate</button>
+              <button class="btn btn-outline" onclick="activateOAuthClient()">Activate</button>
+              <button class="btn btn-danger" onclick="deleteOAuthClient()">Delete</button>
+            </div>
+          </div>
+          <div class="response-area" id="res-oclient-manage"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== OIDC ===================== -->
+    <div class="section" id="section-oidc">
+      <h2 class="section-title">OIDC Discovery</h2>
+      <p class="section-desc">View the OpenID Connect discovery document and JWKS.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>OpenID Configuration</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/.well-known/openid-configuration','res-oidc-config')">Fetch Discovery</button>
+          </div>
+          <div class="response-area" id="res-oidc-config"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>JWKS</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/.well-known/jwks.json','res-oidc-jwks')">Fetch JWKS</button>
+          </div>
+          <div class="response-area" id="res-oidc-jwks"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== ADMIN ===================== -->
+    <div class="section" id="section-admin">
+      <h2 class="section-title">Admin Dashboard</h2>
+      <p class="section-desc">View system statistics, manage users, and manage JWK signing keys. Requires admin role.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Dashboard Statistics</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/admin/stats','res-admin-stats',null,true)">Get Stats</button>
+          </div>
+          <div class="response-area" id="res-admin-stats"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Search Users</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:400px;">
+            <div class="field"><label>Search Query</label><input id="admin-search" type="text" value="" placeholder="Email or name (optional)"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="adminSearchUsers()">Search Users</button>
+          </div>
+          <div class="response-area" id="res-admin-users"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Get User Detail</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:500px;">
+            <div class="field"><label>User ID</label><input id="admin-userid" type="text" placeholder="Paste user ID from search results"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="adminGetUser()">Get User Detail</button>
+          </div>
+          <div class="response-area" id="res-admin-detail"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>JWK Keys Management</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="loadJwkKeys()">List Keys</button>
+            <button class="btn btn-warning" style="background:var(--warning);color:#fff;margin-left:8px;" onclick="rotateJwkKeys()">Rotate Keys</button>
+          </div>
+          <div id="res-jwk-keys" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== RBAC ===================== -->
+    <div class="section" id="section-rbac">
+      <h2 class="section-title">RBAC</h2>
+      <p class="section-desc">Role-Based Access Control: manage permissions, roles, and assignments.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Create Permission</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Name</label><input id="rbac-perm-name" type="text" value="documents:read" placeholder="resource:action"></div>
+            <div class="field"><label>Resource</label><input id="rbac-perm-resource" type="text" value="documents" placeholder="e.g. documents"></div>
+            <div class="field"><label>Action</label><input id="rbac-perm-action" type="text" value="read" placeholder="e.g. read"></div>
+            <div class="field"><label>Description</label><input id="rbac-perm-desc" type="text" value="Read documents" placeholder="Description"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createPermission()">Create</button>
+          </div>
+          <div class="response-area" id="res-rbac-perm-create"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List Permissions</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/rbac/permissions','res-rbac-perm-list',null,true)">List</button>
+          </div>
+          <div class="response-area" id="res-rbac-perm-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Create Role</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>Name</label><input id="rbac-role-name" type="text" value="editor" placeholder="Role name"></div>
+            <div class="field"><label>Description</label><input id="rbac-role-desc" type="text" value="Content editor" placeholder="Description"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createRole()">Create Role</button>
+          </div>
+          <div class="response-area" id="res-rbac-role-create"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>List Roles</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/rbac/roles','res-rbac-role-list',null,true)">List Roles</button>
+          </div>
+          <div class="response-area" id="res-rbac-role-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Assign Role to User</h3>
+          <span class="method method-POST">POST</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field"><label>User ID</label><input id="rbac-assign-uid" type="text" placeholder="Paste from /api/users/me"></div>
+            <div class="field"><label>Role ID</label><input id="rbac-assign-rid" type="text" placeholder="From list roles response"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="assignRole()">Assign</button>
+          </div>
+          <div class="response-area" id="res-rbac-assign"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Get User Permissions</h3>
+          <span class="method method-GET">GET</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid single" style="max-width:500px;">
+            <div class="field"><label>User ID</label><input id="rbac-userperms-uid" type="text" placeholder="User ID"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="getUserPermissions()">Get Permissions</button>
+          </div>
+          <div class="response-area" id="res-rbac-userperms"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/test-static/app.js?v=3"></script>
+
+  <!-- MFA Modal -->
+  <div id="mfa-modal">
+    <div class="mfa-modal-card">
+      <h3>MFA Verification Required</h3>
+      <p class="mfa-modal-desc">Enter the 6-digit code from your authenticator app.</p>
+      <div class="field">
+        <input id="mfa-modal-code" type="text" placeholder="000000" maxlength="8" autofocus>
+      </div>
+      <div class="mfa-modal-actions">
+        <button class="btn btn-primary" style="flex:1;" onclick="submitMfaModal()">Verify</button>
+        <button class="btn btn-outline" onclick="closeMfaModal()">Cancel</button>
+      </div>
+      <div class="mfa-modal-error" id="mfa-modal-error"></div>
+    </div>
+  </div>
+</body>
+</html>

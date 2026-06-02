@@ -1,0 +1,36 @@
+⚠️ Security Alert - {{ company_name }}
+
+Hello{% if user_name %} {{ user_name }}{% endif %},
+
+We detected {{ alert_type }} on your {{ company_name }} account.
+
+Activity Details:
+- Date: {{ timestamp }}
+{% if ip_address %}- IP Address: {{ ip_address }}{% endif %}
+{% if location %}- Location: {{ location }}{% endif %}
+{% if device %}- Device: {{ device }}{% endif %}
+{% if browser %}- Browser: {{ browser }}{% endif %}
+
+{% if was_you %}
+✅ Was this you? No action needed - your account is secure.
+{% endif %}
+
+{% if not was_you %}
+❌ Was this NOT you? Take immediate action:
+- Change your password immediately
+- Review your recent account activity
+- Enable Two-Factor Authentication (MFA)
+- Contact your administrator if you need help
+
+Secure your account: {{ security_url }}
+{% endif %}
+
+Security Tips:
+- Never share your password with anyone
+- Use a strong, unique password for each account
+- Enable MFA for an extra layer of security
+- Keep your contact information up to date
+
+---
+This email was sent from {{ company_name }}.
+If you have questions, please contact your administrator.
