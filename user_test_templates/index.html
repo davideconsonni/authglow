@@ -693,7 +693,7 @@
     <!-- ===================== ADMIN ===================== -->
     <div class="section" id="section-admin">
       <h2 class="section-title">Admin Dashboard</h2>
-      <p class="section-desc">View system statistics, manage users, and inspect audit logs. Requires admin role.</p>
+      <p class="section-desc">View system statistics, manage users, and manage JWK signing keys. Requires admin role.</p>
 
       <div class="card">
         <div class="card-header">
@@ -742,14 +742,15 @@
 
       <div class="card">
         <div class="card-header">
-          <h3>Audit Logs</h3>
+          <h3>JWK Keys Management</h3>
           <span class="method method-GET">GET</span>
         </div>
         <div class="card-body">
           <div class="btn-row">
-            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/admin/audit/logs','res-admin-audit',null,true)">Get Logs</button>
+            <button class="btn btn-primary" onclick="loadJwkKeys()">List Keys</button>
+            <button class="btn btn-warning" style="background:var(--warning);color:#fff;margin-left:8px;" onclick="rotateJwkKeys()">Rotate Keys</button>
           </div>
-          <div class="response-area" id="res-admin-audit"></div>
+          <div id="res-jwk-keys" style="margin-top:12px;"></div>
         </div>
       </div>
     </div>
@@ -856,7 +857,7 @@
     </div>
   </main>
 
-  <script src="/test-static/app.js"></script>
+  <script src="/test-static/app.js?v=2"></script>
 
   <!-- MFA Modal -->
   <div id="mfa-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:none;align-items:center;justify-content:center;">

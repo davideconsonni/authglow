@@ -1,9 +1,11 @@
 """Configuration management for AuthGlow."""
 
+import json
+import os
 import warnings
+from datetime import datetime, timedelta, timezone
 from functools import cached_property, lru_cache
-from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -11,48 +13,206 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_KEYRING_FILENAME = "keyring.json"
+_LEGACY_KID = "klegacy"
 
-def get_or_generate_keys(private_key_path: str, public_key_path: str, secret_key: str = ""):
+
+def _generate_key_pair(key_size: int = 2048):
+    """Generate a fresh RSA key pair and return (private_bytes, public_bytes)."""
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, key_size=key_size, backend=default_backend()
+    )
+    priv_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    pub_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    return priv_bytes, pub_bytes
+
+
+def _new_kid() -> str:
+    """Generate a unique sortable key ID with timestamp + random suffix."""
+    import secrets
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    suffix = secrets.token_hex(2)
+    return f"k{ts}{suffix}"
+
+
+def _load_keyring(keyring_path: str) -> Optional[Dict[str, Any]]:
+    """Load keyring.json, return None if missing."""
+    if not os.path.exists(keyring_path):
+        return None
+    with open(keyring_path, "r", encoding="utf-8") as f:
+        data: Dict[str, Any] = json.load(f)
+        return data
+
+
+def _save_keyring(keyring_path: str, keyring: Dict[str, Any]):
+    """Atomically save keyring.json."""
+    tmp = keyring_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(keyring, f, indent=2)
+    os.replace(tmp, keyring_path)
+
+
+def get_or_generate_keyring(
+    keys_dir: str,
+    secret_key: str,
+    rotation_days: int = 90,
+    auto_rotate: bool = True,
+    key_size: int = 2048,
+):
     """
-    Load RSA keys from disk, or generate them if they don't exist.
-    Private key is encrypted at rest with AES-256-GCM via SECRET_KEY.
+    Ensure the RSA keyring exists on disk with at least one active key.
 
-    Function is not @lru_cache decorated at module level because this is
-    called once from Settings.__init__, which is itself cached via
-    get_settings(). Adding lru_cache here would duplicate the caching
-    and is unnecessary.
+    1. Migrate legacy single-key format to keyring if needed.
+    2. Generate new keys if no keys exist.
+    3. Auto-rotate if the active key is older than *rotation_days*.
+
+    Backward compat: the active key is also written to
+    ``{keys_dir}/private_key.pem`` / ``{keys_dir}/public_key.pem``.
     """
-    priv_path = Path(private_key_path)
-    pub_path = Path(public_key_path)
+    from authglow.core.crypto import encrypt_private_key
 
-    priv_path.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(keys_dir, exist_ok=True)
+    keyring_path = os.path.join(keys_dir, _KEYRING_FILENAME)
+    legacy_priv_path = os.path.join(keys_dir, "private_key.pem")
+    legacy_pub_path = os.path.join(keys_dir, "public_key.pem")
 
-    if not (priv_path.exists() and pub_path.exists()):
-        from authglow.core.crypto import encrypt_private_key
+    keyring = _load_keyring(keyring_path)
 
-        print("Generating new RSA keys...")
-        private_key = rsa.generate_private_key(
-            public_exponent=65537, key_size=2048, backend=default_backend()
-        )
-        public_key = private_key.public_key()
+    # --- Migration from legacy single-key format ---
+    if keyring is None and os.path.exists(legacy_priv_path) and os.path.exists(legacy_pub_path):
+        print("Migrating legacy RSA keys to keyring...")
+        kid = _LEGACY_KID
+        kid_dir = os.path.join(keys_dir, kid)
+        os.makedirs(kid_dir, exist_ok=True)
+        os.rename(legacy_priv_path, os.path.join(kid_dir, "private_key.pem"))
+        os.rename(legacy_pub_path, os.path.join(kid_dir, "public_key.pem"))
+        keyring = {
+            "active_kid": kid,
+            "keys": {
+                kid: {
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "active",
+                    "algorithm": "RS256",
+                    "key_size": key_size,
+                }
+            },
+        }
+        _save_keyring(keyring_path, keyring)
+        _write_active_symlinks(keys_dir, keyring)
 
-        priv_bytes = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-        pub_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
+    # --- Fresh generation ---
+    if keyring is None:
+        print("Generating new RSA keyring...")
+        kid = _new_kid()
+        kid_dir = os.path.join(keys_dir, kid)
+        os.makedirs(kid_dir, exist_ok=True)
 
+        priv_bytes, pub_bytes = _generate_key_pair(key_size)
         encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-        with open(priv_path, "wb") as f:
+        with open(os.path.join(kid_dir, "private_key.pem"), "wb") as f:
             f.write(encrypted_priv)
-        with open(pub_path, "wb") as f:
+        with open(os.path.join(kid_dir, "public_key.pem"), "wb") as f:
             f.write(pub_bytes)
 
-        print(f"New RSA keys generated and saved to {priv_path.parent}")
+        keyring = {
+            "active_kid": kid,
+            "keys": {
+                kid: {
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "active",
+                    "algorithm": "RS256",
+                    "key_size": key_size,
+                }
+            },
+        }
+        _save_keyring(keyring_path, keyring)
+        _write_active_symlinks(keys_dir, keyring)
+        print(f"RSA keyring initialised — active kid={kid}")
+        return
+
+    # --- Auto-rotate ---
+    if auto_rotate:
+        active_kid = keyring["active_kid"]
+        active_meta = keyring["keys"].get(active_kid, {})
+        created_str = active_meta.get("created_at", "")
+        if created_str:
+            created_dt = datetime.fromisoformat(created_str)
+            age = datetime.now(timezone.utc) - created_dt
+            if age > timedelta(days=rotation_days):
+                print(
+                    f"Active key {active_kid} is {age.days} days old "
+                    f"(> {rotation_days} days). Auto-rotating..."
+                )
+                _perform_rotation(keys_dir, keyring_path, keyring, secret_key, active_kid, key_size)
+
+
+def _write_active_symlinks(keys_dir: str, keyring: Dict[str, Any]):
+    """Copy the active key to the legacy flat paths for backward compatibility."""
+    active_kid = keyring["active_kid"]
+    src_priv = os.path.join(keys_dir, active_kid, "private_key.pem")
+    src_pub = os.path.join(keys_dir, active_kid, "public_key.pem")
+    dst_priv = os.path.join(keys_dir, "private_key.pem")
+    dst_pub = os.path.join(keys_dir, "public_key.pem")
+
+    try:
+        os.remove(dst_priv)
+    except FileNotFoundError:
+        pass
+    try:
+        os.remove(dst_pub)
+    except FileNotFoundError:
+        pass
+
+    import shutil
+
+    shutil.copy2(src_priv, dst_priv)
+    shutil.copy2(src_pub, dst_pub)
+
+
+def _perform_rotation(
+    keys_dir: str,
+    keyring_path: str,
+    keyring: Dict[str, Any],
+    secret_key: str,
+    old_kid: str,
+    key_size: int,
+):
+    """Generate a new key pair, mark old active as verifying, save."""
+    from authglow.core.crypto import encrypt_private_key
+
+    kid = _new_kid()
+    kid_dir = os.path.join(keys_dir, kid)
+    os.makedirs(kid_dir, exist_ok=True)
+
+    priv_bytes, pub_bytes = _generate_key_pair(key_size)
+    encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
+    with open(os.path.join(kid_dir, "private_key.pem"), "wb") as f:
+        f.write(encrypted_priv)
+    with open(os.path.join(kid_dir, "public_key.pem"), "wb") as f:
+        f.write(pub_bytes)
+
+    now_str = datetime.now(timezone.utc).isoformat()
+    keyring["keys"][kid] = {
+        "created_at": now_str,
+        "status": "active",
+        "algorithm": "RS256",
+        "key_size": key_size,
+    }
+    keyring["keys"][old_kid]["status"] = "verifying"
+    keyring["keys"][old_kid]["retired_at"] = now_str
+    keyring["active_kid"] = kid
+
+    _save_keyring(keyring_path, keyring)
+    _write_active_symlinks(keys_dir, keyring)
+    print(f"Key rotated: {old_kid} -> {kid} (new active, old is now verifying)")
 
 
 class Settings(BaseSettings):
@@ -66,16 +226,25 @@ class Settings(BaseSettings):
     app_name: str = "AuthGlow"
     app_env: str = "development"
     debug: bool = False
+    enable_docs: bool = True
     secret_key: str = Field(..., min_length=32)
     jwt_algorithm: str = "RS256"
+    keys_dir: str = "data/keys"
     private_key_path: str = "data/keys/private_key.pem"
     public_key_path: str = "data/keys/public_key.pem"
+    jwt_key_rotation_days: int = 90
+    jwt_auto_rotate: bool = True
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
     def __init__(self, **values):
         super().__init__(**values)
-        get_or_generate_keys(self.private_key_path, self.public_key_path, self.secret_key)
+        get_or_generate_keyring(
+            self.keys_dir,
+            self.secret_key,
+            self.jwt_key_rotation_days,
+            self.jwt_auto_rotate,
+        )
         if self.cors_allow_credentials and self.cors_allowed_headers == "*":
             warnings.warn(
                 "CORS misconfiguration: cors_allow_credentials=true combined with "

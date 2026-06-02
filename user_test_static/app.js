@@ -914,5 +914,87 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ---- JWK Key Management ----
+async function loadJwkKeys() {
+  var res = await apiCall('GET', '/api/admin/jwk-keys', null, null, true);
+  var container = document.getElementById('res-jwk-keys');
+  if (!container) return;
+
+  if (res.status !== 200) {
+    showResponse('res-jwk-keys', res.status, res.data, res.time);
+    return;
+  }
+
+  var keys = res.data.keys || [];
+  var activeKid = res.data.active_kid || '';
+  if (keys.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);padding:12px;">No keys found.</p>';
+    return;
+  }
+
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--border);">';
+  html += '<th style="text-align:left;padding:8px;">KID</th>';
+  html += '<th style="text-align:left;padding:8px;">Status</th>';
+  html += '<th style="text-align:left;padding:8px;">Created</th>';
+  html += '<th style="text-align:center;padding:8px;">Actions</th>';
+  html += '</tr></thead><tbody>';
+
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var badge = '';
+    if (k.status === 'active') badge = '<span style="background:#d4edda;color:#155724;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Active</span>';
+    else if (k.status === 'verifying') badge = '<span style="background:#fff3cd;color:#856404;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Verifying</span>';
+    else if (k.status === 'revoked') badge = '<span style="background:#f8d7da;color:#721c24;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Revoked</span>';
+    else badge = '<span style="background:var(--border);color:var(--text);padding:2px 10px;border-radius:12px;font-size:11px;">' + (k.status || '?') + '</span>';
+
+    var createdAt = k.created_at ? new Date(k.created_at).toLocaleString() : '&mdash;';
+    var actions = '';
+    if (k.status === 'verifying') {
+      actions = '<button class="btn btn-danger" style="font-size:0.75rem;padding:4px 10px;" onclick="revokeJwkKey(\'' + escapeHtml(k.kid) + '\')">Revoke</button>';
+    } else if (k.status === 'active') {
+      actions = '<span style="color:var(--text-muted);font-size:11px;">Current signer</span>';
+    } else {
+      actions = '<span style="color:var(--text-muted);font-size:11px;">&mdash;</span>';
+    }
+
+    html += '<tr style="border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:8px;font-family:monospace;font-size:12px;">' + escapeHtml(k.kid) + (k.kid === activeKid ? ' &larr;' : '') + '</td>';
+    html += '<td style="padding:8px;">' + badge + '</td>';
+    html += '<td style="padding:8px;">' + createdAt + '</td>';
+    html += '<td style="padding:8px;text-align:center;">' + actions + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function rotateJwkKeys() {
+  if (!confirm('Rotate the active signing key? This generates a new key pair. Existing tokens will still be valid.')) return;
+  var res = await apiCall('POST', '/api/admin/jwk-keys/rotate', null, null, true);
+  if (res.status === 200) {
+    showToast('Key rotated: ' + res.data.old_kid + ' \u2192 ' + res.data.new_kid, 'success');
+  } else {
+    showToast('Rotation failed: ' + (res.data.detail || JSON.stringify(res.data)), 'error');
+  }
+  loadJwkKeys();
+}
+
+async function revokeJwkKey(kid) {
+  if (!confirm('Revoke key ' + kid + '? All tokens signed with this key will be rejected. This is irreversible.')) return;
+  var res = await apiCall('POST', '/api/admin/jwk-keys/' + encodeURIComponent(kid) + '/revoke', null, null, true);
+  if (res.status === 200) {
+    showToast('Key ' + kid + ' revoked', 'success');
+  } else {
+    showToast('Revocation failed: ' + (res.data.detail || JSON.stringify(res.data)), 'error');
+  }
+  loadJwkKeys();
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // ---- Init ----
 updateSessionUI();

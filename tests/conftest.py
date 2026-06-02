@@ -70,6 +70,7 @@ def test_settings(tmp_path, test_keys_dir):
         secret_key="test-secret-key-for-authglow-testing-32chars!",
         storage_path=storage_path,
         storage_backend="file",
+        keys_dir=test_keys_dir,
         private_key_path=os.path.join(test_keys_dir, "private_key.pem"),
         public_key_path=os.path.join(test_keys_dir, "public_key.pem"),
         app_name="AuthGlow Test",
@@ -80,6 +81,7 @@ def test_settings(tmp_path, test_keys_dir):
         password_require_lowercase=True,
         password_require_digits=True,
         password_require_special=True,
+        jwt_auto_rotate=False,
     )
     return settings
 
@@ -164,12 +166,8 @@ def oauth2_service(test_settings):
     from authglow.services.oauth2 import OAuth2Service
 
     with patch("authglow.services.oauth2.get_settings", return_value=test_settings):
-        with patch(
-            "authglow.services.oauth_client.get_settings", return_value=test_settings
-        ):
-            with patch(
-                "authglow.services.password.get_settings", return_value=test_settings
-            ):
+        with patch("authglow.services.oauth_client.get_settings", return_value=test_settings):
+            with patch("authglow.services.password.get_settings", return_value=test_settings):
                 svc = OAuth2Service()
                 return svc
 
@@ -187,9 +185,7 @@ def api_key_service(test_settings):
 def refresh_token_service(test_settings):
     from authglow.services.refresh_token import RefreshTokenService
 
-    with patch(
-        "authglow.services.refresh_token.get_settings", return_value=test_settings
-    ):
+    with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
         svc = RefreshTokenService()
         return svc
 
@@ -214,9 +210,7 @@ def session_service(test_settings):
 def password_reset_service(test_settings):
     from authglow.services.password_reset import PasswordResetService
 
-    with patch(
-        "authglow.services.password_reset.get_settings", return_value=test_settings
-    ):
+    with patch("authglow.services.password_reset.get_settings", return_value=test_settings):
         return PasswordResetService()
 
 
@@ -224,12 +218,8 @@ def password_reset_service(test_settings):
 def oauth_client_storage(test_settings):
     from authglow.services.oauth_client import OAuth2ClientStorage
 
-    with patch(
-        "authglow.services.oauth_client.get_settings", return_value=test_settings
-    ):
-        with patch(
-            "authglow.services.password.get_settings", return_value=test_settings
-        ):
+    with patch("authglow.services.oauth_client.get_settings", return_value=test_settings):
+        with patch("authglow.services.password.get_settings", return_value=test_settings):
             return OAuth2ClientStorage()
 
 
@@ -237,9 +227,7 @@ def oauth_client_storage(test_settings):
 def oauth_consent_service(test_settings):
     from authglow.services.oauth_consent import OAuth2ConsentService
 
-    with patch(
-        "authglow.services.oauth_consent.get_settings", return_value=test_settings
-    ):
+    with patch("authglow.services.oauth_consent.get_settings", return_value=test_settings):
         return OAuth2ConsentService()
 
 
@@ -247,9 +235,7 @@ def oauth_consent_service(test_settings):
 def email_verification_service(test_settings):
     from authglow.services.email_verification import EmailVerificationService
 
-    with patch(
-        "authglow.services.email_verification.get_settings", return_value=test_settings
-    ):
+    with patch("authglow.services.email_verification.get_settings", return_value=test_settings):
         with patch("authglow.services.email_verification.UserStorage") as mock_cls:
             svc = EmailVerificationService()
             svc.user_storage = MagicMock()
@@ -268,9 +254,7 @@ def rbac_service(test_settings):
 def user_profile_service(test_settings):
     from authglow.services.user_profile import UserProfileService
 
-    with patch(
-        "authglow.services.user_profile.get_settings", return_value=test_settings
-    ):
+    with patch("authglow.services.user_profile.get_settings", return_value=test_settings):
         with patch("authglow.services.user_profile.EmailVerificationService"):
             with patch("authglow.services.user_profile.SecurityNotificationService"):
                 svc = UserProfileService()
@@ -296,9 +280,7 @@ def security_notification_service(test_settings):
         "authglow.services.security_notifications.get_settings",
         return_value=test_settings,
     ):
-        with patch(
-            "authglow.services.security_notifications.get_email_service"
-        ) as mock:
+        with patch("authglow.services.security_notifications.get_email_service") as mock:
             mock_email = MagicMock()
             mock.return_value = mock_email
             svc = SecurityNotificationService()

@@ -1,6 +1,7 @@
 """OpenID Connect API endpoints."""
 
 import base64
+import os
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -93,25 +94,14 @@ async def openid_configuration():
 async def jwks():
     """JSON Web Key Set (JWKS) endpoint.
 
-    Returns the public key used to verify JWT signatures in JWK format.
+    Returns all active and verifying public keys in JWK format.
+    Revoked keys are excluded.
     Spec: https://tools.ietf.org/html/rfc7517
     """
     settings = get_settings()
+    jwt_service = JWTService()
+    keyring_info = jwt_service.get_keyring_info()
 
-    try:
-        with open(settings.public_key_path, "rb") as f:
-            public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Public key not found.")
-
-    if not isinstance(public_key, RSAPublicKey):
-        raise HTTPException(
-            status_code=500, detail="Public key is not RSA. Only RSA keys are supported for JWK."
-        )
-
-    public_numbers = public_key.public_numbers()
-
-    # Helper to convert int to urlsafe_base64
     def int_to_base64(n):
         return (
             base64.urlsafe_b64encode(n.to_bytes((n.bit_length() + 7) // 8, "big"))
@@ -119,16 +109,40 @@ async def jwks():
             .decode("utf-8")
         )
 
-    jwk = {
-        "kty": "RSA",
-        "use": "sig",
-        "alg": settings.jwt_algorithm,
-        "kid": "main-key",  # Key ID
-        "n": int_to_base64(public_numbers.n),
-        "e": int_to_base64(public_numbers.e),
-    }
+    keys = []
+    for kid, meta in keyring_info["keys"].items():
+        status = meta.get("status", "")
+        if status not in ("active", "verifying"):
+            continue
 
-    return JWKSResponse(keys=[jwk])
+        pub_path = os.path.join(settings.keys_dir, kid, "public_key.pem")
+        if not os.path.exists(pub_path):
+            continue
+
+        try:
+            with open(pub_path, "rb") as f:
+                public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+        except Exception:
+            continue
+
+        if not isinstance(public_key, RSAPublicKey):
+            continue
+
+        public_numbers = public_key.public_numbers()
+        jwk = {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": settings.jwt_algorithm,
+            "kid": kid,
+            "n": int_to_base64(public_numbers.n),
+            "e": int_to_base64(public_numbers.e),
+        }
+        keys.append(jwk)
+
+    if not keys:
+        raise HTTPException(status_code=500, detail="No public keys available.")
+
+    return JWKSResponse(keys=keys)
 
 
 @router.get("/oauth2/userinfo", response_model=UserInfoResponse)

@@ -33,10 +33,19 @@ class SecurityHeadersMiddleware:
 
         settings = self._get_settings()
         is_production = settings.app_env.lower() == "production"
+        path = scope.get("path", "")
 
         headers_to_add: list[tuple[str, str]] = []
 
-        _add_header(headers_to_add, "content-security-policy", settings.csp_header)
+        if path in ("/docs", "/redoc"):
+            _add_header(
+                headers_to_add,
+                "content-security-policy",
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net "
+                "https://fastapi.tiangolo.com; img-src 'self' https://fastapi.tiangolo.com data:;",
+            )
+        else:
+            _add_header(headers_to_add, "content-security-policy", settings.csp_header)
         _add_header(headers_to_add, "x-frame-options", settings.x_frame_options)
         _add_header(headers_to_add, "x-content-type-options", settings.x_content_type_options)
         _add_header(headers_to_add, "referrer-policy", settings.referrer_policy)

@@ -83,8 +83,10 @@ class TestSettingsInstantiation:
             secret_key="a" * 32,
             storage_path=storage_path,
             storage_backend="file",
+            keys_dir=keys_dir,
             private_key_path=str(tmp_path / "keys" / "private_key.pem"),
             public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+            jwt_auto_rotate=False,
         )
         assert settings.secret_key == "a" * 32
         assert settings.password_min_length == 8
@@ -93,65 +95,70 @@ class TestSettingsInstantiation:
 
 class TestRSAKeyEncryption:
     def test_generated_private_key_is_encrypted_on_disk(self, tmp_path):
-        priv_path = str(tmp_path / "keys" / "private_key.pem")
-        pub_path = str(tmp_path / "keys" / "public_key.pem")
+        keys_dir = str(tmp_path / "keys")
         secret = "k" * 32
-        os.makedirs(os.path.dirname(priv_path), exist_ok=True)
+        os.makedirs(keys_dir, exist_ok=True)
 
-        from authglow.core.config import get_or_generate_keys
+        from authglow.core.config import get_or_generate_keyring
 
-        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
+        get_or_generate_keyring(keys_dir, secret_key=secret)
 
+        keyring_path = os.path.join(keys_dir, "keyring.json")
+        assert os.path.exists(keyring_path), "keyring.json must exist"
+
+        import json
+
+        with open(keyring_path, "r") as f:
+            keyring = json.load(f)
+
+        active_kid = keyring["active_kid"]
+        priv_path = os.path.join(keys_dir, active_kid, "private_key.pem")
         raw = Path(priv_path).read_bytes()
-        assert raw.startswith(b"agk1:"), (
-            "Private key must be encrypted with agk1: prefix"
-        )
-        assert b"BEGIN PRIVATE KEY" not in raw, (
-            "Private key must NOT contain plaintext PEM"
-        )
+        assert raw.startswith(b"agk1:"), "Private key must be encrypted with agk1: prefix"
+        assert b"BEGIN PRIVATE KEY" not in raw, "Private key must NOT contain plaintext PEM"
 
     def test_public_key_remains_plaintext(self, tmp_path):
-        priv_path = str(tmp_path / "keys" / "private_key.pem")
-        pub_path = str(tmp_path / "keys" / "public_key.pem")
+        keys_dir = str(tmp_path / "keys")
         secret = "k" * 32
-        os.makedirs(os.path.dirname(pub_path), exist_ok=True)
+        os.makedirs(keys_dir, exist_ok=True)
 
-        from authglow.core.config import get_or_generate_keys
+        from authglow.core.config import get_or_generate_keyring
 
-        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
+        get_or_generate_keyring(keys_dir, secret_key=secret)
 
+        import json
+
+        with open(os.path.join(keys_dir, "keyring.json"), "r") as f:
+            keyring = json.load(f)
+
+        active_kid = keyring["active_kid"]
+        pub_path = os.path.join(keys_dir, active_kid, "public_key.pem")
         pub_raw = Path(pub_path).read_bytes()
-        assert pub_raw.startswith(b"-----BEGIN PUBLIC KEY-----"), (
-            "Public key must remain plain PEM"
-        )
+        assert pub_raw.startswith(b"-----BEGIN PUBLIC KEY-----"), "Public key must remain plain PEM"
         assert b"agk1:" not in pub_raw, "Public key must NOT be encrypted"
 
     def test_jwt_roundtrip_with_encrypted_key(self, tmp_path):
-        priv_path = str(tmp_path / "keys" / "private_key.pem")
-        pub_path = str(tmp_path / "keys" / "public_key.pem")
+        keys_dir = str(tmp_path / "keys")
         secret = "r" * 32
-        os.makedirs(os.path.dirname(priv_path), exist_ok=True)
+        os.makedirs(keys_dir, exist_ok=True)
 
-        mock_settings = MagicMock()
-        mock_settings.secret_key = secret
+        from authglow.core.config import get_or_generate_keyring
 
-        from authglow.core.config import get_or_generate_keys
-
-        get_or_generate_keys(priv_path, pub_path, secret_key=secret)
+        get_or_generate_keyring(keys_dir, secret_key=secret)
 
         settings = Settings(
             secret_key=secret,
+            keys_dir=keys_dir,
             storage_path=str(tmp_path / "data" / "users"),
             storage_backend="file",
-            private_key_path=priv_path,
-            public_key_path=pub_path,
+            private_key_path=str(tmp_path / "keys" / "private_key.pem"),
+            public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+            jwt_auto_rotate=False,
         )
 
         from authglow.services.jwt import JWTService
 
-        with patch(
-            "authglow.services.jwt.get_settings", return_value=settings
-        ):
+        with patch("authglow.services.jwt.get_settings", return_value=settings):
             svc = JWTService()
 
         token = svc.create_access_token(

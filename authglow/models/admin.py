@@ -1,7 +1,7 @@
 """Admin portal data models."""
 
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Optional, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, EmailStr, Field
 

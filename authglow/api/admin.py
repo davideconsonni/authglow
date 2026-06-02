@@ -1,5 +1,6 @@
 """Admin portal API endpoints."""
 
+import os
 from datetime import timedelta
 from typing import List, Optional, TypedDict
 
@@ -20,6 +21,7 @@ from authglow.models.admin import (
 )
 from authglow.models.user import User, UserResponse
 from authglow.services.audit import AuditService
+from authglow.services.jwt import JWTService
 from authglow.services.mfa import MFAService
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
@@ -703,3 +705,110 @@ async def revoke_consent_admin(
     )
 
     return {"message": "Consent revoked successfully"}
+
+
+# --- JWK Key Management ---
+
+
+@router.get("/admin/jwk-keys", response_class=HTMLResponse)
+async def admin_jwk_keys_page(request: Request):
+    """JWK key management page (auth handled by JS)."""
+    settings = get_settings()
+    return templates.TemplateResponse(
+        request, "admin_jwk_keys.html", context={**settings.ui_context}
+    )
+
+
+@router.get("/api/admin/jwk-keys")
+async def get_jwk_keys(
+    current_user: User = Depends(require_admin),
+):
+    """Get all JWK keys in the keyring."""
+    jwt_service = JWTService()
+    info = jwt_service.get_keyring_info()
+
+    keys_list = []
+    for kid, meta in info["keys"].items():
+        pub_path = os.path.join(get_settings().keys_dir, kid, "public_key.pem")
+        has_file = os.path.exists(pub_path)
+        try:
+            with open(pub_path, "rb") as f:
+                from cryptography.hazmat.backends import default_backend
+                from cryptography.hazmat.primitives import serialization
+
+                pub_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+                key_size = getattr(pub_key, "key_size", None)
+        except Exception:
+            key_size = meta.get("key_size", None)
+
+        keys_list.append(
+            {
+                "kid": kid,
+                "status": meta.get("status"),
+                "created_at": meta.get("created_at"),
+                "retired_at": meta.get("retired_at"),
+                "revoked_at": meta.get("revoked_at"),
+                "algorithm": meta.get("algorithm"),
+                "key_size": key_size,
+                "file_exists": has_file,
+                "is_active": kid == info["active_kid"],
+            }
+        )
+
+    keys_list.sort(key=lambda k: k.get("created_at", ""), reverse=True)
+    return {"active_kid": info["active_kid"], "keys": keys_list}
+
+
+@router.post("/api/admin/jwk-keys/rotate")
+@limiter.limit("5/minute")
+async def rotate_jwk_keys(
+    request: Request,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Rotate the active JWK signing key."""
+    jwt_service = JWTService()
+    result = jwt_service.rotate_keys()
+
+    await audit_service.log_event(
+        event_type="jwk_key_rotated",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"old_kid": result["old_kid"], "new_kid": result["new_kid"]},
+        severity="warning",
+    )
+
+    return {
+        "message": "JWK key rotated successfully",
+        "old_kid": result["old_kid"],
+        "new_kid": result["new_kid"],
+    }
+
+
+@router.post("/api/admin/jwk-keys/{kid}/revoke")
+@limiter.limit("5/minute")
+async def revoke_jwk_key(
+    kid: str,
+    request: Request,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Revoke a JWK key. Active key cannot be revoked."""
+    jwt_service = JWTService()
+    success = jwt_service.revoke_key(kid)
+
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot revoke key: either it is the active key or it does not exist",
+        )
+
+    await audit_service.log_event(
+        event_type="jwk_key_revoked",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"kid": kid},
+        severity="warning",
+    )
+
+    return {"message": f"JWK key {kid} revoked successfully"}

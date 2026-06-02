@@ -352,12 +352,24 @@ Usa una sessione per fix, spunta ciò che completi.
     **Test**: 663/663 passano. App si avvia con uvicorn senza errori.
     `mypy authglow/` → 0 errori. `ruff check authglow/` → 0 violazioni.
 
-- [ ] **D4 — Rotazione chiavi RSA (JWK key rotation)**
-  - File: `authglow/services/jwt.py`, `authglow/core/config.py`
+- [x] **D4 — Rotazione chiavi RSA (JWK key rotation)**
+  - File: `authglow/services/jwt.py`, `authglow/core/config.py`, `authglow/api/oidc.py`, `authglow/api/admin.py`
   - Problema: le chiavi RSA non hanno meccanismo di rotazione. Se compromesse, tutti i token
     esistenti diventano non validabili senza downtime.
   - Fix: aggiungere `kid` (Key ID) nei JWT. Supportare multiple chiavi con `JWKS.keys[]`.
     La chiave più recente firma, le vecchie verificano. Rotazione periodica (ogni 90 giorni).
+  - **Risolto**: Keyring multi-chiave (`data/keys/keyring.json` + directory per KID).
+    `get_or_generate_keyring()` in `config.py`: migrazione automatica da formato legacy,
+    generazione chiavi, auto-rotazione all'avvio se chiave attiva > `JWT_KEY_ROTATION_DAYS`.
+    `JWTService` ora include `kid` nell'header JWT, verifica multi-chiave con fallback.
+    Metodi `rotate_keys()` e `revoke_key()` con supporto audit log.
+    JWKS endpoint restituisce tutte le chiavi `active` + `verifying` (non `revoked`).
+    API admin: `GET /api/admin/jwk-keys`, `POST .../rotate`, `POST .../{kid}/revoke`.
+    Pagina admin `/admin/jwk-keys` per gestione visuale chiavi (rotazione, revoca, stato).
+    Settings: `JWT_KEY_ROTATION_DAYS=90`, `JWT_AUTO_ROTATE=true`.
+    Test: 21 test in `tests/unit/test_jwt_key_rotation.py` (keyring init, migrazione,
+    kid in header, verifica multi-chiave, rotazione, revoca, backward compat).
+    684/684 test totali passano.
 
 - [ ] **D5 — Backup codes: rate limit dedicato**
   - File: `authglow/services/mfa.py`, `authglow/api/mfa.py` e `auth.py`
@@ -390,5 +402,5 @@ Usa una sessione per fix, spunta ciò che completi.
 - [x] P6 — Caching layer (Phase 5 per Redis, short-term fatto)
 - [x] P7 — OAuth2ClientStorage AsyncFileSystem
 - [x] D3 — mypy + ruff config
-- [ ] D4 — JWK key rotation
+- [x] D4 — JWK key rotation
 - [ ] D5 — Backup code rate limit

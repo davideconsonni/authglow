@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('authglow-theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWK Keys - {{ company_name }}</title>
+    <link rel="stylesheet" href="/static/css/theme.css?v=1.2">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <style>
+        .keys-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .page-header h1 { margin: 0; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-danger { background: var(--danger, #dc3545); color: white; }
+        .btn-danger:hover { background: var(--danger-hover, #c82333); }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+        .keys-table { width: 100%; border-collapse: collapse; }
+        .keys-table th, .keys-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .keys-table th {
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+        .keys-table td { font-size: 0.9rem; }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-active { background: #d4edda; color: #155724; }
+        .badge-verifying { background: #fff3cd; color: #856404; }
+        .badge-revoked { background: #f8d7da; color: #721c24; }
+        .info-banner {
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .mono { font-family: 'Consolas', 'Menlo', monospace; font-size: 0.85rem; }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        }
+        .toast-success { background: #28a745; }
+        .toast-error { background: #dc3545; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    {% include 'components/admin_header.html' %}
+    <div class="admin-container">
+        {% include 'components/admin_nav.html' %}
+        <main class="admin-content">
+            <div class="keys-container">
+                <div class="page-header">
+                    <h1>JWK Key Management</h1>
+                    <button class="btn btn-primary" onclick="rotateKeys()">Rotate Keys</button>
+                </div>
+                <div class="info-banner">
+                    <strong>How key rotation works:</strong> The <em>active</em> key signs all new tokens.
+                    <em>Verifying</em> keys are used to validate tokens signed before the last rotation.
+                    <em>Revoked</em> keys are permanently rejected — tokens signed with them will fail verification.
+                    Auto-rotation happens every 90 days on app restart when <code>JWT_AUTO_ROTATE=true</code>.
+                </div>
+                <table class="keys-table">
+                    <thead>
+                        <tr>
+                            <th>Key ID (kid)</th>
+                            <th>Status</th>
+                            <th>Algorithm</th>
+                            <th>Key Size</th>
+                            <th>Created</th>
+                            <th>Retired / Revoked</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="keys-tbody">
+                        <tr><td colspan="7" style="text-align:center; padding:32px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <div id="toast-container"></div>
+    <script>
+        let activeKid = null;
+
+        async function loadKeys() {
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch('/api/admin/jwk-keys', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to load keys');
+                const data = await response.json();
+                activeKid = data.active_kid;
+                renderKeys(data.keys);
+            } catch (err) {
+                document.getElementById('keys-tbody').innerHTML =
+                    `<tr><td colspan="7" style="text-align:center; padding:32px; color: var(--danger)">Error: ${err.message}</td></tr>`;
+            }
+        }
+
+        function renderKeys(keys) {
+            const tbody = document.getElementById('keys-tbody');
+            if (keys.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:32px;">No keys found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = keys.map(k => {
+                let statusBadge = '';
+                if (k.status === 'active') statusBadge = '<span class="badge badge-active">Active</span>';
+                else if (k.status === 'verifying') statusBadge = '<span class="badge badge-verifying">Verifying</span>';
+                else if (k.status === 'revoked') statusBadge = '<span class="badge badge-revoked">Revoked</span>';
+                else statusBadge = `<span class="badge">${k.status || 'unknown'}</span>`;
+
+                let retiredRevoked = '';
+                if (k.retired_at) retiredRevoked = `Retired: ${formatDate(k.retired_at)}`;
+                if (k.revoked_at) retiredRevoked = `Revoked: ${formatDate(k.revoked_at)}`;
+
+                let actions = '';
+                if (k.status === 'verifying') {
+                    actions = `<button class="btn btn-danger" onclick="revokeKey('${k.kid}')">Revoke</button>`;
+                } else if (k.status === 'active') {
+                    actions = '<span style="color: var(--text-tertiary); font-size: 0.85rem;">Current signer</span>';
+                } else {
+                    actions = '<span style="color: var(--text-tertiary); font-size: 0.85rem;">&mdash;</span>';
+                }
+
+                return `<tr>
+                    <td class="mono">${k.kid} ${k.is_active ? '&larr;' : ''}</td>
+                    <td>${statusBadge}</td>
+                    <td>${k.algorithm || 'RS256'}</td>
+                    <td>${k.key_size ? k.key_size + ' bits' : '&mdash;'}</td>
+                    <td>${formatDate(k.created_at)}</td>
+                    <td>${retiredRevoked || '&mdash;'}</td>
+                    <td>${actions}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function formatDate(isoStr) {
+            if (!isoStr) return '&mdash;';
+            const d = new Date(isoStr);
+            return d.toLocaleString();
+        }
+
+        async function rotateKeys() {
+            if (!confirm('Rotate the active signing key? A new key will be generated. Existing tokens will continue to work until they expire.')) return;
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch('/api/admin/jwk-keys/rotate', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showToast(`Key rotated: ${data.old_kid} -> ${data.new_kid}`, 'success');
+                    loadKeys();
+                } else {
+                    showToast(data.detail || 'Rotation failed', 'error');
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function revokeKey(kid) {
+            if (!confirm(`Revoke key ${kid}? All tokens signed with this key will be rejected. This is irreversible.`)) return;
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(`/api/admin/jwk-keys/${encodeURIComponent(kid)}/revoke`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showToast(`Key ${kid} revoked`, 'success');
+                    loadKeys();
+                } else {
+                    showToast(data.detail || 'Revocation failed', 'error');
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        function showToast(message, type) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { toast.remove(); }, 5000);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('admin_token')) {
+                window.location.href = '/login';
+                return;
+            }
+            loadKeys();
+        });
+    </script>
+    <script src="/static/js/theme.js"></script>
+</body>
+</html>
