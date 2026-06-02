@@ -1,1 +1,0 @@
-# AuthGlow middleware package

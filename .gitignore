@@ -207,5 +207,10 @@ __marimo__/
 
 /.idea
 /.claude
-/data/*
+/backend/data/*
 nul
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+./backend/.idea
