@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Search, Loader2, Trash2, Key, Plus, Save, Ban } from 'lucide-react'
+import { Search, Loader2, Trash2, Key, Plus, Save, Ban, Copy, Check, RotateCcw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { CopyButton } from '@/components/shared/CopyButton'
 import { formatDateTime } from '@/lib/utils'
 
 interface ApiKeyData {
-  id: string
+  key_id: string
+  user_id: string
   user_email: string
   name: string
   key_prefix: string
   scopes: string[]
   created_at: string
-  is_revoked: boolean
+  is_active: boolean
   expires_at: string | null
 }
 
@@ -23,6 +23,12 @@ interface CreateForm {
   name: string
   scopes: string
   expires_in_days: string
+}
+
+interface CreatedKey {
+  key_id: string
+  api_key: string
+  name: string
 }
 
 const initialForm: CreateForm = {
@@ -35,6 +41,7 @@ const initialForm: CreateForm = {
 export function AdminApiKeysPage() {
   const [search, setSearch] = useState('')
   const [revokeId, setRevokeId] = useState<string | null>(null)
+  const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
@@ -42,6 +49,8 @@ export function AdminApiKeysPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const queryParam = search ? `?q=${encodeURIComponent(search)}` : ''
   const { data, refetch, isLoading } = useApiQuery<any>(
@@ -59,27 +68,47 @@ export function AdminApiKeysPage() {
 
   const handleRevoke = async () => {
     if (!revokeId) return
+    setError('')
     try {
-      setError('')
       await api.post(`/api/keys/${revokeId}/revoke`)
       setRevokeId(null)
-      setSuccess('Key revoked successfully.')
+      setSuccess('Key revoked. You can restore it later if needed.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke key')
+      const msg = err instanceof Error ? err.message : 'Failed to revoke key'
+      setError(msg)
+    }
+  }
+
+  const handleRestore = async () => {
+    if (!restoreId) return
+    setError('')
+    try {
+      await api.patch(`/api/keys/${restoreId}`, { is_active: true })
+      setRestoreId(null)
+      setSuccess('Key restored successfully.')
+      await refetch()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to restore key'
+      setError(msg)
     }
   }
 
   const handleDelete = async () => {
     if (!deleteId) return
+    setError('')
     try {
-      setError('')
       await api.delete(`/api/keys/${deleteId}`)
       setDeleteId(null)
       setSuccess('Key deleted successfully.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete key')
+      const msg = err instanceof Error ? err.message : 'Failed to delete key'
+      if (msg.includes('403') || msg.includes('authorized')) {
+        setError('Delete failed: you may need admin scope.')
+      } else {
+        setError(msg)
+      }
     }
   }
 
@@ -114,16 +143,33 @@ export function AdminApiKeysPage() {
       if (!isNaN(days) && days > 0) {
         body.expires_in_days = days
       }
-      await api.post('/api/keys', body)
+      const result = await api.post<CreatedKey>('/api/keys', body)
       setShowCreate(false)
       setForm(initialForm)
-      setSuccess('Key created successfully.')
+      setCreatedKey({
+        key_id: result.key_id,
+        api_key: result.api_key,
+        name: result.name || form.name,
+      })
+      setCopied(false)
       await refetch()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleCopyKey = () => {
+    if (!createdKey) return
+    navigator.clipboard.writeText(createdKey.api_key)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+  }
+
+  const closeCreatedKey = () => {
+    setCreatedKey(null)
+    setCopied(false)
   }
 
   return (
@@ -216,14 +262,11 @@ export function AdminApiKeysPage() {
             </thead>
             <tbody className="divide-y divide-surface-2">
               {keys.map((k, i) => (
-                <tr key={k.id || `key-${i}`} className={`hover:bg-surface-2/50 ${k.is_revoked ? 'opacity-50' : ''}`}>
+                <tr key={k.key_id || `key-${i}`} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-3 text-sm text-text-primary">{k.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{k.name}</td>
                   <td className="px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-text-secondary">{k.key_prefix}</code>
-                      <CopyButton text={k.key_prefix} />
-                    </div>
+                    <code className="text-xs font-mono text-text-secondary">{k.key_prefix}</code>
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -243,19 +286,27 @@ export function AdminApiKeysPage() {
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
-                      {!k.is_revoked && (
+                      {k.is_active ? (
                         <button
-                          onClick={() => setRevokeId(k.id)}
-                          className="text-text-muted hover:text-semantic-error transition-colors"
-                          title="Revoke key"
+                          onClick={() => setRevokeId(k.key_id)}
+                          className="text-text-muted hover:text-semantic-warning transition-colors"
+                          title="Deactivate key (reversible)"
                         >
                           <Ban size={14} />
                         </button>
+                      ) : (
+                        <button
+                          onClick={() => setRestoreId(k.key_id)}
+                          className="text-text-muted hover:text-semantic-success transition-colors"
+                          title="Reactivate key"
+                        >
+                          <RotateCcw size={14} />
+                        </button>
                       )}
                       <button
-                        onClick={() => setDeleteId(k.id)}
+                        onClick={() => setDeleteId(k.key_id)}
                         className="text-text-muted hover:text-semantic-error transition-colors"
-                        title="Delete key"
+                        title="Delete key permanently (irreversible)"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -270,18 +321,28 @@ export function AdminApiKeysPage() {
 
       <ConfirmDialog
         open={!!revokeId}
-        title="Revoke API Key"
-        message="This will immediately invalidate the key. Any service using this key will lose access."
-        confirmLabel="Revoke"
+        title="Deactivate API Key"
+        message="The key will stop working immediately but you can reactivate it later. Use Delete if you want to remove it permanently."
+        confirmLabel="Deactivate"
         variant="danger"
         onConfirm={handleRevoke}
         onCancel={() => setRevokeId(null)}
       />
 
       <ConfirmDialog
+        open={!!restoreId}
+        title="Reactivate API Key"
+        message="This will make the key active again. All services using this key will regain access."
+        confirmLabel="Reactivate"
+        variant="danger"
+        onConfirm={handleRestore}
+        onCancel={() => setRestoreId(null)}
+      />
+
+      <ConfirmDialog
         open={!!deleteId}
         title="Delete API Key"
-        message="This will permanently delete the key. This action cannot be undone."
+        message="This permanently removes the key. It cannot be recovered. Use Deactivate if you might need to restore it later."
         confirmLabel="Delete"
         variant="danger"
         onConfirm={handleDelete}
@@ -353,6 +414,49 @@ export function AdminApiKeysPage() {
                 Create Key
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {createdKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeCreatedKey} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+            <div className="text-center space-y-2">
+              <div className="rounded-2xl bg-semantic-success/10 p-3 inline-block">
+                <Key size={24} className="text-semantic-success" />
+              </div>
+              <h3 className="text-lg font-semibold text-text-primary">API Key Created</h3>
+              <p className="text-xs text-semantic-warning">
+                Copy this key now. You won't be able to see it again.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-surface-2 bg-surface-2 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-text-muted">{createdKey.name}</span>
+                <span className="text-[10px] font-mono text-text-muted">{createdKey.key_id}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all text-sm font-mono text-text-primary">
+                  {createdKey.api_key}
+                </code>
+                <button
+                  onClick={handleCopyKey}
+                  className="rounded-xl p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors shrink-0"
+                  title="Copy key"
+                >
+                  {copied ? <Check size={16} className="text-semantic-success" /> : <Copy size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={closeCreatedKey}
+              className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

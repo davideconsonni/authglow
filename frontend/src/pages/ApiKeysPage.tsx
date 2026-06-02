@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { Plus, Trash2, Copy, Check, Key, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { CopyButton } from '@/components/shared/CopyButton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 
 interface ApiKeyData {
-  id: string
+  key_id: string
   name: string
   scopes: string[]
   key_prefix: string
+  is_active: boolean
   expires_at: string | null
   last_used_at: string | null
   created_at: string
@@ -25,6 +25,7 @@ export function ApiKeysPage() {
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
+  const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
@@ -35,12 +36,12 @@ export function ApiKeysPage() {
     setError('')
     setCreating(true)
     try {
-      const data = await api.post<{ id: string; key: string; key_prefix: string }>('/api/keys', {
+      const data = await api.post<{ key_id: string; api_key: string; key_prefix: string }>('/api/keys', {
         name: newName || 'My Key',
         scopes: newScopes.split(',').map((s: string) => s.trim()).filter(Boolean),
         expires_in_days: newExpires ? parseInt(newExpires) : null,
       })
-      setNewKey(data.key)
+      setNewKey(data.api_key)
       setNewName('')
       await refetch()
     } catch (err: unknown) {
@@ -64,7 +65,18 @@ export function ApiKeysPage() {
       setRevokeId(null)
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke key')
+      setError(err instanceof Error ? err.message : 'Failed to deactivate key')
+    }
+  }
+
+  const handleRestore = async () => {
+    if (!restoreId) return
+    try {
+      await api.patch(`/api/keys/${restoreId}`, { is_active: true })
+      setRestoreId(null)
+      await refetch()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to restore key')
     }
   }
 
@@ -107,7 +119,6 @@ export function ApiKeysPage() {
 
       {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
-      {/* Create dialog */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeCreate} />
@@ -145,7 +156,6 @@ export function ApiKeysPage() {
         </div>
       )}
 
-      {/* Keys list */}
       {keys && keys.length > 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1">
           <div className="overflow-x-auto">
@@ -155,19 +165,17 @@ export function ApiKeysPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-2">
                 {keys.map((k, i) => (
-                  <tr key={k.id || i} className="hover:bg-surface-2/50" data-testid="api-key-row">
+                  <tr key={k.key_id || i} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
                     <td className="px-6 py-3 text-sm font-medium text-text-primary">{k.name}</td>
                     <td className="px-6 py-3">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
-                        {k.key_prefix && <CopyButton text={k.key_prefix} />}
-                      </div>
+                      <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap gap-1">
@@ -176,15 +184,26 @@ export function ApiKeysPage() {
                         ))}
                       </div>
                     </td>
+                    <td className="px-6 py-3">
+                      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${k.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
+                        {k.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
                     <td className="px-6 py-3 text-sm text-text-muted">
                       {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => setRevokeId(k.id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-text-secondary transition-colors" aria-label="Revoke key" title="Revoke">
-                          <Key size={14} />
-                        </button>
-                        <button onClick={() => setDeleteId(k.id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
+                        {k.is_active ? (
+                          <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">
+                            <Ban size={14} />
+                          </button>
+                        ) : (
+                          <button onClick={() => setRestoreId(k.key_id)} className="text-text-muted hover:text-semantic-success transition-colors" aria-label="Restore key" title="Restore">
+                            <RotateCcw size={14} />
+                          </button>
+                        )}
+                        <button onClick={() => setDeleteId(k.key_id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -203,8 +222,9 @@ export function ApiKeysPage() {
         </div>
       )}
 
-      <ConfirmDialog open={!!revokeId} title="Revoke API Key" message="This will immediately invalidate the key." confirmLabel="Revoke" variant="danger" onConfirm={handleRevoke} onCancel={() => setRevokeId(null)} />
-      <ConfirmDialog open={!!deleteId} title="Delete API Key" message="This action cannot be undone." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
+      <ConfirmDialog open={!!revokeId} title="Deactivate API Key" message="The key will stop working immediately but you can reactivate it later." confirmLabel="Deactivate" variant="danger" onConfirm={handleRevoke} onCancel={() => setRevokeId(null)} />
+      <ConfirmDialog open={!!restoreId} title="Reactivate API Key" message="This will make the key active again." confirmLabel="Reactivate" variant="danger" onConfirm={handleRestore} onCancel={() => setRestoreId(null)} />
+      <ConfirmDialog open={!!deleteId} title="Delete API Key" message="This permanently removes the key. Use Deactivate if you might need it later." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
     </div>
   )
 }
