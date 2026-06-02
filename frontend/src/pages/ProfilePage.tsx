@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight, AlertTriangle } from 'lucide-react'
+import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
@@ -14,6 +14,65 @@ import { Section } from '@/components/shared/Section'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDateTime } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
+
+function PreferencesSection() {
+  const { data: prefs } = useApiQuery<{ theme?: string; language?: string }>(['user-prefs'], '/api/profile/me/preferences')
+  const [saving, setSaving] = useState(false)
+  const [theme, setTheme] = useState(prefs?.theme || 'dark')
+  const [language, setLanguage] = useState(prefs?.language || 'en')
+  const [prefSuccess, setPrefSuccess] = useState(false)
+
+  const savePrefs = async () => {
+    setSaving(true)
+    try {
+      await api.patch('/api/profile/me/preferences', { theme, language })
+      setPrefSuccess(true)
+      setTimeout(() => setPrefSuccess(false), 2000)
+    } catch {} finally { setSaving(false) }
+  }
+
+  return (
+    <Section title="Preferences" description="Customize your AuthGlow experience.">
+      <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+        {prefSuccess && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">Preferences saved.</div>}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Theme</label>
+            <select
+              value={theme}
+              onChange={e => setTheme(e.target.value)}
+              className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+            >
+              <option value="dark">Dark (default)</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Language</label>
+            <select
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+            >
+              <option value="en">English</option>
+              <option value="it">Italiano</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
+        </div>
+        <button
+          onClick={savePrefs}
+          disabled={saving}
+          className="mt-4 rounded-xl bg-gradient-cta px-5 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save preferences'}
+        </button>
+      </div>
+    </Section>
+  )
+}
 
 const profileSchema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -256,6 +315,9 @@ export function ProfilePage() {
           </div>
         </div>
       </Section>
+
+      {/* Preferences */}
+      <PreferencesSection />
 
       {/* Danger Zone */}
       <Section title="Danger Zone" description="Irreversible account actions. Please be careful.">

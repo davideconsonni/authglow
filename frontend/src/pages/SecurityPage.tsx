@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, AlertTriangle } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { MFAEnrollment } from '@/components/profile/MFAEnrollment'
 import { BackupCodes } from '@/components/profile/BackupCodes'
@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
+import { useApiQuery } from '@/hooks/useApi'
 
 export function SecurityPage() {
   const { user, fetchCurrentUser } = useAuth()
@@ -18,6 +19,8 @@ export function SecurityPage() {
   const [showMfaSetup, setShowMfaSetup] = useState(false)
   const [disableMfa, setDisableMfa] = useState(false)
   const [error, setError] = useState('')
+
+  const { data: mfaStatus } = useApiQuery<{ enabled: boolean; backup_codes_remaining?: number }>(['mfa-status'], '/api/mfa/status')
 
   const handleCodesRegenerated = async () => {
     try {
@@ -74,7 +77,9 @@ export function SecurityPage() {
               <div className="flex-1">
                 <p className="text-sm text-text-primary">MFA is {user?.mfa_enabled ? 'enabled' : 'not enabled'}</p>
                 <p className="text-xs text-text-muted">
-                  {user?.mfa_enabled ? 'Account protected with authenticator app codes.' : 'Add protection with Google Authenticator or similar app.'}
+                  {user?.mfa_enabled
+                    ? `Account protected with authenticator app codes.${mfaStatus?.backup_codes_remaining !== undefined ? ` ${mfaStatus.backup_codes_remaining} backup codes remaining.` : ''}`
+                    : 'Add protection with Google Authenticator or similar app.'}
                 </p>
               </div>
               <StatusBadge status={!!user?.mfa_enabled} trueLabel="On" falseLabel="Off" />
