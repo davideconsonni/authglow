@@ -1,232 +1,232 @@
 # AuthGlow - Feature Catalog
 
-> Catalogo completo delle funzionalità. Questo file serve come riferimento unico per rigenerare documentazione, frontend (React), e consent screen.  
-> Per i dettagli implementativi, consultare il codice sorgente (`authglow/api/`, `authglow/services/`, `authglow/models/`).
+> Complete feature catalog. This file serves as a single reference for regenerating documentation, frontend (React), and consent screens.  
+> For implementation details, consult the source code (`authglow/api/`, `authglow/services/`, `authglow/models/`).
 
 ---
 
 ## 1. User Authentication & Lifecycle
 
-### Registrazione Pubblica
-- Endpoint `POST /api/users` — self-registration con validazione password
-- Disabilitabile via env `ALLOW_PUBLIC_REGISTRATION=false`
-- Password policy configurabile: lunghezza minima, richiesta uppercase/lowercase/digits/caratteri speciali
-- Alla registrazione: invio email di verifica + email di benvenuto
-- Audit log: evento `user_registered`
+### Public Registration
+- Endpoint `POST /api/users` — self-registration with password validation
+- Disableable via env `ALLOW_PUBLIC_REGISTRATION=false`
+- Configurable password policy: minimum length, uppercase/lowercase/digits/special characters required
+- On registration: verification email + welcome email sent
+- Audit log: event `user_registered`
 
 ### Login
-- **Login tradizionale**: `POST /api/token` (OAuth2PasswordRequestForm) con username/password
-- **Login OAuth2**: `GET/POST /oauth2/authorize` → login form → redirect con authorization code
-- Rate limiting: 5 tentativi/minuto su `/api/token`, 10/minuto su `/oauth2/authorize`
-- Account lockout automatico dopo 5 tentativi falliti consecutivi (15 minuti, configurabile)
-- Protezione user enumeration: messaggi di errore identici per email inesistente e password errata
-- Timing side-channel protection: jitter casuale nelle risposte per utenti non trovati
+- **Traditional login**: `POST /api/token` (OAuth2PasswordRequestForm) with username/password
+- **OAuth2 login**: `GET/POST /oauth2/authorize` → login form → redirect with authorization code
+- Rate limiting: 5 attempts/minute on `/api/token`, 10/minute on `/oauth2/authorize`
+- Automatic account lockout after 5 consecutive failed attempts (15 minutes, configurable)
+- User enumeration protection: identical error messages for nonexistent email and wrong password
+- Timing side-channel protection: random jitter in responses for users not found
 
-### Invito Utenti (Admin)
-- `POST /api/users/invite` — admin invita un nuovo utente
-- Generazione password temporanea, email di benvenuto con link verifica
-- Audit log: evento `user_invited`
+### User Invitation (Admin)
+- `POST /api/users/invite` — admin invites a new user
+- Temporary password generation, welcome email with verification link
+- Audit log: event `user_invited`
 
 ### Password Reset
-- `POST /api/password/reset/request` — richiede reset (5/ora, anti-abuso)
-- Risposta sempre "success" per prevenire enumerazione email
-- Token one-time con scadenza 30 minuti
-- `POST /api/password/reset/confirm` — imposta nuova password con validazione
-- Revoca automatica dei token attivi pre-esistenti dell'utente
+- `POST /api/password/reset/request` — request reset (5/hour, anti-abuse)
+- Always returns "success" to prevent email enumeration
+- One-time token with 30-minute expiration
+- `POST /api/password/reset/confirm` — set new password with validation
+- Automatic revocation of user's pre-existing active tokens
 
-### Cambio Password (utente autenticato)
-- `POST /api/password/change` — richiede password corrente
-- Impedisce riutilizzo della stessa password
-- `POST /api/profile/me/change-password` — endpoint alternativo via profilo
+### Password Change (authenticated user)
+- `POST /api/password/change` — requires current password
+- Prevents reuse of the same password
+- `POST /api/profile/me/change-password` — alternative endpoint via profile
 
-### Verifica Email
-- Email di verifica inviata alla registrazione
-- `GET /verify-email?token=...` — pagina HTML di conferma
-- `POST /api/email/verify` — verifica via API
-- `POST /api/email/resend-verification` — ri-invio email (5/ora)
-- `GET /resend-verification` — pagina HTML per richiedere ri-invio
+### Email Verification
+- Verification email sent upon registration
+- `GET /verify-email?token=...` — HTML confirmation page
+- `POST /api/email/verify` — API verification
+- `POST /api/email/resend-verification` — resend email (5/hour)
+- `GET /resend-verification` — HTML page to request resend
 
 ### Account Lifecycle
-- **Disattivazione**: `POST /api/profile/me/deactivate` — account disattivato ma recuperabile
-- **Riattivazione**: `POST /api/profile/me/reactivate`
-- **Cancellazione permanente**: `DELETE /api/profile/me` — richiede password e conferma esplicita
+- **Deactivation**: `POST /api/profile/me/deactivate` — account deactivated but recoverable
+- **Reactivation**: `POST /api/profile/me/reactivate`
+- **Permanent deletion**: `DELETE /api/profile/me` — requires password and explicit confirmation
 
-### Lockout & Protezione Brute-Force
-- Blocco account dopo N tentativi falliti (default 5)
-- Sblocco automatico dopo timeout (default 15 minuti)
-- Reset contatore al login riuscito
-- Lockout separato per API keys (5 tentativi, 15 minuti)
-- Lockout separato per backup codes MFA (3 tentativi, 30 secondi)
+### Lockout & Brute-Force Protection
+- Account lock after N failed attempts (default 5)
+- Automatic unlock after timeout (default 15 minutes)
+- Counter reset on successful login
+- Separate lockout for API keys (5 attempts, 15 minutes)
+- Separate lockout for MFA backup codes (3 attempts, 30 seconds)
 
 ---
 
 ## 2. Multi-Factor Authentication (MFA)
 
 ### TOTP (Time-based One-Time Password)
-- Algoritmo standard RFC 6238 con Google Authenticator / app compatibili
-- Enrollment: `POST /api/mfa/enroll` → restituisce secret, QR code (base64), 10 backup codes
-- QR code generato lato server con `qrcode` library
-- Verifica enrollment: `POST /api/mfa/verify` con primo codice TOTP
-- Secret TOTP cifrato a riposo (AES-GCM) con chiave derivata da `SECRET_KEY`
+- Standard RFC 6238 algorithm with Google Authenticator / compatible apps
+- Enrollment: `POST /api/mfa/enroll` → returns secret, QR code (base64), 10 backup codes
+- QR code generated server-side with `qrcode` library
+- Enrollment verification: `POST /api/mfa/verify` with first TOTP code
+- TOTP secret encrypted at rest (AES-GCM) with key derived from `SECRET_KEY`
 
 ### Backup Codes
-- 10 codici monouso generati all'enrollment
-- Utilizzabili al posto del TOTP (8+ caratteri)
-- Rigenerabili: `POST /api/mfa/regenerate-backup-codes`
-- Lockout dedicato: 3 tentativi errati → 30 secondi di attesa
-- I codici sono hash-verificati (bcrypt), mai in chiaro dopo la generazione
+- 10 one-time codes generated at enrollment
+- Usable instead of TOTP (8+ characters)
+- Regeneratable: `POST /api/mfa/regenerate-backup-codes`
+- Dedicated lockout: 3 failed attempts → 30-second wait
+- Codes are hash-verified (bcrypt), never in plaintext after generation
 
 ### Trusted Devices
-- Opzione "Ricorda questo dispositivo" durante login MFA
+- "Remember this device" option during MFA login
 - Fingerprinting: user-agent + IP
-- Lista dispositivi trusted: `GET /api/mfa/trusted-devices`
-- Rimozione: `DELETE /api/mfa/trusted-devices/{id}`
-- Se dispositivo trusted → skip MFA nei login successivi
+- Trusted device list: `GET /api/mfa/trusted-devices`
+- Removal: `DELETE /api/mfa/trusted-devices/{id}`
+- Trusted device → skip MFA on subsequent logins
 
-### MFA nel Flusso OAuth2
-- Durante `POST /oauth2/authorize`: se MFA attivo → redirect a pagina MFA
-- `POST /oauth2/mfa-verify` — verifica codice, completa l'auth code
-- Trust device option disponibile anche nel flusso OAuth2
+### MFA in OAuth2 Flow
+- During `POST /oauth2/authorize`: if MFA active → redirect to MFA page
+- `POST /oauth2/mfa-verify` — verify code, complete auth code
+- Trust device option available in OAuth2 flow as well
 
-### MFA nel Flusso API Token
-- `POST /api/token` restituisce `mfa_required: true` + session token
-- `POST /api/mfa/verify-login` — verifica e restituisce JWT access token
+### MFA in API Token Flow
+- `POST /api/token` returns `mfa_required: true` + session token
+- `POST /api/mfa/verify-login` — verify and return JWT access token
 
-### Amministrazione MFA
-- Admin può resettare MFA di un utente: `POST /api/admin/users/{id}/reset-mfa`
-- Dashboard admin mostra percentuale utenti con MFA attivo
-- Filtro utenti per `mfa_enabled` nella ricerca admin
+### MFA Administration
+- Admin can reset a user's MFA: `POST /api/admin/users/{id}/reset-mfa`
+- Admin dashboard shows percentage of users with MFA enabled
+- User filter by `mfa_enabled` in admin search
 
 ---
 
 ## 3. Passkeys (WebAuthn / FIDO2)
 
-### Registrazione
-- `POST /api/passkey/register/begin` — genera credential creation options
-- Relying Party ID e Origin configurabili via env
-- Rilevamento dinamico di RP ID/Origin da header (supporta reverse proxy/playground)
-- Esclude passkey già registrate per evitare duplicati
-- `POST /api/passkey/register/complete` — verifica attestation, salva credenziale
-- Challenge con scadenza 5 minuti
+### Registration
+- `POST /api/passkey/register/begin` — generates credential creation options
+- Relying Party ID and Origin configurable via env
+- Dynamic RP ID/Origin detection from headers (supports reverse proxy/playground)
+- Excludes already-registered passkeys to prevent duplicates
+- `POST /api/passkey/register/complete` — verifies attestation, saves credential
+- Challenge with 5-minute expiration
 
-### Autenticazione Passwordless
-- `POST /api/passkey/auth/begin` — riceve email, restituisce assertion options
-- Rate limit: 10 tentativi/minuto
-- `POST /api/passkey/auth/complete` — verifica assertion, restituisce JWT access token
-- Supporta platform authenticator (Touch ID, Windows Hello) e cross-platform (YubiKey)
+### Passwordless Authentication
+- `POST /api/passkey/auth/begin` — receives email, returns assertion options
+- Rate limit: 10 attempts/minute
+- `POST /api/passkey/auth/complete` — verifies assertion, returns JWT access token
+- Supports platform authenticator (Touch ID, Windows Hello) and cross-platform (YubiKey)
 
-### Metadata Passkey
-- Tracciamento: `device_type`, `transports`, `backup_eligible`, `backup_state`
-- `last_used_at` aggiornato ad ogni autenticazione
-- Sign count per rilevare clonazione autenticatore
+### Passkey Metadata
+- Tracking: `device_type`, `transports`, `backup_eligible`, `backup_state`
+- `last_used_at` updated on every authentication
+- Sign count to detect authenticator cloning
 
-### Gestione Utente
-- `GET /api/passkey/list` — elenca passkey dell'utente
-- `DELETE /api/passkey/{credential_id}` — rimuove una passkey
-- Pagina HTML dedicata: `/passkeys`
+### User Management
+- `GET /api/passkey/list` — lists user's passkeys
+- `DELETE /api/passkey/{credential_id}` — removes a passkey
+- Dedicated HTML page: `/passkeys`
 
-### Gestione Admin
-- `GET /api/admin/users/{id}/passkeys` — conteggio passkey
-- `GET /api/admin/users/{id}/passkeys/list` — lista completa
-- `DELETE /api/admin/users/{id}/passkeys/{credential_id}` — rimozione forzata
+### Admin Management
+- `GET /api/admin/users/{id}/passkeys` — passkey count
+- `GET /api/admin/users/{id}/passkeys/list` — full list
+- `DELETE /api/admin/users/{id}/passkeys/{credential_id}` — forced removal
 
 ---
 
 ## 4. OAuth 2.0 Authorization Server
 
-### Authorization Code Flow (con PKCE)
-- `GET /oauth2/authorize` — mostra login form con parametri OAuth2
-- `POST /oauth2/authorize` — autentica utente, crea authorization code (o inoltra a MFA/consent)
-- Verifica `client_id`, `redirect_uri` (contro whitelist del client)
-- Validazione scope contro configurazione del client
-- PKCE obbligatorio per client pubblici (S256)
-- PKCE configurabile per client (opzionale per confidential)
-- Authorization code monouso con scadenza (default 10 minuti)
-- Protezione race-condition: lock + optimistic concurrency versioning sul code redemption
+### Authorization Code Flow (with PKCE)
+- `GET /oauth2/authorize` — displays login form with OAuth2 parameters
+- `POST /oauth2/authorize` — authenticates user, creates authorization code (or forwards to MFA/consent)
+- Verifies `client_id`, `redirect_uri` (against client whitelist)
+- Scope validation against client configuration
+- PKCE mandatory for public clients (S256)
+- PKCE configurable per client (optional for confidential)
+- One-time authorization code with expiration (default 10 minutes)
+- Race-condition protection: lock + optimistic concurrency versioning on code redemption
 
 ### Token Endpoint
-- `POST /oauth2/token` — supporta 3 grant type:
+- `POST /oauth2/token` — supports 3 grant types:
 
 #### Authorization Code → Token
-- Richiede `code`, `redirect_uri`, client authentication
-- Supporta `client_secret_basic` (HTTP Basic Auth) e `client_secret_post`
-- Client pubblici vs confidential: secret richiesto solo per confidential
-- Validazione PKCE: `code_verifier` → SHA256 → confronto con `code_challenge`
-- Emette: access token (JWT RS256), refresh token, ID token (se scope `openid`)
-- Refresh token con rotazione automatica
+- Requires `code`, `redirect_uri`, client authentication
+- Supports `client_secret_basic` (HTTP Basic Auth) and `client_secret_post`
+- Public vs confidential clients: secret required only for confidential
+- PKCE validation: `code_verifier` → SHA256 → compared with `code_challenge`
+- Issues: access token (JWT RS256), refresh token, ID token (if scope `openid`)
+- Refresh token with automatic rotation
 
 #### Client Credentials
-- `grant_type=client_credentials` con `client_id` + `client_secret`
-- Token legato al client, senza utente reale
-- Perfetto per M2M / service-to-service
+- `grant_type=client_credentials` with `client_id` + `client_secret`
+- Token tied to client, no real user
+- Perfect for M2M / service-to-service
 
 #### Refresh Token
-- `grant_type=refresh_token` con rotazione
-- Il vecchio refresh token viene invalidato, ne viene emesso uno nuovo
-- Rivocazione in cascata se un refresh token già usato viene riutilizzato (rilevamento theft)
-- Ip address tracciato per audit
+- `grant_type=refresh_token` with rotation
+- Old refresh token invalidated, new one issued
+- Cascade revocation if an already-used refresh token is reused (theft detection)
+- IP address tracked for audit
 
 ### Token Revocation (RFC 7009)
-- `POST /oauth2/revoke` — revoca refresh token
-- Per access token JWT: essendo stateless, non revocabili ma loggati
-- Restituisce sempre 200 OK (anti-scanning)
+- `POST /oauth2/revoke` — revokes refresh token
+- For JWT access tokens: stateless, not revocable but logged
+- Always returns 200 OK (anti-scanning)
 
 ### Token Introspection (RFC 7662)
-- `POST /oauth2/introspect` — resource server interroga metadata token
-- Richiede client authentication
-- Supporta access token e refresh token
-- Risposta standard RFC 7662 con `active`, `scope`, `sub`, `exp`, `iat`, etc.
+- `POST /oauth2/introspect` — resource server queries token metadata
+- Requires client authentication
+- Supports access token and refresh token
+- Standard RFC 7662 response with `active`, `scope`, `sub`, `exp`, `iat`, etc.
 
 ### Logout (RP-Initiated)
-- `GET /oauth2/logout` — supporta `id_token_hint`, `post_logout_redirect_uri`, `state`
-- Validazione redirect URI (whitelist del client, permite localhost in dev)
-- `POST /oauth2/logout` — logout con Bearer token, audit logging
-- Stateless: il client deve eliminare i token lato suo
+- `GET /oauth2/logout` — supports `id_token_hint`, `post_logout_redirect_uri`, `state`
+- Redirect URI validation (client whitelist, allows localhost in dev)
+- `POST /oauth2/logout` — logout with Bearer token, audit logging
+- Stateless: client must delete tokens on its side
 
 ### Callback Endpoint
-- `GET /callback` — pagina HTML di test che mostra authorization code ricevuto
+- `GET /callback` — HTML test page showing received authorization code
 
 ---
 
 ## 5. OpenID Connect (OIDC)
 
 ### Discovery
-- `GET /.well-known/openid-configuration` — metadati completi OIDC
-- `GET /.well-known/jwks.json` — chiavi pubbliche in formato JWK (RFC 7517)
-- Include solo chiavi `active` e `verifying` (esclude `revoked`)
+- `GET /.well-known/openid-configuration` — complete OIDC metadata
+- `GET /.well-known/jwks.json` — public keys in JWK format (RFC 7517)
+- Includes only `active` and `verifying` keys (excludes `revoked`)
 
 ### ID Token
-- Emesso con `authorization_code` grant quando scope `openid` è richiesto
-- Contiene claims utente basati sugli scope: `profile`, `email`, `phone`, `address`
-- Firmato RS256 con chiave attiva del keyring
-- Supporta `nonce` per prevenire replay
-- Include `auth_time` claim
+- Issued with `authorization_code` grant when scope `openid` is requested
+- Contains user claims based on scopes: `profile`, `email`, `phone`, `address`
+- RS256-signed with active keyring key
+- Supports `nonce` to prevent replay
+- Includes `auth_time` claim
 
 ### UserInfo Endpoint
-- `GET /oauth2/userinfo` — restituisce claims utente via Bearer token
-- Richiede scope `openid` nel token
-- Scope supportati: `openid`, `profile`, `email`, `phone`, `address`
+- `GET /oauth2/userinfo` — returns user claims via Bearer token
+- Requires `openid` scope in token
+- Supported scopes: `openid`, `profile`, `email`, `phone`, `address`
 
 ### Supported Standards
 - Scopes: `openid`, `profile`, `email`, `phone`, `address`, `offline_access`
-- Response types: `code`, `token`, `id_token` e combinazioni ibride
+- Response types: `code`, `token`, `id_token` and hybrid combinations
 - Grant types: `authorization_code`, `implicit`, `refresh_token`, `client_credentials`
-- PKCE: `S256` (obbligatorio per client pubblici)
+- PKCE: `S256` (mandatory for public clients)
 
 ---
 
 ## 6. OAuth2 / OIDC Authentication Flows
 
-Questa sezione descrive i flussi di autenticazione OAuth2/OIDC completi gestiti da AuthGlow,
-dal punto di vista del protocollo (sequenza di richieste e risposte).
+This section describes the complete OAuth2/OIDC authentication flows handled by AuthGlow,
+from the protocol perspective (request/response sequence).
 
-### Authorization Code Flow (con PKCE) — per Web App e SPA
+### Authorization Code Flow (with PKCE) — for Web Apps and SPAs
 
-Il flusso principale per applicazioni web e single-page, l'unico che coinvolge
-l'interazione diretta dell'utente con AuthGlow (login, MFA, consent).
+The main flow for web and single-page applications, the only one involving
+direct user interaction with AuthGlow (login, MFA, consent).
 
 ```
-  Utente           Client App          AuthGlow             Resource Server
+  User            Client App          AuthGlow             Resource Server
     |                  |                   |                       |
     |  (1) click login |                   |                       |
     |<-----------------|                   |                       |
@@ -249,32 +249,33 @@ l'interazione diretta dell'utente con AuthGlow (login, MFA, consent).
     |                  | (5) POST /oauth2/authorize               |
     |                  |  email, password, csrf_token, ...        |
     |                  |------------------>|                       |
-    |                  |                   | (6) Validazione:      |
-    |                  |                   |  - credenziali        |
+    |                  |                   | (6) Validation:       |
+    |                  |                   |  - credentials        |
     |                  |                   |  - client_id          |
     |                  |                   |  - redirect_uri       |
-    |                  |                   |  - scope autorizzati  |
+    |                  |                   |  - authorized scopes  |
     |                  |                   |  - account lockout?   |
     |                  |                   |                       |
-    |                  |                   | (7) Se MFA attivo e   |
-    |                  |                   |  dispositivo NON      |
-    |                  |                   |  trusted → MFA page   |
+    |                  |                   | (7) If MFA active and |
+    |                  |                   |  device NOT trusted   |
+    |                  |                   |  → MFA page           |
     |                  | (7a) MFA form     |                       |
     |                  |<------------------|                       |
     |                  | (7b) POST /oauth2/mfa-verify              |
     |                  |  code, session_token, csrf_token         |
     |                  |------------------>|                       |
     |                  |                   |                       |
-    |                  | (8) Se MFA OK (o skip), redirect a        |
+    |                  | (8) If MFA OK (or skip), redirect to      |
     |                  |  /oauth2/consent?session_token=...       |
     |                  |<------------------| (303 redirect)        |
     |                  |                   |                       |
     |                  | (9) GET /oauth2/consent?session_token=... |
     |                  |------------------>|                       |
-    |                  |                   | (10) Se consenso già  |
-    |                  |                   |  prestato + remember: |
-    |                  |                   |  skip → redirect      |
-    |                  |                   |  diretto con code     |
+    |                  |                   | (10) If consent       |
+    |                  |                   |  already given +      |
+    |                  |                   |  remember: skip →     |
+    |                  |                   |  direct redirect      |
+    |                  |                   |  with code            |
     |                  |                   |                       |
     |  (11) review     | (12) Consent screen                      |
     |   scopes         |<------------------|                       |
@@ -284,7 +285,7 @@ l'interazione diretta dell'utente con AuthGlow (login, MFA, consent).
     |                  |  session_token, csrf_token               |
     |                  |------------------>|                       |
     |                  |                   |                       |
-    |                  | (14) Redirect con authorization code      |
+    |                  | (14) Redirect with authorization code     |
     |                  |  ?code=AUTH_CODE&state=...               |
     |                  |<------------------| (303 redirect)        |
     |                  |                   |                       |
@@ -292,20 +293,20 @@ l'interazione diretta dell'utente con AuthGlow (login, MFA, consent).
     |                  |  grant_type=authorization_code           |
     |                  |  code=AUTH_CODE                          |
     |                  |  redirect_uri=...                        |
-    |                  |  code_verifier=PLAINTEXT (per PKCE)      |
-    |                  |  + client auth (Basic o form)            |
+    |                  |  code_verifier=PLAINTEXT (for PKCE)      |
+    |                  |  + client auth (Basic or form)           |
     |                  |------------------>|                       |
-    |                  |                   | (16) Validazione:     |
-    |                  |                   |  - code esistente     |
+    |                  |                   | (16) Validation:      |
+    |                  |                   |  - code exists        |
     |                  |                   |  - client_id match    |
     |                  |                   |  - redirect_uri match |
     |                  |                   |  - PKCE S256 verifier |
-    |                  |                   |  - code non usato     |
+    |                  |                   |  - code not used      |
     |                  |                   |                       |
     |                  | (17) Token response                      |
     |                  |  { access_token, refresh_token,          |
     |                  |    token_type, expires_in,               |
-    |                  |    id_token (se scope=openid) }          |
+    |                  |    id_token (if scope=openid) }          |
     |                  |<------------------|                       |
     |                  |                   |                       |
     |                  | (18) GET /api/resource                   |
@@ -316,18 +317,18 @@ l'interazione diretta dell'utente con AuthGlow (login, MFA, consent).
     |                  |<------------------------------------------|
 ```
 
-**Particolarità del flusso:**
-- **CSRF**: ogni form (login, MFA, consent) include un `csrf_token` legato a un `session_id` cookie HttpOnly
-- **PKCE**: S256 obbligatorio per client pubblici (`is_confidential=false`); per client confidential il code_challenge può essere omesso se `require_pkce=false`
-- **MFA**: se l'utente ha MFA attivo e il dispositivo non è trusted, il flusso si interrompe dopo il login e mostra la pagina MFA; dopo verifica MFA, si procede con il consent
-- **Consent skip**: se l'utente ha già prestato consenso con l'opzione "remember", il passaggio del consent screen viene saltato e si ottiene direttamente l'authorization code
-- **One-time code**: l'authorization code è monouso (protetto da lock + CAS cross-process)
-- **Refresh token rotation**: ogni utilizzo del refresh token invalida il precedente e ne emette uno nuovo; se un token già usato viene ri-presentato, TUTTI i refresh token dell'utente vengono revocati (theft detection)
-- **ID token**: emesso solo se tra gli scope richiesti c'è `openid`; firmato RS256, contiene `nonce` e `auth_time`
+**Flow specifics:**
+- **CSRF**: each form (login, MFA, consent) includes a `csrf_token` tied to an HttpOnly `session_id` cookie
+- **PKCE**: S256 mandatory for public clients (`is_confidential=false`); for confidential clients the code_challenge can be omitted if `require_pkce=false`
+- **MFA**: if the user has MFA active and the device is not trusted, the flow pauses after login and shows the MFA page; after MFA verification, consent proceeds
+- **Consent skip**: if the user has already consented with the "remember" option, the consent screen step is skipped and the authorization code is obtained directly
+- **One-time code**: authorization code is single-use (protected by lock + cross-process CAS)
+- **Refresh token rotation**: each refresh token use invalidates the previous one and issues a new one; if an already-used token is presented again, ALL of the user's refresh tokens are revoked (theft detection)
+- **ID token**: issued only if `openid` is among the requested scopes; RS256-signed, contains `nonce` and `auth_time`
 
 ### Client Credentials Flow — Machine-to-Machine
 
-Flusso per autenticazione service-to-service senza interazione utente.
+Service-to-service authentication flow without user interaction.
 
 ```
   Client App (M2M)          AuthGlow               Resource API
@@ -338,10 +339,10 @@ Flusso per autenticazione service-to-service senza interazione utente.
         |  client_secret=...                           |
         |  scope=read write                            |
         |--------------------->|                        |
-        |                      | (2) Validazione:       |
-        |                      |  - client_id e secret  |
-        |                      |  - client attivo?      |
-        |                      |  - scope autorizzati   |
+        |                      | (2) Validation:        |
+        |                      |  - client_id & secret  |
+        |                      |  - client active?      |
+        |                      |  - authorized scopes   |
         |                      |                        |
         | (3) Token response   |                        |
         |  { access_token,     |                        |
@@ -357,15 +358,15 @@ Flusso per autenticazione service-to-service senza interazione utente.
         |<----------------------------------------------|
 ```
 
-**Particolarità:**
-- Non viene emesso refresh token (effimero)
-- Il token è legato al `client_id` (non a un utente reale)
-- Scope limitati a quelli concessi al client
-- Perfetto per automation, CI/CD, cron job, microservizi
+**Specifics:**
+- No refresh token issued (ephemeral)
+- Token tied to `client_id` (not a real user)
+- Scopes limited to those granted to the client
+- Perfect for automation, CI/CD, cron jobs, microservices
 
-### Refresh Token Flow — Rotazione e Rilevamento Furto
+### Refresh Token Flow — Rotation and Theft Detection
 
-Flusso per ottenere nuovi access token senza richiedere login.
+Flow for obtaining new access tokens without requiring login.
 
 ```
   Client App                 AuthGlow
@@ -375,60 +376,60 @@ Flusso per ottenere nuovi access token senza richiedere login.
       |  refresh_token=RT_OLD
       |  client_id=...
       |------------------------>|
-      |                         | (2) Validazione:
-      |                         |  - RT esiste?
-      |                         |  - RT scaduto?
-      |                         |  - RT già usato? → THEFT! Revoca tutti i token utente
-      |                         |  - RT revocato?
+      |                         | (2) Validation:
+      |                         |  - RT exists?
+      |                         |  - RT expired?
+      |                         |  - RT already used? → THEFT! Revoke all user tokens
+      |                         |  - RT revoked?
       |                         |  - client_id match?
       |                         |
-      | (3a) Successo:         |
+      | (3a) Success:          |
       |  { access_token,       |
-      |    refresh_token=RT_NEW,  ← nuovo RT, il vecchio è invalidato
+      |    refresh_token=RT_NEW,  ← new RT, old one invalidated
       |    token_type,         |
       |    expires_in }        |
       |<------------------------|
       |                         |
-      | (3b) Furto rilevato:    |
+      | (3b) Theft detected:    |
       |  401 "Token reuse      |
       |  detected. All tokens   |
       |  revoked for security." |
       |<------------------------|
 ```
 
-**Particolarità:**
-- Ogni utilizzo invalida il refresh token precedente
-- Il nuovo refresh token ha la stessa scadenza dell'originale (non estesa)
-- Se un token già usato viene ripresentato → revoca automatica di tutti i refresh token dell'utente
-- I refresh token sono memorizzati come hash SHA256 sul filesystem
+**Specifics:**
+- Each use invalidates the previous refresh token
+- New refresh token has same expiration as the original (not extended)
+- If an already-used token is presented again → automatic revocation of all user's refresh tokens
+- Refresh tokens are stored as SHA256 hashes on the filesystem
 
 ### OpenID Connect Discovery Flow
 
-Flusso di auto-configurazione per client OIDC.
+Auto-configuration flow for OIDC clients.
 
 ```
   Client OIDC              AuthGlow
       |                        |
       | (1) GET /.well-known/openid-configuration
-      |   (metadata OIDC)      |
+      |   (OIDC metadata)      |
       |----------------------->|
-      | (2) JSON con tutti     |
-      |   gli endpoint e le    |
-      |   capability supportate|
+      | (2) JSON with all      |
+      |   endpoints and        |
+      |   supported capabilities|
       |<-----------------------|
       |                        |
       | (3) GET /.well-known/jwks.json
-      |   (chiavi pubbliche)   |
+      |   (public keys)        |
       |----------------------->|
-      | (4) JSON JWK set con   |
-      |   chiavi RSA attive    |
-      |   e in verifying       |
+      | (4) JSON JWK set with  |
+      |   active and verifying |
+      |   RSA keys             |
       |<-----------------------|
       |                        |
       | (5) GET /oauth2/userinfo
       |  Authorization: Bearer <access_token>
       |----------------------->|
-      | (6) Claims utente      |
+      | (6) User claims        |
       |  (sub, email, name,    |
       |   picture, etc.)       |
       |<-----------------------|
@@ -437,7 +438,7 @@ Flusso di auto-configurazione per client OIDC.
 ### OpenID Connect Logout (RP-Initiated)
 
 ```
-  Utente         Client App          AuthGlow
+  User          Client App          AuthGlow
     |                |                   |
     | (1) click      |                   |
     |  "logout"      |                   |
@@ -447,11 +448,11 @@ Flusso di auto-configurazione per client OIDC.
     |                |  &post_logout_redirect_uri=...
     |                |  &state=...
     |                |------------------>|
-    |                |                   | (3) Valida ID token
-    |                |                   |  Verifica redirect URI
+    |                |                   | (3) Validate ID token
+    |                |                   |  Verify redirect URI
     |                |                   |  Audit log
     |                |                   |
-    |                | (4) Redirect a    |
+    |                | (4) Redirect to   |
     |                |  post_logout_redirect_uri
     |                |<------------------|
     |                |                   |
@@ -459,8 +460,8 @@ Flusso di auto-configurazione per client OIDC.
     |<---------------|                   |
 ```
 
-**Nota:** AuthGlow è stateless — la logout invalida solo il refresh token lato server.
-Il client è responsabile di eliminare access token e ID token lato suo.
+**Note:** AuthGlow is stateless — logout only invalidates the refresh token server-side.
+The client is responsible for deleting access tokens and ID tokens on its side.
 
 ### Token Revocation (RFC 7009)
 
@@ -470,13 +471,13 @@ Il client è responsabile di eliminare access token e ID token lato suo.
       | POST /oauth2/revoke  |
       |  token=REFRESH_TOKEN |
       |  token_type_hint=refresh_token
-      |  (opzionale: client auth)
+      |  (optional: client auth)
       |---------------------->|
-      |                       | Marca RT come revocato
+      |                       | Marks RT as revoked
       |                       | Audit log
       |                       |
-      | 200 OK (sempre)       |  ← Per RFC 7009, sempre 200
-      |<----------------------|    per prevenire scanning
+      | 200 OK (always)       |  ← Per RFC 7009, always 200
+      |<----------------------|    to prevent scanning
 ```
 
 ### Token Introspection (RFC 7662)
@@ -486,12 +487,12 @@ Il client è responsabile di eliminare access token e ID token lato suo.
       |                         |
       | POST /oauth2/introspect |
       |  token=ACCESS_OR_RT     |
-      |  (client auth richiesta)|
+      |  (client auth required) |
       |------------------------>|
-      |                         | Per access token JWT:
-      |                         |  decodifica, verifica scadenza
-      |                         | Per refresh token:
-      |                         |  verifica DB, stato revoca
+      |                         | For JWT access token:
+      |                         |  decode, verify expiration
+      |                         | For refresh token:
+      |                         |  verify DB, revocation status
       |                         |
       | { active: true/false,   |
       |   scope, sub, exp,      |
@@ -499,9 +500,9 @@ Il client è responsabile di eliminare access token e ID token lato suo.
       |<------------------------|
 ```
 
-### Riepilogo Endpoint OAuth2/OIDC
+### OAuth2/OIDC Endpoint Overview
 
-| Endpoint | Metodo | RFC | Descrizione |
+| Endpoint | Method | RFC | Description |
 |----------|--------|-----|-------------|
 | `/oauth2/authorize` | GET, POST | 6749 | Authorization endpoint (login + consent) |
 | `/oauth2/token` | POST | 6749 | Token endpoint (code→token, client_credentials, refresh) |
@@ -513,350 +514,350 @@ Il client è responsabile di eliminare access token e ID token lato suo.
 | `/oauth2/mfa-verify` | POST | — | MFA verification during OAuth2 flow |
 | `/.well-known/openid-configuration` | GET | OIDC | Discovery metadata |
 | `/.well-known/jwks.json` | GET | 7517 | JWK Set |
-| `/oauth2/register` | — | 7591 | (Dichiarato in discovery, non implementato) |
+| `/oauth2/register` | — | 7591 | (Declared in discovery, not implemented) |
 
 ---
 
 ## 7. OAuth2 Client Management
 
-### CRUD Client (Admin)
-- `POST /api/oauth-clients` — crea client OAuth2 (10/ora rate limit)
-- `GET /api/oauth-clients` — lista con paginazione e filtro `active_only`
-- `GET /api/oauth-clients/{id}` — dettaglio singolo client
-- `PUT /api/oauth-clients/{id}` — aggiorna (30/ora)
-- `DELETE /api/oauth-clients/{id}` — elimina (20/ora)
-- Il client secret viene mostrato UNA SOLA volta alla creazione
+### Client CRUD (Admin)
+- `POST /api/oauth-clients` — create OAuth2 client (10/hour rate limit)
+- `GET /api/oauth-clients` — list with pagination and `active_only` filter
+- `GET /api/oauth-clients/{id}` — single client detail
+- `PUT /api/oauth-clients/{id}` — update (30/hour)
+- `DELETE /api/oauth-clients/{id}` — delete (20/hour)
+- Client secret is shown ONLY ONCE at creation
 
-### Proprietà del Client
+### Client Properties
 - `client_name`, `description`, `logo_uri`, `homepage_uri`, `terms_uri`, `privacy_uri`
-- `redirect_uris` — lista URI whitelist per il callback
-- `allowed_scopes` — scope autorizzati per questo client
-- `grant_types` — grant type permessi (authorization_code, client_credentials, etc.)
-- `is_confidential` — se true, richiede client_secret per token endpoint
-- `require_pkce` — se true, PKCE obbligatorio
-- `require_consent` — se true, mostra sempre consent screen
-- `access_token_lifetime` / `refresh_token_lifetime` — TTL personalizzati per client
-- Attivazione/disattivazione: `POST /api/oauth-clients/{id}/activate` e `/deactivate`
+- `redirect_uris` — whitelist URI list for callback
+- `allowed_scopes` — authorized scopes for this client
+- `grant_types` — allowed grant types (authorization_code, client_credentials, etc.)
+- `is_confidential` — if true, requires client_secret for token endpoint
+- `require_pkce` — if true, PKCE mandatory
+- `require_consent` — if true, always show consent screen
+- `access_token_lifetime` / `refresh_token_lifetime` — per-client custom TTL
+- Activation/deactivation: `POST /api/oauth-clients/{id}/activate` and `/deactivate`
 
-### Rotazione Secret
-- `POST /api/oauth-clients/{id}/rotate-secret` (10/giorno)
-- Nuovo secret mostrato una sola volta
+### Secret Rotation
+- `POST /api/oauth-clients/{id}/rotate-secret` (10/day)
+- New secret shown only once
 
-### Client di Default (Fallback)
-- Client predefinito via env (`OAUTH2_CLIENT_ID`/`OAUTH2_CLIENT_SECRET`)
-- Funge da fallback se nessun client dinamico corrisponde
+### Default Client (Fallback)
+- Predefined client via env (`OAUTH2_CLIENT_ID`/`OAUTH2_CLIENT_SECRET`)
+- Acts as fallback if no dynamic client matches
 
 ---
 
 ## 8. OAuth2 Consent Management
 
 ### Consent Screen
-- `GET /oauth2/consent?session_token=...` — mostra UI di consenso
-- Visualizza: nome client, logo, descrizione, scope richiesti con descrizioni
-- Se utente ha già consentito → skip automatico, redirect diretto con auth code
-- `POST /oauth2/consent` — approva/nega
-- Opzione "remember" — salva il consenso permanentemente
-- Denial → redirect con `error=access_denied`
+- `GET /oauth2/consent?session_token=...` — displays consent UI
+- Shows: client name, logo, description, requested scopes with descriptions
+- If user already consented → auto skip, direct redirect with auth code
+- `POST /oauth2/consent` — approve/deny
+- "remember" option — saves consent permanently
+- Denial → redirect with `error=access_denied`
 
-### Amministrazione Consensi
-- `GET /api/admin/oauth-consents` — lista tutti i consensi con paginazione
-- Filtro per email utente
-- Include: utente, client, scope, date, stato revoca
-- `POST /api/admin/oauth-consents/{id}/revoke` — revoca consenso
+### Consent Administration
+- `GET /api/admin/oauth-consents` — list all consents with pagination
+- Filter by user email
+- Includes: user, client, scope, dates, revocation status
+- `POST /api/admin/oauth-consents/{id}/revoke` — revoke consent
 
 ### Scope Descriptions
-- `read`, `write`, `admin`, `email`, `profile`, `openid` con descrizioni human-readable
-- Configurabili per la UI di consenso
+- `read`, `write`, `admin`, `email`, `profile`, `openid` with human-readable descriptions
+- Configurable for consent UI
 
 ---
 
 ## 9. Refresh Token Management
 
-### Creazione e Rotazione
-- Refresh token creati durante `authorization_code` grant
-- Rotazione automatica: ogni utilizzo invalida il precedente e ne genera uno nuovo
-- Rilevamento theft: se un token già usato viene ripresentato → revoca di TUTTI i token di quell'utente
-- Scadenza configurabile (default 7 giorni per utenti, personalizzabile per client)
-- IP address e user-agent registrati
+### Creation and Rotation
+- Refresh tokens created during `authorization_code` grant
+- Automatic rotation: each use invalidates the previous one and generates a new one
+- Theft detection: if an already-used token is presented again → revocation of ALL tokens for that user
+- Configurable expiration (default 7 days for users, customizable per client)
+- IP address and user-agent recorded
 
 ### Cache
-- Cache in-memory dei refresh token validi (TTL 60s, max 5000 entries)
-- Riduce I/O su storage per validazioni frequenti
+- In-memory cache of valid refresh tokens (TTL 60s, max 5000 entries)
+- Reduces I/O on storage for frequent validations
 
-### Amministrazione
-- `GET /api/admin/sessions` — lista sessioni attive con dettagli (utente, client, IP, scopes)
-- `POST /api/admin/tokens/refresh/{id}/revoke` — revoca forzata admin
-- `POST /api/admin/sessions/cleanup` — pulizia token scaduti
-- `POST /api/tokens/refresh/revoke-all` — utente revoca tutti i propri token (logout everywhere)
+### Administration
+- `GET /api/admin/sessions` — list active sessions with details (user, client, IP, scopes)
+- `POST /api/admin/tokens/refresh/{id}/revoke` — admin forced revocation
+- `POST /api/admin/sessions/cleanup` — cleanup expired tokens
+- `POST /api/tokens/refresh/revoke-all` — user revokes all their tokens (logout everywhere)
 
 ---
 
 ## 10. API Key Management
 
-### Creazione e Utilizzo
-- `POST /api/keys` — crea API key (10/ora) con nome, scopes, scadenza opzionale
-- La key (plaintext) viene mostrata UNA SOLA volta
-- Formato: `ak_` + random (memorizzato come hash bcrypt)
-- Utilizzabile via header `X-API-Key` o `Authorization: Bearer ak_...`
-- `POST /api/token/api-key` — scambia API key per JWT access token
+### Creation and Usage
+- `POST /api/keys` — create API key (10/hour) with name, scopes, optional expiration
+- Key (plaintext) shown ONLY ONCE
+- Format: `ak_` + random (stored as bcrypt hash)
+- Usable via `X-API-Key` header or `Authorization: Bearer ak_...`
+- `POST /api/token/api-key` — exchange API key for JWT access token
 
 ### CRUD
-- `GET /api/keys` — elenca le proprie key
-- `GET /api/keys/{id}` — dettaglio singola key (proprietario o admin)
-- `PATCH /api/keys/{id}` — aggiorna (nome, scopes, stato)
-- `POST /api/keys/{id}/revoke` — revoca (disattiva ma mantiene)
-- `DELETE /api/keys/{id}` — eliminazione permanente
+- `GET /api/keys` — list own keys
+- `GET /api/keys/{id}` — single key detail (owner or admin)
+- `PATCH /api/keys/{id}` — update (name, scopes, status)
+- `POST /api/keys/{id}/revoke` — revoke (deactivates but retains)
+- `DELETE /api/keys/{id}` — permanent deletion
 
-### Sicurezza
-- Brute-force lockout: dopo 5 tentativi falliti → blocco 15 minuti
-- Audit trail: creazione, utilizzo, revoca, lockout
-- Tracciamento utilizzo: IP, user-agent, timestamp ultimo uso
-- Le key vengono hashate (bcrypt) — mai in chiaro dopo la creazione
+### Security
+- Brute-force lockout: after 5 failed attempts → 15-minute lock
+- Audit trail: creation, usage, revocation, lockout
+- Usage tracking: IP, user-agent, last use timestamp
+- Keys are bcrypt-hashed — never in plaintext after creation
 
-### Amministrazione
-- `GET /api/admin/keys` — lista globale con paginazione e filtro
-- `GET /api/admin/users/{id}/keys` — key di un utente specifico
-- `POST /api/admin/keys/cleanup` — pulizia key scadute/inattive
+### Administration
+- `GET /api/admin/keys` — global list with pagination and filtering
+- `GET /api/admin/users/{id}/keys` — keys for a specific user
+- `POST /api/admin/keys/cleanup` — cleanup expired/inactive keys
 
 ---
 
 ## 11. Role-Based Access Control (RBAC)
 
 ### Permission Management
-- CRUD completo: `POST/GET/DELETE /api/rbac/permissions`
-- Ogni permission ha `name` e `description`
-- Esempi: `users.read`, `users.write`, `roles.read`, `roles.write`
-- Protetto da `require_admin()` o `require_permission("roles.read")`
+- Full CRUD: `POST/GET/DELETE /api/rbac/permissions`
+- Each permission has `name` and `description`
+- Examples: `users.read`, `users.write`, `roles.read`, `roles.write`
+- Protected by `require_admin()` or `require_permission("roles.read")`
 
 ### Role Management
-- CRUD completo: `POST/GET/PATCH/DELETE /api/rbac/roles`
-- Ogni ruolo ha: `name`, `description`, `permissions` (lista), `is_system`
-- Ruoli di sistema non modificabili/eliminabili
-- `PATCH` supporta aggiornamento parziale
-- `GET /api/rbac/roles/{id}` restituisce dettagli completi con permission expand
+- Full CRUD: `POST/GET/PATCH/DELETE /api/rbac/roles`
+- Each role has: `name`, `description`, `permissions` (list), `is_system`
+- System roles are not editable/deletable
+- `PATCH` supports partial update
+- `GET /api/rbac/roles/{id}` returns full details with permission expand
 
 ### User-Role Assignment
-- `POST /api/rbac/user-roles` — assegna ruolo a utente
-- Supporta scadenza dell'assegnazione (`expires_at`)
-- `DELETE /api/rbac/user-roles/{user_id}/{role_id}` — rimuove ruolo
-- `GET /api/rbac/user-roles/{user_id}` — ruoli di un utente (con nome ruolo e email)
-- Gli utenti possono vedere i propri ruoli; per vedere quelli altrui serve `roles.read`
+- `POST /api/rbac/user-roles` — assign role to user
+- Supports assignment expiration (`expires_at`)
+- `DELETE /api/rbac/user-roles/{user_id}/{role_id}` — remove role
+- `GET /api/rbac/user-roles/{user_id}` — roles for a user (with role name and email)
+- Users can see their own roles; viewing others' roles requires `roles.read`
 
 ### User Permissions
-- `GET /api/rbac/users/{user_id}/permissions` — tutte le permission effettive
-- Calcolate come unione delle permission di tutti i ruoli assegnati
-- Include flag `is_admin`
-- Cache e risoluzione ricorsiva
+- `GET /api/rbac/users/{user_id}/permissions` — all effective permissions
+- Calculated as union of permissions across all assigned roles
+- Includes `is_admin` flag
+- Cache and recursive resolution
 
 ---
 
 ## 12. Admin Dashboard & Management
 
 ### Dashboard Statistics
-- `GET /api/admin/stats` — statistiche aggregate:
-  - Utenti totali, attivi, inattivi
-  - Utenti con MFA e percentuale
-  - Nuovi utenti: oggi, questa settimana, questo mese
-- `GET /api/admin/stats/timeseries` — dati per grafici temporali (30 giorni default)
+- `GET /api/admin/stats` — aggregate statistics:
+  - Total, active, inactive users
+  - Users with MFA and percentage
+  - New users: today, this week, this month
+- `GET /api/admin/stats/timeseries` — time-series chart data (30 days default)
 
 ### User Management
-- Ricerca con filtri: testo libero (email, nome, cognome), `is_active`, `mfa_enabled`
-- Paginazione server-side: `limit` (max 500) e `offset`
-- `GET /api/admin/users/search` — ricerca e filtro
-- `GET /api/admin/users/{id}` — dettaglio utente (AdminUserDetail)
-- `PUT /api/admin/users/{id}` — modifica (attivo, email verificata, scopes, nome)
-- `DELETE /api/admin/users/{id}` — elimina (non può eliminare se stesso)
-- Impedisce la propria disattivazione/eliminazione
+- Search with filters: free text (email, first name, last name), `is_active`, `mfa_enabled`
+- Server-side pagination: `limit` (max 500) and `offset`
+- `GET /api/admin/users/search` — search and filter
+- `GET /api/admin/users/{id}` — user detail (AdminUserDetail)
+- `PUT /api/admin/users/{id}` — modify (active, email verified, scopes, name)
+- `DELETE /api/admin/users/{id}` — delete (cannot delete self)
+- Prevents self-deactivation/deletion
 
 ### Bulk Operations
-- `POST /api/admin/users/bulk` — operazioni in massa:
+- `POST /api/admin/users/bulk` — bulk operations:
   - `activate` / `deactivate`
   - `assign_scope` / `remove_scope`
   - `delete`
-- Report successi/fallimenti per ogni utente
+- Success/failure report per user
 
 ### Session Management
-- `GET /api/admin/sessions` — tutte le sessioni attive con dettagli
+- `GET /api/admin/sessions` — all active sessions with details
 - `POST /api/admin/tokens/refresh/{id}/revoke`
 - `POST /api/admin/sessions/cleanup`
-- Pagina HTML: `/admin/sessions`
+- HTML page: `/admin/sessions`
 
 ### Consent Management
-- `GET /api/admin/oauth-consents` — lista consensi con filtro email
+- `GET /api/admin/oauth-consents` — consent list with email filter
 - `POST /api/admin/oauth-consents/{id}/revoke`
-- Pagina HTML: `/admin/oauth-consents`
+- HTML page: `/admin/oauth-consents`
 
 ### Password Reset Admin
-- `GET /api/admin/password-resets` — lista token di reset (con filtro active_only)
-- `GET /api/admin/users/{id}/password-resets` — token di un utente specifico
-- `POST /api/admin/users/{id}/revoke-resets` — revoca tutti i token attivi
-- `POST /api/admin/password-resets/cleanup` — pulizia scaduti
-- `GET /api/admin/password-resets/stats` — statistiche
+- `GET /api/admin/password-resets` — reset token list (with `active_only` filter)
+- `GET /api/admin/users/{id}/password-resets` — token for a specific user
+- `POST /api/admin/users/{id}/revoke-resets` — revoke all active tokens
+- `POST /api/admin/password-resets/cleanup` — cleanup expired
+- `GET /api/admin/password-resets/stats` — statistics
 
-### Pagine HTML Admin
+### Admin HTML Pages
 - `/admin` — dashboard
-- `/admin/users` — gestione utenti
-- `/admin/oauth-clients` — client OAuth2
+- `/admin/users` — user management
+- `/admin/oauth-clients` — OAuth2 clients
 - `/admin/api-keys` — API keys
-- `/admin/password-resets` — reset password
-- `/admin/sessions` — sessioni attive
-- `/admin/oauth-consents` — consensi
-- `/admin/rbac` — ruoli e permessi
-- `/admin/jwk-keys` — chiavi JWK
+- `/admin/password-resets` — password resets
+- `/admin/sessions` — active sessions
+- `/admin/oauth-consents` — consents
+- `/admin/rbac` — roles and permissions
+- `/admin/jwk-keys` — JWK keys
 - `/admin/playground` — API playground
 
 ### JWK Key Management
-- `GET /api/admin/jwk-keys` — stato del keyring (tutte le chiavi)
-- `POST /api/admin/jwk-keys/rotate` — ruota chiave attiva
-- `POST /api/admin/jwk-keys/{kid}/revoke` — revoca chiave (non attiva)
-- La chiave attiva viene copiata come symlink a `private_key.pem` / `public_key.pem`
+- `GET /api/admin/jwk-keys` — keyring status (all keys)
+- `POST /api/admin/jwk-keys/rotate` — rotate active key
+- `POST /api/admin/jwk-keys/{kid}/revoke` — revoke key (not the active one)
+- Active key is copied as symlink to `private_key.pem` / `public_key.pem`
 
 ---
 
 ## 13. User Profile & Preferences
 
-### Profilo Utente
-- `GET /api/profile/me` — profilo completo (UserProfileResponse)
-- `PATCH /api/profile/me` — aggiorna profilo (nome, avatar, bio, etc.)
-- `GET /api/users/me` — info base utente autenticato
+### User Profile
+- `GET /api/profile/me` — full profile (UserProfileResponse)
+- `PATCH /api/profile/me` — update profile (name, avatar, bio, etc.)
+- `GET /api/users/me` — basic authenticated user info
 
-### Cambio Password
-- `POST /api/profile/me/change-password` — richiede password corrente + nuova
+### Password Change
+- `POST /api/profile/me/change-password` — requires current + new password
 
-### Cambio Email
-- `POST /api/profile/me/change-email` — richiede password per conferma, invia verifica
+### Email Change
+- `POST /api/profile/me/change-email` — requires password for confirmation, sends verification
 
-### Preferenze Utente
-- `GET /api/profile/me/preferences` — preferenze salvate
-- `PATCH /api/profile/me/preferences` — aggiorna preferenze
-- Modello: `UserPreferences` (theme, lingua, notifiche, etc.)
+### User Preferences
+- `GET /api/profile/me/preferences` — saved preferences
+- `PATCH /api/profile/me/preferences` — update preferences
+- Model: `UserPreferences` (theme, language, notifications, etc.)
 
-### Pagine HTML Utente
-- `/dashboard` — dashboard personale
-- `/profile` — gestione profilo
-- `/passkeys` — gestione passkey
+### User HTML Pages
+- `/dashboard` — personal dashboard
+- `/profile` — profile management
+- `/passkeys` — passkey management
 
 ---
 
 ## 14. Security Features
 
 ### Rate Limiting
-- Per-IP con `slowapi` (in-memory, adatto a single-process)
-- Endpoint protetti: login (5/min), registrazione (5/min), password reset (5/ora), MFA verify (3/min), creazione API key (10/ora), creazione client (10/ora), etc.
-- Middleware `SlowAPIMiddleware` integrato
+- Per-IP with `slowapi` (in-memory, suitable for single-process)
+- Protected endpoints: login (5/min), registration (5/min), password reset (5/hour), MFA verify (3/min), API key creation (10/hour), client creation (10/hour), etc.
+- `SlowAPIMiddleware` integrated
 
 ### CSRF Protection
-- Token CSRF generati per ogni form (login, MFA, consent)
-- Validazione lato server con session ID via cookie `HttpOnly`
-- Scadenza token: 30 minuti
+- CSRF tokens generated per form (login, MFA, consent)
+- Server-side validation with session ID via HttpOnly cookie
+- Token expiration: 30 minutes
 
 ### CORS
-- Configurabile via env: `CORS_ALLOWED_ORIGINS`, `CORS_ALLOW_CREDENTIALS`, etc.
-- Warning automatico se `credentials=true` con headers wildcard (violazione Fetch standard)
-- Supporto origini multiple, metodi e headers specifici
+- Configurable via env: `CORS_ALLOWED_ORIGINS`, `CORS_ALLOW_CREDENTIALS`, etc.
+- Automatic warning if `credentials=true` with wildcard headers (violation of Fetch standard)
+- Support for multiple origins, specific methods and headers
 
 ### Security Headers (OWASP)
-- Content-Security-Policy (configurabile)
+- Content-Security-Policy (configurable)
 - X-Frame-Options: DENY
 - X-Content-Type-Options: nosniff
 - Referrer-Policy: strict-origin-when-cross-origin
 - X-Permitted-Cross-Domain-Policies: none
-- HSTS (HTTP Strict Transport Security) con max-age e includeSubdomains
-- Permissions-Policy (configurabile)
+- HSTS (HTTP Strict Transport Security) with max-age and includeSubdomains
+- Permissions-Policy (configurable)
 
 ### HTTPS Enforcement
-- Middleware di redirect HTTP → HTTPS in produzione
-- Status code configurabile (default 301)
-- Disabilitabile via `ENFORCE_HTTPS=false` per sviluppo locale
+- HTTP → HTTPS redirect middleware in production
+- Configurable status code (default 301)
+- Disableable via `ENFORCE_HTTPS=false` for local development
 
 ### Request Body Size Limiter
-- Middleware che rifiuta payload oltre `MAX_REQUEST_BODY_SIZE_MB` (default 10MB)
-- Protegge da DoS via payload oversize
+- Middleware rejecting payloads over `MAX_REQUEST_BODY_SIZE_MB` (default 10MB)
+- Protects against DoS via oversized payloads
 
 ### Timing Side-Channel Protection
-- Jitter casuale (0-50ms) nelle risposte per utenti non trovati
-- Padding I/O per uniformare il profilo "found" vs "not found"
-- Disabilitabile via `TIMING_LEAK_PROTECTION=false`
+- Random jitter (0-50ms) in responses for users not found
+- I/O padding to normalize "found" vs "not found" profiles
+- Disableable via `TIMING_LEAK_PROTECTION=false`
 
 ### Password Policy
-- Lunghezza minima configurabile (default 8)
-- Requisiti configurabili: uppercase, lowercase, digits, special characters
-- Validazione lato server in registrazione, cambio, reset
+- Configurable minimum length (default 8)
+- Configurable requirements: uppercase, lowercase, digits, special characters
+- Server-side validation on registration, change, reset
 
 ### Password Hashing
-- bcrypt per tutte le password (utenti, API key hash, backup codes)
-- Secret TOTP cifrato con AES-GCM (chiave derivata da SECRET_KEY)
-- Chiavi private RSA cifrate a riposo
+- bcrypt for all passwords (users, API key hash, backup codes)
+- TOTP secret encrypted with AES-GCM (key derived from SECRET_KEY)
+- RSA private keys encrypted at rest
 
 ### Secure Token Design
-- JWT firmati con RS256 (RSA 2048 bit)
-- ID token, access token, refresh token con scopi e TTL separati
-- Refresh token: hash SHA256 nel database, mai in chiaro
-- Key rotation automatica con periodo configurabile (default 90 giorni)
+- JWT signed with RS256 (RSA 2048 bit)
+- ID token, access token, refresh token with separate scopes and TTLs
+- Refresh token: SHA256 hash in database, never in plaintext
+- Automatic key rotation with configurable period (default 90 days)
 
 ---
 
 ## 15. Storage System (fsspec)
 
-### Backend Supportati
-- **file** — filesystem locale, JSON human-readable
+### Supported Backends
+- **file** — local filesystem, human-readable JSON
 - **s3** — AWS S3
 - **gcs** — Google Cloud Storage
 - **abfs** — Azure Blob Storage
 
-### Configurazione
-- `STORAGE_BACKEND` e `STORAGE_PATH` via env
-- Credenziali cloud specifiche: `AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, etc.
-- Switch trasparente: nessun cambio di codice
+### Configuration
+- `STORAGE_BACKEND` and `STORAGE_PATH` via env
+- Cloud-specific credentials: `AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, etc.
+- Transparent switch: no code changes needed
 
-### Dati Memorizzati
-- Utenti (JSON per user_id)
+### Stored Data
+- Users (JSON per user_id)
 - Email index (email → user_id mapping)
-- Codici di autorizzazione OAuth2
-- Refresh token
-- OAuth2 client
-- OAuth2 consensi
+- OAuth2 authorization codes
+- Refresh tokens
+- OAuth2 clients
+- OAuth2 consents
 - API keys
-- Token verifica email
-- Token reset password
-- Backup codes MFA
-- Trusted devices MFA
-- Passkey
-- Ruoli e permessi RBAC
-- Assegnazioni utente-ruolo
-- Preferenze utente
+- Email verification tokens
+- Password reset tokens
+- MFA backup codes
+- MFA trusted devices
+- Passkeys
+- RBAC roles and permissions
+- User-role assignments
+- User preferences
 
-### Concorrenza
-- Named lock in-process per operazioni read-modify-write
-- Optimistic concurrency versioning per cross-process (authorization code redemption)
-- Lock separati per risorsa (`user:<id>`, `email_index`, etc.)
+### Concurrency
+- Named in-process locks for read-modify-write operations
+- Optimistic concurrency versioning for cross-process (authorization code redemption)
+- Separate locks per resource (`user:<id>`, `email_index`, etc.)
 
 ### Cache
-- Cache utenti in-memory (TTL 300s, max 2000 entries)
-- Cache refresh token (TTL 60s, max 5000 entries)
+- In-memory user cache (TTL 300s, max 2000 entries)
+- Refresh token cache (TTL 60s, max 5000 entries)
 - Cachetools (TTLCache)
 
 ---
 
 ## 16. Email System
 
-### Provider Supportati
-- **console** — stampa su stdout (sviluppo)
-- **file_storage** — salva JSON su filesystem (debug)
-- **smtp** — invio via server SMTP
-- **sendgrid** — API SendGrid
-- **mailgun** — API Mailgun
+### Supported Providers
+- **console** — prints to stdout (development)
+- **file_storage** — saves JSON to filesystem (debug)
+- **smtp** — sends via SMTP server
+- **sendgrid** — SendGrid API
+- **mailgun** — Mailgun API
 
-### Template Email
-- HTML + testo per ogni tipo:
-  - **email_verification** — link verifica email
-  - **welcome** — benvenuto con password temporanea (invito) o senza (registrazione)
-  - **password_reset** — link reset con scadenza
-  - **security_alert** — notifica eventi di sicurezza
-- Template Jinja2 personalizzabili
-- Variabili: `user_name`, `verification_url`, `reset_url`, `company_name`, etc.
+### Email Templates
+- HTML + text for each type:
+  - **email_verification** — email verification link
+  - **welcome** — welcome with temporary password (invite) or without (registration)
+  - **password_reset** — reset link with expiration
+  - **security_alert** — security event notification
+- Customizable Jinja2 templates
+- Variables: `user_name`, `verification_url`, `reset_url`, `company_name`, etc.
 
-### Configurazione
+### Configuration
 - `EMAIL_BACKEND`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`
 - SMTP: host, port, username, password, TLS
 - SendGrid: API key
@@ -866,7 +867,7 @@ Il client è responsabile di eliminare access token e ID token lato suo.
 
 ## 17. UI Customization & Theming
 
-### Variabili d'Ambiente
+### Environment Variables
 - `UI_COMPANY_NAME`, `UI_SUPPORT_EMAIL`
 - `UI_PRIVACY_POLICY_URL`, `UI_TERMS_OF_SERVICE_URL`
 - `UI_LOGO_URL`, `UI_LOGO_DARK_URL` (light/dark mode)
@@ -874,35 +875,35 @@ Il client è responsabile di eliminare access token e ID token lato suo.
 - `UI_BACKGROUND_COLOR`, `UI_BACKGROUND_DARK`
 - `UI_TEXT_COLOR`, `UI_TEXT_DARK`
 
-### Tema
-- Supporto light/dark mode
-- CSS custom properties (variabili) iniettate da `ui_context`
-- Theme switcher JS lato client
-- Applicato uniformemente a tutte le pagine (login, dashboard, admin, consent, etc.)
+### Theme
+- Light/dark mode support
+- CSS custom properties (variables) injected from `ui_context`
+- Client-side theme switcher JS
+- Applied uniformly to all pages (login, dashboard, admin, consent, etc.)
 
-### Contesto UI
-- Dizionario `ui_context` calcolato una volta (cached property su Settings)
-- Iniettato in tutti i template Jinja2
+### UI Context
+- `ui_context` dictionary computed once (cached property on Settings)
+- Injected into all Jinja2 templates
 
 ---
 
 ## 18. Initial Setup Wizard
 
-### Flusso
-- `GET /api/setup/check` — verifica se setup necessario (nessun utente nel sistema)
-- `GET /setup` — pagina HTML wizard (reindirizza a `/login` se già completato)
-- `POST /api/setup/create-admin` — crea primo admin
-  - Valida password policy
-  - Imposta scopes: `["read", "write", "admin"]`
-  - Auto-verifica email (salta verifica per admin iniziale)
-  - Bloccato se esistono già utenti
+### Flow
+- `GET /api/setup/check` — verifies if setup is needed (no users in the system)
+- `GET /setup` — HTML wizard page (redirects to `/login` if already completed)
+- `POST /api/setup/create-admin` — create first admin
+  - Validates password policy
+  - Sets scopes: `["read", "write", "admin"]`
+  - Auto-verifies email (skips verification for initial admin)
+  - Blocked if users already exist
 
 ---
 
 ## 19. Audit Logging
 
-### Eventi Tracciati
-- **Autenticazione**: `login_success`, `login_failed`, `login_mfa_required`, `login_success_with_mfa`, `login_attempt_while_locked`
+### Tracked Events
+- **Authentication**: `login_success`, `login_failed`, `login_mfa_required`, `login_success_with_mfa`, `login_attempt_while_locked`
 - **Account**: `user_registered`, `user_invited`, `user_updated`, `user_deleted`, `account_locked`
 - **MFA**: `mfa_enabled`, `mfa_verification_failed`
 - **OAuth2**: `oauth_client_created/updated/deleted/activated/deactivated`, `oauth_client_secret_rotated`, `oauth2_consent_granted/denied`, `oauth_consent_revoked_by_admin`
@@ -911,79 +912,79 @@ Il client è responsabile di eliminare access token e ID token lato suo.
 - **Password**: `password_reset_requested/completed/failed`, `password_changed`, `password_change_failed`
 - **Email**: `email_verified`, `email_verification_failed`, `email_verification_resent`
 - **Admin**: `bulk_user_operation`, `mfa_reset_by_admin`, `admin_deleted_passkey`, `admin_revoked_password_resets`, `jwk_key_rotated/revoked`
-- **Sistema**: `all_refresh_tokens_revoked`
+- **System**: `all_refresh_tokens_revoked`
 
-### Livelli di Severità
+### Severity Levels
 - `info`, `warning`, `high`
 
-### Privacy Email
-- `AUDIT_EMAIL_LOG_LEVEL`: `mask` (default, oscura dominio), `hash` (SHA256), `none` (in chiaro)
+### Email Privacy
+- `AUDIT_EMAIL_LOG_LEVEL`: `mask` (default, obscures domain), `hash` (SHA256), `none` (plaintext)
 
 ---
 
 ## 20. JWK Key Management
 
 ### Keyring
-- Sistema multi-chiave con keyring (`data/keys/keyring.json`)
-- Ogni chiave ha: `kid` (ID univoco), `created_at`, `status`, `algorithm`, `key_size`
-- Stati: `active` (una sola), `verifying` (per validate token esistenti dopo rotazione), `revoked`
-- Caricamento intelligente: migra formato legacy, genera nuove chiavi se assente, auto-rota
+- Multi-key system with keyring (`data/keys/keyring.json`)
+- Each key has: `kid` (unique ID), `created_at`, `status`, `algorithm`, `key_size`
+- States: `active` (only one), `verifying` (to validate existing tokens after rotation), `revoked`
+- Smart loading: migrates legacy format, generates new keys if absent, auto-rotates
 
-### Auto-Rotazione
-- Periodo configurabile: `JWT_KEY_ROTATION_DAYS` (default 90)
-- Disabilitabile: `JWT_AUTO_ROTATE=false`
-- Alla rotazione: nuova chiave `active`, vecchia chiave → `verifying`
-- JWKS endpoint espone sia `active` che `verifying` (non `revoked`)
+### Auto-Rotation
+- Configurable period: `JWT_KEY_ROTATION_DAYS` (default 90)
+- Disableable: `JWT_AUTO_ROTATE=false`
+- On rotation: new key `active`, old key → `verifying`
+- JWKS endpoint exposes both `active` and `verifying` (not `revoked`)
 
-### Rotazione Manuale
-- `POST /api/admin/jwk-keys/rotate` — immediata
-- `POST /api/admin/jwk-keys/{kid}/revoke` — revoca (non la attiva)
+### Manual Rotation
+- `POST /api/admin/jwk-keys/rotate` — immediate
+- `POST /api/admin/jwk-keys/{kid}/revoke` — revoke (not the active one)
 
 ### Backward Compatibility
-- Symlink `private_key.pem` e `public_key.pem` → chiave attiva
-- Formato legacy supportato e migrato automaticamente
+- Symlinks `private_key.pem` and `public_key.pem` → active key
+- Legacy format supported and automatically migrated
 
-### Crittografia
-- Chiavi private cifrate con AES-GCM (chiave derivata da `SECRET_KEY`)
-- Chiavi pubbliche in chiaro (necessarie per verifica JWT/JWKS)
+### Encryption
+- Private keys encrypted with AES-GCM (key derived from `SECRET_KEY`)
+- Public keys in plaintext (needed for JWT/JWKS verification)
 
 ---
 
 ## 21. Middleware & Infrastructure
 
-### Stack Middleware
+### Middleware Stack
 1. `SlowAPIMiddleware` — rate limiting
 2. `CORSMiddleware` — cross-origin
 3. `SecurityHeadersMiddleware` — OWASP headers
-4. `MaxBodySizeMiddleware` — limite dimensione richieste
-5. `HttpsEnforcementMiddleware` — redirect HTTP→HTTPS
+4. `MaxBodySizeMiddleware` — request size limit
+5. `HttpsEnforcementMiddleware` — HTTP→HTTPS redirect
 
 ### Framework
-- **FastAPI** con `uvicorn`
-- OpenAPI docs (`/docs`, `/redoc`) disabilitabili via env `ENABLE_DOCS=false`
+- **FastAPI** with `uvicorn`
+- OpenAPI docs (`/docs`, `/redoc`) disableable via env `ENABLE_DOCS=false`
 - Health check: `GET /health`
 
-### Configurazione
-- `pydantic-settings` con `.env` file
-- Validazione automatica (`SECRET_KEY` min 32 caratteri, warning per placeholder)
-- `get_settings()` con `@lru_cache` (singleton)
+### Configuration
+- `pydantic-settings` with `.env` file
+- Automatic validation (`SECRET_KEY` min 32 characters, warning for placeholder)
+- `get_settings()` with `@lru_cache` (singleton)
 
 ### Docker
-- Dockerfile incluso (Python 3.13-slim)
-- Volume per persistenza dati (`/app/data`)
-- `.env` file per configurazione runtime
+- Dockerfile included (Python 3.13-slim)
+- Volume for data persistence (`/app/data`)
+- `.env` file for runtime configuration
 
 ### Test Suite
-- Test unitari (35 file): ogni servizio e modello
-- Test integrazione (8 file): API endpoints, CORS, HTTPS, rate limit, security headers
-- `conftest.py` con fixtures condivise
-- `pytest` con `asyncio_mode=auto`
+- Unit tests (35 files): every service and model
+- Integration tests (8 files): API endpoints, CORS, HTTPS, rate limit, security headers
+- `conftest.py` with shared fixtures
+- `pytest` with `asyncio_mode=auto`
 
 ---
 
-## Riepilogo Moduli dell'Applicazione
+## Application Module Overview
 
-| Modulo | API Router | Service | Models |
+| Module | API Router | Service | Models |
 |--------|-----------|---------|--------|
 | Auth | `api/auth.py` | `services/jwt.py`, `services/password.py`, `services/oauth2.py` | `models/user.py`, `models/token.py` |
 | MFA | `api/mfa.py` | `services/mfa.py` | `models/mfa.py` |

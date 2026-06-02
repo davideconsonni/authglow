@@ -35,7 +35,7 @@ function readLocalTheme(): Theme {
   } catch {
     /* localStorage unavailable */
   }
-  return 'auto'
+  return 'light'
 }
 
 function saveLocalTheme(theme: Theme) {
@@ -53,7 +53,7 @@ async function syncFromServer(): Promise<void> {
   serverSyncPromise = (async () => {
     try {
       const prefs = await api.get<{ theme?: Theme }>('/api/profile/me/preferences')
-      const serverTheme = prefs.theme ?? 'auto'
+      const serverTheme = prefs.theme ?? 'light'
       const localTheme = readLocalTheme()
 
       if (localTheme !== 'auto' && serverTheme === localTheme) {

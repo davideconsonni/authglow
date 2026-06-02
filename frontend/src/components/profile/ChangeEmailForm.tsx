@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
 
 const schema = z.object({
   new_email: z.string().email('Invalid email'),
@@ -13,6 +14,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export function ChangeEmailForm() {
+  const { user } = useAuth()
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,7 +47,8 @@ export function ChangeEmailForm() {
       {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">Verification email sent to new address</div>}
       {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <input {...register('new_email')} placeholder="New email address" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
+        <input type="hidden" autoComplete="username" value={user?.email ?? ''} />
+        <input {...register('new_email')} type="email" autoComplete="email" placeholder="New email address" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
         {errors.new_email && <p className="text-xs text-semantic-error">{errors.new_email.message}</p>}
         <input type="password" autoComplete="current-password" {...register('password')} placeholder="Confirm with password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
         {errors.password && <p className="text-xs text-semantic-error">{errors.password.message}</p>}

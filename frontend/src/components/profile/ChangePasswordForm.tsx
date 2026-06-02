@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Eye, EyeOff, Lock } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
 
 const changePasswordSchema = z
   .object({
@@ -25,6 +26,7 @@ const changePasswordSchema = z
 type FormData = z.infer<typeof changePasswordSchema>
 
 export function ChangePasswordForm() {
+  const { user } = useAuth()
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -64,6 +66,7 @@ export function ChangePasswordForm() {
       {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+        <input type="hidden" autoComplete="username" value={user?.email ?? ''} />
         {(['current_password', 'new_password'] as const).map((field, i) => {
           const show = i === 0 ? showCurrent : showNew
           const setShow = i === 0 ? setShowCurrent : setShowNew

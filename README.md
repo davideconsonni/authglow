@@ -128,7 +128,7 @@ docker run -p 8000:8000 -v ./data:/app/data --env-file .env authglow
 
 ## Built with AI
 
-**100% AI-generated.** Every line of code, every template, every piece of documentation was written by AI models — Claude, Gemini, MiniMax, GLM, Deepseek — under human direction. No manual coding. It's a glimpse of what human-AI collaboration looks like in 2025.
+**100% AI-generated.** Every line of code, every template, every piece of documentation was written by AI models — Claude, Gemini, MiniMax, GLM, Deepseek — under human direction. No manual coding. It's a glimpse of what human-AI collaboration looks like in 2026.
 
 I decided what to build and how. The AI wrote the code.
 
