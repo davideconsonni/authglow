@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,6 +7,7 @@ import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight } from 'l
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
+import { useTheme, type Theme } from '@/hooks/useTheme'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -17,15 +18,25 @@ import { ROUTES } from '@/lib/constants'
 
 function PreferencesSection() {
   const { data: prefs } = useApiQuery<{ theme?: string; language?: string }>(['user-prefs'], '/api/profile/me/preferences')
+  const { theme, setTheme } = useTheme()
   const [saving, setSaving] = useState(false)
-  const [theme, setTheme] = useState(prefs?.theme || 'dark')
-  const [language, setLanguage] = useState(prefs?.language || 'en')
+  const [language, setLanguage] = useState('en')
   const [prefSuccess, setPrefSuccess] = useState(false)
+
+  useEffect(() => {
+    if (prefs?.language) {
+      setLanguage(prefs.language)
+    }
+  }, [prefs?.language])
+
+  const handleThemeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    await setTheme(e.target.value as Theme)
+  }
 
   const savePrefs = async () => {
     setSaving(true)
     try {
-      await api.patch('/api/profile/me/preferences', { theme, language })
+      await api.patch('/api/profile/me/preferences', { language })
       setPrefSuccess(true)
       setTimeout(() => setPrefSuccess(false), 2000)
     } catch {} finally { setSaving(false) }
@@ -40,10 +51,11 @@ function PreferencesSection() {
             <label className="block text-xs font-medium text-text-secondary mb-1">Theme</label>
             <select
               value={theme}
-              onChange={e => setTheme(e.target.value)}
+              onChange={handleThemeChange}
               className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
             >
-              <option value="dark">Dark (default)</option>
+              <option value="auto">Auto (system)</option>
+              <option value="dark">Dark</option>
               <option value="light">Light</option>
             </select>
           </div>
@@ -67,7 +79,7 @@ function PreferencesSection() {
           disabled={saving}
           className="mt-4 rounded-xl bg-gradient-cta px-5 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
         >
-          {saving ? 'Saving...' : 'Save preferences'}
+          {saving ? 'Saving...' : 'Save language'}
         </button>
       </div>
     </Section>

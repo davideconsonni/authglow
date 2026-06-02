@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme } from '@/hooks/useTheme'
 
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
@@ -76,10 +77,16 @@ function LazyFallback() {
   return <LoadingState />
 }
 
+function ThemeInitializer({ children }: { children: React.ReactNode }) {
+  useTheme()
+  return <>{children}</>
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ThemeInitializer>
         <Routes>
           <Route path={ROUTES.AUTH.LOGIN} element={<GuestRoute><LoginPage /></GuestRoute>} />
           <Route path={ROUTES.AUTH.REGISTER} element={<GuestRoute><RegisterPage /></GuestRoute>} />
@@ -111,6 +118,7 @@ function App() {
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
           <Route path="*" element={<div>Not Found</div>} />
         </Routes>
+        </ThemeInitializer>
       </BrowserRouter>
     </QueryClientProvider>
   )

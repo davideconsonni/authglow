@@ -16,30 +16,30 @@ export default {
       },
       colors: {
         bg: {
-          primary: '#050816',
-          secondary: '#0A1024',
-          tertiary: '#11182F',
+          primary: 'var(--color-bg-primary)',
+          secondary: 'var(--color-bg-secondary)',
+          tertiary: 'var(--color-bg-tertiary)',
         },
         surface: {
-          1: '#121A32',
-          2: '#182345',
-          3: '#202D56',
+          1: 'var(--color-surface-1)',
+          2: 'var(--color-surface-2)',
+          3: 'var(--color-surface-3)',
         },
         brand: {
-          violet: '#8B5CF6',
-          magenta: '#D946EF',
-          blue: '#60A5FA',
+          violet: 'var(--color-brand-violet)',
+          magenta: 'var(--color-brand-magenta)',
+          blue: 'var(--color-brand-blue)',
         },
         semantic: {
-          success: '#22C55E',
-          warning: '#F59E0B',
-          error: '#EF4444',
-          info: '#38BDF8',
+          success: 'var(--color-semantic-success)',
+          warning: 'var(--color-semantic-warning)',
+          error: 'var(--color-semantic-error)',
+          info: 'var(--color-semantic-info)',
         },
         text: {
-          primary: '#FFFFFF',
-          secondary: '#CBD5E1',
-          muted: '#94A3B8',
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
         },
 
         /* shadcn/ui CSS variable colors */
@@ -84,14 +84,14 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        'glow-violet': '0 0 40px -10px rgba(139, 92, 246, 0.3), 0 0 80px -20px rgba(139, 92, 246, 0.2)',
-        'glow-magenta': '0 0 40px -10px rgba(217, 70, 239, 0.3), 0 0 80px -20px rgba(217, 70, 239, 0.2)',
-        'glow-blue': '0 0 40px -10px rgba(96, 165, 250, 0.3), 0 0 80px -20px rgba(96, 165, 250, 0.2)',
+        'glow-violet': 'var(--glow-violet)',
+        'glow-magenta': 'var(--glow-magenta)',
+        'glow-blue': 'var(--glow-blue)',
       },
       backgroundImage: {
-        'gradient-cta': 'linear-gradient(135deg, #8B5CF6 0%, #D946EF 100%)',
-        'gradient-secondary': 'linear-gradient(135deg, #60A5FA 0%, #8B5CF6 100%)',
-        'gradient-ai': 'linear-gradient(135deg, #06B6D4 0%, #8B5CF6 50%, #D946EF 100%)',
+        'gradient-cta': 'var(--gradient-cta)',
+        'gradient-secondary': 'var(--gradient-secondary)',
+        'gradient-ai': 'var(--gradient-ai)',
       },
       transitionDuration: {
         'micro': '150ms',

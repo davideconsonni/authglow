@@ -108,65 +108,65 @@ describe('Fase 1.3 — Design token AuthGlow in tailwind.config.js', () => {
   })
 
   describe('Colori bg', () => {
-    it('bg.primary = #050816', () => {
-      expect(config.theme.extend.colors.bg.primary).toBe('#050816')
+    it('bg.primary usa CSS variable', () => {
+      expect(config.theme.extend.colors.bg.primary).toBe('var(--color-bg-primary)')
     })
-    it('bg.secondary = #0A1024', () => {
-      expect(config.theme.extend.colors.bg.secondary).toBe('#0A1024')
+    it('bg.secondary usa CSS variable', () => {
+      expect(config.theme.extend.colors.bg.secondary).toBe('var(--color-bg-secondary)')
     })
-    it('bg.tertiary = #11182F', () => {
-      expect(config.theme.extend.colors.bg.tertiary).toBe('#11182F')
+    it('bg.tertiary usa CSS variable', () => {
+      expect(config.theme.extend.colors.bg.tertiary).toBe('var(--color-bg-tertiary)')
     })
   })
 
   describe('Colori surface', () => {
-    it('surface.1 = #121A32', () => {
-      expect(config.theme.extend.colors.surface['1']).toBe('#121A32')
+    it('surface.1 usa CSS variable', () => {
+      expect(config.theme.extend.colors.surface['1']).toBe('var(--color-surface-1)')
     })
-    it('surface.2 = #182345', () => {
-      expect(config.theme.extend.colors.surface['2']).toBe('#182345')
+    it('surface.2 usa CSS variable', () => {
+      expect(config.theme.extend.colors.surface['2']).toBe('var(--color-surface-2)')
     })
-    it('surface.3 = #202D56', () => {
-      expect(config.theme.extend.colors.surface['3']).toBe('#202D56')
+    it('surface.3 usa CSS variable', () => {
+      expect(config.theme.extend.colors.surface['3']).toBe('var(--color-surface-3)')
     })
   })
 
   describe('Colori brand', () => {
-    it('brand.violet = #8B5CF6', () => {
-      expect(config.theme.extend.colors.brand.violet).toBe('#8B5CF6')
+    it('brand.violet usa CSS variable', () => {
+      expect(config.theme.extend.colors.brand.violet).toBe('var(--color-brand-violet)')
     })
-    it('brand.magenta = #D946EF', () => {
-      expect(config.theme.extend.colors.brand.magenta).toBe('#D946EF')
+    it('brand.magenta usa CSS variable', () => {
+      expect(config.theme.extend.colors.brand.magenta).toBe('var(--color-brand-magenta)')
     })
-    it('brand.blue = #60A5FA', () => {
-      expect(config.theme.extend.colors.brand.blue).toBe('#60A5FA')
+    it('brand.blue usa CSS variable', () => {
+      expect(config.theme.extend.colors.brand.blue).toBe('var(--color-brand-blue)')
     })
   })
 
   describe('Colori semantic', () => {
-    it('semantic.success = #22C55E', () => {
-      expect(config.theme.extend.colors.semantic.success).toBe('#22C55E')
+    it('semantic.success usa CSS variable', () => {
+      expect(config.theme.extend.colors.semantic.success).toBe('var(--color-semantic-success)')
     })
-    it('semantic.warning = #F59E0B', () => {
-      expect(config.theme.extend.colors.semantic.warning).toBe('#F59E0B')
+    it('semantic.warning usa CSS variable', () => {
+      expect(config.theme.extend.colors.semantic.warning).toBe('var(--color-semantic-warning)')
     })
-    it('semantic.error = #EF4444', () => {
-      expect(config.theme.extend.colors.semantic.error).toBe('#EF4444')
+    it('semantic.error usa CSS variable', () => {
+      expect(config.theme.extend.colors.semantic.error).toBe('var(--color-semantic-error)')
     })
-    it('semantic.info = #38BDF8', () => {
-      expect(config.theme.extend.colors.semantic.info).toBe('#38BDF8')
+    it('semantic.info usa CSS variable', () => {
+      expect(config.theme.extend.colors.semantic.info).toBe('var(--color-semantic-info)')
     })
   })
 
   describe('Colori text', () => {
-    it('text.primary = #FFFFFF', () => {
-      expect(config.theme.extend.colors.text.primary).toBe('#FFFFFF')
+    it('text.primary usa CSS variable', () => {
+      expect(config.theme.extend.colors.text.primary).toBe('var(--color-text-primary)')
     })
-    it('text.secondary = #CBD5E1', () => {
-      expect(config.theme.extend.colors.text.secondary).toBe('#CBD5E1')
+    it('text.secondary usa CSS variable', () => {
+      expect(config.theme.extend.colors.text.secondary).toBe('var(--color-text-secondary)')
     })
-    it('text.muted = #94A3B8', () => {
-      expect(config.theme.extend.colors.text.muted).toBe('#94A3B8')
+    it('text.muted usa CSS variable', () => {
+      expect(config.theme.extend.colors.text.muted).toBe('var(--color-text-muted)')
     })
   })
 

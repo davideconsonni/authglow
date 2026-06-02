@@ -37,7 +37,6 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,6 +45,8 @@ app.add_middleware(
     allow_methods=settings.get_cors_methods(),
     allow_headers=settings.get_cors_headers(),
 )
+
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
