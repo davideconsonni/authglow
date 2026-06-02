@@ -1,11 +1,14 @@
 """Admin portal data models."""
 
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
+
+if TYPE_CHECKING:
+    from authglow.models.user import User
 
 T = TypeVar("T")
 
@@ -54,6 +57,26 @@ class AdminUserDetail(BaseModel):
     mfa_verified: bool
     login_count: int = 0
     failed_login_count: int = 0
+
+    @classmethod
+    def from_user(cls, user: "User") -> "AdminUserDetail":
+        return cls(
+            id=user.id,
+            email=user.email,
+            is_active=user.is_active,
+            is_invited=user.is_invited,
+            email_verified=user.email_verified,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            last_login=user.last_login,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            scopes=user.scopes,
+            mfa_enabled=user.mfa_enabled,
+            mfa_verified=user.mfa_verified,
+            login_count=user.login_count,
+            failed_login_count=user.failed_login_count,
+        )
 
 
 class UserFilter(BaseModel):

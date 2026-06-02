@@ -254,6 +254,9 @@ a { color: var(--primary); text-decoration: none; }
 .btn-danger { background: var(--error); color: #fff; }
 .btn-danger:hover { opacity: 0.9; }
 
+.btn-warning { background: var(--warning); color: #000; }
+.btn-warning:hover { opacity: 0.85; }
+
 .response-area {
   margin-top: 14px;
   display: none;

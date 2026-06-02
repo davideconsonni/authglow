@@ -85,22 +85,6 @@ async def admin_users_page(request: Request):
     return templates.TemplateResponse(request, "admin_users.html", context={**ui_context})
 
 
-@router.get("/admin/audit", response_class=HTMLResponse)
-async def admin_audit_page(request: Request):
-    """Audit logs page (auth handled by JS)."""
-    settings = get_settings()
-    ui_context = settings.ui_context
-
-    return templates.TemplateResponse(
-        request,
-        "admin_audit.html",
-        context={
-            **ui_context,
-            "current_user": {"email": "Loading..."},
-        },
-    )
-
-
 @router.get("/admin/oauth-clients", response_class=HTMLResponse)
 async def admin_oauth_clients_page(request: Request):
     """OAuth2 clients management page (auth handled by JS)."""
@@ -205,13 +189,7 @@ async def search_users(
 
     items = []
     for user in users:
-        items.append(
-            AdminUserDetail(
-                **user.model_dump(),
-                login_count=user.login_count,
-                failed_login_count=user.failed_login_count,
-            )
-        )
+        items.append(AdminUserDetail.from_user(user))
 
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
@@ -227,11 +205,7 @@ async def get_user_detail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return AdminUserDetail(
-        **user.model_dump(),
-        login_count=0,
-        failed_login_count=0,
-    )
+    return AdminUserDetail.from_user(user)
 
 
 @router.put("/api/admin/users/{user_id}", response_model=UserResponse)
@@ -488,29 +462,6 @@ async def bulk_user_operation(
     )
 
     return results
-
-
-@router.get("/api/admin/audit/logs")
-async def get_audit_logs(
-    user_id: Optional[str] = Query(None),
-    event_type: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
-):
-    """Audit log analysis is handled by external log shipping."""
-    return []
-
-
-@router.get("/api/admin/security/events")
-async def get_security_events(
-    limit: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(require_admin),
-):
-    """Security event monitoring is handled by external systems."""
-    return []
 
 
 # New admin endpoints for OAuth2 features

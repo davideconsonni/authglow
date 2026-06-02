@@ -102,13 +102,21 @@ async def auto_oauth2_authorize(request: Request):
                 error_data = get_resp.json()
             except Exception:
                 error_data = {"error": get_resp.text[:500]}
+            print(f"[DEBUG] GET /oauth2/authorize returned {get_resp.status_code}, aborting")
             return JSONResponse(status_code=get_resp.status_code, content=error_data)
+
+        print(f"[DEBUG] GET /oauth2/authorize returned 200 OK")
 
         # Extract csrf_token from the login form HTML
         import re
+        from html import unescape
 
-        csrf_match = re.search(r'name="csrf_token"\s+value="([^"]+)"', get_resp.text)
-        csrf_token = csrf_match.group(1) if csrf_match else None
+        csrf_match = re.search(r'<input[^>]*name="csrf_token"[^>]*value="([^"]*)"', get_resp.text)
+        csrf_token = unescape(csrf_match.group(1)) if csrf_match else None
+
+        print(f"[DEBUG] csrf_token extracted from HTML: repr={repr(csrf_token)}")
+        if csrf_token is None:
+            print(f"[DEBUG] HTML preview (first 500 chars): {get_resp.text[:500]}")
 
         # Step 1: POST /oauth2/authorize with credentials + csrf_token
         form_data = {
@@ -126,11 +134,19 @@ async def auto_oauth2_authorize(request: Request):
         if code_challenge_method:
             form_data["code_challenge_method"] = code_challenge_method
 
+        print(f"[DEBUG] form_data keys: {list(form_data.keys())}")
+        print(f"[DEBUG] form_data csrf_token value: repr={repr(form_data.get('csrf_token'))}")
+
         try:
             auth_resp = await client.post(
                 f"{AUTHGLOW_BASE_URL}/oauth2/authorize",
                 data=form_data,
             )
+            print(
+                f"[DEBUG] POST /oauth2/authorize returned status={auth_resp.status_code} content-type={auth_resp.headers.get('content-type', 'none')}"
+            )
+            if auth_resp.status_code >= 400:
+                print(f"[DEBUG] POST response body: {auth_resp.text[:500]}")
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
             return JSONResponse(status_code=502, content={"error": f"Cannot reach AuthGlow: {exc}"})
 
@@ -198,7 +214,7 @@ async def auto_oauth2_authorize(request: Request):
             return JSONResponse(status_code=502, content={"error": f"Cannot reach AuthGlow: {exc}"})
 
         # If consent endpoint redirects (user already consented), extract the code
-        if consent_resp.status_code in (301, 302, 303):
+        if consent_resp.status_code in (301, 302, 303, 307, 308):
             consent_location = consent_resp.headers.get("location", "")
             result = _extract_code_from_redirect_url(consent_location)
             if "authorization_code" in result:
@@ -210,10 +226,10 @@ async def auto_oauth2_authorize(request: Request):
             "content-type", ""
         ):
             consent_csrf_match = re.search(
-                r'name="csrf_token"\s+value="([^"]+)"', consent_resp.text
+                r'<input[^>]*name="csrf_token"[^>]*value="([^"]*)"', consent_resp.text
             )
             if consent_csrf_match:
-                consent_csrf = consent_csrf_match.group(1)
+                consent_csrf = unescape(consent_csrf_match.group(1))
 
         # Step 4: POST /oauth2/consent to approve (auto-approve)
         consent_form = {

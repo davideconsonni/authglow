@@ -579,19 +579,55 @@ async function oauthUserInfo() {
 
 // ---- OAuth2 Clients ----
 async function createOAuthClient() {
+  var rawScopes = document.getElementById('oclient-scopes').value.trim();
+  var allowedScopes = rawScopes ? rawScopes.split(/\s+/).filter(Boolean) : ['read'];
+  var isConfidential = document.getElementById('oclient-confidential').checked;
+
   const body = {
     client_name: document.getElementById('oclient-name').value,
-    redirect_uris: document.getElementById('oclient-redirects').value.split(',').map(function(s) { return s.trim(); }),
-    scope: document.getElementById('oclient-scopes').value,
-    client_type: document.getElementById('oclient-type').value,
+    redirect_uris: document.getElementById('oclient-redirects').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean),
+    allowed_scopes: allowedScopes,
+    is_confidential: isConfidential,
   };
+
+  if (!isConfidential) {
+    body.require_pkce = true;
+    body.require_consent = true;
+  }
+
   const res = await apiCallAndShow('POST', '/api/oauth-clients', 'res-oclient-create', body, true);
   if (res.status >= 200 && res.status < 300 && res.data.client_id) {
     document.getElementById('oauth-client-id').value = res.data.client_id;
+    document.getElementById('oclient-mgr-id').value = res.data.client_id;
     if (res.data.client_secret) {
       document.getElementById('oauth-client-secret').value = res.data.client_secret;
     }
     showToast('OAuth2 client created! Client ID auto-filled.', 'success');
+  }
+  return res;
+}
+
+async function deactivateOAuthClient() {
+  var cid = document.getElementById('oclient-mgr-id').value.trim();
+  if (!cid) { showToast('Enter a Client ID', 'error'); return; }
+  if (!confirm('Deactivate client ' + cid + '?')) return;
+  return await apiCallAndShow('POST', '/api/oauth-clients/' + cid + '/deactivate', 'res-oclient-manage', null, true);
+}
+
+async function activateOAuthClient() {
+  var cid = document.getElementById('oclient-mgr-id').value.trim();
+  if (!cid) { showToast('Enter a Client ID', 'error'); return; }
+  return await apiCallAndShow('POST', '/api/oauth-clients/' + cid + '/activate', 'res-oclient-manage', null, true);
+}
+
+async function deleteOAuthClient() {
+  var cid = document.getElementById('oclient-mgr-id').value.trim();
+  if (!cid) { showToast('Enter a Client ID', 'error'); return; }
+  if (!confirm('PERMANENTLY delete client ' + cid + '? This cannot be undone.')) return;
+  var res = await apiCallAndShow('DELETE', '/api/oauth-clients/' + cid, 'res-oclient-manage', null, true);
+  if (res.status >= 200 && res.status < 300) {
+    document.getElementById('oclient-mgr-id').value = '';
+    showToast('Client deleted.', 'success');
   }
   return res;
 }

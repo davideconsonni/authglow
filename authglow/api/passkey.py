@@ -27,14 +27,24 @@ settings = get_settings()
 
 
 def get_passkey_service(request: Request) -> PasskeyService:
-    """Get passkey service instance with dynamic origin detection."""
-    # Detect origin from request
-    host = request.headers.get("host", "localhost:8000")
-    scheme = "https" if request.url.scheme == "https" else "http"
-    origin = f"{scheme}://{host}"
+    """Get passkey service instance with dynamic origin detection.
 
-    # Extract RP ID from host (remove port)
-    rp_id = host.split(":")[0]
+    Prefers the Origin header (set by the browser) for correct WebAuthn
+    origin verification behind reverse proxies and test playgrounds.
+    Falls back to the Host header when no Origin header is present.
+    """
+    from urllib.parse import urlparse
+
+    origin_header = request.headers.get("origin")
+    if origin_header:
+        parsed = urlparse(origin_header)
+        origin = origin_header
+        rp_id = parsed.hostname or "localhost"
+    else:
+        host = request.headers.get("host", "localhost:8000")
+        scheme = "https" if request.url.scheme == "https" else "http"
+        origin = f"{scheme}://{host}"
+        rp_id = host.split(":")[0]
 
     return PasskeyService(
         storage_path=settings.storage_path,
@@ -133,9 +143,7 @@ async def complete_registration(
         import base64
         import json
 
-        client_data = json.loads(
-            base64.urlsafe_b64decode(verification.client_data_json + "==")
-        )
+        client_data = json.loads(base64.urlsafe_b64decode(verification.client_data_json + "=="))
         challenge_str = client_data["challenge"]
 
         # Verify and save passkey
@@ -204,9 +212,7 @@ async def begin_authentication(
         )
 
     # Generate authentication options
-    options_dict, challenge_str = passkey_service.generate_authentication_options_dict(
-        passkeys
-    )
+    options_dict, challenge_str = passkey_service.generate_authentication_options_dict(passkeys)
 
     # Save challenge
     challenge = PasskeyChallenge(
@@ -239,9 +245,7 @@ async def complete_authentication(
         import base64
         import json
 
-        client_data = json.loads(
-            base64.urlsafe_b64decode(verification.client_data_json + "==")
-        )
+        client_data = json.loads(base64.urlsafe_b64decode(verification.client_data_json + "=="))
         challenge_str = client_data["challenge"]
 
         # Verify authentication

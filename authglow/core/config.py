@@ -138,7 +138,7 @@ class Settings(BaseSettings):
 
     # CORS Security Settings
     cors_allowed_origins: str = (
-        "http://localhost:3000,http://localhost:8080"  # Comma-separated list
+        "http://localhost:3000,http://localhost:6060,http://localhost:8080"  # Comma-separated list
     )
     cors_allow_credentials: bool = True
     cors_allowed_methods: str = "GET,POST,PUT,DELETE,OPTIONS"  # Comma-separated list

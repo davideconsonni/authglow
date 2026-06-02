@@ -611,12 +611,11 @@
           <div class="form-grid">
             <div class="field"><label>Client Name</label><input id="oclient-name" type="text" value="My Test App" placeholder="Application name"></div>
             <div class="field"><label>Redirect URIs (comma-separated)</label><input id="oclient-redirects" type="text" value="http://localhost:5000/callback" placeholder="http://localhost:5000/callback"></div>
-            <div class="field"><label>Scopes</label><input id="oclient-scopes" type="text" value="openid profile email read write" placeholder="Scopes"></div>
-            <div class="field"><label>Client Type</label>
-              <select id="oclient-type">
-                <option value="confidential">confidential</option>
-                <option value="public">public</option>
-              </select>
+            <div class="field"><label>Allowed Scopes (space-separated)</label><input id="oclient-scopes" type="text" value="openid profile email read" placeholder="e.g. openid profile email read write"></div>
+            <div class="field"><label>Confidential Client</label>
+              <label class="checkbox-label" style="display:inline-flex;align-items:center;gap:8px;margin-top:4px;">
+                <input id="oclient-confidential" type="checkbox" checked> Confidential (server-side app, can keep a secret)
+              </label>
             </div>
           </div>
           <div class="btn-row">
@@ -633,9 +632,28 @@
         </div>
         <div class="card-body">
           <div class="btn-row">
-            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/oauth-clients','res-oclient-list',null,true)">List Clients</button>
+            <button class="btn btn-primary" onclick="apiCallAndShow('GET','/api/oauth-clients','res-oclient-list',null,true)">List All Clients</button>
+            <button class="btn btn-outline" onclick="apiCallAndShow('GET','/api/oauth-clients?active_only=true','res-oclient-list',null,true)">Active Only</button>
           </div>
           <div class="response-area" id="res-oclient-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Manage Client</h3>
+          <span class="method method-POST|DELETE">POST | DELETE</span>
+        </div>
+        <div class="card-body">
+          <div class="form-grid" style="grid-template-columns: 1fr auto auto auto;">
+            <div class="field"><label>Client ID</label><input id="oclient-mgr-id" type="text" placeholder="Paste client_id from list or create"></div>
+            <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:2px;">
+              <button class="btn btn-warning" onclick="deactivateOAuthClient()">Deactivate</button>
+              <button class="btn btn-outline" onclick="activateOAuthClient()">Activate</button>
+              <button class="btn btn-danger" onclick="deleteOAuthClient()">Delete</button>
+            </div>
+          </div>
+          <div class="response-area" id="res-oclient-manage"></div>
         </div>
       </div>
     </div>
