@@ -202,8 +202,8 @@ function RolesTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-2">
-              {roleList.map((r) => (
-                <tr key={r.id} className="hover:bg-surface-2/50">
+              {roleList.map((r, idx) => (
+                <tr key={r.id || idx} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-text-primary">{r.name}</span>
@@ -218,9 +218,9 @@ function RolesTab({
                   <td className="px-6 py-3">
                     <div className="flex flex-wrap gap-1">
                       {r.permissions?.length > 0 ? (
-                        r.permissions.map((p) => (
+                        r.permissions.map((p, i) => (
                           <span
-                            key={p.id}
+                            key={p.id || i}
                             className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary"
                           >
                             {p.name}
@@ -290,9 +290,9 @@ function RolesTab({
                 Permissions ({selPerms.length} selected)
               </p>
               <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-surface-2 bg-surface-1 p-2">
-                {permList.map((p) => (
+                {permList.map((p, i) => (
                   <label
-                    key={p.id}
+                    key={p.id || i}
                     className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2/50 cursor-pointer"
                   >
                     <input
@@ -437,8 +437,8 @@ function PermissionsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-2">
-              {permList.map((p) => (
-                <tr key={p.id} className="hover:bg-surface-2/50">
+              {permList.map((p, i) => (
+                <tr key={p.id || i} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3 text-sm font-medium text-text-primary">{p.name}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{p.description || '-'}</td>
                   <td className="px-6 py-3">
@@ -658,8 +658,8 @@ function UserRoleAssignments({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-2">
-                  {userRoles.map((ur: any) => (
-                    <tr key={ur.id || ur.role_id}>
+                  {userRoles.map((ur: any, i: number) => (
+                    <tr key={ur.id || ur.role_id || i}>
                       <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email || userEmail}</td>
                       <td className="px-6 py-3 text-sm text-text-secondary">{ur.role_name || ur.role_id || '-'}</td>
                       <td className="px-6 py-3 text-sm text-text-muted">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
