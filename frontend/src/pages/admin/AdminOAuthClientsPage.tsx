@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Shield, ChevronDown, ChevronRight } from 'lucide-react'
+import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Shield, ChevronDown, ChevronRight, Edit } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -56,6 +56,7 @@ export function AdminOAuthClientsPage() {
   const [success, setSuccess] = useState('')
   const [secretModal, setSecretModal] = useState<string | null>(null)
   const [newClientId, setNewClientId] = useState('')
+  const [editClientId, setEditClientId] = useState<string | null>(null)
 
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
   const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as any)?.items as OAuthClient[]) ?? []
@@ -64,7 +65,19 @@ export function AdminOAuthClientsPage() {
 
   const resetForm = () => {
     setClientType(null); setName(''); setRedirectUris(['']); setScopes('openid profile email')
-    setRefreshToken(true); setShowAdvanced(false); setFormErrors({}); setError('')
+    setRefreshToken(true); setShowAdvanced(false); setFormErrors({})
+    setEditClientId(null)
+  }
+
+  const openEdit = (c: OAuthClient) => {
+    setEditClientId(c.client_id)
+    setName(c.client_name || c.name || '')
+    setRedirectUris(c.redirect_uris?.length ? c.redirect_uris : [''])
+    setScopes((c.scopes || c.allowed_scopes || []).join(', ') || 'openid profile email')
+    setClientType(null)
+    setShowCreate(true)
+    setShowAdvanced(true)
+    setFormErrors({})
   }
 
   const selectType = (ct: ClientType) => {
@@ -90,6 +103,31 @@ export function AdminOAuthClientsPage() {
       const res = await api.post<{ secret: string }>(`/api/oauth-clients/${id}/rotate-secret`)
       setSecretModal(res.secret)
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+  }
+
+  const handleUpdate = async () => {
+    if (!editClientId || !validateForm()) return
+    setSaving(true); setError('')
+    try {
+      const uris = redirectUris.map(u => u.trim()).filter(Boolean)
+      const scopesList = scopes.split(',').map(s => s.trim()).filter(Boolean)
+      await api.put(`/api/oauth-clients/${editClientId}`, {
+        client_name: name,
+        redirect_uris: uris,
+        scopes: scopesList,
+      })
+      setShowCreate(false)
+      resetForm()
+      setSuccess('Client updated.')
+      await refetch()
+    } catch (err: unknown) {
+      setError(friendlyError(err instanceof Error ? err.message : 'Failed to update client'))
+    } finally { setSaving(false) }
+  }
+
+  const handleCreateOrUpdate = async () => {
+    if (editClientId) await handleUpdate()
+    else await handleCreate()
   }
 
   const validateForm = (): boolean => {
@@ -205,6 +243,7 @@ export function AdminOAuthClientsPage() {
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
+                      <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
                       <button onClick={() => handleRotate(c.client_id)} className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
                       <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
                     </div>
@@ -240,10 +279,9 @@ export function AdminOAuthClientsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowCreate(false); resetForm() }} />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-5 shadow-glow-violet">
-            <h3 className="text-lg font-semibold text-text-primary">New OAuth Client</h3>
+            <h3 className="text-lg font-semibold text-text-primary">{editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}</h3>
 
-            {/* Step 1: Choose type */}
-            {!clientType ? (
+            {editClientId ? null : !clientType ? (
               <div className="space-y-3">
                 <p className="text-sm text-text-secondary">What are you building?</p>
                 {CLIENT_TYPES.map(ct => (
@@ -326,9 +364,9 @@ export function AdminOAuthClientsPage() {
 
                 <div className="flex gap-3 pt-1">
                   <button onClick={() => { setShowCreate(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-                  <button onClick={handleCreate} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
+                  <button onClick={handleCreateOrUpdate} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Create
+                    {editClientId ? 'Update' : 'Create'}
                   </button>
                 </div>
               </div>

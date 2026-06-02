@@ -299,11 +299,21 @@ async def revoke_user_password_resets(
     reset_service: PasswordResetService = Depends(get_reset_service),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Revoke all active password reset tokens for a user (admin only)."""
+    """Revoke all active password reset tokens for a user (admin only).
+    Accepts either user_id or email as the path parameter."""
     if "admin" not in current_user.scopes:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    count = await reset_service.revoke_user_tokens(user_id)
+    # Resolve email to user_id if needed
+    target_id = user_id
+    if "@" in user_id:
+        user_storage = UserStorage()
+        user = await user_storage.get_user_by_email(user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        target_id = user.id
+
+    count = await reset_service.revoke_user_tokens(target_id)
 
     # Log admin action
     await audit_service.log_event(
@@ -314,6 +324,31 @@ async def revoke_user_password_resets(
     )
 
     return {"message": f"Revoked {count} password reset tokens"}
+
+
+@router.delete("/api/admin/password-resets/{token_id}")
+async def delete_password_reset(
+    token_id: str,
+    current_user: User = Depends(get_current_user),
+    reset_service: PasswordResetService = Depends(get_reset_service),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Delete a single password reset token (admin only)."""
+    if "admin" not in current_user.scopes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    success = await reset_service.delete_token(token_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+
+    await audit_service.log_event(
+        event_type="admin_deleted_password_reset",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"token_id": token_id},
+    )
+
+    return {"message": "Token deleted successfully"}
 
 
 @router.post("/api/admin/password-resets/cleanup")

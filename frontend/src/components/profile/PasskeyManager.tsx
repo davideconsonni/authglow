@@ -45,7 +45,10 @@ export function PasskeyManager() {
       const regResult = await startRegistration({ optionsJSON: beginResp })
 
       await api.post('/api/passkey/register/complete', {
-        registration_response: regResult,
+        credential_id: regResult.id,
+        client_data_json: regResult.response.clientDataJSON,
+        attestation_object: regResult.response.attestationObject,
+        transports: regResult.response.transports || [],
       })
 
       setSuccessMsg('Passkey added successfully')

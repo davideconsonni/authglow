@@ -14,6 +14,18 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+export const LOGIN_EMAIL_KEY = 'auth-last-email'
+
+export function getSavedEmail(): string {
+  try { return localStorage.getItem(LOGIN_EMAIL_KEY) || '' }
+  catch { return '' }
+}
+
+function saveEmail(email: string) {
+  try { localStorage.setItem(LOGIN_EMAIL_KEY, email) }
+  catch { /* noop */ }
+}
+
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [generalError, setGeneralError] = useState('')
@@ -28,12 +40,15 @@ export function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: { email: getSavedEmail() },
   })
 
   const onSubmit = async (data: LoginFormData) => {
     setGeneralError('')
     try {
       const result = await login(data.email, data.password)
+
+      saveEmail(data.email)
 
       if ('mfa_required' in result && result.mfa_required) {
         const sessionToken = result as unknown as { session_token: string }

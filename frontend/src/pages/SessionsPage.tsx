@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Monitor, Trash2, Globe, Loader2 } from 'lucide-react'
+import { Monitor, Globe, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 
@@ -15,35 +14,27 @@ interface Session {
 }
 
 export function SessionsPage() {
-  const [revokeId, setRevokeId] = useState<string | null>(null)
   const [revokingAll, setRevokingAll] = useState(false)
   const [error, setError] = useState('')
 
   const { data: rawData, refetch, isLoading } = useApiQuery<any>(
     ['my-sessions'],
-    '/api/admin/sessions',
+    '/api/tokens/refresh/list',
   )
 
   const sessions: Session[] = Array.isArray(rawData) ? rawData : (rawData?.sessions || rawData?.items || rawData?.tokens || [])
 
-  const handleRevoke = async () => {
-    if (!revokeId) return
-    try {
-      await api.post(`/api/admin/tokens/refresh/${revokeId}/revoke`)
-      setRevokeId(null)
-      await refetch()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke session')
-    }
-  }
-
   const handleRevokeAll = async () => {
     setRevokingAll(true)
+    setError('')
     try {
-      await api.post('/api/admin/sessions/cleanup')
+      const res = await api.post<{ message?: string; count?: number }>('/api/tokens/refresh/revoke-all')
+      const count = res?.count || 0
+      setError('')
+      alert(count > 0 ? `Revoked ${count} session(s).` : 'All sessions revoked.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke all sessions')
+      setError(err instanceof Error ? err.message : 'Failed to revoke sessions')
     } finally {
       setRevokingAll(false)
     }
@@ -53,7 +44,7 @@ export function SessionsPage() {
     <div>
       <PageHeader
         title="Sessions"
-        description="Manage your active sessions."
+        description="Manage your active OAuth2 refresh tokens."
         actions={
           <button
             onClick={handleRevokeAll}
@@ -77,11 +68,8 @@ export function SessionsPage() {
           </div>
           <h3 className="mt-4 text-sm font-semibold text-text-primary">No active sessions</h3>
           <p className="mt-2 max-w-sm mx-auto text-xs text-text-muted">
-            Session tracking is available for OAuth2 client applications. Direct login sessions
-            are managed via your browser's authentication token and do not appear here.
-          </p>
-          <p className="mt-3 text-xs text-text-muted">
-            If you logged in through an OAuth2 application, those sessions will appear here.
+            You don&apos;t have any active sessions. This can happen if all your sessions have
+            expired or been revoked.
           </p>
         </div>
       ) : (
@@ -94,7 +82,6 @@ export function SessionsPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">IP Address</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Last Active</th>
-                  <th className="px-6 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-2">
@@ -109,15 +96,6 @@ export function SessionsPage() {
                     </td>
                     <td className="px-6 py-3 text-sm text-text-secondary">{formatDateTime(s.created_at)}</td>
                     <td className="px-6 py-3 text-sm text-text-secondary">{formatDateTime(s.last_active)}</td>
-                    <td className="px-6 py-3">
-                      <button
-                        onClick={() => setRevokeId(s.id)}
-                        className="text-text-muted hover:text-semantic-error transition-colors"
-                        aria-label="Revoke session"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -125,16 +103,6 @@ export function SessionsPage() {
           </div>
         </div>
       )}
-
-      <ConfirmDialog
-        open={!!revokeId}
-        title="Revoke Session"
-        message="Are you sure you want to revoke this session? The user will be logged out immediately."
-        confirmLabel="Revoke"
-        variant="danger"
-        onConfirm={handleRevoke}
-        onCancel={() => setRevokeId(null)}
-      />
     </div>
   )
 }

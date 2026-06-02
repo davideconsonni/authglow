@@ -284,6 +284,10 @@ class PasswordResetService:
 
         return count
 
+    async def delete_token(self, token_lookup: str) -> bool:
+        """Delete/recycle a single token permanently."""
+        return await self.mark_token_used(token_lookup)
+
     async def cleanup_expired_tokens(self) -> int:
         """Delete all expired and used tokens.
 

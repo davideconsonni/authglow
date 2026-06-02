@@ -149,9 +149,7 @@ async def introspect_token(
             headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
         )
 
-    if not await oauth2_service.verify_client(
-        resolved_client_id, resolved_client_secret
-    ):
+    if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid client credentials",
@@ -220,9 +218,24 @@ async def list_user_refresh_tokens(
 
     Useful for "active sessions" or "logged in devices" feature.
     """
-    # This would require adding a method to list user's tokens
-    # For now, return placeholder
-    return {"message": "Feature not yet implemented", "user_id": current_user.id}
+    page_tokens, total = await refresh_token_service.list_all_tokens(
+        active_only=True, limit=100, user_id=current_user.id
+    )
+    return {
+        "sessions": [
+            {
+                "id": rt.token_id,
+                "client": rt.client_id,
+                "ip_address": rt.issued_ip,
+                "created_at": rt.created_at.isoformat(),
+                "last_active": (
+                    rt.used_at.isoformat() if rt.used_at else rt.created_at.isoformat()
+                ),
+            }
+            for rt in page_tokens
+        ],
+        "total": total,
+    }
 
 
 @router.post("/api/tokens/refresh/revoke-all")
