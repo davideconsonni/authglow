@@ -12,10 +12,16 @@
   - [x] 2.3 Forza scadenza password
   - [x] 2.4 Sblocca account (lockout)
   - [x] 2.5 Reset tentativi falliti
-- [ ] **Fase 3 — Sessioni e Token**
-  - [ ] 3.1 Revoca tutte le sessioni di un utente
-  - [ ] 3.2 Revoca refresh token specifici
-  - [ ] 3.3 Visualizzazione sessioni attive per utente
+- [x] **Fase 3 — Sessioni e Token**
+  - [x] 3.1 Revoca tutte le sessioni di un utente
+  - [x] 3.2 Revoca refresh token specifici
+  - [x] 3.3 Visualizzazione sessioni attive per utente
+  - [x] *Fix: passkey login ora crea refresh token per session tracking*
+  - [x] *Fix: revoca sessioni su sé stessi forza il logout*
+- [ ] **Fase 4 — MFA e Passkey**
+  - [ ] 4.1 Disabilita MFA forzatamente (senza reset)
+  - [ ] 4.2 Rigenera backup codes
+  - [ ] 4.3 Visualizzazione completa passkey nel drawer (con rimozione)
 - [ ] **Fase 4 — MFA e Passkey**
   - [ ] 4.1 Disabilita MFA forzatamente (senza reset)
   - [ ] 4.2 Rigenera backup codes

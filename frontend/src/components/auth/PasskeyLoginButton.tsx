@@ -22,7 +22,7 @@ export function PasskeyLoginButton() {
       }
       const beginResp = await api.post<any>('/api/passkey/auth/begin', { email })
       const authResult = await startAuthentication({ optionsJSON: beginResp })
-      const completeResp = await api.post<{ access_token: string }>('/api/passkey/auth/complete', {
+      const completeResp = await api.post<{ access_token: string; refresh_token?: string }>('/api/passkey/auth/complete', {
         credential_id: authResult.id,
         client_data_json: authResult.response.clientDataJSON,
         authenticator_data: authResult.response.authenticatorData,
@@ -30,7 +30,7 @@ export function PasskeyLoginButton() {
         user_handle: authResult.response.userHandle || null,
       })
       if (completeResp.access_token) {
-        setToken(completeResp.access_token)
+        setToken(completeResp.access_token, completeResp.refresh_token)
         await fetchCurrentUser()
       }
     } catch (err: unknown) {

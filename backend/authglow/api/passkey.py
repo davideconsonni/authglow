@@ -17,8 +17,10 @@ from authglow.models.passkey import (
     PasskeyResponse,
 )
 from authglow.models.user import User
+from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.passkey import PasskeyService
+from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
 
 router = APIRouter(prefix="/api/passkey")
@@ -234,11 +236,13 @@ async def complete_authentication(
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
     storage: Annotated[UserStorage, Depends(get_user_storage)],
+    refresh_token_service: Annotated[RefreshTokenService, Depends(lambda: RefreshTokenService())],
+    audit_service: Annotated[AuditService, Depends(lambda: AuditService())],
 ):
     """
     Complete passkey authentication ceremony.
 
-    Verifies the authentication assertion and returns access token.
+    Verifies the authentication assertion and returns access + refresh token.
     """
     try:
         # Extract challenge from client_data_json
@@ -274,9 +278,29 @@ async def complete_authentication(
             scopes=user.scopes,
         )
 
+        # Create persistent refresh token for session tracking
+        rt = await refresh_token_service.create_refresh_token(
+            user_id=user.id,
+            client_id="passkey_grant",
+            scopes=user.scopes,
+            issued_ip=request.client.host if request.client else None,
+            expires_in_days=30,
+        )
+
+        # Log successful passkey login
+        await audit_service.log_event(
+            event_type="passkey_login_success",
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host if request.client else None,
+            metadata={"credential_id": verification.credential_id},
+            severity="info",
+        )
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
+            "refresh_token": rt.token,
             "user": {
                 "id": user.id,
                 "email": user.email,

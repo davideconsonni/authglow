@@ -288,3 +288,127 @@ class TestGetActiveSessions:
         assert len(result["sessions"]) == 2
         assert result["total_sessions"] == 5
         assert result["total_refresh_tokens"] == 5
+
+
+class TestGetUserSessions:
+    def test_returns_sessions_for_specific_user(self):
+        import asyncio
+        from authglow.api.admin import get_user_sessions
+
+        token = _make_token("us-t1", "specific-user")
+
+        mock_rt_svc = AsyncMock()
+        mock_rt_svc.list_all_tokens = AsyncMock(return_value=([token], 1))
+
+        with patch("authglow.api.admin.RefreshTokenService", return_value=mock_rt_svc):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_sessions(
+                    user_id="specific-user",
+                    limit=50,
+                    offset=0,
+                    current_user=_make_admin_user(),
+                )
+            )
+
+        assert len(result.items) == 1
+        assert result.items[0]["id"] == token.token_id
+        assert result.items[0]["client_id"] == "test-client"
+        assert result.total == 1
+
+    def test_returns_empty_when_no_sessions(self):
+        import asyncio
+        from authglow.api.admin import get_user_sessions
+
+        mock_rt_svc = AsyncMock()
+        mock_rt_svc.list_all_tokens = AsyncMock(return_value=([], 0))
+
+        with patch("authglow.api.admin.RefreshTokenService", return_value=mock_rt_svc):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_sessions(
+                    user_id="no-sessions-user",
+                    limit=50,
+                    offset=0,
+                    current_user=_make_admin_user(),
+                )
+            )
+
+        assert result.items == []
+        assert result.total == 0
+
+    def test_pagination(self):
+        import asyncio
+        from authglow.api.admin import get_user_sessions
+
+        tokens = [_make_token(f"us-pag-{i}", "pag-user") for i in range(10)]
+        mock_rt_svc = AsyncMock()
+        mock_rt_svc.list_all_tokens = AsyncMock(return_value=(tokens[:3], 10))
+
+        with patch("authglow.api.admin.RefreshTokenService", return_value=mock_rt_svc):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_sessions(
+                    user_id="pag-user",
+                    limit=3,
+                    offset=0,
+                    current_user=_make_admin_user(),
+                )
+            )
+
+        assert len(result.items) == 3
+        assert result.total == 10
+        assert result.limit == 3
+        assert result.offset == 0
+
+
+class TestRevokeAllUserSessions:
+    def test_revokes_all_sessions(self):
+        import asyncio
+        from authglow.api.admin import revoke_all_user_sessions
+
+        mock_rt_svc = AsyncMock()
+        mock_rt_svc.revoke_user_tokens = AsyncMock(return_value=3)
+
+        mock_user_svc = AsyncMock()
+        mock_user_svc.get_user = AsyncMock(
+            return_value=_make_test_user("revoke-target", "target@test.io")
+        )
+
+        audit_svc = AsyncMock()
+
+        user_id = "revoke-target"
+
+        with (
+            patch("authglow.api.admin.RefreshTokenService", return_value=mock_rt_svc),
+            patch("authglow.api.admin.UserStorage", return_value=mock_user_svc),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                revoke_all_user_sessions(
+                    user_id=user_id,
+                    current_user=_make_admin_user(),
+                    audit_service=audit_svc,
+                )
+            )
+
+        assert result["revoked_count"] == 3
+        assert "Revoked" in result["message"]
+        mock_rt_svc.revoke_user_tokens.assert_called_once_with(user_id)
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import revoke_all_user_sessions
+        from fastapi import HTTPException
+
+        mock_user_svc = AsyncMock()
+        mock_user_svc.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_user_svc):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    revoke_all_user_sessions(
+                        user_id="nonexistent",
+                        current_user=_make_admin_user(),
+                        audit_service=MagicMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 404

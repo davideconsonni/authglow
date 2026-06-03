@@ -673,6 +673,68 @@ async def revoke_refresh_token_admin(
     return {"message": "Token revoked successfully"}
 
 
+@router.get("/api/admin/users/{user_id}/sessions")
+async def get_user_sessions(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin),
+):
+    """Get active sessions for a specific user."""
+    refresh_token_service = RefreshTokenService()
+
+    page_tokens, total = await refresh_token_service.list_all_tokens(
+        active_only=True, limit=limit, offset=offset, user_id=user_id
+    )
+
+    items = []
+    for rt in page_tokens:
+        items.append(
+            {
+                "id": rt.token_id,
+                "client_id": rt.client_id,
+                "scopes": rt.scopes,
+                "created_at": rt.created_at.isoformat(),
+                "expires_at": rt.expires_at.isoformat() if rt.expires_at else None,
+                "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
+                "ip_address": rt.issued_ip,
+            }
+        )
+
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/api/admin/users/{user_id}/sessions/revoke-all")
+async def revoke_all_user_sessions(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Revoke all sessions for a specific user."""
+    refresh_token_service = RefreshTokenService()
+    user_storage = UserStorage()
+
+    target_user = await user_storage.get_user(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    revoked_count = await refresh_token_service.revoke_user_tokens(user_id)
+
+    await audit_service.log_event(
+        event_type="all_user_sessions_revoked_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_email": target_user.email,
+            "revoked_count": revoked_count,
+        },
+        severity="warning",
+    )
+
+    return {"message": f"Revoked {revoked_count} session(s)", "revoked_count": revoked_count}
+
+
 @router.post("/api/admin/sessions/cleanup")
 async def cleanup_expired_sessions(current_user: User = Depends(require_admin)):
     """Clean up expired sessions and tokens."""

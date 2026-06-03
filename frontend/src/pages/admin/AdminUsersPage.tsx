@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, UserX, UserPlus, Mail, Save, Plus, X } from 'lucide-react'
+import { Search, Loader2, ShieldOff, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useAuthStore } from '@/stores/authStore'
 
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
@@ -188,6 +189,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const { data: user, isLoading } = useApiQuery<AdminUserDetail>(['user-detail', userId], `/api/admin/users/${userId}`)
   const { data: keys } = useApiQuery<unknown[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
   const { data: passkeys } = useApiQuery<unknown[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys`)
+  const { data: sessionsData, refetch: refetchSessions } = useApiQuery<{ items: SessionItem[]; total: number }>(
+    ['user-sessions', userId], `/api/admin/users/${userId}/sessions`, { enabled: true },
+  )
+
+  interface SessionItem {
+    id: string; client_id: string; scopes: string[]
+    created_at: string; expires_at: string | null; last_used_at: string | null; ip_address: string | null
+  }
+  const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null)
 
   type EditState = { first: string; last: string; verified: boolean; scopes: string[] }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
@@ -275,15 +285,40 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     if (!confirmAction) return
     setError('')
     try {
-      await api.post(`/api/admin/users/${userId}/${confirmAction}`)
+      if (confirmAction === 'revoke-all-sessions') {
+        await api.post(`/api/admin/users/${userId}/sessions/revoke-all`)
+        const currentUser = useAuthStore.getState().user
+        if (currentUser && currentUser.id === userId) {
+          useAuthStore.getState().logout()
+          window.location.assign('/auth/login')
+          return
+        }
+      } else {
+        await api.post(`/api/admin/users/${userId}/${confirmAction}`)
+      }
       setSuccess(getActionSuccessMessage(confirmAction))
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
       onUserUpdated()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed')
     } finally {
       setConfirmAction(null)
+    }
+  }
+
+  const handleRevokeSession = async () => {
+    if (!revokeSessionId) return
+    setError('')
+    try {
+      await api.post(`/api/admin/tokens/refresh/${revokeSessionId}/revoke`)
+      setRevokeSessionId(null)
+      setSuccess('Session revoked.')
+      refetchSessions()
+      queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to revoke session')
     }
   }
 
@@ -293,6 +328,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'expire-password': 'Password expired successfully.',
       'unlock': 'Account unlocked successfully.',
       'reset-failed-attempts': 'Failed attempts reset.',
+      'revoke-all-sessions': 'All sessions revoked.',
     }
     return messages[action] || 'Action completed.'
   }
@@ -303,6 +339,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'expire-password': 'Expire Password',
       'unlock': 'Unlock Account',
       'reset-failed-attempts': 'Reset Failed Attempts',
+      'revoke-all-sessions': 'Revoke All Sessions',
     }
     return titles[action] || ''
   }
@@ -313,6 +350,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'expire-password': 'Force this user to change their password on next login?',
       'unlock': 'Unlock this account and reset failed login attempts?',
       'reset-failed-attempts': 'Reset the failed login counter without unlocking the account?',
+      'revoke-all-sessions': 'Revoke all active sessions for this user? They will be logged out of all devices.',
     }
     return messages[action] || ''
   }
@@ -395,6 +433,51 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             </div>
           </div>
 
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Active Sessions</h4>
+              {(sessionsData?.items ?? []).length > 0 && (
+                <button onClick={() => setConfirmAction('revoke-all-sessions')} data-testid="revoke-all-sessions-btn" className="flex items-center gap-1 rounded-lg bg-semantic-error/10 px-2 py-1 text-[11px] font-medium text-semantic-error hover:bg-semantic-error/20">
+                  <LogOut size={12} />Revoke All
+                </button>
+              )}
+            </div>
+            {!sessionsData ? (
+              <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : sessionsData.items.length === 0 ? (
+              <p className="text-xs text-text-muted italic py-2">No active sessions</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-2">
+                      <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Client</th>
+                      <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Created</th>
+                      <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Last Used</th>
+                      <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">IP</th>
+                      <th className="px-2 py-1.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-2">
+                    {sessionsData.items.map(s => (
+                      <tr key={s.id} className="hover:bg-surface-2/50">
+                        <td className="px-2 py-1.5 text-text-primary font-medium">{s.client_id}</td>
+                        <td className="px-2 py-1.5 text-text-muted">{formatDateTime(s.created_at)}</td>
+                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted">{s.last_used_at ? formatDateTime(s.last_used_at) : '-'}</td>
+                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted font-mono">{s.ip_address ?? '-'}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          <button onClick={() => setRevokeSessionId(s.id)} data-testid={`revoke-session-${s.id}`} className="rounded p-1 text-text-muted hover:text-semantic-error" title="Revoke session">
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {showSetPassword && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/50" onClick={() => setShowSetPassword(false)} />
@@ -423,6 +506,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           <ConfirmDialog open={confirmAction === 'expire-password'} title={getActionTitle('expire-password')} message={getActionMessage('expire-password')} confirmLabel="Expire" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'unlock'} title={getActionTitle('unlock')} message={getActionMessage('unlock')} confirmLabel="Unlock" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'revoke-all-sessions'} title={getActionTitle('revoke-all-sessions')} message={getActionMessage('revoke-all-sessions')} confirmLabel="Revoke All" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={!!revokeSessionId} title="Revoke Session" message="Revoke this session? The user will be logged out of this device." confirmLabel="Revoke" variant="danger" onConfirm={handleRevokeSession} onCancel={() => setRevokeSessionId(null)} />
 
           {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
           {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
