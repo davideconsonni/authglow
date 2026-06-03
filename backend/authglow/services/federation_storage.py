@@ -1,6 +1,5 @@
 """External Identity Provider federation storage."""
 
-import json
 import os
 from typing import List, Optional
 
@@ -30,12 +29,13 @@ class FederationStorage:
             )
 
         self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
 
     def _get_provider_path(self, provider_id: str) -> str:
         return f"{self.storage_path}/{provider_id}.json"
 
     async def _list_files(self) -> List[str]:
-        """List all provider JSON files. Uses glob + manual fallback for s3/cloud."""
+        """List all provider JSON files."""
         try:
             return await self._afs.glob(f"{self.storage_path}/*.json")
         except Exception:
@@ -47,7 +47,7 @@ class FederationStorage:
 
     async def create_provider(self, provider: ExternalIdpConfig) -> ExternalIdpConfig:
         """Create a new external IdP configuration."""
-        async with named_lock("federation:create"):
+        async with self._lock("federation:create"):
             provider.created_at = utcnow()
             provider.updated_at = utcnow()
             filepath = self._get_provider_path(provider.id)
@@ -83,7 +83,7 @@ class FederationStorage:
 
     async def update_provider(self, provider_id: str, updates: dict) -> Optional[ExternalIdpConfig]:
         """Update a provider configuration."""
-        async with named_lock(f"federation:{provider_id}"):
+        async with self._lock(f"federation:{provider_id}"):
             provider = await self.get_provider(provider_id)
             if not provider:
                 return None
@@ -99,7 +99,7 @@ class FederationStorage:
 
     async def delete_provider(self, provider_id: str) -> bool:
         """Delete a provider configuration."""
-        async with named_lock(f"federation:{provider_id}"):
+        async with self._lock(f"federation:{provider_id}"):
             filepath = self._get_provider_path(provider_id)
             exists = await self._afs.exists(filepath)
             if exists:

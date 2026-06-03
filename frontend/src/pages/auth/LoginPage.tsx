@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
+import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
 import { ROUTES } from '@/lib/constants'
 
 export function LoginPage() {
@@ -12,6 +13,7 @@ export function LoginPage() {
     >
       <LoginForm />
       <PasskeyLoginButton />
+      <FederationLoginButtons />
       <p className="text-center text-sm text-text-muted">
         Don't have an account?{' '}
         <Link to={ROUTES.AUTH.REGISTER} className="font-medium text-brand-violet hover:text-brand-blue transition-colors">

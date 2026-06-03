@@ -60,6 +60,7 @@ export function AdminFederationPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [rawScopes, setRawScopes] = useState('openid profile email')
   const [rawAuthLevels, setRawAuthLevels] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
 
   const { data: providers, refetch } = useApiQuery<FederationProvider[]>(
     ['federation', 'admin'],
@@ -70,6 +71,7 @@ export function AdminFederationPage() {
     setForm({ ...emptyForm })
     setRawScopes('openid profile email')
     setRawAuthLevels('')
+    setClientSecret('')
     setEditId(null)
     setError(null)
   }
@@ -83,6 +85,7 @@ export function AdminFederationPage() {
     setForm({ ...p })
     setRawScopes((p.scopes || []).join(' '))
     setRawAuthLevels((p.auth_levels || []).join(', '))
+    setClientSecret('')
     setEditId(p.id)
     setShowForm(true)
   }
@@ -94,19 +97,20 @@ export function AdminFederationPage() {
     const authLevels = rawAuthLevels.split(/[, ]+/).map(s => s.trim()).filter(Boolean)
     try {
       if (editId) {
-        await api.put(`/api/federation/admin/providers/${editId}`, {
+        const updatePayload: Record<string, unknown> = {
           label: form.label,
           description: form.description || null,
           issuer: form.issuer,
           client_id: form.client_id,
-          client_secret: undefined,
           scopes,
           icon_uri: form.icon_uri || null,
           logo_uri: form.logo_uri || null,
           enabled: form.enabled,
           auth_levels: authLevels.length > 0 ? authLevels : null,
           claims_mapping: form.claims_mapping,
-        })
+        }
+        if (clientSecret) updatePayload.client_secret = clientSecret
+        await api.put(`/api/federation/admin/providers/${editId}`, updatePayload)
         setSuccess('Provider updated.')
       } else {
         await api.post('/api/federation/providers', {
@@ -114,7 +118,7 @@ export function AdminFederationPage() {
           description: form.description || null,
           issuer: form.issuer,
           client_id: form.client_id,
-          client_secret: form.issuer,
+          client_secret: clientSecret || form.issuer,
           scopes,
           icon_uri: form.icon_uri || null,
           logo_uri: form.logo_uri || null,
@@ -238,9 +242,9 @@ export function AdminFederationPage() {
             <div className="space-y-3 mb-5">
               <TextInput label="Label *" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="CIE" autoFocus />
               <TextInput label="Description" value={form.description || ''} onChange={(v) => setForm({ ...form, description: v })} placeholder="Carta d'Identità Elettronica" />
-              <TextInput label="Issuer URL *" value={form.issuer} onChange={(v) => setForm({ ...form, issuer: v })} placeholder="https://idserver.servizicie.interno.gov.it" />
+              <TextInput label="Issuer URL *" value={form.issuer} onChange={(v) => setForm({ ...form, issuer: v })} placeholder="https://accounts.google.com" />
               <TextInput label="Client ID *" value={form.client_id} onChange={(v) => setForm({ ...form, client_id: v })} placeholder="your-client-id" />
-              <TextInput label="Client Secret *" type="password" value={form.issuer} onChange={(v) => setForm({ ...form, issuer: v })} placeholder="●●●●●●●●" />
+              <TextInput label="Client Secret *" type="password" value={clientSecret} onChange={(v) => setClientSecret(v)} placeholder="●●●●●●●●" />
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-text-muted">Scopes (space-separated)</label>
                 <input
@@ -257,8 +261,8 @@ export function AdminFederationPage() {
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-text-muted">Auth Levels (CIE: L1, L2, L3)</label>
                 <input
-                  value={(form.auth_levels || []).join(', ')}
-                  onChange={(e) => setForm({ ...form, auth_levels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                  value={rawAuthLevels}
+                  onChange={(e) => setRawAuthLevels(e.target.value)}
                   placeholder="L1, L2, L3"
                   className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
                 />

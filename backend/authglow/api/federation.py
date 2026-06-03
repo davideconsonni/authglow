@@ -8,6 +8,7 @@ import secrets
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
@@ -51,13 +52,22 @@ async def federation_login(
     provider = await storage.get_provider(provider_id)
     if not provider or not provider.enabled:
         raise HTTPException(status_code=404, detail="Provider not found or disabled")
+    if not provider.issuer.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400, detail="Provider issuer must start with http:// or https://"
+        )
 
-    service = FederationService()
-    auth_url, state, nonce = await service.get_authorization_url(
-        provider, redirect_uri, acr_values=acr_values
-    )
-
-    return {"authorization_url": auth_url, "state": state, "nonce": nonce}
+    try:
+        service = FederationService()
+        auth_url, state, nonce = await service.get_authorization_url(
+            provider, redirect_uri, acr_values=acr_values
+        )
+        return RedirectResponse(url=auth_url, status_code=302)
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to reach external provider: {str(e)}",
+        )
 
 
 @router.get("/api/federation/callback")
@@ -167,6 +177,9 @@ async def create_provider(
 ):
     """Admin: create a new external IdP provider."""
     import secrets
+
+    if not provider_data.issuer.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Issuer must start with http:// or https://")
 
     provider = ExternalIdpConfig(
         label=provider_data.label,
