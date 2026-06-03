@@ -19,6 +19,7 @@ interface AdminUserDetail {
   login_count: number; created_at: string; updated_at: string
   last_login: string | null; is_invited: boolean; mfa_verified: boolean
   scopes: string[]; failed_login_count: number
+  password_expired: boolean; locked_until: string | null
 }
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
@@ -215,6 +216,10 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const [showSetPassword, setShowSetPassword] = useState(false)
+  const [setPasswordForm, setSetPasswordForm] = useState({ password: '', requireChange: false })
+  const [confirmAction, setConfirmAction] = useState<string | null>(null)
+
   useEffect(() => { if (user) dispatch({ type: 'INIT', user }) }, [user])
 
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 2000); return () => clearTimeout(t) } }, [success])
@@ -251,6 +256,69 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     }
   }
 
+  const handleSetPassword = async () => {
+    setSaving(true); setError('')
+    try {
+      await api.post(`/api/admin/users/${userId}/set-password`, setPasswordForm)
+      setShowSetPassword(false)
+      setSetPasswordForm({ password: '', requireChange: false })
+      setSuccess('Password set successfully.')
+      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to set password')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return
+    setError('')
+    try {
+      await api.post(`/api/admin/users/${userId}/${confirmAction}`)
+      setSuccess(getActionSuccessMessage(confirmAction))
+      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      onUserUpdated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action failed')
+    } finally {
+      setConfirmAction(null)
+    }
+  }
+
+  function getActionSuccessMessage(action: string): string {
+    const messages: Record<string, string> = {
+      'send-password-reset': 'Password reset email sent.',
+      'expire-password': 'Password expired successfully.',
+      'unlock': 'Account unlocked successfully.',
+      'reset-failed-attempts': 'Failed attempts reset.',
+    }
+    return messages[action] || 'Action completed.'
+  }
+
+  function getActionTitle(action: string): string {
+    const titles: Record<string, string> = {
+      'send-password-reset': 'Send Password Reset',
+      'expire-password': 'Expire Password',
+      'unlock': 'Unlock Account',
+      'reset-failed-attempts': 'Reset Failed Attempts',
+    }
+    return titles[action] || ''
+  }
+
+  function getActionMessage(action: string): string {
+    const messages: Record<string, string> = {
+      'send-password-reset': 'Send a password reset email to this user?',
+      'expire-password': 'Force this user to change their password on next login?',
+      'unlock': 'Unlock this account and reset failed login attempts?',
+      'reset-failed-attempts': 'Reset the failed login counter without unlocking the account?',
+    }
+    return messages[action] || ''
+  }
+
+  const isLocked = user?.locked_until ? new Date(user.locked_until) > new Date() : false
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -264,11 +332,13 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-violet/20 text-sm font-bold text-brand-violet">{(user.first_name?.[0]||'')+(user.last_name?.[0]||'')||'?'}</span>
               <div><p className="text-sm font-semibold text-text-primary">{user.first_name} {user.last_name}</p><p className="text-xs text-text-muted">{user.email}</p></div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Status</p><p className="text-text-primary font-medium">{user.is_active?'Active':'Inactive'}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">MFA</p><p className="text-text-primary font-medium">{user.mfa_enabled?'Enabled':'Disabled'}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Logins</p><p className="text-text-primary font-medium">{user.login_count??0}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Created</p><p className="text-text-primary font-medium">{user.created_at?formatDateTime(user.created_at):'-'}</p></div>
+              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Password</p><p className={`font-medium ${user.password_expired ? 'text-semantic-error' : 'text-semantic-success'}`}>{user.password_expired ? 'Expired' : 'Active'}</p></div>
+              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Failed</p><p className="text-text-primary font-medium">{user.failed_login_count ?? 0}</p></div>
             </div>
 
             <div className="border-t border-surface-2 pt-3 space-y-3">
@@ -296,7 +366,63 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-violet/10 px-2.5 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-40"><Plus size={14} /></button>
               </div>
             </div>
+
+            <div className="border-t border-surface-2 pt-3 space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Password &amp; Credentials</h4>
+              <div className="grid grid-cols-1 gap-2">
+                <button onClick={() => setShowSetPassword(true)} data-testid="set-password-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                  Set Password
+                </button>
+                <button onClick={() => setConfirmAction('send-password-reset')} data-testid="send-password-reset-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                  Send Password Reset
+                </button>
+                {!user.password_expired && (
+                  <button onClick={() => setConfirmAction('expire-password')} data-testid="expire-password-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    Expire Password
+                  </button>
+                )}
+                {isLocked && (
+                  <button onClick={() => setConfirmAction('unlock')} data-testid="unlock-account-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    Unlock Account
+                  </button>
+                )}
+                {user.failed_login_count > 0 && (
+                  <button onClick={() => setConfirmAction('reset-failed-attempts')} data-testid="reset-attempts-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    Reset Failed Attempts
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
+
+          {showSetPassword && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setShowSetPassword(false)} />
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+                <h4 className="text-sm font-semibold text-text-primary">Set Password</h4>
+                <div>
+                  <label className="mb-1 block text-xs text-text-muted">New password</label>
+                  <input type="password" value={setPasswordForm.password} onChange={e => setSetPasswordForm({ ...setPasswordForm, password: e.target.value })} data-testid="set-password-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={setPasswordForm.requireChange} onChange={e => setSetPasswordForm({ ...setPasswordForm, requireChange: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" />
+                  <span className="text-text-primary">Require change at next login</span>
+                </label>
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }) }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50">
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Set Password
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <ConfirmDialog open={confirmAction === 'send-password-reset'} title={getActionTitle('send-password-reset')} message={getActionMessage('send-password-reset')} confirmLabel="Send" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'expire-password'} title={getActionTitle('expire-password')} message={getActionMessage('expire-password')} confirmLabel="Expire" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'unlock'} title={getActionTitle('unlock')} message={getActionMessage('unlock')} confirmLabel="Unlock" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
 
           {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
           {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}

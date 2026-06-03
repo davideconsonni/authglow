@@ -44,6 +44,8 @@ class AdminUserDetail(BaseModel):
     mfa_verified: bool
     login_count: int = 0
     failed_login_count: int = 0
+    password_expired: bool = False
+    locked_until: Optional[datetime] = None
 
     @classmethod
     def from_user(cls, user: "User") -> "AdminUserDetail":
@@ -63,6 +65,8 @@ class AdminUserDetail(BaseModel):
             mfa_verified=user.mfa_verified,
             login_count=user.login_count,
             failed_login_count=user.failed_login_count,
+            password_expired=user.password_expired,
+            locked_until=user.locked_until,
         )
 
 
@@ -87,6 +91,13 @@ class UserUpdate(BaseModel):
     scopes: Optional[List[str]] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+
+
+class SetPasswordRequest(BaseModel):
+    """Set password for a user (admin)."""
+
+    password: str = Field(..., min_length=8)
+    require_change: bool = False
 
 
 class BulkUserOperation(BaseModel):

@@ -6,12 +6,12 @@
   - [x] 1.1 Edit user fields inline (nome, cognome, email_verified)
   - [x] 1.2 Assegna/Rimuovi scope su singolo utente
   - [x] 1.3 Filtri di ricerca avanzati (status, MFA, scope, data creazione)
-- [ ] **Fase 2 — Password e Credenziali**
-  - [ ] 2.1 Imposta password per utente
-  - [ ] 2.2 Invia email reset password per conto dell'utente
-  - [ ] 2.3 Forza scadenza password
-  - [ ] 2.4 Sblocca account (rimuovi lockout)
-  - [ ] 2.5 Reset tentativi falliti
+- [x] **Fase 2 — Password e Credenziali**
+  - [x] 2.1 Imposta password per utente
+  - [x] 2.2 Invia email reset password
+  - [x] 2.3 Forza scadenza password
+  - [x] 2.4 Sblocca account (lockout)
+  - [x] 2.5 Reset tentativi falliti
 - [ ] **Fase 3 — Sessioni e Token**
   - [ ] 3.1 Revoca tutte le sessioni di un utente
   - [ ] 3.2 Revoca refresh token specifici
@@ -65,7 +65,7 @@ Operazioni principalmente frontend su backend già esistente.
 | 2.4 | Sblocca account (lockout) | Nuovo endpoint `POST /api/admin/users/{id}/unlock` — resetta `locked_until` e `failed_login_attempts` | Bottone "Unlock Account" (solo se locked) nelle azioni → confirm dialog | BE: unit test unlock su utente bloccato; FE: test visibilità condizionale bottone |
 | 2.5 | Reset tentativi falliti | Nuovo endpoint `POST /api/admin/users/{id}/reset-failed-attempts` — azzera solo `failed_login_attempts` | Bottone "Reset Failed Attempts" nelle azioni → confirm dialog | BE: unit test reset; FE: test UI |
 
-**Backend changes:** Nuovi endpoint in `admin.py`, nuove funzioni in `storage.py`, eventuale nuovo campo `password_expired` su modello User.
+**Backend changes:** Nuovi endpoint in `admin.py`, nuove funzioni in `storage.py` (`set_password`, `clear_failed_login_attempts`), nuovo campo `password_expired` su User model, estensione `AdminUserDetail`, modifica login per flag `password_expired` nel token response.
 
 ---
 

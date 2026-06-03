@@ -647,6 +647,10 @@ async def login_for_access_token(
         user.id, user.email, user.scopes, include_refresh=False
     )
 
+    # Check if password is expired
+    if user.password_expired:
+        token_response.password_expired = True
+
     # Create persistent refresh token in storage so sessions are tracked
     rt = await refresh_token_service.create_refresh_token(
         user_id=user.id,

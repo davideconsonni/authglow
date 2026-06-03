@@ -42,6 +42,10 @@ class User(BaseModel):
     failed_login_attempts: int = 0
     locked_until: Optional[datetime] = None
 
+    # Password management
+    password_expired: bool = False
+    password_changed_at: Optional[datetime] = None
+
     # Email verification
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None

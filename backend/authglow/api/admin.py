@@ -14,6 +14,7 @@ from authglow.models.admin import (
     BulkUserOperation,
     DashboardStats,
     PaginatedResponse,
+    SetPasswordRequest,
     UserUpdate,
 )
 from authglow.models.user import User, UserResponse
@@ -23,6 +24,8 @@ from authglow.services.mfa import MFAService
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.passkey import PasskeyService
+from authglow.services.password import PasswordValidator, hash_password
+from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
 
@@ -327,6 +330,186 @@ async def reset_user_mfa(
     )
 
     return {"message": "MFA reset successfully"}
+
+
+# --- Phase 2: Password and Credentials ---
+
+
+@router.post("/api/admin/users/{user_id}/set-password")
+@limiter.limit("30/minute")
+async def set_user_password(
+    request: Request,
+    user_id: str,
+    body: SetPasswordRequest,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Set a new password for a user (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    validator = PasswordValidator()
+    is_valid, errors = validator.validate(body.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password does not meet requirements: {'; '.join(errors or [])}",
+        )
+
+    hashed = hash_password(body.password)
+    updated = await storage.set_password(user_id, hashed, require_change=body.require_change)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await audit_service.log_event(
+        event_type="password_set_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_user_email": user.email,
+            "require_change": body.require_change,
+        },
+        severity="warning",
+    )
+
+    return {"message": "Password set successfully"}
+
+
+@router.post("/api/admin/users/{user_id}/send-password-reset")
+@limiter.limit("10/minute")
+async def send_password_reset(
+    request: Request,
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Send a password reset email to a user (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    reset_service = PasswordResetService()
+    token, plaintext = await reset_service.create_reset_token(
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    from authglow.services.email.factory import get_email_service
+
+    email_service = get_email_service()
+    reset_url = f"{get_settings().base_url}/reset-password?token={plaintext}"
+    await email_service.send_template(
+        to=[user.email],
+        subject="Password Reset Request - AuthGlow",
+        template_name="password_reset",
+        context={
+            "user": user,
+            "reset_url": reset_url,
+            "company_name": get_settings().company_name,
+            "expires_in_minutes": 30,
+        },
+    )
+
+    await audit_service.log_event(
+        event_type="password_reset_sent_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_user_email": user.email,
+        },
+        severity="warning",
+    )
+
+    return {"message": "Password reset email sent"}
+
+
+@router.post("/api/admin/users/{user_id}/expire-password")
+@limiter.limit("30/minute")
+async def expire_user_password(
+    request: Request,
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Force a user's password to expire (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password_expired = True
+    await storage.update_user(user)
+
+    await audit_service.log_event(
+        event_type="password_expired_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
+    )
+
+    return {"message": "Password expired successfully"}
+
+
+@router.post("/api/admin/users/{user_id}/unlock")
+@limiter.limit("30/minute")
+async def unlock_user_account(
+    request: Request,
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Unlock a user's account (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await storage.reset_failed_login_attempts(user_id)
+
+    await audit_service.log_event(
+        event_type="account_unlocked_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
+    )
+
+    return {"message": "Account unlocked successfully"}
+
+
+@router.post("/api/admin/users/{user_id}/reset-failed-attempts")
+@limiter.limit("30/minute")
+async def reset_failed_attempts(
+    request: Request,
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Reset failed login attempts for a user without unlocking (admin only)."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await storage.clear_failed_login_attempts(user_id)
+
+    await audit_service.log_event(
+        event_type="failed_attempts_reset_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="info",
+    )
+
+    return {"message": "Failed attempts reset successfully"}
 
 
 @router.post("/api/admin/users/bulk", response_model=dict)

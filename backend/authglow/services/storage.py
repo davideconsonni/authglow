@@ -341,3 +341,28 @@ class UserStorage:
                 return False
 
             return True
+
+    async def set_password(
+        self,
+        user_id: str,
+        hashed_password: str,
+        require_change: bool = False,
+    ):
+        """Set a new password for a user."""
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if not user:
+                return None
+            user.hashed_password = hashed_password
+            user.password_expired = require_change
+            user.password_changed_at = utcnow()
+            await self._write_user(user)
+            return user
+
+    async def clear_failed_login_attempts(self, user_id: str):
+        """Zero out failed_login_attempts without clearing lockout."""
+        async with self._lock(f"user:{user_id}"):
+            user = await self.get_user(user_id)
+            if user:
+                user.failed_login_attempts = 0
+                await self._write_user(user)

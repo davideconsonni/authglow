@@ -18,6 +18,7 @@ class Token(BaseModel):
     refresh_token: Optional[str] = None
     scope: Optional[str] = None
     id_token: Optional[str] = None  # OpenID Connect ID token
+    password_expired: bool = False
 
 
 class TokenData(BaseModel):
