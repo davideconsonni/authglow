@@ -139,6 +139,15 @@ async def federation_callback(
             },
         )
 
+        from authglow.services.login_history import LoginHistoryService
+
+        login_svc = LoginHistoryService()
+        await login_svc.record_login(
+            user_id=user.id,
+            email=user.email,
+            success=True,
+        )
+
         return {
             "access_token": tokens["access_token"],
             "refresh_token": tokens.get("refresh_token"),

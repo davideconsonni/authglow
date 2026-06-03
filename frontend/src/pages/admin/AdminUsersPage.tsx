@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint } from 'lucide-react'
+import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -223,6 +223,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const { data: sessionsData, refetch: refetchSessions } = useApiQuery<{ items: SessionItem[]; total: number }>(
     ['user-sessions', userId], `/api/admin/users/${userId}/sessions`, { enabled: true },
   )
+  const { data: loginHistory } = useApiQuery<{ items: LoginHistoryItem[]; total: number }>(
+    ['user-login-history', userId], `/api/admin/users/${userId}/login-history`, { enabled: true },
+  )
+  const { data: securityEvents } = useApiQuery<{ items: SecurityEventItem[]; total: number }>(
+    ['user-security-events', userId], `/api/admin/users/${userId}/security-events`, { enabled: true },
+  )
+  const { data: oauthConsents } = useApiQuery<OAuthConsentItem[]>(
+    ['user-oauth-consents', userId], `/api/admin/users/${userId}/oauth-consents`, { enabled: true },
+  )
 
   interface SessionItem {
     id: string; client_id: string; scopes: string[]
@@ -232,6 +241,22 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   interface PasskeyItem {
     credential_id: string; name: string; device_type: string | null
     transports: string[]; created_at: string; last_used_at: string | null
+  }
+
+  interface LoginHistoryItem {
+    id: string; success: boolean; ip_address: string | null
+    user_agent: string | null; failure_reason: string | null; timestamp: string
+  }
+
+  interface SecurityEventItem {
+    id: string; event_type: string; description: string | null
+    ip_address: string | null; timestamp: string
+  }
+
+  interface OAuthConsentItem {
+    consent_id: string; client_id: string; client_name: string
+    scopes: string[]; granted_at: string; expires_at: string | null
+    revoked: boolean; revoked_at: string | null
   }
 
   const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null)
@@ -644,6 +669,111 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Changes
           </button>
+
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+              <History size={12} />Login History {loginHistory ? `(${loginHistory.total})` : ''}
+            </h4>
+            {!loginHistory ? (
+              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : loginHistory.items.length === 0 ? (
+              <p className="text-xs text-text-muted italic py-2">No login history</p>
+            ) : (
+              <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-surface-2">
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Status</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
+                    <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">IP</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-2">
+                    {loginHistory.items.slice(0, 10).map(h => (
+                      <tr key={h.id} className="hover:bg-surface-2/50">
+                        <td className="px-2 py-1.5">
+                          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${h.success ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
+                            {h.success ? 'OK' : 'FAIL'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(h.timestamp)}</td>
+                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted font-mono">{h.ip_address ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+              <AlertTriangle size={12} />Security Events {securityEvents ? `(${securityEvents.total})` : ''}
+            </h4>
+            {!securityEvents ? (
+              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : securityEvents.items.length === 0 ? (
+              <p className="text-xs text-text-muted italic py-2">No security events</p>
+            ) : (
+              <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-surface-2">
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Event</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
+                    <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Description</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-2">
+                    {securityEvents.items.slice(0, 10).map(e => (
+                      <tr key={e.id} className="hover:bg-surface-2/50">
+                        <td className="px-2 py-1.5">
+                          <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-violet">
+                            {e.event_type.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(e.timestamp)}</td>
+                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted truncate max-w-[120px]">{e.description ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+              <Globe size={12} />Connected Apps {oauthConsents ? `(${oauthConsents.length})` : ''}
+            </h4>
+            {!oauthConsents ? (
+              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : oauthConsents.length === 0 ? (
+              <p className="text-xs text-text-muted italic py-2">No connected apps</p>
+            ) : (
+              <div className="space-y-1.5">
+                {oauthConsents.filter(c => !c.revoked).map(c => (
+                  <div key={c.consent_id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="text-text-primary font-medium">{c.client_name}</p>
+                      <p className="text-text-muted">
+                        {c.scopes.join(', ')} · {formatDateTime(c.granted_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {oauthConsents.filter(c => c.revoked).length > 0 && (
+                  <>
+                    <p className="text-[10px] text-text-muted pt-2 pb-1 uppercase tracking-wider">Revoked</p>
+                    {oauthConsents.filter(c => c.revoked).map(c => (
+                      <div key={c.consent_id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs opacity-60">
+                        <div className="min-w-0">
+                          <p className="text-text-primary font-medium">{c.client_name}</p>
+                          <p className="text-text-muted">Revoked {c.revoked_at ? formatDateTime(c.revoked_at) : ''}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{(keys as Array<Record<string, unknown>>).map(k => <div key={k.key_id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name as string}</span><code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.key_id as string)?.slice(0,8)) as string)}...</code></div>)}</div></div>}
           <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">

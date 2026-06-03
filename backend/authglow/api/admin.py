@@ -984,6 +984,90 @@ async def revoke_consent_admin(
     return {"message": "Consent revoked successfully"}
 
 
+# --- Phase 6: Audit & Activity ---
+
+
+@router.get("/api/admin/users/{user_id}/login-history")
+async def get_user_login_history(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """Get login history for a specific user."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from authglow.services.login_history import LoginHistoryService
+
+    login_svc = LoginHistoryService()
+    items, total = await login_svc.get_login_history(user_id, limit=limit, offset=offset)
+
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/api/admin/users/{user_id}/security-events")
+async def get_user_security_events(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """Get security events for a specific user."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from authglow.services.security_event import SecurityEventService
+
+    event_svc = SecurityEventService()
+    items, total = await event_svc.get_security_events(user_id, limit=limit, offset=offset)
+
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/api/admin/users/{user_id}/oauth-consents")
+async def get_user_oauth_consents(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """Get OAuth2 consents for a specific user."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from authglow.services.oauth_consent import OAuth2ConsentService
+
+    consent_svc = OAuth2ConsentService()
+    consents = await consent_svc.list_user_consents(user_id)
+
+    result = []
+    from authglow.services.oauth_client import OAuth2ClientStorage
+
+    client_storage = OAuth2ClientStorage()
+
+    for c in consents:
+        client = await client_storage.get_client(c.client_id)
+        result.append(
+            {
+                "consent_id": c.consent_id,
+                "client_id": c.client_id,
+                "client_name": client.client_name if client else c.client_id,
+                "scopes": c.scopes,
+                "granted_at": c.granted_at.isoformat(),
+                "expires_at": c.expires_at.isoformat() if c.expires_at else None,
+                "revoked": c.revoked,
+                "revoked_at": c.revoked_at.isoformat() if c.revoked_at else None,
+            }
+        )
+
+    return result
+
+
 # --- JWK Key Management ---
 
 

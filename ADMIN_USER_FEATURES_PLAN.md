@@ -26,10 +26,10 @@
   - [x] 5.1 Crea utente con password immediata (non solo invite)
   - [x] 5.2 Modifica email utente (con/senza verifica)
   - [x] 5.3 Modifica telefono, avatar
-- [ ] **Fase 6 — Attività e Audit**
-  - [ ] 6.1 Login history per utente
-  - [ ] 6.2 Eventi di sicurezza (cambi password, email, MFA)
-  - [ ] 6.3 Applicazioni connesse e revoca consensi OAuth
+- [x] **Fase 6 — Attività e Audit**
+  - [x] 6.1 Login history per utente
+  - [x] 6.2 Eventi di sicurezza (cambi password, email, MFA)
+  - [x] 6.3 Applicazioni connesse e revoca consensi OAuth
 - [ ] **Fase 7 — Advanced**
   - [ ] 7.1 Esportazione dati utente (JSON)
   - [ ] 7.2 Cronologia azioni admin su quell'utente

@@ -278,6 +278,17 @@ async def verify_mfa_login(
             ip_address=request.client.host if request and request.client else None,
             severity="warning",
         )
+        from authglow.services.login_history import LoginHistoryService
+
+        login_svc = LoginHistoryService()
+        await login_svc.record_login(
+            user_id=user.id,
+            email=user.email,
+            success=False,
+            ip_address=request.client.host if request and request.client else None,
+            user_agent=request.headers.get("user-agent") if request else None,
+            failure_reason="invalid_mfa_code",
+        )
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
     # Update last login
@@ -291,6 +302,17 @@ async def verify_mfa_login(
         ip_address=request.client.host if request and request.client else None,
         user_agent=request.headers.get("user-agent") if request else None,
         metadata={"backup_code_used": is_backup_code},
+    )
+
+    from authglow.services.login_history import LoginHistoryService
+
+    login_svc = LoginHistoryService()
+    await login_svc.record_login(
+        user_id=user.id,
+        email=user.email,
+        success=True,
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     # Return full access token

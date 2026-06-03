@@ -250,6 +250,17 @@ async def authorize_post(
 
     await storage.reset_failed_login_attempts(user.id)
 
+    from authglow.services.login_history import LoginHistoryService
+
+    login_svc = LoginHistoryService()
+    await login_svc.record_login(
+        user_id=user.id,
+        email=user.email,
+        success=True,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
     if user.mfa_enabled and user.mfa_verified:
         user_agent = request.headers.get("user-agent", "")
         client_host = request.client.host if request.client else ""
@@ -567,8 +578,19 @@ async def login_for_access_token(
             user_agent=request.headers.get("user-agent"),
             severity="warning",
         )
-        # For existing users, also record the failed attempt for account locking
+        # Record login history for existing users
         if user:
+            from authglow.services.login_history import LoginHistoryService
+
+            login_svc = LoginHistoryService()
+            await login_svc.record_login(
+                user_id=user.id,
+                email=user.email,
+                success=False,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                failure_reason="invalid_password",
+            )
             locked_until = await storage.record_failed_login(user.id)
             if locked_until:
                 await audit_service.log_event(
@@ -638,6 +660,16 @@ async def login_for_access_token(
         event_type="login_success",
         user_id=user.id,
         email=user.email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    from authglow.services.login_history import LoginHistoryService
+
+    login_svc = LoginHistoryService()
+    await login_svc.record_login(
+        user_id=user.id,
+        email=user.email,
+        success=True,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )

@@ -297,6 +297,17 @@ async def complete_authentication(
             severity="info",
         )
 
+        from authglow.services.login_history import LoginHistoryService
+
+        login_svc = LoginHistoryService()
+        await login_svc.record_login(
+            user_id=user.id,
+            email=user.email,
+            success=True,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
         return {
             "access_token": access_token,
             "token_type": "bearer",

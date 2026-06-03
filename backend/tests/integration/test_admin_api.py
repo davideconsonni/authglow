@@ -562,6 +562,240 @@ class TestRegenerateUserBackupCodes:
         assert exc.value.status_code == 404
 
 
+class TestGetUserLoginHistory:
+    def test_returns_login_history(self):
+        import asyncio
+        from authglow.api.admin import get_user_login_history
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(
+            return_value=_make_test_user("login-hist", "login@test.io")
+        )
+
+        items = [
+            {
+                "id": "e1",
+                "user_id": "login-hist",
+                "email": "login@test.io",
+                "success": True,
+                "ip_address": "127.0.0.1",
+                "user_agent": "Mozilla/5.0",
+                "failure_reason": None,
+                "timestamp": "2025-01-01T00:00:00+00:00",
+            },
+            {
+                "id": "e2",
+                "user_id": "login-hist",
+                "email": "login@test.io",
+                "success": False,
+                "ip_address": "192.168.1.1",
+                "user_agent": "curl/7.0",
+                "failure_reason": "invalid_password",
+                "timestamp": "2025-01-02T00:00:00+00:00",
+            },
+        ]
+
+        mock_login_svc = AsyncMock()
+        mock_login_svc.get_login_history = AsyncMock(return_value=(items, 2))
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch(
+                "authglow.services.login_history.LoginHistoryService", return_value=mock_login_svc
+            ),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_login_history(
+                    user_id="login-hist",
+                    limit=50,
+                    offset=0,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                )
+            )
+
+        assert result.total == 2
+        assert len(result.items) == 2
+        assert result.items[0]["success"] is True
+        assert result.items[1]["success"] is False
+        assert result.items[1]["failure_reason"] == "invalid_password"
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import get_user_login_history
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    get_user_login_history(
+                        user_id="nonexistent",
+                        limit=50,
+                        offset=0,
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                    )
+                )
+
+        assert exc.value.status_code == 404
+
+
+class TestGetUserSecurityEvents:
+    def test_returns_security_events(self):
+        import asyncio
+        from authglow.api.admin import get_user_security_events
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=_make_test_user("sec-events", "sec@test.io"))
+
+        items = [
+            {
+                "id": "s1",
+                "user_id": "sec-events",
+                "event_type": "password_changed",
+                "email": "sec@test.io",
+                "description": "Password changed by admin",
+                "ip_address": "127.0.0.1",
+                "metadata": {},
+                "timestamp": "2025-01-01T00:00:00+00:00",
+            },
+            {
+                "id": "s2",
+                "user_id": "sec-events",
+                "event_type": "mfa_disabled",
+                "email": "sec@test.io",
+                "description": "MFA disabled by admin",
+                "ip_address": None,
+                "metadata": {"admin_id": "admin-test-1"},
+                "timestamp": "2025-01-02T00:00:00+00:00",
+            },
+        ]
+
+        mock_event_svc = AsyncMock()
+        mock_event_svc.get_security_events = AsyncMock(return_value=(items, 2))
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch(
+                "authglow.services.security_event.SecurityEventService", return_value=mock_event_svc
+            ),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_security_events(
+                    user_id="sec-events",
+                    limit=50,
+                    offset=0,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                )
+            )
+
+        assert result.total == 2
+        assert len(result.items) == 2
+        assert result.items[0]["event_type"] == "password_changed"
+        assert result.items[1]["event_type"] == "mfa_disabled"
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import get_user_security_events
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    get_user_security_events(
+                        user_id="nonexistent",
+                        limit=50,
+                        offset=0,
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                    )
+                )
+
+        assert exc.value.status_code == 404
+
+
+class TestGetUserOAuthConsents:
+    def test_returns_oauth_consents(self):
+        import asyncio
+        from authglow.api.admin import get_user_oauth_consents
+        from authglow.services.oauth_consent import OAuth2ConsentService
+        from authglow.core.datetime import utcnow
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(
+            return_value=_make_test_user("consent-user", "consent@test.io")
+        )
+
+        consent = MagicMock()
+        consent.consent_id = "c1"
+        consent.client_id = "test-client"
+        consent.scopes = ["openid", "profile"]
+        consent.granted_at = utcnow()
+        consent.expires_at = None
+        consent.revoked = False
+        consent.revoked_at = None
+
+        mock_consent_svc = AsyncMock()
+        mock_consent_svc.list_user_consents = AsyncMock(return_value=[consent])
+
+        mock_client_storage = AsyncMock()
+        mock_client = MagicMock()
+        mock_client.client_name = "Test App"
+        mock_client_storage.get_client = AsyncMock(return_value=mock_client)
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch(
+                "authglow.services.oauth_consent.OAuth2ConsentService",
+                return_value=mock_consent_svc,
+            ),
+            patch(
+                "authglow.services.oauth_client.OAuth2ClientStorage",
+                return_value=mock_client_storage,
+            ),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                get_user_oauth_consents(
+                    user_id="consent-user",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                )
+            )
+
+        assert len(result) == 1
+        assert result[0]["consent_id"] == "c1"
+        assert result[0]["client_name"] == "Test App"
+        assert result[0]["scopes"] == ["openid", "profile"]
+        assert result[0]["revoked"] is False
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import get_user_oauth_consents
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    get_user_oauth_consents(
+                        user_id="nonexistent",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                    )
+                )
+
+        assert exc.value.status_code == 404
+
+
 class TestCreateUser:
     def test_creates_user_with_password(self):
         import asyncio
