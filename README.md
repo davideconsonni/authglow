@@ -59,6 +59,15 @@ It stores everything as files (JSON by default), runs anywhere with zero externa
 
 ---
 
+## 🖥️ Screenshots
+
+<p align="center">
+  <img src="images/homepage.png" alt="AuthGlow Homepage" width="48%" style="display: inline-block; margin: 0 1%;">
+  <img src="images/profile.png" alt="AuthGlow User Profile" width="48%" style="display: inline-block; margin: 0 1%;">
+</p>
+
+---
+
 ## 📦 Quick Start
 
 ### Prerequisites

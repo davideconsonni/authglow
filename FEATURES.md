@@ -135,12 +135,14 @@
 ## 4. OAuth 2.0 Authorization Server
 
 ### Authorization Code Flow (with PKCE)
-- `GET /oauth2/authorize` — displays login form with OAuth2 parameters
-- `POST /oauth2/authorize` — authenticates user, creates authorization code (or forwards to MFA/consent)
+- `GET /oauth2/authorize` — single-page login + consent flow (inline)
+- `GET /api/oauth2/authorize-info` — returns public client info (name, logo, branding) for the login page
+- `POST /oauth2/authorize` — authenticates user, returns consent data inline (no separate consent page)
 - Verifies `client_id`, `redirect_uri` (against client whitelist)
 - Scope validation against client configuration
 - PKCE mandatory for public clients (S256)
 - PKCE configurable per client (optional for confidential)
+- If `require_consent=false`: skips consent, returns auth code directly
 - One-time authorization code with expiration (default 10 minutes)
 - Race-condition protection: lock + optimistic concurrency versioning on code redemption
 
@@ -223,7 +225,7 @@ from the protocol perspective (request/response sequence).
 ### Authorization Code Flow (with PKCE) — for Web Apps and SPAs
 
 The main flow for web and single-page applications, the only one involving
-direct user interaction with AuthGlow (login, MFA, consent).
+direct user interaction with AuthGlow (login, consent — on the same page).
 
 ```
   User            Client App          AuthGlow             Resource Server
@@ -240,14 +242,15 @@ direct user interaction with AuthGlow (login, MFA, consent).
     |                  |  &code_challenge_method=S256             |
     |                  |------------------>|                       |
     |                  |                   |                       |
-    |                  | (3) Login form + CSRF token              |
+    |                  | (3) Login page with                      |
+    |                  |  client branding (logo, name, etc.)      |
     |                  |<------------------|                       |
     |                  |                   |                       |
     |  (4) enter email |                   |                       |
     |     + password   |                   |                       |
     |<-----------------|                   |                       |
     |                  | (5) POST /oauth2/authorize               |
-    |                  |  email, password, csrf_token, ...        |
+    |                  |  email, password, client_id, ...         |
     |                  |------------------>|                       |
     |                  |                   | (6) Validation:       |
     |                  |                   |  - credentials        |
@@ -258,70 +261,64 @@ direct user interaction with AuthGlow (login, MFA, consent).
     |                  |                   |                       |
     |                  |                   | (7) If MFA active and |
     |                  |                   |  device NOT trusted   |
-    |                  |                   |  → MFA page           |
+    |                  |                   |  → MFA form inline    |
     |                  | (7a) MFA form     |                       |
     |                  |<------------------|                       |
     |                  | (7b) POST /oauth2/mfa-verify              |
-    |                  |  code, session_token, csrf_token         |
+    |                  |  code, session_token                     |
     |                  |------------------>|                       |
     |                  |                   |                       |
-    |                  | (8) If MFA OK (or skip), redirect to      |
-    |                  |  /oauth2/consent?session_token=...       |
-    |                  |<------------------| (303 redirect)        |
+    |                  | (8) If MFA OK (or skip), consent screen   |
+    |                  |  shown INLINE (same page, no redirect)    |
+    |                  |  with client branding, logo, links        |
+    |                  |<------------------| (inline response)     |
     |                  |                   |                       |
-    |                  | (9) GET /oauth2/consent?session_token=... |
-    |                  |------------------>|                       |
-    |                  |                   | (10) If consent       |
-    |                  |                   |  already given +      |
-    |                  |                   |  remember: skip →     |
-    |                  |                   |  direct redirect      |
-    |                  |                   |  with code            |
-    |                  |                   |                       |
-    |  (11) review     | (12) Consent screen                      |
+    |  (9) review      | (10) Consent screen (inline)             |
     |   scopes         |<------------------|                       |
     |<-----------------|                   |                       |
-    |                  | (13) POST /oauth2/consent                |
+    |                  | (11) POST /oauth2/consent                |
     |                  |  approved=true, remember=true            |
-    |                  |  session_token, csrf_token               |
+    |                  |  session_token                           |
     |                  |------------------>|                       |
     |                  |                   |                       |
-    |                  | (14) Redirect with authorization code     |
+    |                  | (12) Redirect with authorization code     |
     |                  |  ?code=AUTH_CODE&state=...               |
     |                  |<------------------| (303 redirect)        |
     |                  |                   |                       |
-    |                  | (15) POST /oauth2/token                  |
+    |                  | (13) POST /oauth2/token                  |
     |                  |  grant_type=authorization_code           |
     |                  |  code=AUTH_CODE                          |
     |                  |  redirect_uri=...                        |
     |                  |  code_verifier=PLAINTEXT (for PKCE)      |
     |                  |  + client auth (Basic or form)           |
     |                  |------------------>|                       |
-    |                  |                   | (16) Validation:      |
+    |                  |                   | (14) Validation:      |
     |                  |                   |  - code exists        |
     |                  |                   |  - client_id match    |
     |                  |                   |  - redirect_uri match |
     |                  |                   |  - PKCE S256 verifier |
     |                  |                   |  - code not used      |
     |                  |                   |                       |
-    |                  | (17) Token response                      |
+    |                  | (15) Token response                      |
     |                  |  { access_token, refresh_token,          |
     |                  |    token_type, expires_in,               |
     |                  |    id_token (if scope=openid) }          |
     |                  |<------------------|                       |
     |                  |                   |                       |
-    |                  | (18) GET /api/resource                   |
+    |                  | (16) GET /api/resource                   |
     |                  |  Authorization: Bearer <access_token>    |
     |                  |------------------------------------------>|
     |                  |                   |                       |
-    |                  | (19) Resource data                        |
+    |                  | (17) Resource data                        |
     |                  |<------------------------------------------|
 ```
 
 **Flow specifics:**
-- **CSRF**: each form (login, MFA, consent) includes a `csrf_token` tied to an HttpOnly `session_id` cookie
+- **Single-page**: login, MFA, and consent all happen on the same `/oauth2/authorize` page — no separate redirects between phases
 - **PKCE**: S256 mandatory for public clients (`is_confidential=false`); for confidential clients the code_challenge can be omitted if `require_pkce=false`
-- **MFA**: if the user has MFA active and the device is not trusted, the flow pauses after login and shows the MFA page; after MFA verification, consent proceeds
-- **Consent skip**: if the user has already consented with the "remember" option, the consent screen step is skipped and the authorization code is obtained directly
+- **MFA**: if the user has MFA active and the device is not trusted, the flow pauses after login and shows the MFA form inline; after MFA verification, consent proceeds
+- **Consent skip**: if `require_consent=false` on the client, consent is skipped entirely and the auth code is returned directly after login
+- **Consent auto-skip**: if the user has already consented with the "remember" option, `POST /oauth2/authorize` returns the redirect directly (no consent phase)
 - **One-time code**: authorization code is single-use (protected by lock + cross-process CAS)
 - **Refresh token rotation**: each refresh token use invalidates the previous one and issues a new one; if an already-used token is presented again, ALL of the user's refresh tokens are revoked (theft detection)
 - **ID token**: issued only if `openid` is among the requested scopes; RS256-signed, contains `nonce` and `auth_time`
@@ -504,13 +501,15 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 
 | Endpoint | Method | RFC | Description |
 |----------|--------|-----|-------------|
-| `/oauth2/authorize` | GET, POST | 6749 | Authorization endpoint (login + consent) |
+| `/oauth2/authorize` | GET, POST | 6749 | Authorization endpoint (single-page: login + consent inline) |
 | `/oauth2/token` | POST | 6749 | Token endpoint (code→token, client_credentials, refresh) |
 | `/oauth2/revoke` | POST | 7009 | Token revocation |
 | `/oauth2/introspect` | POST | 7662 | Token introspection |
 | `/oauth2/userinfo` | GET | OIDC | UserInfo endpoint |
 | `/oauth2/logout` | GET, POST | OIDC | RP-Initiated logout |
-| `/oauth2/consent` | GET, POST | — | Consent screen |
+| `/oauth2/consent` | POST | — | Process consent decision (called inline from authorize page) |
+| `/api/oauth2/consent/check` | GET | — | Check if user has existing consent (auto-skip) |
+| `/api/oauth2/authorize-info` | GET | — | Public client info for the authorize login page |
 | `/oauth2/mfa-verify` | POST | — | MFA verification during OAuth2 flow |
 | `/.well-known/openid-configuration` | GET | OIDC | Discovery metadata |
 | `/.well-known/jwks.json` | GET | 7517 | JWK Set |
@@ -530,12 +529,13 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 
 ### Client Properties
 - `client_name`, `description`, `logo_uri`, `homepage_uri`, `terms_uri`, `privacy_uri`
+- `custom_css` — per-client CSS override for consent screen branding (scoped to `.authglow-consent`)
 - `redirect_uris` — whitelist URI list for callback
-- `allowed_scopes` — authorized scopes for this client
+- `allowed_scopes` — space-separated authorized scopes for this client
 - `grant_types` — allowed grant types (authorization_code, client_credentials, etc.)
 - `is_confidential` — if true, requires client_secret for token endpoint
 - `require_pkce` — if true, PKCE mandatory
-- `require_consent` — if true, always show consent screen
+- `require_consent` — if true, always show consent screen; if false, skip consent and return auth code directly
 - `access_token_lifetime` / `refresh_token_lifetime` — per-client custom TTL
 - Activation/deactivation: `POST /api/oauth-clients/{id}/activate` and `/deactivate`
 
@@ -552,12 +552,16 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 ## 8. OAuth2 Consent Management
 
 ### Consent Screen
-- `GET /oauth2/consent?session_token=...` — displays consent UI
-- Shows: client name, logo, description, requested scopes with descriptions
-- If user already consented → auto skip, direct redirect with auth code
-- `POST /oauth2/consent` — approve/deny
-- "remember" option — saves consent permanently
+- Single-page inline consent: login → consent all on `/oauth2/authorize` (no separate consent page)
+- Shows: client logo, name, description, requested scopes with descriptions, branding links
+- Per-client custom CSS support via `custom_css` field (scoped to `.authglow-consent`)
+- Neutral default theme (slate/white) when no custom CSS is set — fully overrideable
+- If user `require_consent=false` on client: consent skipped entirely
+- If user already consented with "remember": auto-skip via `GET /api/oauth2/consent/check`
+- `POST /oauth2/consent` — approve/deny with `remember` option
+- "remember" option — saves consent permanently (stored as JSON file)
 - Denial → redirect with `error=access_denied`
+- `GET /api/oauth2/authorize-info` — public endpoint returning client branding for the login page
 
 ### Consent Administration
 - `GET /api/admin/oauth-consents` — list all consents with pagination
@@ -565,9 +569,14 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - Includes: user, client, scope, dates, revocation status
 - `POST /api/admin/oauth-consents/{id}/revoke` — revoke consent
 
+### Consent Preview
+- Eye/Preview button in the OAuth Clients table (only for clients with `require_consent=true`)
+- Modal preview shows exact consent screen with client's branding, scopes, and custom CSS applied
+
 ### Scope Descriptions
-- `read`, `write`, `admin`, `email`, `profile`, `openid` with human-readable descriptions
-- Configurable for consent UI
+- `openid`, `profile`, `email`, `phone`, `address`, `offline_access`, `read`, `write` with human-readable descriptions
+- Custom scopes use generic fallback description (`Access to {scope}`)
+- Descriptions shown in consent screen and admin preview
 
 ---
 
