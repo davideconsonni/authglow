@@ -1,23 +1,76 @@
 import { useMemo } from 'react'
 
-const JSON_KEY = /("(?:[^"\\]|\\.)*")\s*:/g
-const JSON_STRING = /("(?:[^"\\]|\\.)*")/g
-const JSON_NUMBER = /(-?\d+\.?\d*(?:[eE][+-]?\d+)?)/g
-const JSON_BOOL_NULL = /\b(true|false|null)\b/g
-
 function highlight(json: string): string {
-  let html = json
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  let html = ''
+  let i = 0
 
-  html = html.replace(JSON_KEY, '<span class="text-brand-violet">$1</span>:')
-  html = html.replace(JSON_BOOL_NULL, '<span class="text-amber-400">$1</span>')
-  html = html.replace(JSON_NUMBER, '<span class="text-emerald-400">$1</span>')
-  html = html.replace(JSON_STRING, (match) => {
-    if (match.includes('text-brand-violet')) return match
-    return `<span class="text-emerald-300">${match}</span>`
-  })
+  while (i < json.length) {
+    const ch = json[i]
+
+    if (ch === '&') { html += '&amp;'; i++; continue }
+    if (ch === '<') { html += '&lt;'; i++; continue }
+    if (ch === '>') { html += '&gt;'; i++; continue }
+
+    if (ch === '"') {
+      let content = ''
+      i++
+      while (i < json.length) {
+        if (json[i] === '\\' && i + 1 < json.length) {
+          content += '\\' + json[i + 1]
+          i += 2
+          continue
+        }
+        if (json[i] === '"') {
+          i++
+          break
+        }
+        if (json[i] === '&') content += '&amp;'
+        else if (json[i] === '<') content += '&lt;'
+        else if (json[i] === '>') content += '&gt;'
+        else content += json[i]
+        i++
+      }
+
+      let j = i
+      while (j < json.length && json[j] === ' ') j++
+      if (j < json.length && json[j] === ':') {
+        html += '<span class="text-brand-violet">"' + content + '"</span>:'
+        i = j + 1
+      } else {
+        html += '<span class="text-emerald-300">"' + content + '"</span>'
+      }
+      continue
+    }
+
+    if ((ch >= '0' && ch <= '9') || ch === '-') {
+      let num = ''
+      while (i < json.length && '0123456789.eE+-'.includes(json[i])) {
+        num += json[i]
+        i++
+      }
+      html += '<span class="text-emerald-400">' + num + '</span>'
+      continue
+    }
+
+    if (json.slice(i, i + 4) === 'true') {
+      html += '<span class="text-amber-400">true</span>'
+      i += 4
+      continue
+    }
+    if (json.slice(i, i + 5) === 'false') {
+      html += '<span class="text-amber-400">false</span>'
+      i += 5
+      continue
+    }
+    if (json.slice(i, i + 4) === 'null') {
+      html += '<span class="text-amber-400">null</span>'
+      i += 4
+      continue
+    }
+
+    html += ch
+    i++
+  }
 
   return html
 }

@@ -9,7 +9,7 @@
 
 The Playground page is a blank shell. Make it a functional OAuth2/OIDC debug console.
 
-- [ ] **14.1** Token Introspection — `POST /oauth2/introspect` with a textarea for the token, show decoded claims
+- [x] **14.1** Token Introspection — `POST /oauth2/introspect` with a textarea for the token, show decoded claims
 - [ ] **14.2** UserInfo — `GET /oauth2/userinfo` button that shows the OIDC user info response
 - [ ] **14.3** Revoke token — `POST /oauth2/revoke` with token input + feedback
 - [ ] **14.4** API Key token exchange — `POST /api/token/api-key` demo
