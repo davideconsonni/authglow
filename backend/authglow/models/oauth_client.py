@@ -30,6 +30,7 @@ class OAuth2Client(BaseModel):
     homepage_uri: Optional[str] = None
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
+    custom_css: Optional[str] = None
 
     # Status
     is_active: bool = True
@@ -73,6 +74,7 @@ class OAuth2ClientCreate(BaseModel):
     homepage_uri: Optional[str] = None
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
+    custom_css: Optional[str] = Field(None, max_length=20000)
 
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
     refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days
@@ -95,6 +97,7 @@ class OAuth2ClientUpdate(BaseModel):
     homepage_uri: Optional[str] = None
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
+    custom_css: Optional[str] = Field(None, max_length=20000)
 
     is_active: Optional[bool] = None
 
@@ -118,6 +121,9 @@ class OAuth2ClientResponse(BaseModel):
     description: Optional[str] = None
     logo_uri: Optional[str] = None
     homepage_uri: Optional[str] = None
+    terms_uri: Optional[str] = None
+    privacy_uri: Optional[str] = None
+    custom_css: Optional[str] = None
 
     is_active: bool
     created_at: datetime

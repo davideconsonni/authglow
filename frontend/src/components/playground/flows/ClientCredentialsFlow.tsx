@@ -41,7 +41,7 @@ export function ClientCredentialsFlow() {
     try {
       const formBody: Record<string, string> = {
         grant_type: 'client_credentials',
-        scope: localScopes,
+        scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
       }
       const headers: Record<string, string> = {}
       if (localClientId && localClientSecret) {

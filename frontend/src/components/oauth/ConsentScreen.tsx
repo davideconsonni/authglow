@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, Check, Globe, Mail, User, Lock, Key, type LucideIcon } from 'lucide-react'
+import { Shield, Check, Globe, Mail, User, Lock, Key, ExternalLink, type LucideIcon } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -17,17 +17,29 @@ function getScopeIcon(scope: string): LucideIcon {
 }
 
 interface ConsentScreenProps {
-  sessionToken: string
+  sessionToken?: string
   clientName: string
-  clientDescription?: string
+  clientDescription?: string | null
+  clientLogoUri?: string | null
+  clientHomepageUri?: string | null
+  clientTermsUri?: string | null
+  clientPrivacyUri?: string | null
+  customCss?: string | null
   scopes: Array<{ name: string; description: string }>
+  preview?: boolean
 }
 
 export function ConsentScreen({
   sessionToken,
   clientName,
   clientDescription,
+  clientLogoUri,
+  clientHomepageUri,
+  clientTermsUri,
+  clientPrivacyUri,
+  customCss,
   scopes,
+  preview = false,
 }: ConsentScreenProps) {
   const [remember, setRemember] = useState(false)
   const [approving, setApproving] = useState(false)
@@ -35,15 +47,16 @@ export function ConsentScreen({
   const [generalError, setGeneralError] = useState('')
 
   const handleApprove = async () => {
+    if (preview || !sessionToken) return
     setApproving(true)
     setGeneralError('')
     try {
-      const data = await api.post<{ redirect_url: string }>(
+      const data = await api.postForm<{ redirect_url: string }>(
         '/oauth2/consent',
         {
           session_token: sessionToken,
-          consent: 'approve',
-          remember,
+          approved: 'true',
+          remember: remember ? 'true' : 'false',
         },
       )
       window.location.href = data.redirect_url
@@ -55,14 +68,16 @@ export function ConsentScreen({
   }
 
   const handleDeny = async () => {
+    if (preview || !sessionToken) return
     setDenying(true)
     setGeneralError('')
     try {
-      const data = await api.post<{ redirect_url: string }>(
+      const data = await api.postForm<{ redirect_url: string }>(
         '/oauth2/consent',
         {
           session_token: sessionToken,
-          consent: 'deny',
+          approved: 'false',
+          remember: 'false',
         },
       )
       window.location.href = data.redirect_url
@@ -73,38 +88,296 @@ export function ConsentScreen({
     }
   }
 
+  const hasLinks = clientHomepageUri || clientTermsUri || clientPrivacyUri
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
-      <div className="w-full max-w-lg space-y-6">
+    <div className="authglow-consent">
+      <style>{`
+        /* Neutral base — overrideable via custom_css */
+        .authglow-consent {
+          --bg-primary: #f8f9fa;
+          --bg-surface: #ffffff;
+          --bg-subtle: #f1f3f5;
+          --text-primary: #1a1a2e;
+          --text-secondary: #4a5568;
+          --text-muted: #718096;
+          --border-color: #e2e8f0;
+          --brand-color: #475569;
+          --brand-hover: #334155;
+          --brand-color-subtle: #eaecf0;
+          --brand-color-border: #cbd5e1;
+          --brand-shadow: rgba(71, 85, 105, 0.25);
+          --brand-text: #ffffff;
+          --error-color: #dc2626;
+          --error-bg: #fef2f2;
+          --success-color: #16a34a;
+          --radius: 16px;
+          --radius-sm: 10px;
+          --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+          --transition: 150ms ease;
+          display: flex;
+          min-height: ${preview ? 'auto' : '100vh'};
+          align-items: ${preview ? 'flex-start' : 'center'};
+          justify-content: center;
+          background: var(--bg-primary);
+          padding: 2rem;
+          font-family: var(--font-family);
+          color: var(--text-primary);
+        }
+        .authglow-consent * { box-sizing: border-box; }
+        .authglow-consent .consent-card {
+          width: 100%;
+          max-width: 32rem;
+        }
+        .authglow-consent .consent-logo-area {
+          text-align: center;
+        }
+        .authglow-consent .consent-logo-img {
+          height: 56px;
+          width: 56px;
+          border-radius: 12px;
+          object-fit: contain;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-color);
+          display: inline-block;
+        }
+        .authglow-consent .consent-logo-icon {
+          display: inline-flex;
+          height: 56px;
+          width: 56px;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius);
+          background: var(--brand-color-subtle);
+          border: 1px solid var(--brand-color-border);
+          color: var(--brand-color);
+        }
+        .authglow-consent .consent-header {
+          margin-top: 1rem;
+          text-align: center;
+        }
+        .authglow-consent .consent-title {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: var(--text-primary);
+        }
+        .authglow-consent .consent-title .consent-app-name {
+          color: var(--brand-color);
+          font-weight: 700;
+        }
+        .authglow-consent .consent-description {
+          margin-top: 0.5rem;
+          font-size: 0.875rem;
+          color: var(--text-muted);
+        }
+        .authglow-consent .consent-section {
+          margin-top: 1.5rem;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius);
+          padding: 1.5rem;
+        }
+        .authglow-consent .consent-section-title {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: var(--text-secondary);
+          margin-bottom: 1rem;
+        }
+        .authglow-consent .scope-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        .authglow-consent .scope-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+        .authglow-consent .scope-item:last-child { margin-bottom: 0; }
+        .authglow-consent .scope-icon {
+          display: flex;
+          width: 2rem;
+          height: 2rem;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.5rem;
+          background: var(--bg-subtle);
+          color: var(--text-secondary);
+          margin-top: 0.125rem;
+        }
+        .authglow-consent .scope-name {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: var(--text-primary);
+        }
+        .authglow-consent .scope-desc {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+        .authglow-consent .consent-remember {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          cursor: pointer;
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid var(--border-color);
+        }
+        .authglow-consent .consent-remember-box {
+          display: flex;
+          width: 1.25rem;
+          height: 1.25rem;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.375rem;
+          border: 1px solid var(--border-color);
+          background: var(--bg-subtle);
+          transition: all var(--transition);
+        }
+        .authglow-consent .consent-remember-box.checked {
+          border-color: var(--brand-color);
+          background: var(--brand-color);
+          color: var(--brand-text);
+        }
+        .authglow-consent .consent-remember-label {
+          font-size: 0.875rem;
+          color: var(--text-secondary);
+        }
+        .authglow-consent .consent-links {
+          margin-top: 1rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid var(--border-color);
+        }
+        .authglow-consent .consent-links-title {
+          font-size: 0.6875rem;
+          font-weight: 500;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 0.5rem;
+        }
+        .authglow-consent .consent-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.75rem;
+          color: var(--brand-color);
+          text-decoration: none;
+          transition: color var(--transition);
+        }
+        .authglow-consent .consent-link:hover { color: var(--brand-hover); }
+        .authglow-consent .consent-link + .consent-link { margin-left: 1rem; }
+        .authglow-consent .consent-error {
+          margin-top: 1.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--color, $ef4444 / 30%);
+          background: var(--error-bg);
+          color: var(--error-color);
+          font-size: 0.875rem;
+        }
+        .authglow-consent .consent-preview-badge {
+          margin-top: 1.5rem;
+          text-align: center;
+          padding: 0.625rem 1rem;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--border-color);
+          background: var(--bg-subtle);
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+        .authglow-consent .consent-actions {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 1.5rem;
+        }
+        .authglow-consent .btn-deny {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--border-color);
+          background: transparent;
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .authglow-consent .btn-deny:hover { background: var(--bg-subtle); }
+        .authglow-consent .btn-deny:disabled { cursor: not-allowed; opacity: 0.5; }
+        .authglow-consent .btn-approve {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-sm);
+          border: none;
+          background: var(--brand-color);
+          color: var(--brand-text);
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all var(--transition);
+          box-shadow: 0 2px 8px var(--brand-shadow);
+        }
+        .authglow-consent .btn-approve:hover { background: var(--brand-hover); transform: scale(1.02); }
+        .authglow-consent .btn-approve:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+        .authglow-consent .btn-approve:active { transform: scale(0.98); }
+        .authglow-consent .spinner {
+          animation: consent-spin 1s linear infinite;
+          width: 16px; height: 16px;
+        }
+        @keyframes consent-spin { to { transform: rotate(360deg); } }
+
+        /* Custom CSS from client — placed last to override all above */
+        ${customCss || ''}
+      `}</style>
+
+      <div className="consent-card">
+
+        {/* Logo */}
+        <div className="consent-logo-area">
+          {clientLogoUri ? (
+            <img src={clientLogoUri} alt={`${clientName} logo`} className="consent-logo-img"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          ) : (
+            <div className="consent-logo-icon">
+              <Shield size={28} />
+            </div>
+          )}
+        </div>
+
         {/* Header */}
-        <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-violet/10 ring-1 ring-brand-violet/20">
-            <Shield className="h-8 w-8 text-brand-violet" />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-text-primary">
-            Authorize <span className="gradient-text">{clientName}</span>
+        <div className="consent-header">
+          <h1 className="consent-title">
+            Authorize <span className="consent-app-name">{clientName}</span>
           </h1>
           {clientDescription && (
-            <p className="mt-2 text-sm text-text-muted">{clientDescription}</p>
+            <p className="consent-description">{clientDescription}</p>
           )}
         </div>
 
         {/* Scope list */}
-        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
-          <p className="text-sm font-medium text-text-secondary">
-            {clientName} is requesting access to:
-          </p>
-          <ul className="space-y-3">
+        <div className="consent-section">
+          <p className="consent-section-title">{clientName} is requesting access to:</p>
+          <ul className="scope-list">
             {scopes.map((scope) => {
               const Icon = getScopeIcon(scope.name)
               return (
-                <li key={scope.name} className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2">
-                    <Icon size={16} className="text-text-secondary" />
-                  </div>
+                <li key={scope.name} className="scope-item">
+                  <div className="scope-icon"><Icon size={16} /></div>
                   <div>
-                    <p className="text-sm font-medium text-text-primary">{scope.name}</p>
-                    <p className="text-xs text-text-muted">{scope.description}</p>
+                    <p className="scope-name">{scope.name}</p>
+                    <p className="scope-desc">{scope.description}</p>
                   </div>
                 </li>
               )
@@ -112,51 +385,63 @@ export function ConsentScreen({
           </ul>
 
           {/* Remember checkbox */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <button
-              role="checkbox"
-              aria-checked={remember}
-              onClick={() => setRemember(!remember)}
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                remember
-                  ? 'border-brand-violet bg-brand-violet'
-                  : 'border-surface-3 bg-surface-2'
-              }`}
-            >
-              {remember && <Check size={12} className="text-white" />}
-            </button>
-            <span className="text-sm text-text-secondary">
-              Remember this decision for future requests
-            </span>
-          </label>
+          {!preview && (
+            <div className="consent-remember" onClick={() => setRemember(!remember)} role="checkbox" aria-checked={remember}>
+              <div className={`consent-remember-box${remember ? ' checked' : ''}`}>
+                {remember && <Check size={12} />}
+              </div>
+              <span className="consent-remember-label">Remember this decision for future requests</span>
+            </div>
+          )}
+
+          {/* Branding links */}
+          {hasLinks && (
+            <div className="consent-links">
+              <p className="consent-links-title">Application details</p>
+              {clientHomepageUri && (
+                <a href={clientHomepageUri} target="_blank" rel="noopener noreferrer" className="consent-link">
+                  Homepage <ExternalLink size={10} />
+                </a>
+              )}
+              {clientTermsUri && (
+                <a href={clientTermsUri} target="_blank" rel="noopener noreferrer" className="consent-link">
+                  Terms of Service <ExternalLink size={10} />
+                </a>
+              )}
+              {clientPrivacyUri && (
+                <a href={clientPrivacyUri} target="_blank" rel="noopener noreferrer" className="consent-link">
+                  Privacy Policy <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Error */}
-        {generalError && (
-          <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
-            {generalError}
+        {/* Preview badge */}
+        {preview && (
+          <div className="consent-preview-badge">
+            This is a preview of how the consent screen will appear to users. Actions are disabled.
           </div>
         )}
 
+        {/* Error */}
+        {generalError && (
+          <div className="consent-error" role="alert">{generalError}</div>
+        )}
+
         {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={handleDeny}
-            disabled={denying || approving}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-surface-2 bg-transparent px-4 py-3 text-sm font-medium text-text-secondary hover:bg-surface-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {denying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Deny
-          </button>
-          <button
-            onClick={handleApprove}
-            disabled={approving || denying}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Approve
-          </button>
-        </div>
+        {!preview && (
+          <div className="consent-actions">
+            <button onClick={handleDeny} disabled={denying || approving} className="btn-deny">
+              {denying ? <Loader2 className="spinner" /> : null}
+              Deny
+            </button>
+            <button onClick={handleApprove} disabled={approving || denying} className="btn-approve">
+              {approving ? <Loader2 className="spinner" /> : null}
+              Approve
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

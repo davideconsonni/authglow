@@ -35,7 +35,7 @@ export function AuthorizationCodeFlow() {
       response_type: 'code',
       client_id: localClientId,
       redirect_uri: localRedirectUri,
-      scope: localScopes,
+      scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
       state: localState,
     })
     return `${window.location.origin}/oauth2/authorize?${params.toString()}`

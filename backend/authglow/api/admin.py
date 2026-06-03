@@ -543,7 +543,7 @@ async def get_oauth_consents_admin(
             _fs = _fsspec.filesystem(_settings.storage_backend, **_settings.get_storage_options())
         _afs = AsyncFileSystem(_fs)
 
-        pattern = f"{_storage_path}/*.json"
+        pattern = f"{_storage_path}/**/*.json"
         files = await _afs.glob(pattern)
 
         for file_path in files:

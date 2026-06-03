@@ -2,7 +2,7 @@
 
 import base64
 import hashlib
-from typing import NoReturn, Optional, Tuple
+from typing import Dict, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -275,6 +275,21 @@ async def authorize_post(
 
     await storage.update_last_login(user.id)
 
+    if not client.require_consent:
+        auth_code = await oauth2_service.create_authorization_code(
+            client_id=client_id,
+            user_id=user.id,
+            redirect_uri=redirect_uri,
+            scope=validated_scope,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            nonce=nonce,
+        )
+        redirect_url = f"{redirect_uri}?code={auth_code.code}"
+        if state:
+            redirect_url += f"&state={state}"
+        return {"redirect_url": redirect_url}
+
     consent_session = await session_service.create_consent_session(
         user_id=user.id,
         client_id=client_id,
@@ -286,9 +301,30 @@ async def authorize_post(
         nonce=nonce,
     )
 
+    scope_labels: Dict[str, str] = {
+        "openid": "Verify your identity",
+        "profile": "Access your profile information (name, picture)",
+        "email": "Access your email address",
+        "offline_access": "Allow offline access (refresh tokens)",
+        "read": "Read access to your data",
+        "write": "Write access to your data",
+    }
+    scope_items = [
+        {"name": s, "description": scope_labels.get(s, f"Access to {s}")}
+        for s in (validated_scope.split() if validated_scope else ["read"])
+    ]
+
     return {
         "consent_required": True,
-        "consent_url": f"/oauth2/consent?session_token={consent_session['session_token']}",
+        "session_token": consent_session["session_token"],
+        "client_name": client.client_name,
+        "client_description": client.description,
+        "client_logo_uri": client.logo_uri,
+        "client_homepage_uri": client.homepage_uri,
+        "client_terms_uri": client.terms_uri,
+        "client_privacy_uri": client.privacy_uri,
+        "custom_css": client.custom_css,
+        "scopes": scope_items,
     }
 
 

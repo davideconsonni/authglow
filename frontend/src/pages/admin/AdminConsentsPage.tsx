@@ -7,12 +7,13 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 
 interface ConsentData {
-  id: string
+  consent_id: string
   user_email: string
   client_name: string
   scopes: string[]
-  created_at: string
-  is_revoked: boolean
+  granted_at: string
+  revoked: boolean
+  revoked_at: string | null
 }
 
 export function AdminConsentsPage() {
@@ -80,7 +81,7 @@ export function AdminConsentsPage() {
             </thead>
             <tbody className="divide-y divide-surface-2">
               {consents.map((c) => (
-                <tr key={c.id} className={`hover:bg-surface-2/50 ${c.is_revoked ? 'opacity-50' : ''}`}>
+                <tr key={c.consent_id} className={`hover:bg-surface-2/50 ${c.revoked ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-3 text-sm text-text-primary">{c.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{c.client_name}</td>
                   <td className="px-6 py-3">
@@ -90,10 +91,10 @@ export function AdminConsentsPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(c.created_at)}</td>
+                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(c.granted_at)}</td>
                   <td className="px-6 py-3">
-                    {!c.is_revoked && (
-                      <button onClick={() => setRevokeId(c.id)} className="text-text-muted hover:text-semantic-error" title="Revoke consent">
+                    {!c.revoked && (
+                      <button onClick={() => setRevokeId(c.consent_id)} className="text-text-muted hover:text-semantic-error" title="Revoke consent">
                         <Ban size={14} />
                       </button>
                     )}

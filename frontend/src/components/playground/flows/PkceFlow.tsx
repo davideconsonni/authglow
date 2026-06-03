@@ -37,7 +37,7 @@ export function PkceFlow() {
       response_type: 'code',
       client_id: localClientId,
       redirect_uri: localRedirectUri,
-      scope: localScopes,
+      scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
       state: localState,
       code_challenge: localChallenge,
       code_challenge_method: 'S256',

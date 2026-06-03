@@ -12,7 +12,7 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
-import { OAuthConsentPage } from '@/pages/OAuthConsentPage'
+import { OAuthAuthorizePage } from '@/pages/OAuthAuthorizePage'
 import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -94,7 +94,7 @@ function App() {
           <Route path={ROUTES.AUTH.RESET_PASSWORD} element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
           <Route path={ROUTES.AUTH.MFA_VERIFY} element={<MFAVerifyPage />} />
           <Route path={ROUTES.AUTH.VERIFY_EMAIL} element={<EmailVerifiedPage />} />
-          <Route path={ROUTES.OAUTH_CONSENT} element={<OAuthConsentPage />} />
+          <Route path={ROUTES.OAUTH_AUTHORIZE} element={<OAuthAuthorizePage />} />
           <Route path={ROUTES.SETUP} element={<SetupPage />} />
 
           <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle } from 'lucide-react'
+import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
+import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
+import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 
 interface OAuthClient {
   id?: string
@@ -26,6 +28,7 @@ interface OAuthClient {
   privacy_uri?: string
   access_token_lifetime?: number
   refresh_token_lifetime?: number
+  custom_css?: string | null
   token_endpoint_auth_method?: string
 }
 
@@ -37,6 +40,21 @@ const ALL_GRANT_TYPES: { id: GrantType; label: string; desc: string }[] = [
   { id: 'client_credentials', label: 'Client Credentials', desc: 'Machine-to-machine, no user' },
   { id: 'refresh_token', label: 'Refresh Token', desc: 'Issue long-lived refresh tokens' },
 ]
+
+const SCOPE_DESCRIPTIONS: Record<string, string> = {
+  openid: 'Verify your identity',
+  profile: 'Access your profile information (name, picture)',
+  email: 'Access your email address',
+  phone: 'Access your phone number',
+  address: 'Access your physical address',
+  offline_access: 'Allow offline access (refresh tokens)',
+  read: 'Read access to your data',
+  write: 'Write access to your data',
+}
+
+function getScopeLabel(scope: string): string {
+  return SCOPE_DESCRIPTIONS[scope] || `Access to ${scope}`
+}
 
 interface Template {
   id: string
@@ -81,6 +99,27 @@ function friendlyError(raw: string): string {
   return raw
 }
 
+function TextInput(props: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  'data-testid'?: string
+  type?: string
+  autoFocus?: boolean
+}) {
+  return (
+    <input
+      type={props.type || 'text'}
+      value={props.value}
+      onChange={(e) => props.onChange(e.target.value)}
+      placeholder={props.placeholder}
+      data-testid={props['data-testid']}
+      autoFocus={props.autoFocus}
+      className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+    />
+  )
+}
+
 export function AdminOAuthClientsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -101,6 +140,7 @@ export function AdminOAuthClientsPage() {
   const [allowedScopes, setAllowedScopes] = useState('openid profile email')
   const [accessTokenLifetime, setAccessTokenLifetime] = useState(3600)
   const [refreshTokenLifetime, setRefreshTokenLifetime] = useState(2592000)
+  const [customCss, setCustomCss] = useState('')
 
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -110,6 +150,8 @@ export function AdminOAuthClientsPage() {
   const [secretModal, setSecretModal] = useState<string | null>(null)
   const [newClientId, setNewClientId] = useState('')
   const [editClientId, setEditClientId] = useState<string | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [previewClient, setPreviewClient] = useState<OAuthClient | null>(null)
   const [originalGrantTypes, setOriginalGrantTypes] = useState<GrantType[]>([])
   const [originalIsConfidential, setOriginalIsConfidential] = useState(true)
 
@@ -123,13 +165,14 @@ export function AdminOAuthClientsPage() {
     setAuthMethod('client_secret_basic'); setRedirectUris([''])
     setRequirePkce(false); setRequireConsent(true)
     setHomepageUri(''); setLogoUri(''); setTermsUri(''); setPrivacyUri('')
-    setAllowedScopes('openid profile email')
+    setAllowedScopes('openid profile email'); setCustomCss('')
     setAccessTokenLifetime(3600); setRefreshTokenLifetime(2592000)
-    setShowAdvanced(false); setFormErrors({})
+    setShowAdvanced(false); setFormErrors({}); setSelectedTemplate(null)
     setEditClientId(null); setOriginalGrantTypes([]); setOriginalIsConfidential(true)
   }
 
   const applyTemplate = (t: Template) => {
+    setSelectedTemplate(t.id)
     setGrantTypes(t.grant_types)
     setIsConfidential(t.is_confidential)
     setAuthMethod(t.auth_method)
@@ -162,7 +205,8 @@ export function AdminOAuthClientsPage() {
     setLogoUri(c.logo_uri || '')
     setTermsUri(c.terms_uri || '')
     setPrivacyUri(c.privacy_uri || '')
-    setAllowedScopes((c.scopes || c.allowed_scopes || []).join(', ') || 'openid profile email')
+    setCustomCss(c.custom_css || '')
+    setAllowedScopes((c.scopes || c.allowed_scopes || []).join(' ') || 'openid profile email')
     setAccessTokenLifetime(c.access_token_lifetime ?? 3600)
     setRefreshTokenLifetime(c.refresh_token_lifetime ?? 2592000)
     setShowForm(true)
@@ -213,7 +257,8 @@ export function AdminOAuthClientsPage() {
       logo_uri: logoUri || undefined,
       terms_uri: termsUri || undefined,
       privacy_uri: privacyUri || undefined,
-      allowed_scopes: allowedScopes.split(',').map(s => s.trim()).filter(Boolean),
+      custom_css: customCss || undefined,
+      allowed_scopes: allowedScopes.trim().split(/\s+/).filter(Boolean),
       access_token_lifetime: accessTokenLifetime,
       refresh_token_lifetime: refreshTokenLifetime,
     }
@@ -278,18 +323,6 @@ export function AdminOAuthClientsPage() {
 
   const clientDisplayName = (c: OAuthClient) => c.client_name || c.name || c.client_id
   const clientGrantTypes = (c: OAuthClient) => c.grant_types || []
-
-  const TextInput = (props: { value: string; onChange: (v: string) => void; placeholder?: string; 'data-testid'?: string; type?: string; autoFocus?: boolean }) => (
-    <input
-      type={props.type || 'text'}
-      value={props.value}
-      onChange={e => props.onChange(e.target.value)}
-      placeholder={props.placeholder}
-      data-testid={props['data-testid']}
-      autoFocus={props.autoFocus}
-      className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
-    />
-  )
 
   return (
     <div className="space-y-6">
@@ -359,6 +392,9 @@ export function AdminOAuthClientsPage() {
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
+                      {c.require_consent !== false && (
+                        <button onClick={() => setPreviewClient(c)} className="text-text-muted hover:text-text-secondary" title="Preview consent screen"><Eye size={14} /></button>
+                      )}
                       <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
                       <button onClick={() => handleRotate(c.client_id)} className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
                       <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
@@ -390,38 +426,71 @@ export function AdminOAuthClientsPage() {
         </div>
       )}
 
+      {/* Preview consent screen modal */}
+      {previewClient && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setPreviewClient(null)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-bg-primary p-6 shadow-glow-violet my-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-primary">Consent Screen Preview</h3>
+              <button onClick={() => setPreviewClient(null)} className="text-text-muted hover:text-text-secondary text-sm">Close</button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto">
+              <ConsentScreen
+                clientName={previewClient.client_name || previewClient.name || 'Untitled'}
+                clientDescription={previewClient.description}
+                clientLogoUri={previewClient.logo_uri}
+                clientHomepageUri={previewClient.homepage_uri}
+                clientTermsUri={previewClient.terms_uri}
+                clientPrivacyUri={previewClient.privacy_uri}
+                scopes={(previewClient.allowed_scopes || previewClient.scopes || ['openid', 'profile', 'email']).map(s => ({
+                  name: s,
+                  description: getScopeLabel(s),
+                }))}
+                customCss={previewClient.custom_css}
+                preview
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create / Edit Client Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
-          <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-5 shadow-glow-violet my-auto">
-            <h3 className="text-lg font-semibold text-text-primary">{editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}</h3>
-
-            {/* Quick start templates — shown in create mode only */}
-            {!editClientId && (
-              <div>
-                <p className="mb-2 text-xs font-medium text-text-muted">Quick start (optional)</p>
-                <div className="grid grid-cols-3 gap-2">
+          <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-text-primary">
+                {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
+              </h3>
+              {!editClientId && (
+                <div className="flex items-center gap-1">
                   {TEMPLATES.map(t => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => applyTemplate(t)}
                       data-testid={`template-${t.id}`}
-                      className="flex flex-col items-center gap-1 rounded-xl border border-surface-2 bg-bg-secondary p-3 text-center transition-all hover:border-brand-violet/40 hover:bg-surface-1"
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
+                        selectedTemplate === t.id
+                          ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                          : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
+                      )}
                     >
-                      <t.icon size={18} className="text-brand-violet" />
-                      <span className="text-xs font-semibold text-text-primary">{t.label}</span>
-                      <span className="text-[10px] text-text-muted">{t.desc}</span>
+                      <t.icon size={12} />
+                      {t.label}
+                      {selectedTemplate === t.id && <Check size={10} />}
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Breaking change warning in edit mode */}
             {showBreakingChangeWarning && (
-              <div className="flex items-start gap-2 rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 px-4 py-3 text-xs text-semantic-warning" data-testid="breaking-change-warning">
+              <div className="flex items-start gap-2 rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 px-4 py-3 text-xs text-semantic-warning mb-5" data-testid="breaking-change-warning">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold">Heads up: changing grant types or client type can break existing integrations.</p>
@@ -430,177 +499,200 @@ export function AdminOAuthClientsPage() {
               </div>
             )}
 
-            {/* Basic info */}
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-secondary">Application name <span className="text-semantic-error">*</span></label>
-                <TextInput value={name} onChange={v => { setName(v); setFormErrors({...formErrors, name: ''}) }} placeholder="My Application" data-testid="client-name-input" autoFocus />
-                {formErrors.name && <p className="mt-1 text-xs text-semantic-error">{formErrors.name}</p>}
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-secondary">Description</label>
-                <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 resize-y" />
-              </div>
-            </div>
+            {/* Two-column layout */}
+            <div className="grid grid-cols-2 gap-5 mb-5">
+              {/* Left column: Application identity */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Identity</p>
 
-            {/* Authentication */}
-            <div className="space-y-3 rounded-xl border border-surface-2 bg-bg-secondary p-4">
-              <p className="text-xs font-medium text-text-secondary">Authentication</p>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-muted">Grant types <span className="text-semantic-error">*</span></label>
-                <div className="space-y-1.5">
-                  {ALL_GRANT_TYPES.map(g => (
-                    <label key={g.id} className="flex items-start gap-2 rounded-lg p-2 hover:bg-surface-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={grantTypes.includes(g.id)}
-                        onChange={() => toggleGrantType(g.id)}
-                        data-testid={`grant-${g.id}`}
-                        className="mt-0.5 h-4 w-4 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-text-primary">{g.label}</p>
-                        <p className="text-[11px] text-text-muted">{g.desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                {formErrors.grant_types && <p className="mt-1 text-xs text-semantic-error">{formErrors.grant_types}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Client type</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { setIsConfidential(true); setAuthMethod('client_secret_basic') }}
-                      data-testid="client-type-confidential"
-                      className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'}`}
-                    >
-                      Confidential
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setIsConfidential(false); setAuthMethod('none'); setRequirePkce(true) }}
-                      data-testid="client-type-public"
-                      className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${!isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'}`}
-                    >
-                      Public
-                    </button>
-                  </div>
-                  <p className="mt-1 text-[10px] text-text-muted">
-                    {isConfidential ? 'Has a client secret. Server-side apps.' : 'No secret. SPAs/mobile. PKCE required.'}
-                  </p>
+                  <label className="mb-1 block text-[11px] font-medium text-text-secondary">Application name <span className="text-semantic-error">*</span></label>
+                  <TextInput value={name} onChange={v => { setName(v); setFormErrors({...formErrors, name: ''}) }} placeholder="My Application" data-testid="client-name-input" autoFocus />
+                  {formErrors.name && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Auth method</label>
-                  <select
-                    value={authMethod}
-                    onChange={e => setAuthMethod(e.target.value as AuthMethod)}
-                    disabled={!isConfidential}
-                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary focus:border-brand-violet focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="client_secret_basic">client_secret_basic</option>
-                    <option value="client_secret_post">client_secret_post</option>
-                    {!isConfidential && <option value="none">none (public)</option>}
-                  </select>
+                  <label className="mb-1 block text-[11px] font-medium text-text-secondary">Description</label>
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 resize-y" />
                 </div>
-              </div>
 
-              {showRedirectUris && (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Redirect URIs <span className="text-semantic-error">*</span></label>
-                  <div className="space-y-2">
-                    {redirectUris.map((uri, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/callback${redirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
-                        {redirectUris.length > 1 && <button type="button" onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={14} /></button>}
-                      </div>
+                  <label className="mb-1.5 block text-[11px] font-medium text-text-secondary">Grant types <span className="text-semantic-error">*</span></label>
+                  <div className="space-y-1">
+                    {ALL_GRANT_TYPES.map(g => (
+                      <label key={g.id} className={cn(
+                        'flex items-center gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors',
+                        grantTypes.includes(g.id) ? 'bg-brand-violet/10' : 'hover:bg-surface-2'
+                      )}>
+                        <input
+                          type="checkbox"
+                          checked={grantTypes.includes(g.id)}
+                          onChange={() => toggleGrantType(g.id)}
+                          data-testid={`grant-${g.id}`}
+                          className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                        />
+                        <span className="text-xs text-text-primary">{g.label}</span>
+                      </label>
                     ))}
                   </div>
-                  <button type="button" onClick={addRedirectUri} className="mt-2 text-xs text-brand-violet hover:text-brand-blue font-medium">+ Add another URI</button>
-                  {formErrors.redirect_uris && <p className="mt-1 text-xs text-semantic-error">{formErrors.redirect_uris}</p>}
+                  {formErrors.grant_types && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.grant_types}</p>}
                 </div>
-              )}
+              </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isConfidential ? requirePkce : true}
-                    onChange={e => setRequirePkce(e.target.checked)}
-                    disabled={!isConfidential}
-                    className="h-4 w-4 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20 disabled:opacity-50"
-                  />
-                  <span className={`text-xs ${!isConfidential ? 'text-text-muted' : 'text-text-primary'}`}>
-                    Require PKCE
-                    {!isConfidential && <span className="ml-1 text-[10px]">(locked: public client)</span>}
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={requireConsent}
-                    onChange={e => setRequireConsent(e.target.checked)}
-                    className="h-4 w-4 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
-                  />
-                  <span className="text-xs text-text-primary">Require consent screen</span>
-                </label>
+              {/* Right column: Security configuration */}
+              <div className="space-y-4">
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Security</p>
+
+                <div className="rounded-xl border border-surface-2 bg-bg-secondary p-4 space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Client type</label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setIsConfidential(true); setAuthMethod('client_secret_basic') }}
+                        data-testid="client-type-confidential"
+                        className={cn(
+                          'flex-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
+                          isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'
+                        )}
+                      >
+                        Confidential
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setIsConfidential(false); setAuthMethod('none'); setRequirePkce(true) }}
+                        data-testid="client-type-public"
+                        className={cn(
+                          'flex-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
+                          !isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'
+                        )}
+                      >
+                        Public
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[10px] text-text-muted">
+                      {isConfidential ? 'Has a client secret. Server-side apps.' : 'No secret. SPAs / mobile. PKCE required.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Auth method</label>
+                    <select
+                      value={authMethod}
+                      onChange={e => setAuthMethod(e.target.value as AuthMethod)}
+                      disabled={!isConfidential}
+                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-[11px] text-text-primary focus:border-brand-violet focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="client_secret_basic">client_secret_basic</option>
+                      <option value="client_secret_post">client_secret_post</option>
+                      {!isConfidential && <option value="none">none (public)</option>}
+                    </select>
+                  </div>
+
+                  {showRedirectUris && (
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Redirect URIs <span className="text-semantic-error">*</span></label>
+                      <div className="space-y-1.5">
+                        {redirectUris.map((uri, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/cb${redirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                            {redirectUris.length > 1 && <button type="button" onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={12} /></button>}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={addRedirectUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
+                      {formErrors.redirect_uris && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.redirect_uris}</p>}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 pt-1 border-t border-surface-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isConfidential ? requirePkce : true}
+                        onChange={e => setRequirePkce(e.target.checked)}
+                        disabled={!isConfidential}
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20 disabled:opacity-50"
+                      />
+                      <span className={cn('text-[11px]', !isConfidential && 'text-text-muted')}>
+                        Require PKCE
+                        {!isConfidential && <span className="ml-1 text-[10px]">(required)</span>}
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={requireConsent}
+                        onChange={e => setRequireConsent(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                      />
+                      <span className="text-[11px] text-text-primary">Require consent screen</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Advanced (collapsible) */}
-            <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="flex w-full items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-secondary transition-colors">
+            <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="flex w-full items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-secondary transition-colors mb-5">
               {showAdvanced ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              Advanced settings (branding, scopes, token lifetimes)
+              Advanced: branding, scopes, token lifetimes
             </button>
 
             {showAdvanced && (
-              <div className="space-y-4 rounded-xl border border-surface-2 bg-bg-secondary p-4">
+              <div className="space-y-4 rounded-xl border border-surface-2 bg-bg-secondary p-4 mb-5">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Allowed scopes (comma-separated)</label>
-                  <input value={allowedScopes} onChange={e => setAllowedScopes(e.target.value)} placeholder="openid, profile, email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
-                  <p className="mt-1 text-[10px] text-text-muted">Permissions the client is allowed to request.</p>
+                  <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Allowed scopes (space-separated)</label>
+                  <input value={allowedScopes} onChange={e => setAllowedScopes(e.target.value)} placeholder="openid profile email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Homepage URI</label>
-                    <input value={homepageUri} onChange={e => setHomepageUri(e.target.value)} placeholder="https://app.example.com" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Homepage URI</label>
+                    <input value={homepageUri} onChange={e => setHomepageUri(e.target.value)} placeholder="https://app.example.com" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Logo URI</label>
-                    <input value={logoUri} onChange={e => setLogoUri(e.target.value)} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URI</label>
+                    <input value={logoUri} onChange={e => setLogoUri(e.target.value)} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Terms of service URI</label>
-                    <input value={termsUri} onChange={e => setTermsUri(e.target.value)} placeholder="https://app.example.com/tos" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Terms URI</label>
+                    <input value={termsUri} onChange={e => setTermsUri(e.target.value)} placeholder="https://app.example.com/tos" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Privacy policy URI</label>
-                    <input value={privacyUri} onChange={e => setPrivacyUri(e.target.value)} placeholder="https://app.example.com/privacy" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Privacy URI</label>
+                    <input value={privacyUri} onChange={e => setPrivacyUri(e.target.value)} placeholder="https://app.example.com/privacy" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-surface-2">
+                <div className="pt-3 border-t border-surface-2">
+                  <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Custom CSS</label>
+                  <textarea
+                    value={customCss}
+                    onChange={e => setCustomCss(e.target.value)}
+                    placeholder={`.authglow-consent {\n  --bg-color: #ffffff;\n  --text-color: #1a1a2e;\n}\n.authglow-consent .btn-approve {\n  background: #6366f1;\n  border-radius: 8px;\n}`}
+                    rows={5}
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y"
+                  />
+                  <p className="mt-1 text-[10px] text-text-muted">Override consent screen styles. Uses CSS custom properties and scoped selectors.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-surface-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Access token lifetime (seconds)</label>
-                    <input type="number" min={300} max={86400} value={accessTokenLifetime} onChange={e => setAccessTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
-                    <p className="mt-1 text-[10px] text-text-muted">300–86400 (5 min – 24 hours)</p>
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Access token lifetime (s)</label>
+                    <input type="number" min={300} max={86400} value={accessTokenLifetime} onChange={e => setAccessTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                    <p className="mt-1 text-[10px] text-text-muted">5 min – 24 hours</p>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Refresh token lifetime (seconds)</label>
-                    <input type="number" min={3600} max={7776000} value={refreshTokenLifetime} onChange={e => setRefreshTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
-                    <p className="mt-1 text-[10px] text-text-muted">3600–7776000 (1 hour – 90 days)</p>
+                    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Refresh token lifetime (s)</label>
+                    <input type="number" min={3600} max={7776000} value={refreshTokenLifetime} onChange={e => setRefreshTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                    <p className="mt-1 text-[10px] text-text-muted">1 hour – 90 days</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="flex gap-3 pt-1">
+            <div className="flex gap-3">
               <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
               <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

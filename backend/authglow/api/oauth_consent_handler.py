@@ -5,11 +5,42 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from authglow.core.rate_limit import limiter
 from authglow.services.audit import AuditService
 from authglow.services.oauth2 import OAuth2Service
+from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.session import SessionService
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
+
+SCOPE_DESCRIPTIONS = {
+    "openid": "Verify your identity",
+    "profile": "Access your profile information (name, picture)",
+    "email": "Access your email address",
+    "offline_access": "Allow offline access (refresh tokens)",
+    "read": "Read access to your data",
+    "write": "Write access to your data",
+}
+
+
+@router.get("/api/oauth2/authorize-info")
+async def get_authorize_info(
+    client_id: str,
+    client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
+):
+    """Return public client info for the OAuth authorize page."""
+    client = await client_storage.get_client(client_id)
+    if not client or not client.is_active:
+        raise HTTPException(status_code=400, detail="Invalid client_id")
+
+    return {
+        "client_name": client.client_name,
+        "client_description": client.description,
+        "client_logo_uri": client.logo_uri,
+        "client_homepage_uri": client.homepage_uri,
+        "client_terms_uri": client.terms_uri,
+        "client_privacy_uri": client.privacy_uri,
+        "custom_css": client.custom_css,
+    }
 
 
 @router.get("/api/oauth2/consent/check")
@@ -18,6 +49,7 @@ async def check_consent_auto(
     session_service: SessionService = Depends(lambda: SessionService()),
     consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
     user_storage: UserStorage = Depends(lambda: UserStorage()),
+    client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
 ):
     """Check if user has already consented and auto-create auth code if so."""
     session = await session_service.get_consent_session(session_token)
@@ -58,7 +90,27 @@ async def check_consent_auto(
             "redirect_url": redirect_url,
         }
 
-    return {"consent_required": True, "session_token": session_token}
+    oauth2_service = OAuth2Service()
+    client = await client_storage.get_client(session["client_id"])
+
+    request_scopes = [
+        {"name": s, "description": SCOPE_DESCRIPTIONS.get(s, f"Access to {s}")}
+        for s in requested_scopes
+    ]
+
+    return {
+        "consent_required": True,
+        "session_token": session_token,
+        "client_name": client.client_name if client else session["client_id"],
+        "client_id": session["client_id"],
+        "client_description": client.description if client else None,
+        "client_logo_uri": client.logo_uri if client else None,
+        "client_homepage_uri": client.homepage_uri if client else None,
+        "client_terms_uri": client.terms_uri if client else None,
+        "client_privacy_uri": client.privacy_uri if client else None,
+        "custom_css": client.custom_css if client else None,
+        "scopes": request_scopes,
+    }
 
 
 @router.post("/oauth2/consent")
