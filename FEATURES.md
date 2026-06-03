@@ -1012,4 +1012,60 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | Core | — | `services/storage.py`, `services/audit.py`, `services/csrf.py`, `services/email/`, `services/security_notifications.py` | — |
 | Config | — | `core/config.py`, `core/crypto.py`, `core/cache.py`, `core/rate_limit.py`, `core/concurrency.py`, `core/password.py`, `core/permissions.py`, `core/datetime.py`, `core/async_io.py` | — |
 | Middleware | — | `middleware/security_headers.py`, `middleware/request_body_size.py`, `middleware/https_enforcement.py` | — |
+| Federation | `api/federation.py` | `services/federation.py`, `services/federation_storage.py` | `models/federation.py` |
+
+---
+
+## 22. OIDC Federation (External Identity Providers)
+
+AuthGlow can act as an OIDC Relying Party, delegating authentication to external identity providers.
+One infrastructure, any provider — just a configuration entry.
+
+### Federated Login
+- OIDC Discovery: automatic `.well-known/openid-configuration` resolution
+- Authorization Code + PKCE flow toward external IdP
+- ID Token validation: `iss`, `aud`, `exp`, `iat`, `nonce`, signature verification against JWKS
+- UserInfo endpoint fetching and claims mapping
+- Auto-create / auto-link user accounts by external ID or email
+- RP-Initiated Logout propagation (when supported by the IdP)
+- Per-provider toggle: enable/disable from admin UI without deleting configuration
+
+### Supported Providers (natively)
+Any OIDC-compliant provider works out of the box:
+
+| Provider | Type | Notes |
+|---|---|---|
+| **CIE** (Carta d'Identità Elettronica) | OIDC | L1/L2/L3, custom claims (codice_fiscale, NIS) |
+| **SPID** (Sistema Pubblico di Identità Digitale) | OIDC | Multiple IdP levels |
+| **Google** | OIDC | accounts.google.com |
+| **Microsoft / Entra ID** | OIDC | Multi-tenant support |
+| **Apple** | OIDC | Private Email Relay support |
+| **Keycloak** | OIDC | Any realm |
+| **Auth0, Okta** | OIDC | Enterprise IdPs |
+| **GitHub, Facebook** | OAuth2 | Via lightweight adapter |
+
+### CIE-Specific Features
+- `acr_values` for security levels (L1/L2/L3)
+- Custom claims mapping: codice_fiscale, NIS, data_nascita, etc.
+- NFC-based authentication handled transparently by the CIE IdP
+- Full documentation: [docs/CIE.md](docs/CIE.md)
+
+### Admin Management
+- CRUD for external IdP configurations
+- Enable/disable toggle per provider
+- Claims mapping configuration per provider
+- Rate limiting on create/update/delete
+
+### Login UI Integration
+- Federation buttons rendered on:
+  - OAuth2 authorize page (`/oauth2/authorize`)
+  - Standard login page (`/auth/login`)
+- "Or continue with" section below the password form
+- Provider icons and labels dynamically loaded from enabled providers
+
+### Playground
+- Federation flow available in the OAuth Playground for testing
+- Simulate redirect to external IdP with configurable parameters
+
+> For detailed CIE-specific setup, see [docs/CIE.md](docs/CIE.md).
 | Email | — | `services/email/base.py`, `console.py`, `factory.py`, `file_storage.py` | `models/email.py` |

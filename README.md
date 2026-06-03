@@ -175,6 +175,7 @@ Change storage backend at any time — your data stays the same, just a differen
 - [FEATURES.md](FEATURES.md) — Complete feature catalog
 - [DESIGN.md](DESIGN.md) — Design system and visual language
 - [AGENTS.md](AGENTS.md) — Developer guide for AI coding agents
+- [docs/CIE.md](docs/CIE.md) — Italian Electronic Identity Card integration guide
 - [API Docs](http://localhost:8000/docs) — Auto-generated OpenAPI (Swagger UI at `/docs`)
 
 ---

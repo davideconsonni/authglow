@@ -54,6 +54,9 @@ const AdminPasswordResetsPage = lazy(() =>
 const AdminPlaygroundPage = lazy(() =>
   import('@/pages/admin/AdminPlaygroundPage').then((m) => ({ default: m.AdminPlaygroundPage })),
 )
+const AdminFederationPage = lazy(() =>
+  import('@/pages/admin/AdminFederationPage').then((m) => ({ default: m.AdminFederationPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -113,6 +116,7 @@ function App() {
             <Route path={ROUTES.ADMIN.JWK_KEYS} element={<Suspense fallback={<LazyFallback />}><AdminJwkKeysPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.PLAYGROUND} element={<Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.FEDERATION} element={<Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense>} />
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />

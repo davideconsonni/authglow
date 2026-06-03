@@ -15,6 +15,7 @@ import {
   Play,
   Menu,
   X,
+  Globe,
   type LucideIcon,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
@@ -66,6 +67,7 @@ export function Sidebar() {
         { label: 'JWK Keys', icon: Shield, to: ROUTES.ADMIN.JWK_KEYS },
         { label: 'Password Resets', icon: Lock, to: ROUTES.ADMIN.PASSWORD_RESETS },
         { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
+        { label: 'Federation', icon: Globe, to: ROUTES.ADMIN.FEDERATION },
       ],
     })
   }

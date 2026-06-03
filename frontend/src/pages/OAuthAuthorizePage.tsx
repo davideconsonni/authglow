@@ -195,6 +195,53 @@ const NEUTRAL_CSS = `
   color: var(--brand-color);
 }
 @keyframes authglow-spin { to { transform: rotate(360deg); } }
+.authglow-authorize .fed-separator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.authglow-authorize .fed-sep-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+.authglow-authorize .fed-sep-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.authglow-authorize .fed-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.authglow-authorize .fed-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.authglow-authorize .fed-btn:hover {
+  background: var(--bg-subtle);
+  border-color: var(--brand-color);
+}
+.authglow-authorize .fed-btn-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+}
 `
 
 export function OAuthAuthorizePage() {
@@ -206,6 +253,7 @@ export function OAuthAuthorizePage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fedProviders, setFedProviders] = useState<Array<{id: string; label: string; icon_uri?: string | null}>>([])
 
   const clientId = searchParams.get('client_id') || ''
   const redirectUri = searchParams.get('redirect_uri') || ''
@@ -246,6 +294,18 @@ export function OAuthAuthorizePage() {
     fetchClientInfo()
     return () => { cancelled = true }
   }, [clientId, redirectUri, responseType])
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchProviders = async () => {
+      try {
+        const providers = await api.get<Array<{id: string; label: string; icon_uri?: string | null}>>('/api/federation/providers')
+        if (!cancelled) setFedProviders(providers)
+      } catch { /* federation not available — silently skip */ }
+    }
+    fetchProviders()
+    return () => { cancelled = true }
+  }, [])
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -412,7 +472,31 @@ export function OAuthAuthorizePage() {
                 {loading ? <Loader2 size={16} className="login-spin" /> : <LogIn size={16} />}
                 Sign In & Continue
               </button>
+
+              {fedProviders.length > 0 && (
+                <div className="fed-separator">
+                  <span className="fed-sep-line" />
+                  <span className="fed-sep-text">or continue with</span>
+                  <span className="fed-sep-line" />
+                </div>
+              )}
             </form>
+          )}
+
+          {fedProviders.length > 0 && (
+            <div className="fed-buttons">
+              {fedProviders.map((p) => (
+                <a
+                  key={p.id}
+                  href={`/api/federation/login/${p.id}?redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname + window.location.search)}`}
+                  className="fed-btn"
+                  data-testid={`fed-provider-${p.id}`}
+                >
+                  {p.icon_uri ? <img src={p.icon_uri} alt="" className="fed-btn-icon" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} /> : <Shield size={16} />}
+                  {p.label}
+                </a>
+              ))}
+            </div>
           )}
         </div>
       </div>
