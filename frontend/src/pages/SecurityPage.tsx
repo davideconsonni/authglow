@@ -12,8 +12,10 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function SecurityPage() {
+  useDocumentTitle('Security')
   const { user, fetchCurrentUser } = useAuth()
   const [backupCodes, setBackupCodes] = useState<string[]>([])
   const [showMfaSetup, setShowMfaSetup] = useState(false)

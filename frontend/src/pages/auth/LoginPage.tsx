@@ -3,9 +3,11 @@ import { AuthLayout } from '@/components/auth/AuthLayout'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
 import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { ROUTES } from '@/lib/constants'
 
 export function LoginPage() {
+  useDocumentTitle('Sign In')
   return (
     <AuthLayout
       title="Welcome back"

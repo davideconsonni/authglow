@@ -3,8 +3,10 @@ import { Loader2, ShieldCheck } from 'lucide-react'
 import { api } from '@/lib/api'
 import { ROUTES } from '@/lib/constants'
 import { SetupWizard } from '@/components/setup/SetupWizard'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function SetupPage() {
+  useDocumentTitle('Setup')
   const [status, setStatus] = useState<'loading' | 'needed' | 'done'>('loading')
 
   useEffect(() => {

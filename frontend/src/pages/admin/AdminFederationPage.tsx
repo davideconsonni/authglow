@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface FederationProvider {
   id: string
@@ -51,6 +52,7 @@ function TextInput(props: { value: string; onChange: (v: string) => void; placeh
 }
 
 export function AdminFederationPage() {
+  useDocumentTitle('Federation')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FederationProvider>({ ...emptyForm })

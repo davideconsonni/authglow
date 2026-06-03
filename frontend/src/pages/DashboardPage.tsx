@@ -3,6 +3,7 @@ import { Shield, Monitor, Key, Users, CheckCircle2, Mail } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
 import { ROUTES } from '@/lib/constants'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Section } from '@/components/shared/Section'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
@@ -31,6 +32,7 @@ interface AdminStats {
 }
 
 export function DashboardPage() {
+  useDocumentTitle('Dashboard')
   const { user } = useAuth()
   const navigate = useNavigate()
   const isAdmin = user?.scopes?.includes('admin')

@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface Session {
   id: string
@@ -14,6 +15,7 @@ interface Session {
 }
 
 export function SessionsPage() {
+  useDocumentTitle('Sessions')
   const [revokingAll, setRevokingAll] = useState(false)
   const [error, setError] = useState('')
 

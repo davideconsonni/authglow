@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface ConsentData {
   consent_id: string
@@ -17,6 +18,7 @@ interface ConsentData {
 }
 
 export function AdminConsentsPage() {
+  useDocumentTitle('Consents')
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -74,8 +76,8 @@ export function AdminConsentsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -84,14 +86,14 @@ export function AdminConsentsPage() {
                 <tr key={c.consent_id} className={`hover:bg-surface-2/50 ${c.revoked ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-3 text-sm text-text-primary">{c.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{c.client_name}</td>
-                  <td className="px-6 py-3">
+                  <td className="hidden md:table-cell px-6 py-3">
                     <div className="flex flex-wrap gap-1">
                       {c.scopes?.map((s) => (
                         <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">{s}</span>
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(c.granted_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(c.granted_at)}</td>
                   <td className="px-6 py-3">
                     {!c.revoked && (
                       <button onClick={() => setRevokeId(c.consent_id)} className="text-text-muted hover:text-semantic-error" title="Revoke consent">

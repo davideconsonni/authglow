@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface ResetToken {
   id: string
@@ -24,6 +25,7 @@ interface ResetStats {
 }
 
 export function AdminPasswordResetsPage() {
+  useDocumentTitle('Password Resets')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [revokeEmail, setRevokeEmail] = useState('')
   const [cleaning, setCleaning] = useState(false)
@@ -121,8 +123,8 @@ export function AdminPasswordResetsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Token</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -143,8 +145,8 @@ export function AdminPasswordResetsPage() {
                       {t.is_used ? 'Used' : new Date(t.expires_at) < new Date() ? 'Expired' : 'Active'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(t.created_at)}</td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(t.expires_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(t.created_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(t.expires_at)}</td>
                   <td className="px-6 py-3">
                     <button onClick={() => setDeleteId(t.id)} className="text-text-muted hover:text-semantic-error" title="Delete token"><Trash2 size={14} /></button>
                   </td>

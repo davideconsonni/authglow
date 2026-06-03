@@ -19,6 +19,8 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { SessionsPage } from '@/pages/SessionsPage'
 import { ApiKeysPage } from '@/pages/ApiKeysPage'
 import { SetupPage } from '@/pages/SetupPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
+import { ToastContainer } from '@/components/shared/Toast'
 
 const SecurityPage = lazy(() =>
   import('@/pages/SecurityPage').then((m) => ({ default: m.SecurityPage })),
@@ -120,8 +122,9 @@ function App() {
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
-          <Route path="*" element={<div>Not Found</div>} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        <ToastContainer />
         </ThemeInitializer>
       </BrowserRouter>
     </QueryClientProvider>

@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
 import { useTheme, type Theme } from '@/hooks/useTheme'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -105,6 +106,7 @@ interface UserProfile {
 }
 
 export function ProfilePage() {
+  useDocumentTitle('Profile')
   const { user, fetchCurrentUser } = useAuth()
   const navigate = useNavigate()
   const [success, setSuccess] = useState(false)

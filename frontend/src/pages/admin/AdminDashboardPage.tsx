@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, Shield, Loader2 } from 'lucide-react'
 import { useApiQuery } from '@/hooks/useApi'
 import { ROUTES } from '@/lib/constants'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface AdminStats {
   total_users: number
@@ -15,6 +16,7 @@ interface AdminStats {
 }
 
 export function AdminDashboardPage() {
+  useDocumentTitle('Admin Dashboard')
   const navigate = useNavigate()
   const { data, isLoading } = useApiQuery<AdminStats>(['admin-stats-v2'], '/api/admin/stats')
 

@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface ApiKeyData {
   key_id: string
@@ -39,6 +40,7 @@ const initialForm: CreateForm = {
 }
 
 export function AdminApiKeysPage() {
+  useDocumentTitle('Admin API Keys')
   const [search, setSearch] = useState('')
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
@@ -254,9 +256,9 @@ export function AdminApiKeysPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -268,7 +270,7 @@ export function AdminApiKeysPage() {
                   <td className="px-6 py-3">
                     <code className="text-xs font-mono text-text-secondary">{k.key_prefix}</code>
                   </td>
-                  <td className="px-6 py-3">
+                  <td className="hidden md:table-cell px-6 py-3">
                     <div className="flex flex-wrap gap-1">
                       {k.scopes?.map((s, si) => (
                         <span
@@ -280,8 +282,8 @@ export function AdminApiKeysPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
-                  <td className="px-6 py-3 text-sm text-text-muted">
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">
                     {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}
                   </td>
                   <td className="px-6 py-3">

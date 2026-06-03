@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface JwkKey {
   kid: string
@@ -15,6 +16,7 @@ interface JwkKey {
 }
 
 export function AdminJwkKeysPage() {
+  useDocumentTitle('JWK Keys')
   const [revokeKid, setRevokeKid] = useState<string | null>(null)
   const [rotating, setRotating] = useState(false)
   const [error, setError] = useState('')
@@ -83,9 +85,9 @@ export function AdminJwkKeysPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Key ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Algorithm</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Key Size</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Algorithm</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Key Size</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
@@ -102,9 +104,9 @@ export function AdminJwkKeysPage() {
                       {k.status}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-secondary">{k.algorithm}</td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{k.key_size} bit</td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-secondary">{k.algorithm}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{k.key_size} bit</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
                   <td className="px-6 py-3">
                     {k.status !== 'revoked' && k.status !== 'active' && (
                       <button

@@ -1,6 +1,7 @@
 import { usePlaygroundStore, type PlaygroundFlow } from '@/stores/playgroundStore'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { FlowSidebar } from '@/components/playground/FlowSidebar'
+import { FlowSidebar, FLOWS } from '@/components/playground/FlowSidebar'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { AuthorizationCodeFlow } from '@/components/playground/flows/AuthorizationCodeFlow'
 import { ClientCredentialsFlow } from '@/components/playground/flows/ClientCredentialsFlow'
 import { PkceFlow } from '@/components/playground/flows/PkceFlow'
@@ -39,6 +40,7 @@ const FLOW_DESCRIPTIONS: Record<PlaygroundFlow, string> = {
 }
 
 export function AdminPlaygroundPage() {
+  useDocumentTitle('API Playground')
   const { currentFlow, setCurrentFlow } = usePlaygroundStore()
 
   const title = FLOW_TITLES[currentFlow]
@@ -63,10 +65,31 @@ export function AdminPlaygroundPage() {
     <div>
       <PageHeader title="API Playground" description="Step-by-step OAuth2 / OIDC flow debugger. Tokens are automatically shared between flows." />
 
-      <div className="flex rounded-2xl border border-surface-2 overflow-hidden">
-        <FlowSidebar currentFlow={currentFlow} onSelect={setCurrentFlow} />
+      <div className="flex flex-col md:flex-row rounded-2xl border border-surface-2 overflow-hidden">
+        <div className="hidden md:block">
+          <FlowSidebar currentFlow={currentFlow} onSelect={setCurrentFlow} />
+        </div>
 
-        <div className="flex-1 p-6 min-w-0">
+        <div className="md:hidden border-b border-surface-2 bg-surface-1">
+          <div className="p-3">
+            <label className="mb-1.5 block text-xs font-semibold tracking-wider text-text-muted uppercase">
+              Select Flow
+            </label>
+            <select
+              value={currentFlow}
+              onChange={(e) => setCurrentFlow(e.target.value as PlaygroundFlow)}
+              className="w-full rounded-xl border border-surface-2 bg-surface-2 px-3 py-2.5 text-sm text-text-primary"
+            >
+              {FLOWS.map((flow) => (
+                <option key={flow.id} value={flow.id}>
+                  {flow.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 sm:p-6 min-w-0">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
             <p className="text-xs text-text-muted mt-0.5">{desc}</p>

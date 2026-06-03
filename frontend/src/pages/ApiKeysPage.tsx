@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface ApiKeyData {
   key_id: string
@@ -18,6 +19,7 @@ interface ApiKeyData {
 }
 
 export function ApiKeysPage() {
+  useDocumentTitle('API Keys')
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newScopes, setNewScopes] = useState('read')

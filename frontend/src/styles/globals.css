@@ -121,6 +121,17 @@
     @apply bg-bg-primary text-text-primary antialiased;
     font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
   }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-violet ring-offset-2 ring-offset-bg-primary;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible {
+    @apply ring-2 ring-brand-violet ring-offset-2 ring-offset-bg-primary;
+  }
 }
 
 @layer components {

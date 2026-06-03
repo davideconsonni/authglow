@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
@@ -17,6 +18,7 @@ function UserAvatar({ first, last }: { first?: string; last?: string }) {
 }
 
 export function AdminUsersPage() {
+  useDocumentTitle('Admin Users')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -94,25 +96,25 @@ export function AdminUsersPage() {
 
         <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
           <table className="w-full"><thead className="border-b border-surface-2"><tr>
-            <th className="px-4 py-3 w-10"><button onClick={toggleSelectAll} className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.size === users.length && users.length > 0 ? '✓' : '☐'}</button></th>
+            <th className="px-4 py-3 w-10"><button onClick={toggleSelectAll} data-testid="bulk-select-all" className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.size === users.length && users.length > 0 ? '✓' : '☐'}</button></th>
             <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Email</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">MFA</th>
+            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">MFA</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Active</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Logins</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-            <th className="px-6 py-3" />
+            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Logins</th>
+            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+            <th className="hidden md:table-cell px-6 py-3" />
           </tr></thead>
           <tbody className="divide-y divide-surface-2">
             {users.map(u => <tr key={u.id} className={`hover:bg-surface-2/50 cursor-pointer ${selected.has(u.id) ? 'bg-brand-violet/5' : ''}`} onClick={() => setDetailUserId(u.id)} data-testid="user-table-row">
               <td className="px-4 py-3" onClick={e => e.stopPropagation()}><button onClick={() => toggleSelect(u.id)} data-testid="user-select-checkbox" className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.has(u.id) ? '✓' : '☐'}</button></td>
               <td className="px-6 py-3"><div className="flex items-center gap-3"><UserAvatar first={u.first_name} last={u.last_name} /><span className="text-sm font-medium text-text-primary">{u.first_name} {u.last_name}</span></div></td>
               <td className="px-6 py-3 text-sm text-text-secondary">{u.email}</td>
-              <td className="px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${u.mfa_enabled ? 'bg-semantic-success/10 text-semantic-success' : 'bg-surface-2 text-text-muted'}`}>{u.mfa_enabled ? 'Enabled' : 'Disabled'}</span></td>
-              <td className="px-6 py-3" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
-              <td className="px-6 py-3 text-sm text-text-muted">{u.login_count ?? 0}</td>
-              <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
-              <td className="px-6 py-3" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button><button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button></div></td>
+              <td className="hidden md:table-cell px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${u.mfa_enabled ? 'bg-semantic-success/10 text-semantic-success' : 'bg-surface-2 text-text-muted'}`}>{u.mfa_enabled ? 'Enabled' : 'Disabled'}</span></td>
+              <td className="px-6 py-3" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
+              <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{u.login_count ?? 0}</td>
+              <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
+              <td className="hidden md:table-cell px-6 py-3" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button><button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button></div></td>
             </tr>)}
           </tbody></table>
         </div>
@@ -145,7 +147,7 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-surface-1 border-l border-surface-2 overflow-y-auto p-6 space-y-5 shadow-glow-violet">
+      <div className="relative z-10 w-full max-w-md bg-surface-1 border-l border-surface-2 overflow-y-auto p-6 space-y-5 shadow-glow-violet" data-testid="user-detail-drawer">
         <div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-text-primary">User Detail</h3><button onClick={onClose} className="rounded-lg p-1 text-text-muted hover:text-text-secondary">✕</button></div>
 
         {isLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>

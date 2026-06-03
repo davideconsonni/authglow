@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface OAuthClient {
   id?: string
@@ -121,6 +122,7 @@ function TextInput(props: {
 }
 
 export function AdminOAuthClientsPage() {
+  useDocumentTitle('OAuth Clients')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
 
@@ -355,9 +357,9 @@ export function AdminOAuthClientsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Redirect URIs</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Grants</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Type</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Redirect URIs</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Grants</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Status</th>
                 <th className="px-6 py-3" />
               </tr>
@@ -372,7 +374,7 @@ export function AdminOAuthClientsPage() {
                       <CopyButton text={c.client_id} />
                     </div>
                   </td>
-                  <td className="px-6 py-3">
+                  <td className="hidden md:table-cell px-6 py-3">
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
                       {(c.redirect_uris || []).slice(0, 2).map(u => (
                         <span key={u} className="truncate rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] font-mono text-text-secondary" title={u}>
@@ -382,8 +384,8 @@ export function AdminOAuthClientsPage() {
                       {(c.redirect_uris || []).length > 2 && <span className="text-[10px] text-text-muted">+{c.redirect_uris.length - 2} more</span>}
                     </div>
                   </td>
-                  <td className="px-6 py-3"><div className="flex flex-wrap gap-1">{clientGrantTypes(c).map(g => <span key={g} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{g}</span>)}</div></td>
-                  <td className="px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
+                  <td className="hidden md:table-cell px-6 py-3"><div className="flex flex-wrap gap-1">{clientGrantTypes(c).map(g => <span key={g} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{g}</span>)}</div></td>
+                  <td className="hidden md:table-cell px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
                   <td className="px-6 py-3">
                     <button onClick={() => handleToggle(c.client_id, c.is_active)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${c.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${c.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
@@ -396,7 +398,7 @@ export function AdminOAuthClientsPage() {
                         <button onClick={() => setPreviewClient(c)} className="text-text-muted hover:text-text-secondary" title="Preview consent screen"><Eye size={14} /></button>
                       )}
                       <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
-                      <button onClick={() => handleRotate(c.client_id)} className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
+                      <button onClick={() => handleRotate(c.client_id)} data-testid="rotate-secret-btn" className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
                       <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>

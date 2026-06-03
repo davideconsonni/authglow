@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface SessionData {
   id: string
@@ -16,6 +17,7 @@ interface SessionData {
 }
 
 export function AdminSessionsPage() {
+  useDocumentTitle('Admin Sessions')
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [error, setError] = useState('')
@@ -83,8 +85,8 @@ export function AdminSessionsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">IP</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">IP</th>
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
@@ -93,10 +95,10 @@ export function AdminSessionsPage() {
                 <tr key={s.id} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3 text-sm text-text-primary">{s.user_email}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary">{s.client}</td>
-                  <td className="px-6 py-3">
+                  <td className="hidden md:table-cell px-6 py-3">
                     <code className="text-xs text-text-muted">{s.ip_address}</code>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-muted">{formatDateTime(s.created_at)}</td>
+                  <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(s.created_at)}</td>
                   <td className="px-6 py-3">
                     <button
                       onClick={() => setRevokeId(s.id)}

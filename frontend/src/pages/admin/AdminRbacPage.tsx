@@ -5,6 +5,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface Permission {
   id: string
@@ -21,6 +22,7 @@ interface Role {
 }
 
 export function AdminRbacPage() {
+  useDocumentTitle('RBAC')
   const [tab, setTab] = useState<'roles' | 'permissions'>('roles')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -196,8 +198,8 @@ function RolesTab({
             <thead className="border-b border-surface-2">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Description</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Permissions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase hidden md:table-cell">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase hidden md:table-cell">Permissions</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -214,8 +216,8 @@ function RolesTab({
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-sm text-text-secondary">{r.description || '-'}</td>
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{r.description || '-'}</td>
+                  <td className="px-6 py-3 hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {r.permissions?.length > 0 ? (
                         r.permissions.map((p, i) => (
@@ -432,7 +434,7 @@ function PermissionsTab({
             <thead className="border-b border-surface-2">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase hidden md:table-cell">Description</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -440,7 +442,7 @@ function PermissionsTab({
               {permList.map((p, i) => (
                 <tr key={p.id || i} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3 text-sm font-medium text-text-primary">{p.name}</td>
-                  <td className="px-6 py-3 text-sm text-text-secondary">{p.description || '-'}</td>
+                  <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{p.description || '-'}</td>
                   <td className="px-6 py-3">
                     <button
                       onClick={() => setDeleteId(p.id)}
@@ -652,8 +654,8 @@ function UserRoleAssignments({
                 <thead className="border-b border-surface-2">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase hidden md:table-cell">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase hidden md:table-cell">Expires</th>
                     <th className="px-6 py-3" />
                   </tr>
                 </thead>
@@ -661,8 +663,8 @@ function UserRoleAssignments({
                   {userRoles.map((ur: any, i: number) => (
                     <tr key={ur.id || ur.role_id || i}>
                       <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email || userEmail}</td>
-                      <td className="px-6 py-3 text-sm text-text-secondary">{ur.role_name || ur.role_id || '-'}</td>
-                      <td className="px-6 py-3 text-sm text-text-muted">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
+                      <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{ur.role_name || ur.role_id || '-'}</td>
+                      <td className="px-6 py-3 text-sm text-text-muted hidden md:table-cell">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
                       <td className="px-6 py-3">
                         <button onClick={() => setRevokeId(ur.role_id)} className="text-text-muted hover:text-semantic-error" title="Revoke"><Trash2 size={14} /></button>
                       </td>
