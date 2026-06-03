@@ -31,6 +31,7 @@
     --color-surface-1: #121A32;
     --color-surface-2: #182345;
     --color-surface-3: #202D56;
+    --color-nested-panel: #1B1740;
     --color-brand-violet: #8B5CF6;
     --color-brand-magenta: #D946EF;
     --color-brand-blue: #60A5FA;
@@ -58,32 +59,33 @@
   }
 
   .light {
-    --background: 220 20% 97%;
-    --foreground: 224 10% 12%;
-    --card: 220 20% 99%;
-    --card-foreground: 224 10% 12%;
-    --popover: 220 20% 99%;
-    --popover-foreground: 224 10% 12%;
-    --primary: 260 75% 48%;
+    --background: 220 27% 96%;
+    --foreground: 225 13% 14%;
+    --card: 240 20% 99%;
+    --card-foreground: 225 13% 14%;
+    --popover: 240 20% 99%;
+    --popover-foreground: 225 13% 14%;
+    --primary: 263 67% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 93%;
-    --secondary-foreground: 224 10% 28%;
-    --muted: 220 15% 93%;
-    --muted-foreground: 220 10% 48%;
-    --accent: 260 75% 48%;
+    --secondary: 220 22% 93%;
+    --secondary-foreground: 225 13% 14%;
+    --muted: 220 22% 93%;
+    --muted-foreground: 225 8% 46%;
+    --accent: 263 67% 45%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 50%;
+    --destructive: 0 73% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 224 12% 88%;
-    --input: 224 12% 88%;
-    --ring: 260 75% 48%;
+    --border: 220 16% 85%;
+    --input: 220 18% 89%;
+    --ring: 263 67% 45%;
 
-    --color-bg-primary: #F6F7F9;
-    --color-bg-secondary: #EDEFF3;
-    --color-bg-tertiary: #E2E5EB;
-    --color-surface-1: #FDFDFE;
-    --color-surface-2: #EBEDF2;
-    --color-surface-3: #DEE1E8;
+    --color-bg-primary: #F1F3F8;
+    --color-bg-secondary: #E7EAF1;
+    --color-bg-tertiary: #DDE1EB;
+    --color-surface-1: #FCFCFD;
+    --color-surface-2: #EDEFF5;
+    --color-surface-3: #DFE3EC;
+    --color-nested-panel: #F4F1FB;
     --color-brand-violet: #6D28D9;
     --color-brand-magenta: #A21CAF;
     --color-brand-blue: #2563EB;
@@ -91,20 +93,20 @@
     --color-semantic-warning: #C27803;
     --color-semantic-error: #DC2626;
     --color-semantic-info: #0369A1;
-    --color-text-primary: #1B1D23;
+    --color-text-primary: #1E2028;
     --color-text-secondary: #545865;
-    --color-text-muted: #8B8F9A;
+    --color-text-muted: #71747E;
 
-    --color-glass-bg: rgba(255, 255, 255, 0.75);
-    --color-glass-border: rgba(220, 224, 233, 0.5);
-    --color-glass-subtle-bg: rgba(255, 255, 255, 0.5);
-    --color-glass-subtle-border: rgba(220, 224, 233, 0.35);
+    --color-glass-bg: rgba(252, 252, 253, 0.78);
+    --color-glass-border: rgba(212, 218, 230, 0.6);
+    --color-glass-subtle-bg: rgba(252, 252, 253, 0.5);
+    --color-glass-subtle-border: rgba(212, 218, 230, 0.35);
     --color-scrollbar-thumb: rgba(160, 165, 178, 0.4);
     --color-scrollbar-thumb-hover: rgba(160, 165, 178, 0.6);
 
-    --glow-violet: 0 0 30px -8px rgba(109, 40, 217, 0.18), 0 0 60px -16px rgba(109, 40, 217, 0.1);
-    --glow-magenta: 0 0 30px -8px rgba(162, 28, 175, 0.18), 0 0 60px -16px rgba(162, 28, 175, 0.1);
-    --glow-blue: 0 0 30px -8px rgba(37, 99, 235, 0.18), 0 0 60px -16px rgba(37, 99, 235, 0.1);
+    --glow-violet: 0 0 24px -8px rgba(109, 40, 217, 0.16), 0 0 50px -16px rgba(109, 40, 217, 0.08);
+    --glow-magenta: 0 0 24px -8px rgba(162, 28, 175, 0.16), 0 0 50px -16px rgba(162, 28, 175, 0.08);
+    --glow-blue: 0 0 24px -8px rgba(37, 99, 235, 0.16), 0 0 50px -16px rgba(37, 99, 235, 0.08);
     --gradient-cta: linear-gradient(135deg, #6D28D9 0%, #A21CAF 100%);
     --gradient-secondary: linear-gradient(135deg, #2563EB 0%, #6D28D9 100%);
     --gradient-ai: linear-gradient(135deg, #0891B2 0%, #6D28D9 50%, #A21CAF 100%);

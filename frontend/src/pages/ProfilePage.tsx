@@ -52,7 +52,7 @@ function PreferencesSection() {
             <select
               value={theme}
               onChange={handleThemeChange}
-              className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
             >
               <option value="auto">Auto (system)</option>
               <option value="dark">Dark</option>
@@ -64,7 +64,7 @@ function PreferencesSection() {
             <select
               value={language}
               onChange={e => setLanguage(e.target.value)}
-              className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
             >
               <option value="en">English</option>
               <option value="it">Italiano</option>
@@ -226,11 +226,11 @@ export function ProfilePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-text-muted mb-1.5">First name</label>
-                    <input {...register('first_name')} className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
+                    <input {...register('first_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-text-muted mb-1.5">Last name</label>
-                    <input {...register('last_name')} className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
+                    <input {...register('last_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
                   </div>
                 </div>
                 <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">

@@ -25,6 +25,7 @@ export default {
           2: 'var(--color-surface-2)',
           3: 'var(--color-surface-3)',
         },
+        'nested-panel': 'var(--color-nested-panel)',
         brand: {
           violet: 'var(--color-brand-violet)',
           magenta: 'var(--color-brand-magenta)',

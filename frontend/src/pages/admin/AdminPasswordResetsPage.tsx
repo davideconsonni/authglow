@@ -96,7 +96,7 @@ export function AdminPasswordResetsPage() {
             value={revokeEmail}
             onChange={e => setRevokeEmail(e.target.value)}
             placeholder="user@example.com"
-            className="flex-1 rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+            className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
           />
           <button onClick={handleRevokeForUser} disabled={!revokeEmail.trim()} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">
             <Ban size={14} /> Revoke

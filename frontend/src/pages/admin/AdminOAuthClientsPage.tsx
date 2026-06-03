@@ -115,7 +115,7 @@ function TextInput(props: {
       placeholder={props.placeholder}
       data-testid={props['data-testid']}
       autoFocus={props.autoFocus}
-      className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+      className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
     />
   )
 }
@@ -513,7 +513,7 @@ export function AdminOAuthClientsPage() {
 
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-text-secondary">Description</label>
-                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 resize-y" />
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 resize-y" />
                 </div>
 
                 <div>
@@ -543,7 +543,7 @@ export function AdminOAuthClientsPage() {
               <div className="space-y-4">
                 <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Security</p>
 
-                <div className="rounded-xl border border-surface-2 bg-bg-secondary p-4 space-y-4">
+                <div className="rounded-xl border border-surface-2 bg-nested-panel p-4 space-y-4">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Client type</label>
                     <div className="flex gap-1.5">
@@ -640,7 +640,7 @@ export function AdminOAuthClientsPage() {
             </button>
 
             {showAdvanced && (
-              <div className="space-y-4 rounded-xl border border-surface-2 bg-bg-secondary p-4 mb-5">
+              <div className="space-y-4 rounded-xl border border-surface-2 bg-nested-panel p-4 mb-5">
                 <div>
                   <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Allowed scopes (space-separated)</label>
                   <input value={allowedScopes} onChange={e => setAllowedScopes(e.target.value)} placeholder="openid profile email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
