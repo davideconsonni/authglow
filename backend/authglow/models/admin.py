@@ -48,6 +48,7 @@ class AdminUserDetail(BaseModel):
     failed_login_count: int = 0
     password_expired: bool = False
     locked_until: Optional[datetime] = None
+    suspended_until: Optional[datetime] = None
 
     @classmethod
     def from_user(cls, user: "User") -> "AdminUserDetail":
@@ -71,6 +72,7 @@ class AdminUserDetail(BaseModel):
             failed_login_count=user.failed_login_count,
             password_expired=user.password_expired,
             locked_until=user.locked_until,
+            suspended_until=user.suspended_until,
         )
 
 
@@ -105,6 +107,12 @@ class SetPasswordRequest(BaseModel):
 
     password: str = Field(..., min_length=8)
     require_change: bool = False
+
+
+class SuspendRequest(BaseModel):
+    """Temporary user suspension request."""
+
+    duration_hours: int = Field(..., ge=1, le=8760)
 
 
 class BulkUserOperation(BaseModel):

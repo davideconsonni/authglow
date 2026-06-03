@@ -250,6 +250,13 @@ async def authorize_post(
 
     await storage.reset_failed_login_attempts(user.id)
 
+    # Check if account is suspended
+    if user.suspended_until and utcnow() < user.suspended_until:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account suspended until {user.suspended_until.isoformat()}",
+        )
+
     from authglow.services.login_history import LoginHistoryService
 
     login_svc = LoginHistoryService()
@@ -611,6 +618,13 @@ async def login_for_access_token(
     if not user or not verify_password(form_data.password, user.hashed_password):
         await handle_failed_login()
     assert user is not None  # help mypy narrow after NoReturn handler
+
+    # Check if account is suspended
+    if user.suspended_until and utcnow() < user.suspended_until:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account suspended until {user.suspended_until.isoformat()}",
+        )
 
     # Check if account is locked
     if await storage.is_account_locked(user.id):

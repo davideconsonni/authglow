@@ -1,7 +1,7 @@
 """Admin portal API endpoints."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,12 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.core.datetime import utcnow
 from authglow.models.admin import (
     AdminUserDetail,
     BulkUserOperation,
     DashboardStats,
     PaginatedResponse,
     SetPasswordRequest,
+    SuspendRequest,
     UserUpdate,
 )
 from authglow.models.user import User, UserCreate, UserResponse
@@ -176,7 +178,8 @@ async def update_user(
     if update_data.avatar_url is not None:
         user.avatar_url = update_data.avatar_url
 
-    if update_data.email is not None and update_data.email != user.email:
+    email_changed = update_data.email is not None and update_data.email != user.email
+    if email_changed:
         try:
             user = await storage.update_email(user_id, update_data.email)
         except ValueError as e:
@@ -199,6 +202,28 @@ async def update_user(
             "changes": update_data.model_dump(exclude_none=True),
         },
     )
+
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="user_updated",
+        target_user_id=user_id,
+        target_user_email=user.email,
+        details=update_data.model_dump(exclude_none=True),
+    )
+
+    if email_changed:
+        from authglow.services.security_event import SecurityEventService
+
+        await SecurityEventService().record_event(
+            user_id=user_id,
+            event_type="email_changed_by_admin",
+            email=user.email,
+            description=f"Email changed by admin",
+            metadata={"admin_email": current_user.email, "new_email": update_data.email},
+        )
 
     return UserResponse(**user.model_dump())
 
@@ -256,6 +281,16 @@ async def create_user(
         severity="info",
     )
 
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="user_created",
+        target_user_id=user.id,
+        target_user_email=user.email,
+    )
+
     return UserResponse(**user.model_dump())
 
 
@@ -288,6 +323,16 @@ async def delete_user(
         email=current_user.email,
         metadata={"target_user_id": user_id, "target_user_email": user.email},
         severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="user_deleted",
+        target_user_id=user_id,
+        target_user_email=user.email,
     )
 
     return {"message": "User deleted successfully"}
@@ -363,6 +408,25 @@ async def delete_user_passkey(
         severity="warning",
     )
 
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="passkey_deleted",
+        target_user_id=user_id,
+        target_user_email=user.email,
+        details={"credential_id": credential_id},
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="passkey_removed_by_admin",
+        email=user.email,
+        description="Passkey removed by admin",
+        metadata={"admin_email": current_user.email, "credential_id": credential_id},
+    )
+
     return {"message": "Passkey deleted successfully"}
 
 
@@ -395,6 +459,24 @@ async def reset_user_mfa(
         email=current_user.email,
         metadata={"target_user_id": user_id, "target_user_email": user.email},
         severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="mfa_reset",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="mfa_reset_by_admin",
+        email=user.email,
+        description="MFA reset by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "MFA reset successfully"}
@@ -430,12 +512,29 @@ async def disable_user_mfa(
         severity="warning",
     )
 
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="mfa_disabled",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="mfa_disabled_by_admin",
+        email=user.email,
+        description="MFA disabled by admin",
+        metadata={"admin_email": current_user.email},
+    )
+
     return {"message": "MFA disabled successfully"}
 
 
 @router.post("/api/admin/users/{user_id}/regenerate-backup-codes")
 async def regenerate_user_backup_codes(
-    request: Request,
     user_id: str,
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
@@ -459,6 +558,24 @@ async def regenerate_user_backup_codes(
         email=current_user.email,
         metadata={"target_user_id": user_id, "target_user_email": user.email},
         severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="backup_codes_regenerated",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="backup_codes_regenerated_by_admin",
+        email=user.email,
+        description="Backup codes regenerated by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {
@@ -508,6 +625,25 @@ async def set_user_password(
             "require_change": body.require_change,
         },
         severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="password_set",
+        target_user_id=user_id,
+        target_user_email=user.email,
+        details={"require_change": body.require_change},
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="password_changed_by_admin",
+        email=user.email,
+        description="Password set by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "Password set successfully"}
@@ -562,6 +698,24 @@ async def send_password_reset(
         severity="warning",
     )
 
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="password_reset_sent",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="password_reset_sent_by_admin",
+        email=user.email,
+        description="Password reset email sent by admin",
+        metadata={"admin_email": current_user.email},
+    )
+
     return {"message": "Password reset email sent"}
 
 
@@ -588,6 +742,24 @@ async def expire_user_password(
         email=current_user.email,
         metadata={"target_user_id": user_id, "target_user_email": user.email},
         severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="password_expired",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="password_expired_by_admin",
+        email=user.email,
+        description="Password expired by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "Password expired successfully"}
@@ -617,6 +789,24 @@ async def unlock_user_account(
         severity="warning",
     )
 
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="account_unlocked",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="account_unlocked_by_admin",
+        email=user.email,
+        description="Account unlocked by admin",
+        metadata={"admin_email": current_user.email},
+    )
+
     return {"message": "Account unlocked successfully"}
 
 
@@ -642,6 +832,16 @@ async def reset_failed_attempts(
         email=current_user.email,
         metadata={"target_user_id": user_id, "target_user_email": user.email},
         severity="info",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="failed_attempts_reset",
+        target_user_id=user_id,
+        target_user_email=user.email,
     )
 
     return {"message": "Failed attempts reset successfully"}
@@ -867,6 +1067,17 @@ async def revoke_all_user_sessions(
         severity="warning",
     )
 
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="all_sessions_revoked",
+        target_user_id=user_id,
+        target_user_email=target_user.email,
+        details={"revoked_count": revoked_count},
+    )
+
     return {"message": f"Revoked {revoked_count} session(s)", "revoked_count": revoked_count}
 
 
@@ -1066,6 +1277,211 @@ async def get_user_oauth_consents(
         )
 
     return result
+
+
+# --- Phase 7: Advanced ---
+
+
+@router.get("/api/admin/users/{user_id}/export")
+async def export_user_data(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """Export all data for a specific user as JSON."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from authglow.services.login_history import LoginHistoryService
+    from authglow.services.security_event import SecurityEventService
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.oauth_consent import OAuth2ConsentService
+    from authglow.services.passkey import PasskeyService
+    from authglow.services.oauth_client import OAuth2ClientStorage
+    from authglow.core.config import get_settings as _get_settings
+
+    login_history, lh_total = await LoginHistoryService().get_login_history(user_id, limit=500)
+    security_events, se_total = await SecurityEventService().get_security_events(user_id, limit=500)
+    admin_actions, aa_total = await AdminActionService().get_admin_actions(user_id, limit=500)
+
+    from authglow.services.refresh_token import RefreshTokenService
+
+    page_tokens, sessions_total = await RefreshTokenService().list_all_tokens(
+        active_only=False, limit=500, user_id=user_id
+    )
+
+    settings = _get_settings()
+    passkey_svc = PasskeyService(
+        storage_path=settings.storage_path,
+        rp_id=settings.passkey_rp_id,
+        rp_name=settings.passkey_rp_name,
+        origin=settings.passkey_origin,
+    )
+    passkeys = [
+        {
+            "credential_id": pk.credential_id,
+            "name": pk.name,
+            "device_type": pk.device_type,
+            "created_at": pk.created_at.isoformat(),
+            "last_used_at": pk.last_used_at.isoformat() if pk.last_used_at else None,
+        }
+        for pk in await passkey_svc.get_user_passkeys(user_id)
+    ]
+
+    consent_svc = OAuth2ConsentService()
+    client_storage = OAuth2ClientStorage()
+    consents = []
+    for c in await consent_svc.list_user_consents(user_id):
+        client = await client_storage.get_client(c.client_id)
+        consents.append(
+            {
+                "consent_id": c.consent_id,
+                "client_id": c.client_id,
+                "client_name": client.client_name if client else c.client_id,
+                "scopes": c.scopes,
+                "granted_at": c.granted_at.isoformat(),
+                "revoked": c.revoked,
+            }
+        )
+
+    return {
+        "exported_at": utcnow().isoformat(),
+        "user": user.model_dump(mode="json"),
+        "login_history": {"items": login_history, "total": lh_total},
+        "security_events": {"items": security_events, "total": se_total},
+        "admin_actions": {"items": admin_actions, "total": aa_total},
+        "sessions": {
+            "items": [
+                {
+                    "id": rt.token_id,
+                    "client_id": rt.client_id,
+                    "scopes": rt.scopes,
+                    "created_at": rt.created_at.isoformat(),
+                    "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
+                    "ip_address": rt.issued_ip,
+                    "revoked": rt.revoked,
+                }
+                for rt in page_tokens
+            ],
+            "total": sessions_total,
+        },
+        "passkeys": passkeys,
+        "oauth_consents": consents,
+    }
+
+
+@router.get("/api/admin/users/{user_id}/admin-actions")
+async def get_user_admin_actions(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """Get admin actions for a specific user."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from authglow.services.admin_action import AdminActionService
+
+    svc = AdminActionService()
+    items, total = await svc.get_admin_actions(user_id, limit=limit, offset=offset)
+
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/api/admin/users/{user_id}/suspend")
+async def suspend_user(
+    user_id: str,
+    body: SuspendRequest,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Temporarily suspend a user's account."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    suspended_until = utcnow() + timedelta(hours=body.duration_hours)
+    user.suspended_until = suspended_until
+    await storage.update_user(user)
+
+    await audit_service.log_event(
+        event_type="user_suspended",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_user_email": user.email,
+            "duration_hours": body.duration_hours,
+            "suspended_until": suspended_until.isoformat(),
+        },
+        severity="warning",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="user_suspended",
+        target_user_id=user_id,
+        target_user_email=user.email,
+        details={
+            "duration_hours": body.duration_hours,
+            "suspended_until": suspended_until.isoformat(),
+        },
+    )
+
+    return {
+        "message": "User suspended successfully",
+        "suspended_until": suspended_until.isoformat(),
+    }
+
+
+@router.post("/api/admin/users/{user_id}/unsuspend")
+async def unsuspend_user(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Remove temporary suspension from a user's account."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.suspended_until:
+        raise HTTPException(status_code=400, detail="User is not suspended")
+
+    user.suspended_until = None
+    await storage.update_user(user)
+
+    await audit_service.log_event(
+        event_type="user_unsuspended",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "target_user_id": user_id,
+            "target_user_email": user.email,
+        },
+        severity="info",
+    )
+
+    from authglow.services.admin_action import AdminActionService
+
+    await AdminActionService().record_action(
+        admin_user_id=current_user.id,
+        admin_email=current_user.email,
+        action_type="user_unsuspended",
+        target_user_id=user_id,
+        target_user_email=user.email,
+    )
+
+    return {"message": "User unsuspended successfully"}
 
 
 # --- JWK Key Management ---

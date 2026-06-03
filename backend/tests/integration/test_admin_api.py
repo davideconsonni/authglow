@@ -522,7 +522,6 @@ class TestRegenerateUserBackupCodes:
         ):
             result = asyncio.get_event_loop().run_until_complete(
                 regenerate_user_backup_codes(
-                    request=MagicMock(),
                     user_id="codes-target",
                     current_user=_make_admin_user(),
                     storage=mock_storage,
@@ -550,7 +549,6 @@ class TestRegenerateUserBackupCodes:
             with pytest.raises(HTTPException) as exc:
                 asyncio.get_event_loop().run_until_complete(
                     regenerate_user_backup_codes(
-                        request=MagicMock(),
                         user_id="nonexistent",
                         current_user=_make_admin_user(),
                         storage=mock_storage,

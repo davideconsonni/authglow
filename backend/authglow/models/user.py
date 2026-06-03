@@ -52,6 +52,9 @@ class User(BaseModel):
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None
 
+    # Temporary suspension
+    suspended_until: Optional[datetime] = None
+
     class Config:
         json_schema_extra = {
             "example": {

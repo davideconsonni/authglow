@@ -2,10 +2,11 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from authglow.api.auth import get_current_user
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
+from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
 from authglow.models.mfa import (
     MFAEnrollResponse,
@@ -244,6 +245,13 @@ async def verify_mfa_login(
 
     if not user.mfa_enabled or not user.mfa_verified:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
+
+    # Check if account is suspended
+    if user.suspended_until and utcnow() < user.suspended_until:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account suspended until {user.suspended_until.isoformat()}",
+        )
 
     # Verify TOTP code or backup code
     is_valid = False

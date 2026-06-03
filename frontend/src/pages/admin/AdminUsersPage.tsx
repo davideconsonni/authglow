@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe } from 'lucide-react'
+import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -21,6 +21,7 @@ interface AdminUserDetail {
   last_login: string | null; is_invited: boolean; mfa_verified: boolean
   scopes: string[]; failed_login_count: number
   password_expired: boolean; locked_until: string | null
+  suspended_until: string | null
   phone: string | null; avatar_url: string | null
 }
 
@@ -232,6 +233,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const { data: oauthConsents } = useApiQuery<OAuthConsentItem[]>(
     ['user-oauth-consents', userId], `/api/admin/users/${userId}/oauth-consents`, { enabled: true },
   )
+  const { data: adminActions } = useApiQuery<{ items: AdminActionItem[]; total: number }>(
+    ['user-admin-actions', userId], `/api/admin/users/${userId}/admin-actions`, { enabled: true },
+  )
 
   interface SessionItem {
     id: string; client_id: string; scopes: string[]
@@ -253,6 +257,12 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     ip_address: string | null; timestamp: string
   }
 
+  interface AdminActionItem {
+    id: string; action_type: string; admin_email: string
+    target_user_email: string | null; details: Record<string, unknown> | null
+    ip_address: string | null; timestamp: string
+  }
+
   interface OAuthConsentItem {
     consent_id: string; client_id: string; client_name: string
     scopes: string[]; granted_at: string; expires_at: string | null
@@ -262,6 +272,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null)
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
   const [deletePasskeyId, setDeletePasskeyId] = useState<string | null>(null)
+  const [showSuspend, setShowSuspend] = useState(false)
+  const [suspendHours, setSuspendHours] = useState(24)
 
   type EditState = { first: string; last: string; email: string; verified: boolean; scopes: string[]; phone: string; avatar_url: string }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
@@ -370,6 +382,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       } else if (confirmAction === 'regenerate-backup-codes') {
         const resp = await api.post<{ backup_codes: string[] }>(`/api/admin/users/${userId}/regenerate-backup-codes`)
         setBackupCodes(resp.backup_codes)
+      } else if (confirmAction === 'unsuspend') {
+        await api.post(`/api/admin/users/${userId}/unsuspend`)
       } else {
         await api.post(`/api/admin/users/${userId}/${confirmAction}`)
       }
@@ -399,6 +413,38 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     }
   }
 
+  const handleSuspend = async () => {
+    setSaving(true); setError('')
+    try {
+      await api.post(`/api/admin/users/${userId}/suspend`, { duration_hours: suspendHours })
+      setShowSuspend(false)
+      setSuccess('User suspended.')
+      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      onUserUpdated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to suspend')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      const data = await api.get<Record<string, unknown>>(`/api/admin/users/${userId}/export`)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `user-${user?.email ?? userId}-export.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess('User data exported.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to export')
+    }
+  }
+
   const handleDeletePasskey = async () => {
     if (!deletePasskeyId) return
     setError('')
@@ -423,6 +469,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'disable-mfa': 'MFA disabled.',
       'reset-mfa': 'MFA reset.',
       'regenerate-backup-codes': 'Backup codes regenerated.',
+      'unsuspend': 'Suspension removed.',
     }
     return messages[action] || 'Action completed.'
   }
@@ -437,6 +484,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'disable-mfa': 'Disable MFA',
       'reset-mfa': 'Reset MFA',
       'regenerate-backup-codes': 'Regenerate Backup Codes',
+      'unsuspend': 'Remove Suspension',
     }
     return titles[action] || ''
   }
@@ -451,11 +499,13 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'disable-mfa': 'Disable MFA for this user? They will need to re-enroll to use MFA again.',
       'reset-mfa': 'Reset MFA and delete backup codes for this user?',
       'regenerate-backup-codes': 'Replace existing backup codes with new ones? Old codes will stop working.',
+      'unsuspend': 'Remove suspension for this user? They will be able to log in again.',
     }
     return messages[action] || ''
   }
 
   const isLocked = user?.locked_until ? new Date(user.locked_until) > new Date() : false
+  const isSuspended = user?.suspended_until ? new Date(user.suspended_until) > new Date() : false
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -477,6 +527,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Created</p><p className="text-text-primary font-medium">{user.created_at?formatDateTime(user.created_at):'-'}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Password</p><p className={`font-medium ${user.password_expired ? 'text-semantic-error' : 'text-semantic-success'}`}>{user.password_expired ? 'Expired' : 'Active'}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Failed</p><p className="text-text-primary font-medium">{user.failed_login_count ?? 0}</p></div>
+              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Suspended</p><p className={`font-medium ${isSuspended ? 'text-semantic-error' : 'text-semantic-success'}`}>{isSuspended ? 'Yes' : 'No'}</p></div>
             </div>
 
             <div className="border-t border-surface-2 pt-3 space-y-3">
@@ -560,6 +611,21 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 )}
               </div>
             </div>
+
+            <div className="border-t border-surface-2 pt-3 space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Account Status</h4>
+              <div className="grid grid-cols-1 gap-2">
+                {isSuspended ? (
+                  <button onClick={() => setConfirmAction('unsuspend')} data-testid="unsuspend-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    <Clock size={12} className="inline mr-1.5" />Remove Suspension (until {formatDateTime(user.suspended_until!)})
+                  </button>
+                ) : (
+                  <button onClick={() => setShowSuspend(true)} data-testid="suspend-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    <Ban size={12} className="inline mr-1.5" />Suspend User
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
@@ -639,6 +705,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           <ConfirmDialog open={confirmAction === 'disable-mfa'} title={getActionTitle('disable-mfa')} message={getActionMessage('disable-mfa')} confirmLabel="Disable" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'regenerate-backup-codes'} title={getActionTitle('regenerate-backup-codes')} message={getActionMessage('regenerate-backup-codes')} confirmLabel="Regenerate" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'unsuspend'} title={getActionTitle('unsuspend')} message={getActionMessage('unsuspend')} confirmLabel="Remove Suspension" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={!!revokeSessionId} title="Revoke Session" message="Revoke this session? The user will be logged out of this device." confirmLabel="Revoke" variant="danger" onConfirm={handleRevokeSession} onCancel={() => setRevokeSessionId(null)} />
           <ConfirmDialog open={!!deletePasskeyId} title="Delete Passkey" message="Remove this passkey from the user's account?" confirmLabel="Delete" variant="danger" onConfirm={handleDeletePasskey} onCancel={() => setDeletePasskeyId(null)} />
 
@@ -662,8 +729,42 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             </div>
           )}
 
+          {showSuspend && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setShowSuspend(false)} />
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+                <h4 className="text-sm font-semibold text-text-primary">Suspend User</h4>
+                <p className="text-xs text-text-muted">The user will not be able to log in for the selected duration.</p>
+                <div>
+                  <label className="mb-1 block text-xs text-text-muted">Duration</label>
+                  <select value={suspendHours} onChange={e => setSuspendHours(Number(e.target.value))} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+                    <option value={1}>1 hour</option>
+                    <option value={6}>6 hours</option>
+                    <option value={12}>12 hours</option>
+                    <option value={24}>24 hours</option>
+                    <option value={48}>48 hours</option>
+                    <option value={72}>72 hours</option>
+                    <option value={168}>7 days</option>
+                    <option value={720}>30 days</option>
+                  </select>
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => setShowSuspend(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={handleSuspend} disabled={saving} data-testid="suspend-confirm-btn" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                    Suspend
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
           {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
+
+          <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 rounded-xl border border-surface-2 px-4 py-2.5 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
+            <Download size={16} />Export User Data
+          </button>
 
           <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
@@ -771,6 +872,40 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     ))}
                   </>
                 )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+              <History size={12} />Admin Actions {adminActions ? `(${adminActions.total})` : ''}
+            </h4>
+            {!adminActions ? (
+              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : adminActions.items.length === 0 ? (
+              <p className="text-xs text-text-muted italic py-2">No admin actions</p>
+            ) : (
+              <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-surface-2">
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Action</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Admin</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-2">
+                    {adminActions.items.slice(0, 10).map(a => (
+                      <tr key={a.id} className="hover:bg-surface-2/50">
+                        <td className="px-2 py-1.5">
+                          <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-violet">
+                            {a.action_type.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-text-muted">{a.admin_email}</td>
+                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(a.timestamp)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

@@ -7,10 +7,11 @@ login/callback endpoints for federated authentication flows.
 import secrets
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 
 from authglow.core.config import get_settings
+from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
 from authglow.models.federation import (
     ExternalIdpConfig,
@@ -124,6 +125,13 @@ async def federation_callback(
                 name=mapped.get("name", email or external_id),
             )
             user = await user_storage.create_user(new_user)
+
+        # Check if account is suspended
+        if user.suspended_until and utcnow() < user.suspended_until:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            )
 
         jwt_service = JWTService()
         tokens = await jwt_service.create_user_tokens(user)

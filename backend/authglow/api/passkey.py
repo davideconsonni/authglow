@@ -269,6 +269,13 @@ async def complete_authentication(
                 detail="User not found",
             )
 
+        # Check if account is suspended
+        if user.suspended_until and utcnow() < user.suspended_until:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            )
+
         await storage.update_last_login(user.id)
 
         # Generate access token
