@@ -27,9 +27,7 @@ class IDTokenClaims(BaseModel):
     azp: Optional[str] = None  # Authorized party (client_id if multiple audiences)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: int(v.timestamp()) if v else None
-        }
+        json_encoders = {datetime: lambda v: int(v.timestamp()) if v else None}
 
 
 class UserInfoResponse(BaseModel):
@@ -68,11 +66,7 @@ class UserInfoResponse(BaseModel):
     # Address scope claims
     address: Optional[dict] = None
 
-    model_config = {
-        "json_encoders": {
-            datetime: lambda v: int(v.timestamp()) if v else None
-        }
-    }
+    model_config = {"json_encoders": {datetime: lambda v: int(v.timestamp()) if v else None}}
 
 
 class OpenIDConfiguration(BaseModel):
@@ -113,13 +107,24 @@ class JWKSResponse(BaseModel):
 SCOPE_TO_CLAIMS = {
     "openid": ["sub"],
     "profile": [
-        "name", "given_name", "family_name", "middle_name", "nickname",
-        "preferred_username", "profile", "picture", "website", "gender",
-        "birthdate", "zoneinfo", "locale", "updated_at"
+        "name",
+        "given_name",
+        "family_name",
+        "middle_name",
+        "nickname",
+        "preferred_username",
+        "profile",
+        "picture",
+        "website",
+        "gender",
+        "birthdate",
+        "zoneinfo",
+        "locale",
+        "updated_at",
     ],
     "email": ["email", "email_verified"],
     "phone": ["phone_number", "phone_number_verified"],
-    "address": ["address"]
+    "address": ["address"],
 }
 
 
@@ -130,5 +135,5 @@ OIDC_SCOPES = {
     "email": "Access to email address",
     "phone": "Access to phone number",
     "address": "Access to postal address",
-    "offline_access": "Access to refresh tokens"
+    "offline_access": "Access to refresh tokens",
 }

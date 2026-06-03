@@ -46,9 +46,7 @@ class AsyncFileSystem:
 
         return await asyncio.to_thread(_op)
 
-    async def write_json(
-        self, path: str, data: Any, indent: int = 2, default=None
-    ) -> None:
+    async def write_json(self, path: str, data: Any, indent: int = 2, default=None) -> None:
         _default = default if default is not None else str
 
         def _op():
@@ -91,8 +89,7 @@ class AsyncFileSystem:
 
         if current_version != expected_version:
             raise ConcurrentWriteError(
-                f"Version mismatch for {path}: expected {expected_version}, "
-                f"found {current_version}"
+                f"Version mismatch for {path}: expected {expected_version}, found {current_version}"
             )
 
         data_with_version = {**data, "_version": expected_version + 1}

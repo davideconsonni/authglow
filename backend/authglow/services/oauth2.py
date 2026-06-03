@@ -37,9 +37,7 @@ class OAuth2Service:
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -138,9 +136,7 @@ class OAuth2Service:
         except FileNotFoundError:
             pass
 
-    async def verify_client(
-        self, client_id: str, client_secret: Optional[str] = None
-    ) -> bool:
+    async def verify_client(self, client_id: str, client_secret: Optional[str] = None) -> bool:
         """
         Verify client credentials using dynamic client storage.
 
@@ -159,9 +155,7 @@ class OAuth2Service:
 
             # If secret provided, verify it
             if client_secret:
-                return await self.client_storage.verify_client_secret(
-                    client, client_secret
-                )
+                return await self.client_storage.verify_client_secret(client, client_secret)
 
             return True
 
@@ -180,9 +174,7 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.verify_redirect_uri(
-                client_id, redirect_uri
-            )
+            return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
 
         # Fallback: only allow specific callback for settings-based client
         if client_id == self.settings.oauth2_client_id:
@@ -196,16 +188,12 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.is_scope_allowed(
-                client_id, requested_scopes
-            )
+            return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
 
         # Fallback: allow all scopes for settings-based client
         return client_id == self.settings.oauth2_client_id
 
-    async def process_scopes(
-        self, client_id: str, requested_scopes: List[str]
-    ) -> List[str]:
+    async def process_scopes(self, client_id: str, requested_scopes: List[str]) -> List[str]:
         """
         Process and validate scopes based on client configuration and application settings.
 
@@ -249,9 +237,7 @@ class OAuth2Service:
                 )
             else:
                 # Permissive mode: filter out unauthorized scopes and allow request to proceed
-                filtered_scopes = [
-                    s for s in requested_scopes if s in allowed_scopes_set
-                ]
+                filtered_scopes = [s for s in requested_scopes if s in allowed_scopes_set]
                 return filtered_scopes
 
         return requested_scopes
@@ -262,9 +248,7 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            return await self.client_storage.is_grant_type_allowed(
-                client_id, grant_type
-            )
+            return await self.client_storage.is_grant_type_allowed(client_id, grant_type)
 
         # Fallback: allow all grant types for settings-based client
         return client_id == self.settings.oauth2_client_id

@@ -1,6 +1,5 @@
 """OIDC Relying Party service for federated authentication with external IdPs."""
 
-import hashlib
 import secrets
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlencode

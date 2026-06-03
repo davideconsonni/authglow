@@ -147,9 +147,7 @@ class SecurityNotificationService:
             print(f"Failed to send email changed alert: {e}")
             return False
 
-    async def send_mfa_enabled_alert(
-        self, user: User, ip_address: Optional[str] = None
-    ) -> bool:
+    async def send_mfa_enabled_alert(self, user: User, ip_address: Optional[str] = None) -> bool:
         """Send MFA enabled alert email.
 
         Args:
@@ -181,9 +179,7 @@ class SecurityNotificationService:
             print(f"Failed to send MFA enabled alert email: {e}")
             return False
 
-    async def send_mfa_disabled_alert(
-        self, user: User, ip_address: Optional[str] = None
-    ) -> bool:
+    async def send_mfa_disabled_alert(self, user: User, ip_address: Optional[str] = None) -> bool:
         """Send MFA disabled alert email.
 
         Args:

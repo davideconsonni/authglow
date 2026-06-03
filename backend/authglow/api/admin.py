@@ -1,14 +1,12 @@
 """Admin portal API endpoints."""
 
 import os
-from datetime import timedelta
-from typing import List, Optional, TypedDict
+from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
-from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
 from authglow.models.admin import (
     AdminUserDetail,
@@ -86,37 +84,7 @@ async def get_dashboard_stats(
         new_users_today=stats["new_today"],
         new_users_this_week=stats["new_week"],
         new_users_this_month=stats["new_month"],
-        total_logins_today=0,
-        total_logins_this_week=0,
-        total_logins_this_month=0,
-        failed_logins_today=0,
     )
-
-
-@router.get("/api/admin/stats/timeseries", response_model=List[dict])
-async def get_stats_timeseries(
-    days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_admin),
-):
-    """Get time series statistics for charts (delegated to cloud monitoring)."""
-    start_date = utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
-        days=days - 1
-    )
-    result = []
-    for i in range(days):
-        date = start_date + timedelta(days=i)
-        result.append(
-            {
-                "date": date.strftime("%Y-%m-%d"),
-                "display_date": date.strftime("%m/%d"),
-                "total": 0,
-                "success": 0,
-                "failed": 0,
-                "security": 0,
-                "new_users": 0,
-            }
-        )
-    return result
 
 
 @router.get("/api/admin/users/search")

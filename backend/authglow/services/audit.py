@@ -56,9 +56,7 @@ class AuditService:
             masked_local = local[:2] + "***" if len(local) >= 2 else local + "***"
             domain_parts = domain.split(".")
             if len(domain_parts) >= 2:
-                masked_domain = (
-                    domain_parts[0][:2] + "***." + ".".join(domain_parts[1:])
-                )
+                masked_domain = domain_parts[0][:2] + "***." + ".".join(domain_parts[1:])
             else:
                 masked_domain = domain[:2] + "***"
             return f"{masked_local}@{masked_domain}"
@@ -79,17 +77,13 @@ class AuditService:
             return entry_dict
 
         if entry_dict.get("email"):
-            entry_dict["email"] = AuditService._mask_email(
-                entry_dict["email"], level, secret_key
-            )
+            entry_dict["email"] = AuditService._mask_email(entry_dict["email"], level, secret_key)
 
         metadata = entry_dict.get("metadata", {})
         if isinstance(metadata, dict):
             for key in list(metadata.keys()):
                 if "email" in key.lower() and isinstance(metadata[key], str):
-                    metadata[key] = AuditService._mask_email(
-                        metadata[key], level, secret_key
-                    )
+                    metadata[key] = AuditService._mask_email(metadata[key], level, secret_key)
 
         return entry_dict
 

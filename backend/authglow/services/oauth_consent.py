@@ -30,9 +30,7 @@ class OAuth2ConsentService:
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -105,9 +103,7 @@ class OAuth2ConsentService:
             return result[0]
         return None
 
-    async def get_user_consent(
-        self, user_id: str, client_id: str
-    ) -> Optional[OAuth2Consent]:
+    async def get_user_consent(self, user_id: str, client_id: str) -> Optional[OAuth2Consent]:
         """Get existing consent for user and client — O(1) direct path lookup.
 
         Args:

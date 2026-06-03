@@ -30,9 +30,7 @@ class OAuth2ClientStorage:
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            self.fs = fsspec.filesystem(
-                self.settings.storage_backend, **self.storage_options
-            )
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
@@ -41,9 +39,7 @@ class OAuth2ClientStorage:
         """Get path for a client file."""
         return f"{self.storage_path}/{client_id}.json"
 
-    async def create_client(
-        self, client: OAuth2Client, plaintext_secret: str
-    ) -> OAuth2Client:
+    async def create_client(self, client: OAuth2Client, plaintext_secret: str) -> OAuth2Client:
         """
         Create a new OAuth2 client.
 
@@ -115,9 +111,7 @@ class OAuth2ClientStorage:
 
         return clients[offset : offset + limit]
 
-    async def verify_client_secret(
-        self, client: OAuth2Client, client_secret: str
-    ) -> bool:
+    async def verify_client_secret(self, client: OAuth2Client, client_secret: str) -> bool:
         """Verify client credentials."""
         if not client or not client.is_active:
             return False
@@ -202,9 +196,7 @@ class OAuth2ClientStorage:
         """Generate a secure random client secret."""
         return secrets.token_urlsafe(32)
 
-    async def is_scope_allowed(
-        self, client_id: str, requested_scopes: List[str]
-    ) -> bool:
+    async def is_scope_allowed(self, client_id: str, requested_scopes: List[str]) -> bool:
         """Check if client is allowed to request these scopes."""
         client = await self.get_client(client_id)
 

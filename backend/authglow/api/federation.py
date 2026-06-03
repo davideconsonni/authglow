@@ -176,7 +176,6 @@ async def create_provider(
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: create a new external IdP provider."""
-    import secrets
 
     if not provider_data.issuer.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Issuer must start with http:// or https://")

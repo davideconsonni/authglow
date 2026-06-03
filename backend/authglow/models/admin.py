@@ -24,19 +24,6 @@ class DashboardStats(BaseModel):
     new_users_today: int
     new_users_this_week: int
     new_users_this_month: int
-    total_logins_today: int
-    total_logins_this_week: int
-    total_logins_this_month: int
-    failed_logins_today: int
-
-
-class UserStatsTimeSeries(BaseModel):
-    """Time series data for user statistics."""
-
-    date: str
-    new_users: int
-    total_logins: int
-    failed_logins: int
 
 
 class AdminUserDetail(BaseModel):

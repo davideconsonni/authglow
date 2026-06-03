@@ -31,15 +31,11 @@ class PasswordValidator:
             )
 
         # Check for uppercase
-        if self.settings.password_require_uppercase and not re.search(
-            r"[A-Z]", password
-        ):
+        if self.settings.password_require_uppercase and not re.search(r"[A-Z]", password):
             errors.append("Password must contain at least one uppercase letter")
 
         # Check for lowercase
-        if self.settings.password_require_lowercase and not re.search(
-            r"[a-z]", password
-        ):
+        if self.settings.password_require_lowercase and not re.search(r"[a-z]", password):
             errors.append("Password must contain at least one lowercase letter")
 
         # Check for digits

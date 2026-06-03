@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from authglow.api.auth import get_current_user
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
+from authglow.core.rate_limit import limiter
 from authglow.models.mfa import (
     MFAEnrollResponse,
     MFAStatus,
@@ -17,7 +18,6 @@ from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.storage import UserStorage
-from authglow.core.rate_limit import limiter
 
 router = APIRouter()
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 class EmailPriority(str, Enum):
     """Email priority levels."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -15,6 +16,7 @@ class EmailPriority(str, Enum):
 
 class EmailAttachment(BaseModel):
     """Email attachment."""
+
     filename: str
     content: bytes
     content_type: str = "application/octet-stream"
@@ -22,6 +24,7 @@ class EmailAttachment(BaseModel):
 
 class EmailMessage(BaseModel):
     """Email message structure."""
+
     to: List[EmailStr]
     subject: str
     body_text: Optional[str] = None  # Plain text version
@@ -42,6 +45,7 @@ class EmailMessage(BaseModel):
 
 class EmailSendResult(BaseModel):
     """Result of email send operation."""
+
     success: bool
     message_id: Optional[str] = None
     error: Optional[str] = None

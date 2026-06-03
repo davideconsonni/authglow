@@ -46,9 +46,7 @@ class FileStorageEmailProvider(EmailProvider):
             message_id = f"file-{uuid4()}"
 
             # Create filename with timestamp and ID
-            filename = (
-                f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{message_id.split('-')[1]}.json"
-            )
+            filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{message_id.split('-')[1]}.json"
             file_path = self.storage_path / filename
 
             # Prepare email data
@@ -82,9 +80,7 @@ class FileStorageEmailProvider(EmailProvider):
             # Save to file (async to avoid blocking event loop)
             await asyncio.to_thread(self._write_email, file_path, email_data)
 
-            return EmailSendResult(
-                success=True, message_id=message_id, provider="file_storage"
-            )
+            return EmailSendResult(success=True, message_id=message_id, provider="file_storage")
 
         except Exception as e:
             return EmailSendResult(success=False, error=str(e), provider="file_storage")

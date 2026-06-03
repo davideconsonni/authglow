@@ -59,14 +59,11 @@ class EmailTemplateRenderer:
         self.template_dir = Path(template_dir)
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
-            autoescape=select_autoescape(['html', 'xml'])
+            autoescape=select_autoescape(["html", "xml"]),
         )
 
     def render_template(
-        self,
-        template_name: str,
-        context: Dict[str, Any],
-        is_html: bool = True
+        self, template_name: str, context: Dict[str, Any], is_html: bool = True
     ) -> str:
         """Render an email template.
 
@@ -79,17 +76,15 @@ class EmailTemplateRenderer:
             Rendered template string
         """
         # Add extension if not present
-        if not template_name.endswith(('.html', '.txt')):
-            extension = '.html' if is_html else '.txt'
+        if not template_name.endswith((".html", ".txt")):
+            extension = ".html" if is_html else ".txt"
             template_name = f"{template_name}{extension}"
 
         template = self.env.get_template(template_name)
         return template.render(**context)
 
     def render_both(
-        self,
-        template_base_name: str,
-        context: Dict[str, Any]
+        self, template_base_name: str, context: Dict[str, Any]
     ) -> tuple[Optional[str], Optional[str]]:
         """Render both HTML and text versions of a template.
 
@@ -120,7 +115,9 @@ class EmailTemplateRenderer:
 class EmailService:
     """Main email service that uses a configured provider."""
 
-    def __init__(self, provider: EmailProvider, template_renderer: Optional[EmailTemplateRenderer] = None):
+    def __init__(
+        self, provider: EmailProvider, template_renderer: Optional[EmailTemplateRenderer] = None
+    ):
         """Initialize email service.
 
         Args:
@@ -144,8 +141,7 @@ class EmailService:
         # Render template if specified
         if message.template_name and message.template_context:
             html_content, text_content = self.template_renderer.render_both(
-                message.template_name,
-                message.template_context
+                message.template_name, message.template_context
             )
             message.body_html = html_content
             message.body_text = text_content
@@ -154,12 +150,7 @@ class EmailService:
         return await self.provider.send(message)
 
     async def send_template(
-        self,
-        to: list[str],
-        subject: str,
-        template_name: str,
-        context: Dict[str, Any],
-        **kwargs
+        self, to: list[str], subject: str, template_name: str, context: Dict[str, Any], **kwargs
     ) -> EmailSendResult:
         """Send an email using a template.
 
@@ -174,11 +165,7 @@ class EmailService:
             EmailSendResult with success status
         """
         message = EmailMessage(
-            to=to,
-            subject=subject,
-            template_name=template_name,
-            template_context=context,
-            **kwargs
+            to=to, subject=subject, template_name=template_name, template_context=context, **kwargs
         )
         return await self.send(message)
 

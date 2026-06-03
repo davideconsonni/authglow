@@ -43,9 +43,7 @@ class PermissionChecker:
         self.require_all_permissions = require_all_permissions
         self.require_all_roles = require_all_roles
 
-    async def __call__(
-        self, credentials: HTTPAuthorizationCredentials = Depends(security)
-    ) -> str:
+    async def __call__(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
         """Check if user has required permissions/roles.
 
         Returns:
@@ -84,9 +82,7 @@ class PermissionChecker:
 
             if self.require_all_permissions:
                 # User must have ALL required permissions
-                missing = [
-                    p for p in self.required_permissions if p not in user_permissions
-                ]
+                missing = [p for p in self.required_permissions if p not in user_permissions]
                 if missing:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -141,9 +137,7 @@ def require_permission(permission: Union[str, List[str]], require_all: bool = Fa
     """
     permissions = [permission] if isinstance(permission, str) else permission
     return Depends(
-        PermissionChecker(
-            required_permissions=permissions, require_all_permissions=require_all
-        )
+        PermissionChecker(required_permissions=permissions, require_all_permissions=require_all)
     )
 
 
@@ -159,9 +153,7 @@ def require_role(role: Union[str, List[str]], require_all: bool = False):
         @require_role(["admin", "developer"], require_all=False)
     """
     roles = [role] if isinstance(role, str) else role
-    return Depends(
-        PermissionChecker(required_roles=roles, require_all_roles=require_all)
-    )
+    return Depends(PermissionChecker(required_roles=roles, require_all_roles=require_all))
 
 
 def require_admin():

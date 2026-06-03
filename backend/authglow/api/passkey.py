@@ -265,6 +265,8 @@ async def complete_authentication(
                 detail="User not found",
             )
 
+        await storage.update_last_login(user.id)
+
         # Generate access token
         access_token = jwt_service.create_access_token(
             user_id=user.id,

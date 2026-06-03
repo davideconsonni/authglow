@@ -25,11 +25,11 @@ def validate_password_strength(password: str) -> Tuple[bool, str]:
         return False, "Password must be at most 128 characters long"
 
     # Check for at least one letter
-    if not re.search(r'[a-zA-Z]', password):
+    if not re.search(r"[a-zA-Z]", password):
         return False, "Password must contain at least one letter"
 
     # Check for at least one number or special character
-    if not re.search(r'[\d\W]', password):
+    if not re.search(r"[\d\W]", password):
         return False, "Password must contain at least one number or special character"
 
     return True, "Password is strong"
@@ -62,10 +62,10 @@ def calculate_password_strength(password: str) -> int:
         score += 1
 
     # Character variety
-    has_lower = bool(re.search(r'[a-z]', password))
-    has_upper = bool(re.search(r'[A-Z]', password))
-    has_digit = bool(re.search(r'\d', password))
-    has_special = bool(re.search(r'[^\w\s]', password))
+    has_lower = bool(re.search(r"[a-z]", password))
+    has_upper = bool(re.search(r"[A-Z]", password))
+    has_digit = bool(re.search(r"\d", password))
+    has_special = bool(re.search(r"[^\w\s]", password))
 
     char_variety = sum([has_lower, has_upper, has_digit, has_special])
 

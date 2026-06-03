@@ -1,17 +1,33 @@
-import { Shield, Monitor, Key, Mail, Users, Activity, Settings, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { Shield, Monitor, Key, Users, CheckCircle2, Mail } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
 import { ROUTES } from '@/lib/constants'
 import { Section } from '@/components/shared/Section'
+import { StatusBadge } from '@/components/shared/StatusBadge'
+import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
+
+interface ProfileMe {
+  id: string
+  email: string
+  email_verified: boolean
+  first_name?: string
+  last_name?: string
+  avatar_url?: string
+  mfa_enabled: boolean
+  created_at: string
+  last_login?: string
+  roles: string[]
+  scopes: string[]
+}
+
+interface SessionsResponse {
+  sessions: unknown[]
+  total: number
+}
 
 interface AdminStats {
   total_users: number
-  active_users: number
-  users_with_mfa: number
-  new_users_today: number
-  total_logins_today: number
-  failed_logins_today: number
 }
 
 export function DashboardPage() {
@@ -19,105 +35,193 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const isAdmin = user?.scopes?.includes('admin')
 
+  const { data: profile } = useApiQuery<ProfileMe>(['profile-me'], '/api/profile/me')
+  const { data: sessionsData } = useApiQuery<SessionsResponse>(['my-dash-sessions'], '/api/tokens/refresh/list')
+  const { data: keysData } = useApiQuery<unknown[]>(['my-dash-keys'], '/api/keys')
   const { data: stats } = useApiQuery<AdminStats>(['dash-stats-v2'], '/api/admin/stats', { enabled: isAdmin })
+
+  const sessionCount = sessionsData?.total ?? 0
+  const keyCount = keysData?.length ?? 0
+
+  const emailVerified = profile?.email_verified ?? user?.email_verified ?? false
+  const mfaEnabled = profile?.mfa_enabled ?? user?.mfa_enabled ?? false
+  const missingChecks = (!emailVerified ? 1 : 0) + (!mfaEnabled ? 1 : 0)
+  const allSecure = missingChecks === 0
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">
-          Welcome back, {user?.first_name || 'User'}
+          Welcome back, {profile?.first_name || user?.first_name || 'User'}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          Here's what's happening with your account.
+          Here's a snapshot of your account.
         </p>
       </div>
 
-      {/* Account Overview */}
-      <Section title="Your Account" description="Quick overview and shortcuts to manage your identity.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <DashCard
-            icon={Mail} label="Email" value={user?.email || '-'}
-            color="brand-blue" onClick={() => navigate(ROUTES.PROFILE)}
-          />
-          <DashCard
-            icon={Shield} label="MFA Status"
-            value={user?.mfa_enabled ? 'Enabled' : 'Not enabled'}
-            color={user?.mfa_enabled ? 'semantic-success' : 'brand-violet'}
-            onClick={() => navigate(ROUTES.SECURITY)}
-            action="Set up MFA"
-          />
-          <DashCard
-            icon={Monitor} label="Sessions"
-            value="Manage" color="brand-violet"
-            onClick={() => navigate(ROUTES.SESSIONS)} action="View all"
-          />
-          <DashCard
-            icon={Key} label="API Keys"
-            value="Manage" color="brand-magenta"
-            onClick={() => navigate(ROUTES.API_KEYS)} action="View all"
-          />
+      <Section title="Identity">
+        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-violet/15 text-lg font-bold text-brand-violet">
+                {(profile?.first_name || user?.first_name || '?').charAt(0).toUpperCase()}
+                {(profile?.last_name || user?.last_name || '').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-text-primary">
+                  {profile?.first_name || user?.first_name || 'User'}{' '}
+                  {profile?.last_name || user?.last_name || ''}
+                </p>
+                <p className="mt-0.5 break-all text-sm text-text-muted">
+                  {profile?.email || user?.email || '-'}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusBadge
+                    status={emailVerified}
+                    trueLabel="Email verified"
+                    falseLabel="Email unverified"
+                    trueClass="bg-semantic-success/10 text-semantic-success"
+                    falseClass="bg-semantic-warning/10 text-semantic-warning"
+                  />
+                  <StatusBadge
+                    status={mfaEnabled}
+                    trueLabel="MFA enabled"
+                    falseLabel="MFA not enabled"
+                    trueClass="bg-semantic-success/10 text-semantic-success"
+                    falseClass="bg-semantic-warning/10 text-semantic-warning"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="shrink-0 text-left sm:text-right">
+              <p className="text-xs text-text-muted">Member since</p>
+              <p className="text-sm font-medium text-text-primary">
+                {formatDate(profile?.created_at)}
+              </p>
+              <p className="mt-2 text-xs text-text-muted">Last sign-in</p>
+              <p className="text-sm font-medium text-text-primary">
+                {formatRelativeTime(profile?.last_login)}
+              </p>
+            </div>
+          </div>
         </div>
       </Section>
 
-      {/* System Overview (admin only) */}
-      {isAdmin && stats && (
-        <Section title="System Overview" description="Platform metrics at a glance.">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DashCard icon={Users} label="Total Users" value={String(stats.total_users)} color="brand-violet" onClick={() => navigate(ROUTES.ADMIN.USERS)} action="Manage users" />
-            <DashCard icon={Activity} label="Logins Today" value={String(stats.total_logins_today)} color="brand-blue" onClick={() => navigate(ROUTES.ADMIN.SESSIONS)} action="View sessions" />
-            <DashCard icon={Settings} label="Administration" value="Open panel" color="brand-violet" onClick={() => navigate(ROUTES.ADMIN.DASHBOARD)} action="Admin panel" />
+      {allSecure ? (
+        <Section title="Security">
+          <div className="flex items-center gap-3 rounded-2xl border border-semantic-success/20 bg-semantic-success/5 px-5 py-4">
+            <CheckCircle2 size={20} className="shrink-0 text-semantic-success" />
+            <p className="text-sm font-medium text-text-primary">
+              All security recommendations completed.
+            </p>
+          </div>
+        </Section>
+      ) : (
+        <Section title="Security checklist" description="Complete these steps to secure your account.">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {!emailVerified && (
+              <button
+                onClick={() => navigate(ROUTES.PROFILE)}
+                className="flex items-center gap-3 rounded-2xl border border-surface-2 bg-surface-1 px-5 py-4 text-left transition-all hover:border-semantic-warning/30"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-semantic-warning/10 text-semantic-warning">
+                  <Mail size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary">Verify your email</p>
+                  <p className="text-xs text-text-muted">Confirm your email address to enable account recovery.</p>
+                </div>
+              </button>
+            )}
+            {!mfaEnabled && (
+              <button
+                onClick={() => navigate(ROUTES.SECURITY)}
+                className="flex items-center gap-3 rounded-2xl border border-surface-2 bg-surface-1 px-5 py-4 text-left transition-all hover:border-semantic-warning/30"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-semantic-warning/10 text-semantic-warning">
+                  <Shield size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary">Enable two-factor authentication</p>
+                  <p className="text-xs text-text-muted">Add an extra layer of security to your account.</p>
+                </div>
+              </button>
+            )}
           </div>
         </Section>
       )}
 
-      {/* Quick Actions */}
-      <Section title="Quick Actions" description="Common tasks you might want to do.">
-        <div className="flex flex-wrap gap-3">
-          <QuickAction label="Security settings" onClick={() => navigate(ROUTES.SECURITY)} />
-          <QuickAction label="Create API Key" onClick={() => navigate(ROUTES.API_KEYS)} />
-          <QuickAction label="View Sessions" onClick={() => navigate(ROUTES.SESSIONS)} />
-          <QuickAction label="Edit Profile" onClick={() => navigate(ROUTES.PROFILE)} />
-          {isAdmin && <QuickAction label="Manage Users" onClick={() => navigate(ROUTES.ADMIN.USERS)} />}
+      <Section title="At a glance" description="Live counts based on your account activity.">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            icon={Monitor} label="Active sessions"
+            value={String(sessionCount)} color="brand-violet"
+            onClick={() => navigate(ROUTES.SESSIONS)}
+            hint={sessionCount === 1 ? 'device' : 'devices'}
+          />
+          <StatCard
+            icon={Key} label="API keys"
+            value={String(keyCount)} color="brand-magenta"
+            onClick={() => navigate(ROUTES.API_KEYS)}
+            hint={keyCount === 1 ? 'key' : 'keys'}
+          />
+          {isAdmin && (
+            <StatCard
+              icon={Users} label="Total users"
+              value={String(stats?.total_users ?? 0)} color="brand-blue"
+              onClick={() => navigate(ROUTES.ADMIN.USERS)}
+              hint="platform"
+            />
+          )}
         </div>
       </Section>
+
+      {isAdmin && (
+        <Section title="Administration">
+          <button
+            onClick={() => navigate(ROUTES.ADMIN.DASHBOARD)}
+            className="flex w-full items-center justify-between rounded-2xl border border-surface-2 bg-surface-1 px-6 py-4 text-left transition-all hover:border-brand-violet/30 hover:shadow-glow-violet"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-violet/10 text-brand-violet">
+                <Users size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Open admin overview</p>
+                <p className="text-xs text-text-muted">Manage users, sessions, OAuth clients and more.</p>
+              </div>
+            </div>
+            <span className="text-xs font-medium text-brand-violet">&rarr;</span>
+          </button>
+        </Section>
+      )}
     </div>
   )
 }
 
-function DashCard({ icon: Icon, label, value, color, onClick, action }: {
-  icon: typeof Shield; label: string; value: string; color: string; onClick?: () => void; action?: string
+function StatCard({ icon: Icon, label, value, color, onClick, hint }: {
+  icon: typeof Shield; label: string; value: string; color: string; onClick?: () => void; hint?: string
 }) {
   const colors: Record<string, string> = {
     'brand-violet': 'text-brand-violet bg-brand-violet/10',
     'brand-blue': 'text-brand-blue bg-brand-blue/10',
     'brand-magenta': 'text-brand-magenta bg-brand-magenta/10',
-    'semantic-success': 'text-semantic-success bg-semantic-success/10',
   }
   return (
-    <div className="rounded-2xl border border-surface-2 bg-surface-1 p-5 transition-all duration-300 hover:shadow-glow-violet group cursor-pointer" onClick={onClick}>
+    <div
+      className="rounded-2xl border border-surface-2 bg-surface-1 p-5 transition-all duration-300 hover:shadow-glow-violet cursor-pointer"
+      onClick={onClick}
+    >
       <div className="flex items-center gap-4">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${colors[color] || colors['brand-violet']}`}>
+        <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', colors[color] || colors['brand-violet'])}>
           <Icon size={20} />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs text-text-muted">{label}</p>
-          <p className="text-lg font-bold text-text-primary truncate">{value}</p>
+          <p className="text-lg font-bold text-text-primary">{value}</p>
+          {hint && <p className="text-xs text-text-muted">{hint}</p>}
         </div>
-        {action && (
-          <ArrowRight size={16} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-        )}
       </div>
-      {action && (
-        <p className="mt-3 text-xs font-medium text-brand-violet">{action} &rarr;</p>
-      )}
     </div>
-  )
-}
-
-function QuickAction({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="rounded-xl border border-surface-2 bg-surface-1 px-5 py-2.5 text-sm font-medium text-text-secondary hover:border-brand-violet/30 hover:text-brand-violet transition-all duration-150">
-      {label} &rarr;
-    </button>
   )
 }
