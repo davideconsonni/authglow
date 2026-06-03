@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Search, Loader2, ShieldOff, UserX, UserPlus, Mail, Save } from 'lucide-react'
+import { useState, useEffect, useReducer } from 'react'
+import { Search, Loader2, ShieldOff, UserX, UserPlus, Mail, Save, Plus, X } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -10,6 +11,14 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
   is_active: boolean; mfa_enabled: boolean; created_at: string; login_count: number
+}
+
+interface AdminUserDetail {
+  id: string; email: string; first_name: string | null; last_name: string | null
+  is_active: boolean; mfa_enabled: boolean; email_verified: boolean
+  login_count: number; created_at: string; updated_at: string
+  last_login: string | null; is_invited: boolean; mfa_verified: boolean
+  scopes: string[]; failed_login_count: number
 }
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
@@ -33,11 +42,26 @@ export function AdminUsersPage() {
   const [success, setSuccess] = useState('')
   const [detailUserId, setDetailUserId] = useState<string | null>(null)
 
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [mfaFilter, setMfaFilter] = useState<string>('all')
+  const [verifiedFilter, setVerifiedFilter] = useState<string>('all')
+
   const limit = 15
+
+  const queryParams = new URLSearchParams()
+  queryParams.set('q', search)
+  queryParams.set('limit', String(limit))
+  queryParams.set('offset', String((page - 1) * limit))
+  if (statusFilter !== 'all') queryParams.set('is_active', statusFilter === 'active' ? 'true' : 'false')
+  if (mfaFilter !== 'all') queryParams.set('mfa_enabled', mfaFilter === 'enabled' ? 'true' : 'false')
+  if (verifiedFilter !== 'all') queryParams.set('email_verified', verifiedFilter === 'verified' ? 'true' : 'false')
+
+  const queryKey = ['admin-users', search, String(page), statusFilter, mfaFilter, verifiedFilter]
+  const queryUrl = `/api/admin/users/search?${queryParams.toString()}`
   const { data, refetch, isLoading } = useApiQuery<{ items: AdminUser[]; total: number; limit: number; offset: number }>(
-    ['admin-users', search, String(page)],
-    `/api/admin/users/search?q=${encodeURIComponent(search)}&limit=${limit}&offset=${(page - 1) * limit}`,
+    queryKey, queryUrl, { enabled: true },
   )
+
   const users = data?.items ?? []
   const total = data?.total ?? 0
   const totalPages = Math.ceil(total / limit)
@@ -61,7 +85,7 @@ export function AdminUsersPage() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
   }
 
-  const toggleSelect = (id: string) => { const n = new Set(selected); n.has(id) ? n.delete(id) : n.add(id); setSelected(n) }
+  const toggleSelect = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n) }
   const toggleSelectAll = () => setSelected(selected.size === users.length ? new Set() : new Set(users.map(u => u.id)))
 
   const handleBulkAction = async () => {
@@ -76,6 +100,8 @@ export function AdminUsersPage() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Bulk action failed') } finally { setBulking(false) }
   }
 
+  const handleFilterChange = (setter: (v: string) => void) => (val: string) => { setter(val); setPage(1) }
+
   return (
     <div>
       <PageHeader title="Users" description="Manage registered users."
@@ -84,13 +110,30 @@ export function AdminUsersPage() {
       {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
       {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
 
-      <div className="mb-4"><div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Search by email or name..." data-testid="user-search-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
-      </div></div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Search by email or name..." data-testid="user-search-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+        </div>
+        <select value={statusFilter} onChange={e => handleFilterChange(setStatusFilter)(e.target.value)} data-testid="filter-status" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <select value={mfaFilter} onChange={e => handleFilterChange(setMfaFilter)(e.target.value)} data-testid="filter-mfa" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+          <option value="all">All MFA</option>
+          <option value="enabled">MFA Enabled</option>
+          <option value="disabled">MFA Disabled</option>
+        </select>
+        <select value={verifiedFilter} onChange={e => handleFilterChange(setVerifiedFilter)(e.target.value)} data-testid="filter-verified" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+          <option value="all">All Verified</option>
+          <option value="verified">Email Verified</option>
+          <option value="unverified">Email Unverified</option>
+        </select>
+      </div>
 
       {isLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
-      : users.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-center"><div className="rounded-2xl bg-surface-2 p-4"><Mail className="h-8 w-8 text-text-muted" /></div><h3 className="mt-4 text-lg font-semibold text-text-primary">No users found</h3><p className="mt-2 max-w-sm text-sm text-text-muted">{search ? 'No matches. Try different keywords.' : 'Get started by inviting your first user.'}</p>{!search && <button onClick={() => setShowInvite(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]"><UserPlus size={16} />Invite User</button>}</div>
+      : users.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-center"><div className="rounded-2xl bg-surface-2 p-4"><Mail className="h-8 w-8 text-text-muted" /></div><h3 className="mt-4 text-lg font-semibold text-text-primary">No users found</h3><p className="mt-2 max-w-sm text-sm text-text-muted">{search || statusFilter !== 'all' || mfaFilter !== 'all' || verifiedFilter !== 'all' ? 'No matches. Try different filters.' : 'Get started by inviting your first user.'}</p>{!search && statusFilter === 'all' && mfaFilter === 'all' && verifiedFilter === 'all' && <button onClick={() => setShowInvite(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]"><UserPlus size={16} />Invite User</button>}</div>
       : <>
         {selected.size > 0 && <div className="mb-3 flex items-center gap-3 rounded-xl bg-brand-violet/10 border border-brand-violet/20 px-4 py-3" data-testid="bulk-action-bar"><span className="text-sm text-brand-violet font-medium">{selected.size} selected</span><div className="flex gap-2 ml-auto"><button onClick={() => setBulkAction('activate')} disabled={bulking} className="rounded-lg bg-semantic-success/10 px-3 py-1 text-xs font-medium text-semantic-success hover:bg-semantic-success/20 disabled:opacity-50">Activate</button><button onClick={() => setBulkAction('deactivate')} disabled={bulking} data-testid="bulk-deactivate-btn" className="rounded-lg bg-semantic-warning/10 px-3 py-1 text-xs font-medium text-semantic-warning hover:bg-semantic-warning/20 disabled:opacity-50">Deactivate</button><button onClick={() => setBulkAction('delete')} disabled={bulking} className="rounded-lg bg-semantic-error/10 px-3 py-1 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 disabled:opacity-50">Delete</button><button onClick={() => { setSelected(new Set()); setBulkAction(null) }} className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-text-secondary hover:bg-surface-3">Clear</button></div></div>}
 
@@ -134,15 +177,79 @@ export function AdminUsersPage() {
         <div className="flex gap-3 pt-2"><button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleInvite} disabled={inviting || !inviteForm.email} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{inviting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Create User</button></div>
       </div></div>}
 
-      {detailUserId && <UserDrawer userId={detailUserId} onClose={() => setDetailUserId(null)} />}
+      {detailUserId && <UserDrawer userId={detailUserId} onClose={() => setDetailUserId(null)} onUserUpdated={refetch} />}
     </div>
   )
 }
 
-function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const { data: user, isLoading } = useApiQuery<any>(['user-detail', userId], `/api/admin/users/${userId}`)
-  const { data: keys } = useApiQuery<any[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
-  const { data: passkeys } = useApiQuery<any[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys`)
+function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClose: () => void; onUserUpdated: () => void }) {
+  const queryClient = useQueryClient()
+  const { data: user, isLoading } = useApiQuery<AdminUserDetail>(['user-detail', userId], `/api/admin/users/${userId}`)
+  const { data: keys } = useApiQuery<unknown[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
+  const { data: passkeys } = useApiQuery<unknown[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys`)
+
+  type EditState = { first: string; last: string; verified: boolean; scopes: string[] }
+  const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
+    switch (action.type) {
+      case 'SET_FIRST': return { ...state, first: action.value as string }
+      case 'SET_LAST': return { ...state, last: action.value as string }
+      case 'SET_VERIFIED': return { ...state, verified: action.value as boolean }
+      case 'ADD_SCOPE': return { ...state, scopes: [...state.scopes, action.value as string] }
+      case 'REMOVE_SCOPE': return { ...state, scopes: state.scopes.filter(s => s !== action.value) }
+      case 'INIT': {
+        const u = action.user
+        return {
+          first: u?.first_name ?? '',
+          last: u?.last_name ?? '',
+          verified: u?.email_verified ?? false,
+          scopes: u?.scopes ? [...u.scopes] : [],
+        }
+      }
+      default: return state
+    }
+  }
+
+  const [edit, dispatch] = useReducer(reducer, { first: '', last: '', verified: false, scopes: [] })
+  const [newScope, setNewScope] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  useEffect(() => { if (user) dispatch({ type: 'INIT', user }) }, [user])
+
+  useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 2000); return () => clearTimeout(t) } }, [success])
+
+  const addScope = () => {
+    const trimmed = newScope.trim()
+    if (trimmed && !edit.scopes.includes(trimmed)) {
+      dispatch({ type: 'ADD_SCOPE', value: trimmed })
+    }
+    setNewScope('')
+  }
+
+  const removeScope = (scope: string) => {
+    dispatch({ type: 'REMOVE_SCOPE', value: scope })
+  }
+
+  const handleSave = async () => {
+    setSaving(true); setError('')
+    try {
+      await api.put(`/api/admin/users/${userId}`, {
+        first_name: edit.first || null,
+        last_name: edit.last || null,
+        email_verified: edit.verified,
+        scopes: edit.scopes,
+      })
+      setSuccess('User updated.')
+      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      onUserUpdated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -163,10 +270,44 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Logins</p><p className="text-text-primary font-medium">{user.login_count??0}</p></div>
               <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Created</p><p className="text-text-primary font-medium">{user.created_at?formatDateTime(user.created_at):'-'}</p></div>
             </div>
-            {user.scopes?.length>0 && <div className="flex flex-wrap gap-1 pt-1 border-t border-surface-2"><span className="text-[10px] text-text-muted uppercase mr-2 mt-1">Scopes:</span>{user.scopes.map((s:string)=><span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{s}</span>)}</div>}
+
+            <div className="border-t border-surface-2 pt-3 space-y-3">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Edit Profile</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+              </div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" /><span className="text-text-primary">Email verified</span></label>
+            </div>
+
+            <div className="border-t border-surface-2 pt-3 space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Scopes</h4>
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {edit.scopes.map(s => (
+                  <span key={s} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] text-text-secondary">
+                    {s}
+                    <button onClick={() => removeScope(s)} className="text-text-muted hover:text-semantic-error"><X size={12} /></button>
+                  </span>
+                ))}
+                {edit.scopes.length === 0 && <span className="text-[11px] text-text-muted italic">No scopes</span>}
+              </div>
+              <div className="flex gap-2">
+                <input value={newScope} onChange={e => setNewScope(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScope() } }} placeholder="Add scope..." className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-violet/10 px-2.5 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-40"><Plus size={14} /></button>
+              </div>
+            </div>
           </div>
-          {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{keys.map((k:any)=><div key={k.id} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name}</span><code className="ml-2 text-text-muted">{k.key_prefix||k.id?.slice(0,8)}...</code></div>)}</div></div>}
-          {passkeys && passkeys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">Passkeys ({passkeys.length})</h4><div className="space-y-1.5">{passkeys.map((pk:any)=><div key={pk.id||pk.credential_id} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary">{pk.name||pk.device_type||'Passkey'}</span><span className="ml-2 text-text-muted">{pk.created_at?formatDateTime(pk.created_at):''}</span></div>)}</div></div>}
+
+          {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
+          {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
+
+          <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save Changes
+          </button>
+
+          {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{(keys as Array<Record<string, unknown>>).map(k => <div key={k.id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name as string}</span><code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.id as string)?.slice(0,8)) as string)}...</code></div>)}</div></div>}
+          {passkeys && passkeys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">Passkeys ({passkeys.length})</h4><div className="space-y-1.5">{(passkeys as Array<Record<string, unknown>>).map(pk => <div key={(pk.id ?? pk.credential_id) as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary">{(pk.name ?? pk.device_type ?? 'Passkey') as string}</span><span className="ml-2 text-text-muted">{pk.created_at ? formatDateTime(pk.created_at as string) : ''}</span></div>)}</div></div>}
         </> : <p className="text-sm text-text-muted text-center py-8">Could not load user details.</p>}
       </div>
     </div>

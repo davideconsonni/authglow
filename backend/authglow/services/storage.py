@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 import fsspec
@@ -228,6 +228,12 @@ class UserStorage:
         search: Optional[str] = None,
         is_active: Optional[bool] = None,
         mfa_enabled: Optional[bool] = None,
+        email_verified: Optional[bool] = None,
+        scopes: Optional[list[str]] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
+        last_login_after: Optional[datetime] = None,
+        last_login_before: Optional[datetime] = None,
     ) -> tuple[List[User], int]:
         """List users with optional server-side filtering and pagination.
 
@@ -256,6 +262,27 @@ class UserStorage:
 
             if mfa_enabled is not None and user.mfa_enabled != mfa_enabled:
                 continue
+
+            if email_verified is not None and user.email_verified != email_verified:
+                continue
+
+            if scopes is not None:
+                if not all(s in user.scopes for s in scopes):
+                    continue
+
+            if created_after is not None and user.created_at < created_after:
+                continue
+
+            if created_before is not None and user.created_at > created_before:
+                continue
+
+            if last_login_after is not None:
+                if user.last_login is None or user.last_login < last_login_after:
+                    continue
+
+            if last_login_before is not None:
+                if user.last_login is None or user.last_login > last_login_before:
+                    continue
 
             filtered.append(user)
 

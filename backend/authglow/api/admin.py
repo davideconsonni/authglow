@@ -1,6 +1,7 @@
 """Admin portal API endpoints."""
 
 import os
+from datetime import datetime
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -92,18 +93,34 @@ async def search_users(
     search: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     mfa_enabled: Optional[bool] = Query(None),
+    email_verified: Optional[bool] = Query(None),
+    scopes: Optional[str] = Query(None),
+    created_after: Optional[datetime] = Query(None),
+    created_before: Optional[datetime] = Query(None),
+    last_login_after: Optional[datetime] = Query(None),
+    last_login_before: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Search and filter users with server-side pagination."""
+    scope_list: Optional[list[str]] = None
+    if scopes:
+        scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+
     users, total = await storage.list_users(
         limit=limit,
         offset=offset,
         search=search,
         is_active=is_active,
         mfa_enabled=mfa_enabled,
+        email_verified=email_verified,
+        scopes=scope_list,
+        created_after=created_after,
+        created_before=created_before,
+        last_login_after=last_login_after,
+        last_login_before=last_login_before,
     )
 
     items = []
