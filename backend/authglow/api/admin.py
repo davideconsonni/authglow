@@ -17,8 +17,9 @@ from authglow.models.admin import (
     SetPasswordRequest,
     UserUpdate,
 )
-from authglow.models.user import User, UserResponse
+from authglow.models.user import User, UserCreate, UserResponse
 from authglow.services.audit import AuditService
+from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import MFAService
 from authglow.services.oauth_client import OAuth2ClientStorage
@@ -148,9 +149,7 @@ async def get_user_detail(
 
 
 @router.put("/api/admin/users/{user_id}", response_model=UserResponse)
-@limiter.limit("30/minute")  # Max 30 user updates per minute per IP
 async def update_user(
-    request: Request,
     user_id: str,
     update_data: UserUpdate,
     current_user: User = Depends(require_admin),
@@ -162,7 +161,6 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Update fields
     if update_data.is_active is not None:
         user.is_active = update_data.is_active
     if update_data.email_verified is not None:
@@ -173,10 +171,24 @@ async def update_user(
         user.first_name = update_data.first_name
     if update_data.last_name is not None:
         user.last_name = update_data.last_name
+    if update_data.phone is not None:
+        user.phone = update_data.phone
+    if update_data.avatar_url is not None:
+        user.avatar_url = update_data.avatar_url
 
-    user = await storage.update_user(user)
+    if update_data.email is not None and update_data.email != user.email:
+        try:
+            user = await storage.update_email(user_id, update_data.email)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-    # Log action
+        if not update_data.email_verified:
+            verification_service = EmailVerificationService()
+            token = await verification_service.create_verification_token(user)
+            await verification_service.send_verification_email(user, token.token)
+    else:
+        user = await storage.update_user(user)
+
     await audit_service.log_event(
         event_type="user_updated",
         user_id=current_user.id,
@@ -186,6 +198,62 @@ async def update_user(
             "target_user_email": user.email,
             "changes": update_data.model_dump(exclude_none=True),
         },
+    )
+
+    return UserResponse(**user.model_dump())
+
+
+@router.post("/api/admin/users/create", status_code=201)
+async def create_user(
+    body: UserCreate,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Create a new user with a password (admin only)."""
+    existing = await storage.get_user_by_email(body.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+    validator = PasswordValidator()
+    is_valid, errors = validator.validate(body.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password does not meet requirements: {'; '.join(errors or [])}",
+        )
+
+    user = User(
+        email=body.email,
+        hashed_password=hash_password(body.password),
+        first_name=body.first_name,
+        last_name=body.last_name,
+        phone=body.phone,
+        avatar_url=body.avatar_url,
+        scopes=body.scopes,
+        is_invited=False,
+        email_verified=body.email_verified,
+    )
+
+    try:
+        user = await storage.create_user(user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not body.email_verified:
+        verification_service = EmailVerificationService()
+        token = await verification_service.create_verification_token(user)
+        await verification_service.send_verification_email(user, token.token)
+
+    await audit_service.log_event(
+        event_type="user_created_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "created_user_id": user.id,
+            "created_user_email": user.email,
+        },
+        severity="info",
     )
 
     return UserResponse(**user.model_dump())

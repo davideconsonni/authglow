@@ -512,7 +512,6 @@ class TestRegenerateUserBackupCodes:
         mfa_svc = MagicMock()
         mfa_svc.generate_backup_codes = MagicMock(return_value=["CODE1-AAAA", "CODE2-BBBB"])
         mfa_svc.save_backup_codes = AsyncMock(return_value=None)
-        mfa_svc.save_backup_codes = AsyncMock(return_value=None)
 
         audit_svc = AsyncMock()
 
@@ -561,3 +560,229 @@ class TestRegenerateUserBackupCodes:
                 )
 
         assert exc.value.status_code == 404
+
+
+class TestCreateUser:
+    def test_creates_user_with_password(self):
+        import asyncio
+        from authglow.api.admin import create_user
+        from authglow.models.user import UserCreate
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+        mock_storage.create_user = AsyncMock(side_effect=lambda u: u)
+
+        audit_svc = AsyncMock()
+
+        body = UserCreate(
+            email="newuser@test.io",
+            password="StrongPass1!",
+            first_name="New",
+            last_name="User",
+            scopes=["read", "write"],
+        )
+
+        def fake_hash(pw):
+            return f"hashed-{pw}"
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+            patch("authglow.api.admin.hash_password", side_effect=fake_hash),
+            patch("authglow.api.admin.EmailVerificationService") as mock_ver_svc,
+        ):
+            mock_ver = AsyncMock()
+            mock_ver.create_verification_token = AsyncMock()
+            mock_ver.send_verification_email = AsyncMock(return_value=True)
+            mock_ver_svc.return_value = mock_ver
+
+            result = asyncio.get_event_loop().run_until_complete(
+                create_user(
+                    body=body,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                )
+            )
+
+        assert result.email == "newuser@test.io"
+        assert result.first_name == "New"
+        assert result.last_name == "User"
+        assert result.scopes == ["read", "write"]
+        mock_storage.create_user.assert_called_once()
+        created = mock_storage.create_user.call_args[0][0]
+        assert created.hashed_password == "hashed-StrongPass1!"
+        assert created.is_invited is False
+        audit_svc.log_event.assert_called_once()
+
+    def test_returns_400_when_email_exists(self):
+        import asyncio
+        from authglow.api.admin import create_user
+        from authglow.models.user import UserCreate
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user_by_email = AsyncMock(
+            return_value=_make_test_user("existing", "existing@test.io")
+        )
+
+        body = UserCreate(email="existing@test.io", password="StrongPass1!")
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    create_user(
+                        body=body,
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400
+
+    def test_returns_400_when_password_weak(self):
+        import asyncio
+        from authglow.api.admin import create_user
+        from authglow.models.user import UserCreate
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+        mock_storage.create_user = AsyncMock(side_effect=lambda u: u)
+
+        body = UserCreate(email="weak@test.io", password="abcdefgh")
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.hash_password"),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    create_user(
+                        body=body,
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400
+        assert "Password" in exc.value.detail
+
+
+class TestUpdateUserExtended:
+    def test_updates_phone_and_avatar(self):
+        import asyncio
+        from authglow.api.admin import update_user
+
+        mock_user = _make_test_user("ext-update", "ext@test.io")
+        mock_user.phone = None
+        mock_user.avatar_url = None
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.update_user = AsyncMock(side_effect=lambda u: u)
+
+        audit_svc = AsyncMock()
+
+        from authglow.models.admin import UserUpdate
+
+        update_data = UserUpdate(
+            phone="+1234567890",
+            avatar_url="https://example.com/avatar.png",
+        )
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                update_user(
+                    user_id="ext-update",
+                    update_data=update_data,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                )
+            )
+
+        assert result.phone == "+1234567890"
+        assert result.avatar_url == "https://example.com/avatar.png"
+        audit_svc.log_event.assert_called_once()
+
+    def test_updates_email_triggers_verification(self):
+        import asyncio
+        from authglow.api.admin import update_user
+        from authglow.models.admin import UserUpdate
+
+        mock_user = _make_test_user("email-change", "old@test.io")
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.update_email = AsyncMock(
+            side_effect=lambda uid, email: _make_test_user(uid, email)
+        )
+        mock_storage.update_user = AsyncMock(side_effect=lambda u: u)
+
+        audit_svc = AsyncMock()
+
+        update_data = UserUpdate(email="new@test.io")
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+            patch("authglow.api.admin.EmailVerificationService") as mock_ver_svc,
+        ):
+            mock_ver = AsyncMock()
+            mock_ver.create_verification_token = AsyncMock()
+            mock_ver.send_verification_email = AsyncMock(return_value=True)
+            mock_ver_svc.return_value = mock_ver
+
+            result = asyncio.get_event_loop().run_until_complete(
+                update_user(
+                    user_id="email-change",
+                    update_data=update_data,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                )
+            )
+
+        assert result.email == "new@test.io"
+        mock_storage.update_email.assert_called_once_with("email-change", "new@test.io")
+        mock_ver.create_verification_token.assert_called_once()
+        audit_svc.log_event.assert_called_once()
+
+    def test_updates_email_duplicate_returns_400(self):
+        import asyncio
+        from authglow.api.admin import update_user
+        from authglow.models.admin import UserUpdate
+        from fastapi import HTTPException
+
+        mock_user = _make_test_user("dup-email", "old@test.io")
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.update_email = AsyncMock(
+            side_effect=ValueError("User with email dup@test.io already exists")
+        )
+
+        update_data = UserUpdate(email="dup@test.io")
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=AsyncMock()),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    update_user(
+                        user_id="dup-email",
+                        update_data=update_data,
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400

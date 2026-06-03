@@ -22,10 +22,10 @@
   - [x] 4.1 Disabilita MFA forzatamente (senza reset)
   - [x] 4.2 Rigenera backup codes
   - [x] 4.3 Visualizzazione completa passkey nel drawer (con rimozione)
-- [ ] **Fase 5 — Provisioning e Lifecycle**
-  - [ ] 5.1 Crea utente con password immediata (non solo invite)
-  - [ ] 5.2 Modifica email utente (con/senza verifica)
-  - [ ] 5.3 Modifica telefono, avatar
+- [x] **Fase 5 — Provisioning e Lifecycle**
+  - [x] 5.1 Crea utente con password immediata (non solo invite)
+  - [x] 5.2 Modifica email utente (con/senza verifica)
+  - [x] 5.3 Modifica telefono, avatar
 - [ ] **Fase 6 — Attività e Audit**
   - [ ] 6.1 Login history per utente
   - [ ] 6.2 Eventi di sicurezza (cambi password, email, MFA)

@@ -155,6 +155,38 @@ class UserStorage:
         async with self._lock(f"user:{user.id}"):
             return await self._write_user(user)
 
+    async def update_email(self, user_id: str, new_email: str) -> Optional[User]:
+        """Update a user's email, handling the email index update."""
+        async with self._lock(f"user:{user_id}"), self._lock("email_index"):
+            user = await self.get_user(user_id)
+            if not user:
+                return None
+
+            old_key = user.email.lower()
+            new_key = new_email.lower()
+
+            if old_key == new_key:
+                user.email = new_email  # type: ignore[assignment]
+                return await self._write_user(user)
+
+            email_index = await self._load_email_index()
+
+            # Check new email not already taken
+            if new_key in email_index and email_index[new_key] != user_id:
+                raise ValueError(f"User with email {new_email} already exists")
+
+            # Update index
+            if old_key in email_index:
+                del email_index[old_key]
+            email_index[new_key] = user_id
+            await self._save_email_index(email_index)
+
+            # Update user
+            user.email = new_email  # type: ignore[assignment]
+            user_cache.pop(old_key, None)
+            user_cache.pop(new_key, None)
+            return await self._write_user(user)
+
     async def delete_user(self, user_id: str) -> bool:
         """Delete a user."""
         async with self._lock(f"user:{user_id}"), self._lock("email_index"):

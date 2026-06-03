@@ -39,6 +39,8 @@ class AdminUserDetail(BaseModel):
     last_login: Optional[datetime]
     first_name: Optional[str]
     last_name: Optional[str]
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
     scopes: List[str]
     mfa_enabled: bool
     mfa_verified: bool
@@ -60,6 +62,8 @@ class AdminUserDetail(BaseModel):
             last_login=user.last_login,
             first_name=user.first_name,
             last_name=user.last_name,
+            phone=user.phone,
+            avatar_url=user.avatar_url,
             scopes=user.scopes,
             mfa_enabled=user.mfa_enabled,
             mfa_verified=user.mfa_verified,
@@ -87,10 +91,13 @@ class UserUpdate(BaseModel):
     """Update user details (admin)."""
 
     is_active: Optional[bool] = None
+    email: Optional[EmailStr] = None
     email_verified: Optional[bool] = None
     scopes: Optional[List[str]] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class SetPasswordRequest(BaseModel):

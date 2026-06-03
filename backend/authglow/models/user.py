@@ -26,6 +26,8 @@ class User(BaseModel):
     # Additional profile fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
 
     # OAuth2 related
     scopes: List[str] = Field(default_factory=list)
@@ -67,7 +69,10 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
     scopes: List[str] = Field(default_factory=lambda: ["read"])
+    email_verified: bool = False
 
 
 class UserLogin(BaseModel):
@@ -86,6 +91,8 @@ class UserResponse(BaseModel):
     created_at: datetime
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
     scopes: List[str]
     mfa_enabled: bool = False
     mfa_verified: bool = False

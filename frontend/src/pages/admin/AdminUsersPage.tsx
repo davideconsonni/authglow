@@ -21,6 +21,7 @@ interface AdminUserDetail {
   last_login: string | null; is_invited: boolean; mfa_verified: boolean
   scopes: string[]; failed_login_count: number
   password_expired: boolean; locked_until: string | null
+  phone: string | null; avatar_url: string | null
 }
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
@@ -37,6 +38,9 @@ export function AdminUsersPage() {
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', first_name: '', last_name: '', scopes: '' })
   const [inviting, setInviting] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' })
+  const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null)
   const [bulking, setBulking] = useState(false)
@@ -87,6 +91,23 @@ export function AdminUsersPage() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
   }
 
+  const handleCreate = async () => {
+    if (!createForm.email || !createForm.password) return; setCreating(true); setError('')
+    try {
+      const scopes = createForm.scopes ? createForm.scopes.split(',').map(s => s.trim()).filter(Boolean) : []
+      await api.post('/api/admin/users/create', {
+        email: createForm.email,
+        password: createForm.password,
+        first_name: createForm.first_name || null,
+        last_name: createForm.last_name || null,
+        phone: createForm.phone || null,
+        avatar_url: createForm.avatar_url || null,
+        scopes,
+      })
+      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' }); setSuccess('User created.'); await refetch()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
+  }
+
   const toggleSelect = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n) }
   const toggleSelectAll = () => setSelected(selected.size === users.length ? new Set() : new Set(users.map(u => u.id)))
 
@@ -107,7 +128,7 @@ export function AdminUsersPage() {
   return (
     <div>
       <PageHeader title="Users" description="Manage registered users."
-        actions={<button onClick={() => setShowInvite(true)} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"><UserPlus size={16} />Invite User</button>}
+        actions={<div className="flex gap-2"><button onClick={() => setShowCreate(true)} data-testid="create-user-btn" className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"><UserPlus size={16} />Create User</button><button onClick={() => setShowInvite(true)} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"><Mail size={16} />Invite User</button></div>}
       />
       {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
       {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
@@ -171,6 +192,16 @@ export function AdminUsersPage() {
       <ConfirmDialog open={!!resetMfaId} title="Reset MFA" message="This will disable MFA for this user." confirmLabel="Reset MFA" variant="danger" onConfirm={handleResetMfa} onCancel={() => setResetMfaId(null)} />
       <ConfirmDialog open={!!bulkAction} title={`${bulkAction} ${selected.size} Users`} message={`${bulkAction === 'delete' ? 'Permanently delete' : bulkAction === 'activate' ? 'Activate' : 'Deactivate'} ${selected.size} selected user${selected.size !== 1 ? 's' : ''}.`} confirmLabel="Confirm" variant="danger" onConfirm={handleBulkAction} onCancel={() => setBulkAction(null)} />
 
+      {showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowCreate(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+        <h3 className="text-lg font-semibold text-text-primary">Create User</h3>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} placeholder="user@example.com" type="email" data-testid="create-user-email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Password</label><input value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 8 characters" type="password" data-testid="create-user-password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
+        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
+        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">Phone</label><input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} placeholder="+1234567890" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Avatar URL</label><input value={createForm.avatar_url} onChange={e => setCreateForm({...createForm, avatar_url: e.target.value})} placeholder="https://..." className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label><input value={createForm.scopes} onChange={e => setCreateForm({...createForm, scopes: e.target.value})} placeholder="openid, profile, email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
+        <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
+      </div></div>}
+
       {showInvite && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowInvite(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
         <h3 className="text-lg font-semibold text-text-primary">Invite User</h3>
         <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="user@example.com" type="email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
@@ -207,12 +238,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
   const [deletePasskeyId, setDeletePasskeyId] = useState<string | null>(null)
 
-  type EditState = { first: string; last: string; verified: boolean; scopes: string[] }
+  type EditState = { first: string; last: string; email: string; verified: boolean; scopes: string[]; phone: string; avatar_url: string }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
     switch (action.type) {
       case 'SET_FIRST': return { ...state, first: action.value as string }
       case 'SET_LAST': return { ...state, last: action.value as string }
+      case 'SET_EMAIL': return { ...state, email: action.value as string }
       case 'SET_VERIFIED': return { ...state, verified: action.value as boolean }
+      case 'SET_PHONE': return { ...state, phone: action.value as string }
+      case 'SET_AVATAR': return { ...state, avatar_url: action.value as string }
       case 'ADD_SCOPE': return { ...state, scopes: [...state.scopes, action.value as string] }
       case 'REMOVE_SCOPE': return { ...state, scopes: state.scopes.filter(s => s !== action.value) }
       case 'INIT': {
@@ -220,15 +254,18 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
         return {
           first: u?.first_name ?? '',
           last: u?.last_name ?? '',
+          email: u?.email ?? '',
           verified: u?.email_verified ?? false,
           scopes: u?.scopes ? [...u.scopes] : [],
+          phone: u?.phone ?? '',
+          avatar_url: u?.avatar_url ?? '',
         }
       }
       default: return state
     }
   }
 
-  const [edit, dispatch] = useReducer(reducer, { first: '', last: '', verified: false, scopes: [] })
+  const [edit, dispatch] = useReducer(reducer, { first: '', last: '', email: '', verified: false, scopes: [], phone: '', avatar_url: '' })
   const [newScope, setNewScope] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -257,12 +294,16 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const handleSave = async () => {
     setSaving(true); setError('')
     try {
-      await api.put(`/api/admin/users/${userId}`, {
+      const payload: Record<string, unknown> = {
         first_name: edit.first || null,
         last_name: edit.last || null,
         email_verified: edit.verified,
         scopes: edit.scopes,
-      })
+      }
+      if (edit.email !== user?.email) payload.email = edit.email || null
+      if (edit.phone !== (user?.phone ?? '')) payload.phone = edit.phone || null
+      if (edit.avatar_url !== (user?.avatar_url ?? '')) payload.avatar_url = edit.avatar_url || null
+      await api.put(`/api/admin/users/${userId}`, payload)
       setSuccess('User updated.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -418,6 +459,11 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
                 <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+              </div>
+              <div><label className="mb-1 block text-xs text-text-muted">Email</label><input value={edit.email} onChange={e => dispatch({ type: 'SET_EMAIL', value: e.target.value })} type="email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-xs text-text-muted">Phone</label><input value={edit.phone} onChange={e => dispatch({ type: 'SET_PHONE', value: e.target.value })} placeholder="+1234567890" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                <div><label className="mb-1 block text-xs text-text-muted">Avatar URL</label><input value={edit.avatar_url} onChange={e => dispatch({ type: 'SET_AVATAR', value: e.target.value })} placeholder="https://..." className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
               </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" /><span className="text-text-primary">Email verified</span></label>
             </div>

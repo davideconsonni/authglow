@@ -368,4 +368,85 @@ describe('AdminUsersPage', () => {
       expect(mockApi.post.mock.calls[0][0]).toBe('/api/admin/users/user-0/send-password-reset')
     })
   })
+
+  // --- Fase 5: Create User ---
+
+  it('shows Create User button', () => {
+    renderPage()
+    expect(screen.getByTestId('create-user-btn')).toBeInTheDocument()
+  })
+
+  it('opens create user modal on button click', () => {
+    renderPage()
+    fireEvent.click(screen.getByTestId('create-user-btn'))
+    expect(screen.getByTestId('create-user-email')).toBeInTheDocument()
+    expect(screen.getByTestId('create-user-password')).toBeInTheDocument()
+    expect(screen.getByTestId('create-user-submit')).toBeInTheDocument()
+  })
+
+  it('calls create-user API on modal submit', async () => {
+    mockApi.post.mockResolvedValue({})
+    renderPage()
+    fireEvent.click(screen.getByTestId('create-user-btn'))
+
+    fireEvent.change(screen.getByTestId('create-user-email'), { target: { value: 'new@test.com' } })
+    fireEvent.change(screen.getByTestId('create-user-password'), { target: { value: 'StrongP@ss1' } })
+
+    fireEvent.click(screen.getByTestId('create-user-submit'))
+
+    await waitFor(() => {
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/api/admin/users/create',
+        expect.objectContaining({ email: 'new@test.com', password: 'StrongP@ss1' }),
+      )
+    })
+  })
+
+  // --- Fase 5: Edit Profile with email, phone, avatar ---
+
+  it('shows email, phone and avatar fields in edit profile', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = {
+      id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L',
+      email_verified: true, is_active: true, mfa_enabled: false,
+      login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [],
+      phone: '+1234567890', avatar_url: 'https://example.com/avatar.png',
+    }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByDisplayValue('user0@test.com')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('+1234567890')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('https://example.com/avatar.png')).toBeInTheDocument()
+  })
+
+  it('saves phone and avatar via api.put', async () => {
+    mockApi.post.mockResolvedValue({})
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = {
+      id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L',
+      email_verified: true, is_active: true, mfa_enabled: false,
+      login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [],
+      phone: null, avatar_url: null,
+    }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    const phoneInput = screen.getByPlaceholderText('+1234567890')
+    fireEvent.change(phoneInput, { target: { value: '+1111111111' } })
+
+    const avatarInput = screen.getByPlaceholderText('https://...')
+    fireEvent.change(avatarInput, { target: { value: 'https://new.avatar.com/pic.png' } })
+
+    fireEvent.click(screen.getByText('Save Changes'))
+
+    await waitFor(() => {
+      expect(mockApi.put).toHaveBeenCalledWith(
+        '/api/admin/users/user-0',
+        expect.objectContaining({ phone: '+1111111111', avatar_url: 'https://new.avatar.com/pic.png' }),
+      )
+    })
+  })
 })
