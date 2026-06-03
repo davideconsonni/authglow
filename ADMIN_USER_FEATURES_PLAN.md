@@ -18,14 +18,10 @@
   - [x] 3.3 Visualizzazione sessioni attive per utente
   - [x] *Fix: passkey login ora crea refresh token per session tracking*
   - [x] *Fix: revoca sessioni su sé stessi forza il logout*
-- [ ] **Fase 4 — MFA e Passkey**
-  - [ ] 4.1 Disabilita MFA forzatamente (senza reset)
-  - [ ] 4.2 Rigenera backup codes
-  - [ ] 4.3 Visualizzazione completa passkey nel drawer (con rimozione)
-- [ ] **Fase 4 — MFA e Passkey**
-  - [ ] 4.1 Disabilita MFA forzatamente (senza reset)
-  - [ ] 4.2 Rigenera backup codes
-  - [ ] 4.3 Visualizzazione completa passkey nel drawer (con rimozione)
+- [x] **Fase 4 — MFA e Passkey**
+  - [x] 4.1 Disabilita MFA forzatamente (senza reset)
+  - [x] 4.2 Rigenera backup codes
+  - [x] 4.3 Visualizzazione completa passkey nel drawer (con rimozione)
 - [ ] **Fase 5 — Provisioning e Lifecycle**
   - [ ] 5.1 Crea utente con password immediata (non solo invite)
   - [ ] 5.2 Modifica email utente (con/senza verifica)

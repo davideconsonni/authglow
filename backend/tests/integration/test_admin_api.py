@@ -412,3 +412,152 @@ class TestRevokeAllUserSessions:
                 )
 
         assert exc.value.status_code == 404
+
+
+class TestDisableUserMFA:
+    def test_disables_mfa_and_preserves_backup_codes(self):
+        import asyncio
+        from authglow.api.admin import disable_user_mfa
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("mfa-target", "mfa@test.io")
+        mock_user.mfa_enabled = True
+        mock_user.mfa_secret = "some-secret"
+        mock_user.mfa_verified = True
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.update_user = AsyncMock(return_value=True)
+
+        audit_svc = AsyncMock()
+        mfa_svc = AsyncMock()
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+            patch("authglow.api.admin.MFAService", return_value=mfa_svc),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                disable_user_mfa(
+                    user_id="mfa-target",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                    mfa_service=mfa_svc,
+                )
+            )
+
+        assert result["message"] == "MFA disabled successfully"
+        assert mock_user.mfa_enabled is False
+        assert mock_user.mfa_secret is None
+        assert mock_user.mfa_verified is False
+        mock_storage.update_user.assert_called_once_with(mock_user)
+        mfa_svc.delete_backup_codes.assert_not_called()
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import disable_user_mfa
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    disable_user_mfa(
+                        user_id="nonexistent",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                        mfa_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 404
+
+    def test_returns_400_when_mfa_not_enabled(self):
+        import asyncio
+        from authglow.api.admin import disable_user_mfa
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("no-mfa", "nomfa@test.io")
+        mock_user.mfa_enabled = False
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    disable_user_mfa(
+                        user_id="no-mfa",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                        mfa_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400
+
+
+class TestRegenerateUserBackupCodes:
+    def test_regenerates_and_returns_codes(self):
+        import asyncio
+        from authglow.api.admin import regenerate_user_backup_codes
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(
+            return_value=_make_test_user("codes-target", "codes@test.io")
+        )
+
+        mfa_svc = MagicMock()
+        mfa_svc.generate_backup_codes = MagicMock(return_value=["CODE1-AAAA", "CODE2-BBBB"])
+        mfa_svc.save_backup_codes = AsyncMock(return_value=None)
+        mfa_svc.save_backup_codes = AsyncMock(return_value=None)
+
+        audit_svc = AsyncMock()
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+            patch("authglow.api.admin.MFAService", return_value=mfa_svc),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                regenerate_user_backup_codes(
+                    request=MagicMock(),
+                    user_id="codes-target",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                    mfa_service=mfa_svc,
+                )
+            )
+
+        assert result["message"] == "Backup codes regenerated successfully"
+        assert len(result["backup_codes"]) == 2
+        assert result["backup_codes"] == ["CODE1-AAAA", "CODE2-BBBB"]
+        mfa_svc.save_backup_codes.assert_called_once_with(
+            "codes-target", ["CODE1-AAAA", "CODE2-BBBB"]
+        )
+
+    def test_returns_404_when_user_not_found(self):
+        import asyncio
+        from authglow.api.admin import regenerate_user_backup_codes
+        from fastapi import HTTPException
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=None)
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    regenerate_user_backup_codes(
+                        request=MagicMock(),
+                        user_id="nonexistent",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                        mfa_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 404

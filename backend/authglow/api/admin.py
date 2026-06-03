@@ -332,6 +332,73 @@ async def reset_user_mfa(
     return {"message": "MFA reset successfully"}
 
 
+@router.post("/api/admin/users/{user_id}/disable-mfa")
+async def disable_user_mfa(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+    mfa_service: MFAService = Depends(get_mfa_service),
+):
+    """Disable MFA for a user without deleting backup codes."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
+
+    # Disable MFA (keep backup codes intact)
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_verified = False
+    await storage.update_user(user)
+
+    await audit_service.log_event(
+        event_type="mfa_disabled_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
+    )
+
+    return {"message": "MFA disabled successfully"}
+
+
+@router.post("/api/admin/users/{user_id}/regenerate-backup-codes")
+async def regenerate_user_backup_codes(
+    request: Request,
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+    mfa_service: MFAService = Depends(get_mfa_service),
+):
+    """Regenerate backup codes for a user."""
+    user = await storage.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Generate new backup codes
+    backup_codes = mfa_service.generate_backup_codes(10)
+
+    # Save new backup codes (replaces old ones)
+    await mfa_service.save_backup_codes(user_id, backup_codes)
+
+    await audit_service.log_event(
+        event_type="backup_codes_regenerated_by_admin",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        severity="warning",
+    )
+
+    return {
+        "message": "Backup codes regenerated successfully",
+        "backup_codes": backup_codes,
+    }
+
+
 # --- Phase 2: Password and Credentials ---
 
 

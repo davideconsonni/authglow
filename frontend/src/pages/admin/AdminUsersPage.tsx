@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut } from 'lucide-react'
+import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -188,7 +188,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const queryClient = useQueryClient()
   const { data: user, isLoading } = useApiQuery<AdminUserDetail>(['user-detail', userId], `/api/admin/users/${userId}`)
   const { data: keys } = useApiQuery<unknown[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
-  const { data: passkeys } = useApiQuery<unknown[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys`)
+  const { data: passkeys } = useApiQuery<PasskeyItem[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys/list`)
   const { data: sessionsData, refetch: refetchSessions } = useApiQuery<{ items: SessionItem[]; total: number }>(
     ['user-sessions', userId], `/api/admin/users/${userId}/sessions`, { enabled: true },
   )
@@ -197,7 +197,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     id: string; client_id: string; scopes: string[]
     created_at: string; expires_at: string | null; last_used_at: string | null; ip_address: string | null
   }
+
+  interface PasskeyItem {
+    credential_id: string; name: string; device_type: string | null
+    transports: string[]; created_at: string; last_used_at: string | null
+  }
+
   const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null)
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
+  const [deletePasskeyId, setDeletePasskeyId] = useState<string | null>(null)
 
   type EditState = { first: string; last: string; verified: boolean; scopes: string[] }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
@@ -293,6 +301,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           window.location.assign('/auth/login')
           return
         }
+      } else if (confirmAction === 'regenerate-backup-codes') {
+        const resp = await api.post<{ backup_codes: string[] }>(`/api/admin/users/${userId}/regenerate-backup-codes`)
+        setBackupCodes(resp.backup_codes)
       } else {
         await api.post(`/api/admin/users/${userId}/${confirmAction}`)
       }
@@ -322,6 +333,20 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     }
   }
 
+  const handleDeletePasskey = async () => {
+    if (!deletePasskeyId) return
+    setError('')
+    try {
+      await api.delete(`/api/admin/users/${userId}/passkeys/${deletePasskeyId}`)
+      setDeletePasskeyId(null)
+      setSuccess('Passkey removed.')
+      queryClient.invalidateQueries({ queryKey: ['user-passkeys', userId] })
+      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete passkey')
+    }
+  }
+
   function getActionSuccessMessage(action: string): string {
     const messages: Record<string, string> = {
       'send-password-reset': 'Password reset email sent.',
@@ -329,6 +354,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'unlock': 'Account unlocked successfully.',
       'reset-failed-attempts': 'Failed attempts reset.',
       'revoke-all-sessions': 'All sessions revoked.',
+      'disable-mfa': 'MFA disabled.',
+      'reset-mfa': 'MFA reset.',
+      'regenerate-backup-codes': 'Backup codes regenerated.',
     }
     return messages[action] || 'Action completed.'
   }
@@ -340,6 +368,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'unlock': 'Unlock Account',
       'reset-failed-attempts': 'Reset Failed Attempts',
       'revoke-all-sessions': 'Revoke All Sessions',
+      'disable-mfa': 'Disable MFA',
+      'reset-mfa': 'Reset MFA',
+      'regenerate-backup-codes': 'Regenerate Backup Codes',
     }
     return titles[action] || ''
   }
@@ -351,6 +382,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       'unlock': 'Unlock this account and reset failed login attempts?',
       'reset-failed-attempts': 'Reset the failed login counter without unlocking the account?',
       'revoke-all-sessions': 'Revoke all active sessions for this user? They will be logged out of all devices.',
+      'disable-mfa': 'Disable MFA for this user? They will need to re-enroll to use MFA again.',
+      'reset-mfa': 'Reset MFA and delete backup codes for this user?',
+      'regenerate-backup-codes': 'Replace existing backup codes with new ones? Old codes will stop working.',
     }
     return messages[action] || ''
   }
@@ -431,6 +465,30 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 )}
               </div>
             </div>
+
+            <div className="border-t border-surface-2 pt-3 space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">MFA</h4>
+              <div className="grid grid-cols-1 gap-2">
+                {user.mfa_enabled && (
+                  <button onClick={() => setConfirmAction('disable-mfa')} data-testid="disable-mfa-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    <Shield size={12} className="inline mr-1.5" />Disable MFA
+                  </button>
+                )}
+                {user.mfa_enabled && (
+                  <button onClick={() => setConfirmAction('reset-mfa')} data-testid="reset-mfa-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    <ShieldOff size={12} className="inline mr-1.5" />Reset MFA
+                  </button>
+                )}
+                {user.mfa_enabled && (
+                  <button onClick={() => setConfirmAction('regenerate-backup-codes')} data-testid="regenerate-codes-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                    <RefreshCw size={12} className="inline mr-1.5" />Regenerate Backup Codes
+                  </button>
+                )}
+                {!user.mfa_enabled && (
+                  <p className="text-xs text-text-muted italic py-1">MFA is not enabled</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
@@ -507,7 +565,31 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           <ConfirmDialog open={confirmAction === 'unlock'} title={getActionTitle('unlock')} message={getActionMessage('unlock')} confirmLabel="Unlock" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'revoke-all-sessions'} title={getActionTitle('revoke-all-sessions')} message={getActionMessage('revoke-all-sessions')} confirmLabel="Revoke All" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'disable-mfa'} title={getActionTitle('disable-mfa')} message={getActionMessage('disable-mfa')} confirmLabel="Disable" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'regenerate-backup-codes'} title={getActionTitle('regenerate-backup-codes')} message={getActionMessage('regenerate-backup-codes')} confirmLabel="Regenerate" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={!!revokeSessionId} title="Revoke Session" message="Revoke this session? The user will be logged out of this device." confirmLabel="Revoke" variant="danger" onConfirm={handleRevokeSession} onCancel={() => setRevokeSessionId(null)} />
+          <ConfirmDialog open={!!deletePasskeyId} title="Delete Passkey" message="Remove this passkey from the user's account?" confirmLabel="Delete" variant="danger" onConfirm={handleDeletePasskey} onCancel={() => setDeletePasskeyId(null)} />
+
+          {backupCodes && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setBackupCodes(null)} />
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+                <h4 className="text-sm font-semibold text-text-primary">New Backup Codes</h4>
+                <p className="text-xs text-text-muted">Share these codes with the user. Each code can only be used once.</p>
+                <div className="space-y-1.5">
+                  {backupCodes.map((code, i) => (
+                    <div key={i} className="rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs text-text-primary text-center tracking-wider">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setBackupCodes(null)} className="w-full rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet">
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
           {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
@@ -517,8 +599,41 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             Save Changes
           </button>
 
-          {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{(keys as Array<Record<string, unknown>>).map(k => <div key={k.id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name as string}</span><code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.id as string)?.slice(0,8)) as string)}...</code></div>)}</div></div>}
-          {passkeys && passkeys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">Passkeys ({passkeys.length})</h4><div className="space-y-1.5">{(passkeys as Array<Record<string, unknown>>).map(pk => <div key={(pk.id ?? pk.credential_id) as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary">{(pk.name ?? pk.device_type ?? 'Passkey') as string}</span><span className="ml-2 text-text-muted">{pk.created_at ? formatDateTime(pk.created_at as string) : ''}</span></div>)}</div></div>}
+          {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{(keys as Array<Record<string, unknown>>).map(k => <div key={k.key_id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name as string}</span><code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.key_id as string)?.slice(0,8)) as string)}...</code></div>)}</div></div>}
+          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Passkeys {passkeys ? `(${passkeys.length})` : ''}</h4>
+            {!passkeys ? (
+              <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+            ) : passkeys.length === 0 ? (
+              <div className="flex flex-col items-center py-4 text-center">
+                <Fingerprint size={24} className="text-text-muted mb-2 opacity-40" />
+                <p className="text-xs text-text-muted italic">No passkeys registered</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {passkeys.map(pk => (
+                  <div key={pk.credential_id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {pk.device_type === 'phone' ? <Smartphone size={14} className="shrink-0 text-text-muted" />
+                        : pk.device_type === 'computer' ? <Monitor size={14} className="shrink-0 text-text-muted" />
+                        : <KeyRound size={14} className="shrink-0 text-text-muted" />}
+                      <div className="min-w-0">
+                        <p className="text-text-primary truncate">{pk.name}</p>
+                        <p className="text-text-muted">
+                          {formatDateTime(pk.created_at)}
+                          {pk.last_used_at ? ` · Last used ${formatDateTime(pk.last_used_at)}` : ''}
+                          {pk.transports?.length ? ` · ${pk.transports.join(', ')}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setDeletePasskeyId(pk.credential_id)} data-testid={`delete-passkey-${pk.credential_id}`} className="shrink-0 rounded p-1 text-text-muted hover:text-semantic-error ml-2" title="Delete passkey">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </> : <p className="text-sm text-text-muted text-center py-8">Could not load user details.</p>}
       </div>
     </div>
