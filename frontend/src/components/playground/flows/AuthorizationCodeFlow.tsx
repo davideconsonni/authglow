@@ -114,16 +114,16 @@ export function AuthorizationCodeFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID *</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" data-testid="playground-client-id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client Secret</label>
-              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" data-testid="playground-client-secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
             </div>
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Redirect URI *</label>
-            <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000/callback" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000/callback" data-testid="playground-redirect-uri" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -138,7 +138,7 @@ export function AuthorizationCodeFlow() {
               <button onClick={() => setLocalState(generateState())} className="rounded-xl bg-surface-2 px-3 py-2.5 text-text-muted hover:text-text-secondary" title="Regenerate state"><RefreshCw size={14} /></button>
             </div>
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} data-testid="playground-config-next" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -177,11 +177,12 @@ export function AuthorizationCodeFlow() {
           </p>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Authorization Code *</label>
-            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." data-testid="playground-auth-code" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
           </div>
           <button
             onClick={handleExchangeCode}
             disabled={loading || !localCode}
+            data-testid="playground-exchange-code"
             className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}

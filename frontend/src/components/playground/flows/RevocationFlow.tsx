@@ -130,7 +130,7 @@ export function RevocationFlow() {
             <button onClick={() => setCurrentStep('input')} className="rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">
               Back
             </button>
-            <button onClick={handleRevoke} disabled={loading} className="flex items-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-sm font-semibold text-white hover:scale-[1.02] disabled:opacity-50">
+            <button onClick={handleRevoke} disabled={loading} data-testid="confirm-revoke-btn" className="flex items-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-sm font-semibold text-white hover:scale-[1.02] disabled:opacity-50">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
               Confirm Revocation
             </button>

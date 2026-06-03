@@ -84,7 +84,7 @@ export function IntrospectionFlow() {
           </p>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Token *</label>
-            <textarea value={localToken} onChange={(e) => setLocalToken(e.target.value)} placeholder="eyJhbGciOiJSUzI1NiIs..." rows={4} className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y" />
+            <textarea value={localToken} onChange={(e) => setLocalToken(e.target.value)} placeholder="eyJhbGciOiJSUzI1NiIs..." data-testid="introspect-token-input" rows={4} className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y" />
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Token Type Hint</label>
@@ -136,7 +136,7 @@ export function IntrospectionFlow() {
               <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
             </div>
           </div>
-          <button onClick={handleIntrospect} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleIntrospect} disabled={loading} data-testid="introspect-btn" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
             Introspect Token
           </button>
