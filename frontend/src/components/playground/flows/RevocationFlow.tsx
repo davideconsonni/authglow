@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { Trash2, Loader2, RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, Trash2, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/lib/api'
+import { decodeJwt } from '@/lib/jwt'
 import { usePlaygroundStore } from '@/stores/playgroundStore'
 import { FlowStepper } from '../FlowStepper'
+import { JsonHighlight } from '../JsonHighlight'
 import { ResponsePanel } from '../ResponsePanel'
 
 const STEPS = [
@@ -23,6 +25,9 @@ export function RevocationFlow() {
 
   const [localToken, setLocalToken] = useState(store.accessToken || store.refreshToken)
   const [localHint, setLocalHint] = useState('')
+
+  const decodedClaims = useMemo(() => decodeJwt(localToken), [localToken])
+  const [showDecoded, setShowDecoded] = useState(true)
 
   const handleInputNext = () => {
     setCompleted(['input'])
@@ -82,6 +87,29 @@ export function RevocationFlow() {
               <option value="refresh_token">Refresh Token</option>
             </select>
           </div>
+          {decodedClaims && (
+            <div className="rounded-xl border border-surface-2 bg-surface-1 overflow-hidden">
+              <button
+                onClick={() => setShowDecoded(!showDecoded)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+              >
+                {showDecoded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                Decoded Claims
+              </button>
+              {showDecoded && (
+                <div className="border-t border-surface-2">
+                  <div className="px-3 py-2 border-b border-surface-2">
+                    <p className="text-[11px] font-medium text-text-muted mb-1">Header</p>
+                    <JsonHighlight json={JSON.stringify(decodedClaims.header, null, 2)} maxHeight="max-h-[160px]" />
+                  </div>
+                  <div className="px-3 py-2">
+                    <p className="text-[11px] font-medium text-text-muted mb-1">Payload</p>
+                    <JsonHighlight json={JSON.stringify(decodedClaims.payload, null, 2)} maxHeight="max-h-[240px]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={handleInputNext} disabled={!localToken} className="flex items-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-sm font-semibold text-white hover:scale-[1.02] disabled:opacity-50">
             Next <Trash2 size={16} />
           </button>

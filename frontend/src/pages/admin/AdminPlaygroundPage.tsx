@@ -9,6 +9,7 @@ import { IntrospectionFlow } from '@/components/playground/flows/IntrospectionFl
 import { RevocationFlow } from '@/components/playground/flows/RevocationFlow'
 import { ApiKeyExchangeFlow } from '@/components/playground/flows/ApiKeyExchangeFlow'
 import { OidcDiscoveryFlow } from '@/components/playground/flows/OidcDiscoveryFlow'
+import { UserInfoFlow } from '@/components/playground/flows/UserInfoFlow'
 import { GenericRequestFlow } from '@/components/playground/flows/GenericRequestFlow'
 
 const FLOW_TITLES: Record<PlaygroundFlow, string> = {
@@ -20,6 +21,7 @@ const FLOW_TITLES: Record<PlaygroundFlow, string> = {
   'revocation': 'Token Revocation',
   'api-key-exchange': 'API Key Exchange',
   'oidc-discovery': 'OIDC Discovery',
+  'userinfo': 'UserInfo',
   'generic': 'Generic Request',
 }
 
@@ -32,6 +34,7 @@ const FLOW_DESCRIPTIONS: Record<PlaygroundFlow, string> = {
   'revocation': 'RFC 7009 — Revoke access or refresh tokens.',
   'api-key-exchange': 'Exchange an API key for a short-lived JWT access token.',
   'oidc-discovery': 'OpenID Connect Discovery — explore provider metadata.',
+  'userinfo': 'OpenID Connect UserInfo — fetch user claims with access token.',
   'generic': 'Free-form API request builder for any endpoint.',
 }
 
@@ -51,6 +54,7 @@ export function AdminPlaygroundPage() {
       case 'revocation': return <RevocationFlow />
       case 'api-key-exchange': return <ApiKeyExchangeFlow />
       case 'oidc-discovery': return <OidcDiscoveryFlow />
+      case 'userinfo': return <UserInfoFlow />
       case 'generic': return <GenericRequestFlow />
     }
   }

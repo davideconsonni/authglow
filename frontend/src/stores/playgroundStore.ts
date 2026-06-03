@@ -9,6 +9,7 @@ export type PlaygroundFlow =
   | 'revocation'
   | 'api-key-exchange'
   | 'oidc-discovery'
+  | 'userinfo'
   | 'generic'
 
 export interface PlaygroundState {

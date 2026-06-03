@@ -7,6 +7,7 @@ import {
   BookOpen,
   RefreshCw,
   Trash2,
+  User,
   Braces,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -68,6 +69,12 @@ export const FLOWS: FlowDef[] = [
     label: 'OIDC Discovery',
     icon: BookOpen,
     description: 'Explore the OIDC provider metadata',
+  },
+  {
+    id: 'userinfo',
+    label: 'UserInfo',
+    icon: User,
+    description: 'Fetch OIDC user claims via access token',
   },
   {
     id: 'generic',

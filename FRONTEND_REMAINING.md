@@ -10,10 +10,10 @@
 The Playground page is a blank shell. Make it a functional OAuth2/OIDC debug console.
 
 - [x] **14.1** Token Introspection — `POST /oauth2/introspect` with a textarea for the token, show decoded claims
-- [ ] **14.2** UserInfo — `GET /oauth2/userinfo` button that shows the OIDC user info response
-- [ ] **14.3** Revoke token — `POST /oauth2/revoke` with token input + feedback
-- [ ] **14.4** API Key token exchange — `POST /api/token/api-key` demo
-- [ ] **14.5** OIDC Discovery — show `GET /.well-known/openid-configuration` response
+- [x] **14.2** UserInfo — `GET /oauth2/userinfo` button that shows the OIDC user info response
+- [x] **14.3** Revoke token — `POST /oauth2/revoke` with token input + feedback
+- [x] **14.4** API Key token exchange — `POST /api/token/api-key` demo
+- [x] **14.5** OIDC Discovery — show `GET /.well-known/openid-configuration` response
 - [ ] **14.6** Format responses as pretty-printed JSON with syntax highlighting
 - [ ] **14.7** E2E test: create client → authorize → introspect → revoke flow
 
