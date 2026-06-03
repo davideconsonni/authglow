@@ -99,14 +99,14 @@ export function AdminFederationPage() {
       if (editId) {
         const updatePayload: Record<string, unknown> = {
           label: form.label,
-          description: form.description || null,
+          description: form.description || '',
           issuer: form.issuer,
           client_id: form.client_id,
           scopes,
-          icon_uri: form.icon_uri || null,
-          logo_uri: form.logo_uri || null,
+          icon_uri: form.icon_uri || '',
+          logo_uri: form.logo_uri || '',
           enabled: form.enabled,
-          auth_levels: authLevels.length > 0 ? authLevels : null,
+          auth_levels: authLevels,
           claims_mapping: form.claims_mapping,
         }
         if (clientSecret) updatePayload.client_secret = clientSecret
@@ -234,9 +234,9 @@ export function AdminFederationPage() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
+          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
             <h3 className="mb-4 text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
 
             <div className="space-y-3 mb-5">

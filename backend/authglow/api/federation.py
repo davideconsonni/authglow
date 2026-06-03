@@ -232,7 +232,8 @@ async def update_provider(
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: update a provider."""
-    updated = await storage.update_provider(provider_id, updates.model_dump(exclude_none=True))
+    update_data = updates.model_dump(exclude_unset=True)
+    updated = await storage.update_provider(provider_id, update_data)
     if not updated:
         raise HTTPException(status_code=404, detail="Provider not found")
     return updated
