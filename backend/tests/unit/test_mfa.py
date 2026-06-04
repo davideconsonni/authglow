@@ -22,6 +22,14 @@ class TestTOTPGeneration:
         qr = mfa_service.generate_qr_code(uri)
         assert qr.startswith("data:image/png;base64,")
 
+    def test_totp_secret_uses_secrets_not_random(self, mfa_service):
+        """VAPT-005: TOTP secret must use crypto-secure secrets module, not python random."""
+        import inspect
+
+        src = inspect.getsource(mfa_service.generate_totp_secret)
+        assert "secrets.token_bytes" in src
+        assert "pyotp.random_base32" not in src
+
     def test_verify_totp_valid(self, mfa_service):
         import pyotp
 

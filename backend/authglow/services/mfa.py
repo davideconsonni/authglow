@@ -56,8 +56,8 @@ class MFAService:
         self._lock = named_lock()
 
     def generate_totp_secret(self) -> str:
-        """Generate a new TOTP secret."""
-        return pyotp.random_base32()
+        """Generate a new TOTP secret using cryptographic randomness."""
+        return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
 
     def get_totp_uri(self, secret: str, email: str) -> str:
         """Get TOTP provisioning URI for QR code."""

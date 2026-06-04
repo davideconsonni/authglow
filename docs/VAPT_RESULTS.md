@@ -42,10 +42,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Crypto / RNG
 
-- [ ] **VAPT-005** — TOTP secret generated with non-cryptographic `random.choice` (via `pyotp.random_base32()`)
-  - **Location**: `backend/authglow/services/mfa.py:60`
-  - **Description**: `pyotp.random_base32()` uses Python's `random` module (Mersenne Twister). The rest of `mfa.py` imports `secrets` but does not use it for the secret. An attacker who observes enough outputs can recover PRNG state and predict future TOTP secrets.
-  - **Fix**: Replace with a `secrets`-based helper, e.g. `secrets.choice` over the base32 alphabet, or `secrets.token_bytes(20)` then base32-encode.
+- [x] **VAPT-005** — TOTP secret generated with non-cryptographic `random.choice` (via `pyotp.random_base32()`)
+  - **Fix**: Replaced with `base64.b32encode(secrets.token_bytes(20))` — crypto-secure randomness.
 
 ### Authorization / privilege escalation
 
