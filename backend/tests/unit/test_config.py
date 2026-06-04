@@ -105,6 +105,8 @@ def _make_settings_with(tmp_path, secret_key, app_env):
         private_key_path=str(tmp_path / "keys" / "private_key.pem"),
         public_key_path=str(tmp_path / "keys" / "public_key.pem"),
         jwt_auto_rotate=False,
+        oauth2_client_id="test-client-id",
+        oauth2_client_secret="test-client-secret",
     )
 
 

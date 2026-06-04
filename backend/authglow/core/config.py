@@ -283,8 +283,14 @@ class Settings(BaseSettings):
 
     # OAuth2 Settings
     oauth2_authorization_code_expire_minutes: int = 10
-    oauth2_client_id: str = "default-client-id"
-    oauth2_client_secret: str = "default-client-secret"
+    oauth2_client_id: str = Field(
+        default="change-me-in-production",
+        description="OAuth2 client ID. Must be overridden in production.",
+    )
+    oauth2_client_secret: str = Field(
+        default="change-me-in-production",
+        description="OAuth2 client secret. Must be overridden in production.",
+    )
     oauth2_reject_unknown_scopes: bool = False
 
     # CORS Security Settings
@@ -450,6 +456,46 @@ class Settings(BaseSettings):
                 f"'{self.app_env}'. Generate a real cryptographic key with "
                 "openssl rand -hex 32 and set it in the environment before "
                 "starting the service."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_oauth2_defaults_for_production(self):
+        """Hard-fail in production if OAuth2 client credentials use known defaults.
+
+        The default client-id / client-secret are public knowledge. In production,
+        an operator must override them with unique, generated values.
+        """
+        if not self.app_env or self.app_env.lower() != "production":
+            return self
+
+        known_defaults = (
+            "default-client-id",
+            "default-client-secret",
+            "change-me",
+            "change_me",
+            "change-me-in-production",
+            "change_me_in_production",
+            "replace-me",
+            "replace_me",
+        )
+        client_id_lower = self.oauth2_client_id.lower()
+        client_secret_lower = self.oauth2_client_secret.lower()
+        if any(d in client_id_lower for d in known_defaults):
+            raise ValueError(
+                "OAUTH2_CLIENT_ID appears to be a placeholder or default value "
+                f"('{self.oauth2_client_id}') but app_env is "
+                f"'{self.app_env}'. Generate unique OAuth2 credentials with "
+                'python -c "import secrets; print(secrets.token_urlsafe(16))" '
+                "and set OAUTH2_CLIENT_ID / OAUTH2_CLIENT_SECRET."
+            )
+        if any(d in client_secret_lower for d in known_defaults):
+            raise ValueError(
+                "OAUTH2_CLIENT_SECRET appears to be a placeholder or default value "
+                f"(matches a known default pattern) but app_env is "
+                f"'{self.app_env}'. Generate unique OAuth2 credentials with "
+                'python -c "import secrets; print(secrets.token_urlsafe(32))" '
+                "and set OAUTH2_CLIENT_ID / OAUTH2_CLIENT_SECRET."
             )
         return self
 

@@ -254,6 +254,8 @@ class TestConfigCookieSettings:
         settings = Settings(
             secret_key="a" * 32,
             app_env="production",
+            oauth2_client_id="prod-client-id",
+            oauth2_client_secret="prod-client-secret",
         )
         assert settings.auth_cookie_secure is True
 
