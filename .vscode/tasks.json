@@ -1,0 +1,66 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Backend",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/backend && source .venv/bin/activate && uvicorn main:app --reload --host 0.0.0.0 --port 8080",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Uvicorn running on.*",
+          "endsPattern": "^.*"
+        }
+      }
+    },
+    {
+      "label": "Start Frontend",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/frontend && npm run dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Local:.*",
+          "endsPattern": "^.*"
+        }
+      }
+    },
+    {
+      "label": "Start All",
+      "dependsOn": ["Start Backend", "Start Frontend"],
+      "dependsOrder": "parallel"
+    },
+    {
+      "label": "Test Backend",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/backend && source .venv/bin/activate && pytest -q --tb=line -n auto",
+      "group": "test"
+    },
+    {
+      "label": "Test Frontend",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/frontend && npm test",
+      "group": "test"
+    },
+    {
+      "label": "Test E2E",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/frontend && npm run test:e2e",
+      "group": "test"
+    }
+  ]
+}
