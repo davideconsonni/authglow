@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth } from '../auth.setup'
 
 test.describe('Admin — Search user → Toggle active → View detail', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
-
   test('search for a user, toggle active status, and view detail drawer', async ({ page }) => {
     await page.goto('/admin/users')
     await page.waitForLoadState('networkidle')

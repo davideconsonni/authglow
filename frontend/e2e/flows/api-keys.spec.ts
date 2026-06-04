@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth } from '../auth.setup'
 
 test.describe('API Keys — Create → Copy → Revoke', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
-
   test('create and revoke an API key', async ({ page }) => {
     await page.goto('/api-keys')
     await page.waitForLoadState('networkidle')

@@ -1,12 +1,7 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth } from '../auth.setup'
 
 test.describe('Mobile layout — 375x812 (iPhone 14)', () => {
   test.use({ viewport: { width: 375, height: 812 } })
-
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
 
   test('login page collapses to single column', async ({ page }) => {
     await page.goto('/auth/login')
@@ -24,7 +19,7 @@ test.describe('Mobile layout — 375x812 (iPhone 14)', () => {
     // Sidebar should be hidden on mobile (only toggle visible)
     await expect(page.locator('[data-testid="sidebar"]')).toBeHidden()
     // Page title should be visible
-    await expect(page.locator('[data-testid="page-title"]')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible()
   })
 
   test('sidebar can be opened and closed on mobile', async ({ page }) => {

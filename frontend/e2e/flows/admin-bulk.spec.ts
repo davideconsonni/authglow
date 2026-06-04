@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth } from '../auth.setup'
 
 test.describe('Admin — Bulk select → Deactivate → Verify', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
-
   test('bulk select users, deactivate, and verify', async ({ page }) => {
     await page.goto('/admin/users')
     await page.waitForLoadState('networkidle')

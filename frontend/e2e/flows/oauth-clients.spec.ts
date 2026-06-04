@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth } from '../auth.setup'
 
 test.describe('OAuth Clients — Create → Rotate Secret → Delete', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
-
   test('create, rotate secret, and delete an OAuth client', async ({ page }) => {
     await page.goto('/admin/oauth-clients')
     await page.waitForLoadState('networkidle')

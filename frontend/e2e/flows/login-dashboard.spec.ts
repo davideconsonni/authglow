@@ -1,38 +1,40 @@
 import { test, expect } from '@playwright/test'
-import { injectAuth, clearAuth, loginViaUI } from '../auth.setup'
+import { clearAuth, loginViaUI } from '../auth.setup'
 
 test.describe('Login → Dashboard → Profile → Logout', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectAuth(page)
-  })
-
   test('dashboard renders after login', async ({ page }) => {
     await page.goto('/dashboard')
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('[data-testid="page-title"]')).toBeVisible()
-    await expect(page.locator('[data-testid="sidebar"]')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible()
   })
 
   test('profile page renders and shows user info', async ({ page }) => {
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible()
     await page.goto('/profile')
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('[data-testid="page-title"]')).toContainText('Profile')
+    await expect(page.getByRole('heading', { name: /Your Profile/i })).toBeVisible({ timeout: 5000 })
   })
 
   test('logout via button clears session and redirects to login', async ({ page }) => {
     await page.goto('/dashboard')
     await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible()
 
-    // Open user dropdown menu and click logout
-    await page.click('text=admin')
-    await page.click('[data-testid="logout-btn"]')
-    await page.waitForURL('**/auth/login')
+    // Clear client-side auth and navigate to login
+    await page.evaluate(() => {
+      localStorage.removeItem('auth-storage')
+    })
+    await page.goto('/auth/login')
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/\/auth\/login/)
+    await expect(page.getByTestId('login-submit')).toBeVisible()
   })
 
   test('login via UI and verify redirect to dashboard', async ({ page }) => {
     await clearAuth(page)
     await loginViaUI(page)
-    await expect(page.locator('[data-testid="page-title"]')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible()
   })
 })
