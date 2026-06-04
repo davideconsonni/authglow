@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
+
 class APIKey(BaseModel):
     """API Key model."""
 
@@ -44,9 +45,13 @@ class APIKey(BaseModel):
     allowed_ips: List[str] = Field(default_factory=list)
 
 
-
 class APIKeyCreate(BaseModel):
-    """Request model for creating an API key."""
+    """Request model for creating an API key.
+
+    When ``user_email`` is provided and the caller is an admin, the key is
+    created for the target user.  Without ``user_email`` the key is created
+    for the authenticated caller (self-service).
+    """
 
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
@@ -54,6 +59,8 @@ class APIKeyCreate(BaseModel):
     expires_in_days: Optional[int] = Field(None, ge=1, le=365)
     never_expires: bool = False
     allowed_ips: List[str] = Field(default_factory=list)
+    user_email: Optional[str] = Field(None, max_length=254)
+
 
 class APIKeyResponse(BaseModel):
     """Response model for API key (without sensitive data)."""
@@ -80,10 +87,12 @@ class APIKeyResponse(BaseModel):
         """Alias for total_requests for backward compatibility."""
         return self.total_requests
 
+
 class APIKeyWithSecret(APIKeyResponse):
     """Response model including the plaintext key (only returned on creation)."""
 
     api_key: str  # Full plaintext key, only shown once
+
 
 class APIKeyUpdate(BaseModel):
     """Request model for updating an API key."""
@@ -93,6 +102,7 @@ class APIKeyUpdate(BaseModel):
     scopes: Optional[List[str]] = None
     is_active: Optional[bool] = None
     allowed_ips: Optional[List[str]] = None
+
 
 class APIKeyUsageStats(BaseModel):
     """Usage statistics for an API key."""

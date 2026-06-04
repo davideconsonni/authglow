@@ -29,13 +29,33 @@ async def create_api_key(
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Create a new API key for the current user.
+    """Create a new API key.
+
+    Admins may pass ``user_email`` to create a key for another user.
+    Without ``user_email`` the key is created for the authenticated caller.
 
     The API key secret will only be shown once, so save it securely!
     """
+    if key_data.user_email:
+        if "admin" not in current_user.scopes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins may create API keys for other users",
+            )
+        user_storage = UserStorage()
+        target_user = await user_storage.get_user_by_email(key_data.user_email)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User not found: {key_data.user_email}",
+            )
+        owner_id = target_user.id
+    else:
+        owner_id = current_user.id
+
     # Create the key
     api_key, plaintext_key = await api_key_service.create_key(
-        user_id=current_user.id, key_data=key_data, created_by=current_user.id
+        user_id=owner_id, key_data=key_data, created_by=current_user.id
     )
 
     # Log the creation
@@ -47,6 +67,7 @@ async def create_api_key(
             "key_id": api_key.key_id,
             "key_name": api_key.name,
             "scopes": api_key.scopes,
+            "owner_id": owner_id,
         },
         ip_address=request.client.host if request.client else None,
     )

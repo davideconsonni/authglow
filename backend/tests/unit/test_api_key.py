@@ -1,13 +1,37 @@
-import json
 import asyncio
-import pytest
 from datetime import datetime, timedelta
-from authglow.models.api_key import APIKeyCreate
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from authglow.core.datetime import utcnow
+from authglow.models.api_key import APIKeyCreate
 
 
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
+
+
+class TestAPIKeyCreateModel:
+    def test_user_email_field_accepted(self):
+        """APIKeyCreate model accepts optional user_email field."""
+        key_data = APIKeyCreate(
+            name="Test Key", scopes=["read"], never_expires=True, user_email="target@example.com"
+        )
+        assert key_data.user_email == "target@example.com"
+
+    def test_user_email_field_defaults_none(self):
+        """APIKeyCreate model defaults user_email to None."""
+        key_data = APIKeyCreate(name="Test Key", scopes=["read"], never_expires=True)
+        assert key_data.user_email is None
+
+    def test_user_email_field_exceeds_max_length(self):
+        """APIKeyCreate rejects user_email over 254 chars."""
+        long_email = "a" * 250 + "@example.com"
+        with pytest.raises(Exception):
+            APIKeyCreate(
+                name="Test Key", scopes=["read"], user_email=long_email, never_expires=True
+            )
 
 
 class TestAPIKeyLifecycle:
@@ -347,7 +371,6 @@ class TestAPIKeyBruteForceLockout:
         assert key.failed_validation_attempts == 1
 
     def test_locked_key_auto_unlock_allows_retry(self, api_key_service):
-        from authglow.services.api_key import APIKeyLockedException
 
         key_data = APIKeyCreate(name="Auto Retry", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
@@ -367,3 +390,276 @@ class TestAPIKeyBruteForceLockout:
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is not None
         assert validated.key_id == api_key.key_id
+
+
+class TestAdminCreatesKeyForOtherUser:
+    """Admin can pass user_email to create an API key for another user."""
+
+    def test_admin_creates_key_for_other_user(self, test_settings):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from authglow.api.api_key import router
+        from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        admin_user = User(
+            id="admin-test-1",
+            email="admin@authglow.io",
+            hashed_password=hash_password("NotUsed123!"),
+            is_active=True,
+            scopes=["read", "write", "admin"],
+        )
+        target_user = User(
+            id="target-user-1",
+            email="target@example.com",
+            hashed_password=hash_password("NotUsed123!"),
+            is_active=True,
+            scopes=["read"],
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        async def override_get_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        async def override_get_api_key_service():
+            from datetime import timezone
+
+            svc = AsyncMock()
+            created_key = MagicMock()
+            created_key.key_id = "key-created-001"
+            created_key.name = "Admin-Created Key"
+            created_key.scopes = ["read"]
+            created_key.model_dump.return_value = {
+                "key_id": "key-created-001",
+                "user_id": "target-user-1",
+                "name": "Admin-Created Key",
+                "description": None,
+                "scopes": ["read"],
+                "key_prefix": "ak_test12",
+                "key_hash": "hash",
+                "is_active": True,
+                "never_expires": True,
+                "expires_at": None,
+                "last_used_at": None,
+                "total_requests": 0,
+                "created_at": datetime(2026, 6, 4, tzinfo=timezone.utc),
+                "created_by": "admin-test-1",
+                "allowed_ips": [],
+            }
+            svc.create_key = AsyncMock(return_value=(created_key, "ak_admincreated123456789"))
+            return svc
+
+        app.dependency_overrides[get_api_key_service] = override_get_api_key_service
+
+        async def override_get_audit_service():
+            svc = AsyncMock()
+            svc.log_event = AsyncMock()
+            return svc
+
+        app.dependency_overrides[get_audit_service] = override_get_audit_service
+
+        with patch("authglow.services.storage.UserStorage.get_user_by_email") as mock_lookup:
+            mock_lookup.return_value = target_user
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/keys",
+                json={
+                    "name": "Admin-Created Key",
+                    "scopes": ["read"],
+                    "never_expires": True,
+                    "user_email": "target@example.com",
+                },
+            )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["user_id"] == "target-user-1"
+        assert "api_key" in body
+
+    def test_non_admin_cannot_specify_user_email(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from authglow.api.api_key import router
+        from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        regular_user = User(
+            id="regular-user-1",
+            email="regular@authglow.io",
+            hashed_password=hash_password("NotUsed123!"),
+            is_active=True,
+            scopes=["read"],
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        async def override_get_current_user():
+            return regular_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        async def override_get_api_key_service():
+            return AsyncMock()
+
+        app.dependency_overrides[get_api_key_service] = override_get_api_key_service
+
+        async def override_get_audit_service():
+            svc = AsyncMock()
+            svc.log_event = AsyncMock()
+            return svc
+
+        app.dependency_overrides[get_audit_service] = override_get_audit_service
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/keys",
+            json={
+                "name": "Unauthorized Key",
+                "scopes": ["read"],
+                "never_expires": True,
+                "user_email": "target@example.com",
+            },
+        )
+
+        assert response.status_code == 403
+        assert "admin" in response.json()["detail"].lower()
+
+    def test_admin_gets_404_for_unknown_user_email(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from authglow.api.api_key import router
+        from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        admin_user = User(
+            id="admin-test-2",
+            email="admin@authglow.io",
+            hashed_password=hash_password("NotUsed123!"),
+            is_active=True,
+            scopes=["read", "write", "admin"],
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        async def override_get_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        async def override_get_api_key_service():
+            return AsyncMock()
+
+        app.dependency_overrides[get_api_key_service] = override_get_api_key_service
+
+        async def override_get_audit_service():
+            svc = AsyncMock()
+            svc.log_event = AsyncMock()
+            return svc
+
+        app.dependency_overrides[get_audit_service] = override_get_audit_service
+
+        with patch("authglow.services.storage.UserStorage.get_user_by_email") as mock_lookup:
+            mock_lookup.return_value = None
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/keys",
+                json={
+                    "name": "Missing User Key",
+                    "scopes": ["read"],
+                    "never_expires": True,
+                    "user_email": "nobody@example.com",
+                },
+            )
+
+        assert response.status_code == 404
+        assert "nobody@example.com" in response.json()["detail"]
+
+    def test_user_creates_key_for_self_without_email(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from authglow.api.api_key import router
+        from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        regular_user = User(
+            id="regular-user-2",
+            email="regular@authglow.io",
+            hashed_password=hash_password("NotUsed123!"),
+            is_active=True,
+            scopes=["read"],
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        async def override_get_current_user():
+            return regular_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        async def override_get_api_key_service():
+            from datetime import timezone
+
+            svc = AsyncMock()
+            created_key = MagicMock()
+            created_key.key_id = "self-key-001"
+            created_key.name = "Self Key"
+            created_key.scopes = ["read"]
+            created_key.model_dump.return_value = {
+                "key_id": "self-key-001",
+                "user_id": "regular-user-2",
+                "name": "Self Key",
+                "description": None,
+                "scopes": ["read"],
+                "key_prefix": "ak_self12",
+                "key_hash": "hash",
+                "is_active": True,
+                "never_expires": True,
+                "expires_at": None,
+                "last_used_at": None,
+                "total_requests": 0,
+                "created_at": datetime(2026, 6, 4, tzinfo=timezone.utc),
+                "created_by": "regular-user-2",
+                "allowed_ips": [],
+            }
+            svc.create_key = AsyncMock(return_value=(created_key, "ak_selfservice123456789"))
+            return svc
+
+        app.dependency_overrides[get_api_key_service] = override_get_api_key_service
+
+        async def override_get_audit_service():
+            svc = AsyncMock()
+            svc.log_event = AsyncMock()
+            return svc
+
+        app.dependency_overrides[get_audit_service] = override_get_audit_service
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/keys",
+            json={
+                "name": "Self Key",
+                "scopes": ["read"],
+                "never_expires": True,
+            },
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["user_id"] == "regular-user-2"
