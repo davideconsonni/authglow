@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 
+from authglow.api.admin import require_admin
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
@@ -19,6 +20,7 @@ from authglow.models.federation import (
     ExternalIdpConfigResponse,
     ExternalIdpConfigUpdate,
 )
+from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.federation import FederationService
 from authglow.services.federation_state import FederationStateError, FederationStateToken
@@ -151,14 +153,10 @@ async def federation_callback(
         id_token = token_response.get("id_token")
         if id_token:
             try:
-                import jwt as _jwt
-
-                _unverified = _jwt.decode(id_token, options={"verify_signature": False})
-                if _unverified.get("nonce") != state_claims.get("nonce"):
-                    raise ValueError("nonce mismatch")
-            except (ValueError, TypeError) as e:
+                await service.verify_id_token(provider, id_token, nonce=state_claims.get("nonce"))
+            except Exception as e:
                 raise HTTPException(
-                    status_code=400, detail=f"ID token nonce validation failed: {e}"
+                    status_code=400, detail=f"ID token validation failed: {e}"
                 ) from e
 
         claims = await service.fetch_userinfo(provider, access_token)
@@ -254,6 +252,7 @@ async def federation_callback(
 async def create_provider(
     request: Request,
     provider_data: ExternalIdpConfigCreate,
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: create a new external IdP provider."""
@@ -281,6 +280,7 @@ async def create_provider(
 
 @router.get("/api/federation/admin/providers", response_model=List[ExternalIdpConfigResponse])
 async def list_all_providers(
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: list all providers (including disabled)."""
@@ -292,6 +292,7 @@ async def list_all_providers(
 )
 async def get_provider(
     provider_id: str,
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: get a single provider."""
@@ -309,6 +310,7 @@ async def update_provider(
     request: Request,
     provider_id: str,
     updates: ExternalIdpConfigUpdate,
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: update a provider."""
@@ -324,6 +326,7 @@ async def update_provider(
 async def delete_provider(
     request: Request,
     provider_id: str,
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: delete a provider."""
@@ -336,6 +339,7 @@ async def delete_provider(
 @router.patch("/api/federation/admin/providers/{provider_id}/toggle")
 async def toggle_provider(
     provider_id: str,
+    current_user: User = Depends(require_admin),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Admin: toggle provider enabled/disabled."""

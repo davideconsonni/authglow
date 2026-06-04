@@ -1,4 +1,5 @@
-"""Integration tests for the federation login/callback CSRF protection."""
+"""Integration tests for the federation login/callback CSRF protection
+and admin CRUD authentication."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,12 +9,39 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.api.federation import router as federation_router
+from authglow.core.token_blacklist import _reset_token_blacklist
 
 
 @pytest.fixture
 def federation_app():
     app = FastAPI()
     app.include_router(federation_router)
+    return TestClient(app)
+
+
+@pytest.fixture
+def admin_app():
+    """FastAPI app with mocked admin auth for testing admin CRUD endpoints."""
+    from authglow.models.user import User
+    from authglow.services.password import hash_password
+
+    from authglow.api.admin import require_admin
+
+    app = FastAPI()
+    app.include_router(federation_router)
+
+    admin_user = User(
+        id="admin-test-1",
+        email="admin@authglow.io",
+        hashed_password=hash_password("NotUsed123!"),
+        is_active=True,
+        scopes=["read", "write", "admin"],
+    )
+
+    async def override_require_admin():
+        return admin_user
+
+    app.dependency_overrides[require_admin] = override_require_admin
     return TestClient(app)
 
 
@@ -43,6 +71,9 @@ def _make_provider(provider_id="google", label="Google"):
     provider.id = provider_id
     provider.label = label
     provider.enabled = True
+    provider.description = "Test IdP description"
+    provider.icon_uri = "https://example.com/icon.png"
+    provider.logo_uri = "https://example.com/logo.png"
     provider.issuer = "https://accounts.google.com"
     provider.client_id = "test-client"
     provider.client_secret = "test-secret"
@@ -190,6 +221,7 @@ class TestFederationCallbackIdTokenNonce:
                 service.exchange_code = AsyncMock(
                     return_value={"access_token": "at-123", "id_token": id_token}
                 )
+                service.verify_id_token = AsyncMock()
                 service.fetch_userinfo = AsyncMock(
                     return_value={"sub": "user-123", "email": "u@x.com", "name": "U"}
                 )
@@ -222,6 +254,7 @@ class TestFederationCallbackIdTokenNonce:
 
     def test_callback_rejects_mismatched_nonce(self, test_settings, federation_app):
         from unittest.mock import AsyncMock
+        from authglow.services.federation import JWKSVerificationError
 
         token = _sign_state(test_settings, provider_id="google")  # nonce="fixed-nonce-for-tests"
         provider = _make_provider()
@@ -240,6 +273,9 @@ class TestFederationCallbackIdTokenNonce:
                 service.exchange_code = AsyncMock(
                     return_value={"access_token": "at-123", "id_token": id_token}
                 )
+                service.verify_id_token = AsyncMock(
+                    side_effect=JWKSVerificationError("nonce mismatch")
+                )
                 with patch("authglow.api.federation.AuditService") as MockAudit:
                     MockAudit.return_value.log_event = AsyncMock()
                     resp = federation_app.get(
@@ -249,3 +285,205 @@ class TestFederationCallbackIdTokenNonce:
 
         assert resp.status_code == 400
         assert "nonce" in resp.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: admin auth on CRUD endpoints
+# ---------------------------------------------------------------------------
+
+
+class TestFederationAdminAuth:
+    """Admin CRUD endpoints require admin authentication."""
+
+    def test_create_provider_returns_401_without_auth(self, federation_app):
+        resp = federation_app.post(
+            "/api/federation/providers",
+            json={
+                "label": "Test",
+                "description": "Test IdP",
+                "issuer": "https://idp.example.com",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+                "scopes": ["openid", "email"],
+                "enabled": True,
+            },
+        )
+        assert resp.status_code == 401
+
+    def test_list_all_providers_returns_401_without_auth(self, federation_app):
+        resp = federation_app.get("/api/federation/admin/providers")
+        assert resp.status_code == 401
+
+    def test_get_provider_returns_401_without_auth(self, federation_app):
+        resp = federation_app.get("/api/federation/admin/providers/test-provider")
+        assert resp.status_code == 401
+
+    def test_update_provider_returns_401_without_auth(self, federation_app):
+        resp = federation_app.put(
+            "/api/federation/admin/providers/test-provider",
+            json={"label": "Updated"},
+        )
+        assert resp.status_code == 401
+
+    def test_delete_provider_returns_401_without_auth(self, federation_app):
+        resp = federation_app.delete("/api/federation/admin/providers/test-provider")
+        assert resp.status_code == 401
+
+    def test_toggle_provider_returns_401_without_auth(self, federation_app):
+        resp = federation_app.patch("/api/federation/admin/providers/test-provider/toggle")
+        assert resp.status_code == 401
+
+    def test_create_provider_with_admin_auth(self, admin_app):
+        provider = _make_provider()
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.create_provider = AsyncMock(return_value=provider)
+            resp = admin_app.post(
+                "/api/federation/providers",
+                json={
+                    "label": "Test",
+                    "description": "Test IdP",
+                    "issuer": "https://idp.example.com",
+                    "client_id": "test-client",
+                    "client_secret": "test-secret",
+                    "scopes": ["openid", "email"],
+                    "enabled": True,
+                },
+            )
+        assert resp.status_code == 200
+
+    def test_list_all_providers_with_admin_auth(self, admin_app):
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.list_providers = AsyncMock(return_value=[])
+            resp = admin_app.get("/api/federation/admin/providers")
+        assert resp.status_code == 200
+
+    def test_get_provider_with_admin_auth(self, admin_app):
+        provider = _make_provider()
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
+            resp = admin_app.get("/api/federation/admin/providers/google")
+        assert resp.status_code == 200
+
+    def test_update_provider_with_admin_auth(self, admin_app):
+        provider = _make_provider()
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.update_provider = AsyncMock(return_value=provider)
+            resp = admin_app.put(
+                "/api/federation/admin/providers/google",
+                json={"label": "Updated"},
+            )
+        assert resp.status_code == 200
+
+    def test_delete_provider_with_admin_auth(self, admin_app):
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.delete_provider = AsyncMock(return_value=True)
+            resp = admin_app.delete("/api/federation/admin/providers/google")
+        assert resp.status_code == 200
+
+    def test_toggle_provider_with_admin_auth(self, admin_app):
+        provider = _make_provider()
+        provider.enabled = False
+        toggled = _make_provider()
+        toggled.enabled = True
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
+            MockStorage.return_value.update_provider = AsyncMock(return_value=toggled)
+            resp = admin_app.patch("/api/federation/admin/providers/google/toggle")
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: id_token signature verification (JWKS)
+# ---------------------------------------------------------------------------
+
+
+class TestFederationCallbackIdTokenSignature:
+    def test_callback_accepts_validly_signed_id_token(self, test_settings, federation_app):
+        token = _sign_state(test_settings, provider_id="google")
+        provider = _make_provider()
+
+        id_token_claims = {
+            "iss": "https://accounts.google.com",
+            "sub": "user-123",
+            "aud": "test-client",
+            "nonce": "fixed-nonce-for-tests",
+        }
+        id_token = pyjwt.encode(id_token_claims, "whatever", algorithm="HS256")
+
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
+            with patch("authglow.api.federation.FederationService") as MockService:
+                service = MockService.return_value
+                service.exchange_code = AsyncMock(
+                    return_value={"access_token": "at-123", "id_token": id_token}
+                )
+                service.verify_id_token = AsyncMock()
+                service.fetch_userinfo = AsyncMock(
+                    return_value={"sub": "user-123", "email": "u@x.com", "name": "U"}
+                )
+                service.map_claims_to_user = AsyncMock(
+                    return_value={"external_id": "user-123", "email": "u@x.com", "name": "U"}
+                )
+                with patch("authglow.api.federation.UserStorage") as MockUserStorage:
+                    user = MagicMock()
+                    user.id = "u-1"
+                    user.email = "u@x.com"
+                    user.name = "U"
+                    user.suspended_until = None
+                    MockUserStorage.return_value.get_by_external_id = AsyncMock(return_value=user)
+                    with patch("authglow.api.federation.JWTService") as MockJWT:
+                        MockJWT.return_value.create_user_tokens = AsyncMock(
+                            return_value={
+                                "access_token": "issued-at",
+                                "refresh_token": "issued-rt",
+                            }
+                        )
+                        with patch("authglow.api.federation.AuditService") as MockAudit:
+                            MockAudit.return_value.log_event = AsyncMock()
+                            with patch("authglow.api.federation.LoginHistoryService") as MockLHS:
+                                MockLHS.return_value.record_login = AsyncMock()
+                                resp = federation_app.get(
+                                    "/api/federation/callback",
+                                    params={
+                                        "code": "abc",
+                                        "state": token,
+                                        "provider_id": "google",
+                                    },
+                                )
+
+        assert resp.status_code == 200, resp.text
+
+    def test_callback_rejects_id_token_with_invalid_signature(self, test_settings, federation_app):
+        from authglow.services.federation import JWKSVerificationError
+
+        token = _sign_state(test_settings, provider_id="google")
+        provider = _make_provider()
+        id_token = pyjwt.encode(
+            {"iss": "https://accounts.google.com", "sub": "user-123", "aud": "test-client"},
+            "whatever",
+            algorithm="HS256",
+        )
+
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
+            with patch("authglow.api.federation.FederationService") as MockService:
+                service = MockService.return_value
+                service.exchange_code = AsyncMock(
+                    return_value={"access_token": "at-123", "id_token": id_token}
+                )
+                service.verify_id_token = AsyncMock(
+                    side_effect=JWKSVerificationError("signature verification failed")
+                )
+                with patch("authglow.api.federation.AuditService") as MockAudit:
+                    MockAudit.return_value.log_event = AsyncMock()
+                    resp = federation_app.get(
+                        "/api/federation/callback",
+                        params={
+                            "code": "abc",
+                            "state": token,
+                            "provider_id": "google",
+                        },
+                    )
+
+        assert resp.status_code == 400
+        assert "signature" in resp.json()["detail"].lower()

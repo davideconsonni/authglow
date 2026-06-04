@@ -1,5 +1,7 @@
 """Main FastAPI application for AuthGlow."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.core.token_blacklist import token_blacklist
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
@@ -28,6 +31,13 @@ from authglow.api.federation import router as federation_router
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await token_blacklist().startup_hydrate()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     description="AuthGlow - A lightweight, self-hostable CIAM and OAuth2/OIDC provider.",
@@ -35,6 +45,7 @@ app = FastAPI(
     docs_url="/docs" if settings.enable_docs else None,
     redoc_url="/redoc" if settings.enable_docs else None,
     openapi_url="/openapi.json" if settings.enable_docs else None,
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter

@@ -2,11 +2,13 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 import jwt
 
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_private_key, encrypt_private_key
+from authglow.core.token_blacklist import token_blacklist
 from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
 
@@ -132,7 +134,7 @@ class JWTService:
         scopes: List[str],
         expires_delta: Optional[timedelta] = None,
     ) -> str:
-        """Create an access token."""
+        """Create an access token with a unique jti for revocation support."""
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
@@ -141,6 +143,7 @@ class JWTService:
             )
 
         token_data = {
+            "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
             "scopes": scopes,
@@ -178,7 +181,10 @@ class JWTService:
         return self._encode_token(token_data)
 
     def decode_token(self, token: str) -> Optional[TokenData]:
-        """Decode and validate a JWT token."""
+        """Decode and validate a JWT token.
+
+        Returns None if the token is invalid, expired, or revoked (blacklisted).
+        """
         payload = self._decode_token(token)
         if not payload:
             return None
@@ -187,6 +193,7 @@ class JWTService:
         email = payload.get("email")
         exp_val = payload.get("exp")
         iat_val = payload.get("iat")
+        jti = payload.get("jti")
 
         if not isinstance(sub, str):
             return None
@@ -204,9 +211,13 @@ class JWTService:
             exp=datetime.fromtimestamp(exp_val, tz=timezone.utc),
             iat=datetime.fromtimestamp(iat_val, tz=timezone.utc),
             token_type=payload.get("token_type", "access"),
+            jti=jti if isinstance(jti, str) else None,
         )
 
         if token_data.exp < datetime.now(timezone.utc):
+            return None
+
+        if token_data.jti and token_blacklist().is_revoked(token_data.jti):
             return None
 
         return token_data

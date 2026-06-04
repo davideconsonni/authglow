@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from authglow.api.auth import _extract_basic_auth, get_current_user
 from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
+from authglow.core.token_blacklist import token_blacklist
 from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
@@ -93,21 +94,17 @@ async def revoke_token(
 
     # Try as access token
     if token_type_hint == "access_token" or not token_type_hint:
-        # For access tokens (JWTs), we can't really "revoke" them since they're stateless
-        # In a production system, you would:
-        # 1. Add to a token blacklist (requires caching layer like Redis)
-        # 2. Or just let it expire naturally (they're short-lived)
-
-        # For now, we'll just verify it's a valid token and log
         token_data = jwt_service.decode_token(token)
-        if token_data:
+        if token_data and token_data.jti:
+            # Actually revoke: add jti to in-process blacklist
+            await token_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
             await audit_service.log_event(
-                event_type="access_token_revoke_requested",
+                event_type="access_token_revoked",
                 user_id=token_data.sub,
                 email=token_data.email,
                 metadata={
                     "token_type": "access_token",
-                    "note": "Access tokens cannot be revoked (stateless JWTs)",
+                    "jti": token_data.jti,
                 },
                 severity="info",
                 ip_address=request.client.host if request.client else None,
@@ -186,6 +183,10 @@ async def introspect_token(
         token_data = jwt_service.decode_token(token)
         if token_data:
             active = utcnow() < token_data.exp
+
+            # Also check revocation blacklist
+            if active and token_data.jti and token_blacklist().is_revoked(token_data.jti):
+                active = False
 
             # Get user info
             user = await user_storage.get_user(token_data.sub)

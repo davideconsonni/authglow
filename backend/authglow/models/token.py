@@ -30,6 +30,7 @@ class TokenData(BaseModel):
     exp: datetime
     iat: datetime
     token_type: str = "access"  # access or refresh
+    jti: Optional[str] = None  # JWT ID for revocation blacklist
 
 
 class AuthorizationCode(BaseModel):

@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlencode
 
 import httpx
+import jwt as pyjwt
 
 from authglow.models.federation import ExternalIdpConfig
 from authglow.services.federation_storage import FederationStorage
@@ -25,11 +26,87 @@ class OidcDiscoveryData:
         self.acr_values_supported: list = data.get("acr_values_supported", [])
 
 
+class JWKSVerificationError(Exception):
+    """Raised when JWKS key fetching or id_token verification fails."""
+
+    pass
+
+
 class FederationService:
     """OIDC Relying Party for federated login via external identity providers."""
 
     def __init__(self):
         self.storage = FederationStorage()
+        self._jwks_clients: Dict[str, pyjwt.PyJWKClient] = {}
+
+    async def _get_jwks_client_async(self, provider: ExternalIdpConfig) -> pyjwt.PyJWKClient:
+        """Async version: fetch discovery and create/cache a JWKS client."""
+        discovery_uri = provider.issuer.rstrip("/")
+        if discovery_uri not in self._jwks_clients:
+            discovery = await self.discover(provider.issuer)
+            if not discovery.jwks_uri:
+                raise JWKSVerificationError(
+                    f"Provider {provider.id} has no jwks_uri in discovery document"
+                )
+            self._jwks_clients[discovery_uri] = pyjwt.PyJWKClient(
+                discovery.jwks_uri, cache_keys=True, lifespan=3600
+            )
+        return self._jwks_clients[discovery_uri]
+
+    async def verify_id_token(
+        self,
+        provider: ExternalIdpConfig,
+        id_token: str,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Verify an OIDC id_token from the provider.
+
+        Validates:
+        - Signature using the provider's JWKS keys
+        - ``iss`` matches the provider's issuer
+        - ``aud`` includes our client_id
+        - ``exp`` has not passed
+        - ``nonce`` matches (optional, only if provided)
+
+        Returns the decoded claims dict.
+
+        Raises JWKSVerificationError on any validation failure.
+        """
+        if not provider.issuer.startswith(("http://", "https://")):
+            raise JWKSVerificationError("Provider issuer must be a valid URL")
+
+        try:
+            jwks_client = await self._get_jwks_client_async(provider)
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+            # Determine the algorithm from the token header
+            unverified_header = pyjwt.get_unverified_header(id_token)
+            algorithm = unverified_header.get("alg", "RS256")
+
+            claims: Dict[str, Any] = pyjwt.decode(
+                id_token,
+                signing_key.key,
+                algorithms=[algorithm],
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_iss": True,
+                    "verify_aud": True,
+                },
+                issuer=provider.issuer,
+                audience=provider.client_id,
+            )
+
+            if nonce and claims.get("nonce") != nonce:
+                raise JWKSVerificationError("nonce mismatch")
+
+            return claims
+        except pyjwt.PyJWTError as e:
+            raise JWKSVerificationError(f"id_token verification failed: {e}") from e
+        except Exception as e:
+            if isinstance(e, JWKSVerificationError):
+                raise
+            raise JWKSVerificationError(f"Failed to verify id_token from {provider.id}: {e}") from e
 
     async def discover(self, issuer: str) -> OidcDiscoveryData:
         """Fetch and parse the OIDC discovery document from the issuer."""
