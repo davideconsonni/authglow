@@ -8,8 +8,6 @@ import hashlib
 import pytest
 from unittest.mock import patch, MagicMock
 
-asyncio.set_event_loop(asyncio.new_event_loop())
-
 
 class TestAuditLogging:
     def test_log_event_returns_entry(self, audit_service):

@@ -1,10 +1,6 @@
-import asyncio
-
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime, timedelta, timezone
-
-asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 class TestUserStoragePagination:

@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 from authglow.models.api_key import APIKeyCreate
 from authglow.core.datetime import utcnow
 
-asyncio.set_event_loop(asyncio.new_event_loop())
-
 
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
