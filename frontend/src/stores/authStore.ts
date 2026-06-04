@@ -21,6 +21,7 @@ interface AuthState {
   user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
+  _hydrated: boolean
 }
 
 interface AuthActions {
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthStore>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      _hydrated: false,
 
       setAuthenticated: (value: boolean) => {
         set({ isAuthenticated: value })
@@ -108,6 +110,13 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: 'auth-storage',
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      onRehydrateStorage: () => {
+        return (state) => {
+          if (state) {
+            state._hydrated = true
+          }
+        }
+      },
     },
   ),
 )

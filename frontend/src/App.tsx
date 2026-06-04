@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
+import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/hooks/useTheme'
 import { api } from '@/lib/api'
 
@@ -69,25 +70,35 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
+  const hydrated = useAuthStore((s) => s._hydrated)
+  if (!hydrated) return <LoadingState />
   if (!isAuthenticated) return <Navigate to={ROUTES.AUTH.LOGIN} replace />
   return <>{children}</>
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
+  const hydrated = useAuthStore((s) => s._hydrated)
+  if (!hydrated) return <LoadingState />
   if (isAuthenticated) return <Navigate to={ROUTES.DASHBOARD} replace />
   return <>{children}</>
 }
 
 function SetupGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation()
+  const checked = useRef(false)
   const [setupStatus, setSetupStatus] = useState<{ loading: boolean; needsSetup: boolean }>({
-    loading: location.pathname !== ROUTES.SETUP,
+    loading: true,
     needsSetup: false,
   })
 
   useEffect(() => {
-    if (location.pathname === ROUTES.SETUP) return
+    if (location.pathname === ROUTES.SETUP) {
+      setSetupStatus({ loading: false, needsSetup: false })
+      return
+    }
+    if (checked.current) return
+    checked.current = true
     api.get<{ needs_setup: boolean }>('/api/setup/check')
       .then((data) => setSetupStatus({ loading: false, needsSetup: data.needs_setup }))
       .catch(() => setSetupStatus({ loading: false, needsSetup: false }))

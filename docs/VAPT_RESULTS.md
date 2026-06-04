@@ -64,10 +64,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Tokens in logs
 
-- [ ] **VAPT-011** — Email verification plaintext token written to audit log (SIEM compromise = replay)
-  - **Location**: `backend/authglow/api/email_verification.py:40, 52`
-  - **Description**: Both the failure and success paths of the email-verification endpoint log the raw, unhashed token in `metadata.token`. Anyone with audit-log read access can present the token to `/api/email/verify` and verify arbitrary addresses. The `_mask_pii` filter only redacts keys whose name contains the substring `"email"`.
-  - **Fix**: Replace `token` with a short HMAC lookup prefix, or omit entirely.
+- [x] **VAPT-011** — Email verification plaintext token written to audit log (SIEM compromise = replay)
+  - **Fix**: Removed `"token"` from metadata in both failure and success audit log paths of `verify_email_api`.
 
 ---
 

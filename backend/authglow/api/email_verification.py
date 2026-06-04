@@ -37,7 +37,7 @@ async def verify_email_api(request: Request, verification_request: EmailVerifica
         await audit_service.log_event(
             event_type="email_verification_failed",
             email="unknown",
-            metadata={"token": verification_request.token, "error": error},
+            metadata={"error": error},
             severity="warning",
             ip_address=request.client.host if request.client else None,
         )
@@ -49,7 +49,7 @@ async def verify_email_api(request: Request, verification_request: EmailVerifica
             event_type="email_verified",
             user_id=verification_token.user_id,
             email=verification_token.email,
-            metadata={"token": verification_request.token},
+            metadata={},
             ip_address=request.client.host if request.client else None,
         )
 

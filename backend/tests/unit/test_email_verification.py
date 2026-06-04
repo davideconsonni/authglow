@@ -224,3 +224,14 @@ class TestCleanupExpiredTokens:
 
         deleted = asyncio_run(email_verification_service.cleanup_expired_tokens())
         assert deleted >= 1
+
+
+class TestNoTokenInAuditLog:
+    """VAPT-011: Plaintext token must never appear in audit log metadata."""
+
+    def test_verify_email_api_does_not_log_token(self):
+        import inspect
+        from authglow.api.email_verification import verify_email_api
+
+        source = inspect.getsource(verify_email_api)
+        assert '"token":' not in source
