@@ -1,11 +1,12 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
+import { api } from '@/lib/api'
 
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
@@ -78,6 +79,26 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function SetupGuard({ children }: { children: React.ReactNode }) {
+  const location = useLocation()
+  const [setupStatus, setSetupStatus] = useState<{ loading: boolean; needsSetup: boolean }>({
+    loading: location.pathname !== ROUTES.SETUP,
+    needsSetup: false,
+  })
+
+  useEffect(() => {
+    if (location.pathname === ROUTES.SETUP) return
+    api.get<{ needs_setup: boolean }>('/api/setup/check')
+      .then((data) => setSetupStatus({ loading: false, needsSetup: data.needs_setup }))
+      .catch(() => setSetupStatus({ loading: false, needsSetup: false }))
+  }, [location.pathname])
+
+  if (location.pathname === ROUTES.SETUP) return <>{children}</>
+  if (setupStatus.loading) return <LoadingState />
+  if (setupStatus.needsSetup) return <Navigate to={ROUTES.SETUP} replace />
+  return <>{children}</>
+}
+
 function LazyFallback() {
   return <LoadingState />
 }
@@ -92,6 +113,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ThemeInitializer>
+        <SetupGuard>
         <Routes>
           <Route path={ROUTES.AUTH.LOGIN} element={<GuestRoute><LoginPage /></GuestRoute>} />
           <Route path={ROUTES.AUTH.REGISTER} element={<GuestRoute><RegisterPage /></GuestRoute>} />
@@ -124,6 +146,7 @@ function App() {
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </SetupGuard>
         <ToastContainer />
         </ThemeInitializer>
       </BrowserRouter>
