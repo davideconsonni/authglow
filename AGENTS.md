@@ -14,8 +14,8 @@ AuthGlow is an authentication platform with a Python/FastAPI backend (`backend/`
 # Run the dev server
 uvicorn main:app --reload
 
-# Run all tests
-pytest
+# Run all tests (parallel via pytest-xdist)
+pytest -q --tb=line -n auto
 
 # Run a single test file
 pytest tests/unit/test_jwt.py
@@ -56,6 +56,22 @@ npm test -- path/to/file    # run single file
 npx playwright test
 npx playwright test e2e/flows/login-dashboard.spec.ts   # single spec
 ```
+
+## Test anti-regressione
+
+Tests serve as regression protection. After every change:
+
+- **Backend** → run only the test files matching the changed area
+  (e.g. modified `services/jwt.py` → `tests/unit/test_jwt.py`).
+  Full suite (`-n auto`) only for `core/` changes or before committing.
+- **Frontend** → run only the test file(s) for the changed component
+  (`npm test -- path/to/file`).
+- **E2E** → only for cross-cutting flows touched by the change
+  (login, registration, OAuth2, MFA). Uses Playwright.
+
+When the full backend suite is needed, use `pytest -q --tb=line -n auto`
+(requires `pytest-xdist`). Pass `timeout: 300000` to the Bash tool —
+the timeout parameter belongs to the Bash tool, not pytest.
 
 ## Code Style — Backend (Python 3.11)
 
@@ -141,7 +157,11 @@ Lazy imports inside functions for circular-dependency avoidance.
 
 **Running tests — token-saving rules:**
 
-- When running the full suite, always use `pytest -q --tb=line` to minimize output.
+- When running the full suite, always use `pytest -q --tb=line -n auto` to minimize output.
+- Run only the test files matching the changed area, not the full suite every time
+  (e.g. modified `services/jwt.py` → `tests/unit/test_jwt.py`).
+- Pass `timeout: 300000` to the Bash tool for the full suite — the timeout
+  parameter belongs to the Bash tool, not pytest.
 - Show only failures and warning summary — never dump full tracebacks unless debugging a specific failure.
 - **Pre-existing test failures**: this repo has known failures (Python 3.13 event loop, CSP mismatch, `setup_page` import). After every test run, separate failures into two buckets: (a) files you modified — fix these immediately; (b) untouched files — report them clearly and **ask the user** whether to investigate. Never auto-fix pre-existing failures without asking.
 

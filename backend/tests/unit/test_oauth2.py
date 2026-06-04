@@ -93,17 +93,13 @@ class TestOAuth2ClientVerification:
     def test_verify_client_with_settings_defaults(self, oauth2_service):
         import asyncio
 
-        result = asyncio.run(
-            oauth2_service.verify_client("test-client-id", "test-client-secret")
-        )
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", "test-client-secret"))
         assert result is True
 
     def test_verify_client_wrong_secret(self, oauth2_service):
         import asyncio
 
-        result = asyncio.run(
-            oauth2_service.verify_client("test-client-id", "wrong-secret")
-        )
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", "wrong-secret"))
         assert result is False
 
     def test_verify_client_no_secret(self, oauth2_service):
@@ -115,18 +111,14 @@ class TestOAuth2ClientVerification:
     def test_verify_client_unknown_client(self, oauth2_service):
         import asyncio
 
-        result = asyncio.run(
-            oauth2_service.verify_client("unknown-client", "any-secret")
-        )
+        result = asyncio.run(oauth2_service.verify_client("unknown-client", "any-secret"))
         assert result is False
 
     def test_verify_redirect_uri_default_client(self, oauth2_service):
         import asyncio
 
         result = asyncio.run(
-            oauth2_service.verify_redirect_uri(
-                "test-client-id", "http://localhost:8000/callback"
-            )
+            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:8000/callback")
         )
         assert result is True
 
@@ -134,9 +126,7 @@ class TestOAuth2ClientVerification:
         import asyncio
 
         result = asyncio.run(
-            oauth2_service.verify_redirect_uri(
-                "test-client-id", "https://evil.com/callback"
-            )
+            oauth2_service.verify_redirect_uri("test-client-id", "https://evil.com/callback")
         )
         assert result is False
 
@@ -152,9 +142,7 @@ class TestOAuth2ScopeProcessing:
         import asyncio
 
         scopes = asyncio.run(
-            oauth2_service.process_scopes(
-                "test-client-id", ["openid", "profile", "email"]
-            )
+            oauth2_service.process_scopes("test-client-id", ["openid", "profile", "email"])
         )
         assert "openid" in scopes
         assert "profile" in scopes
@@ -167,7 +155,60 @@ class TestOAuth2ScopeProcessing:
 
         with pytest.raises(ValueError, match="Unauthorized scopes"):
             asyncio.run(
-                oauth2_service.process_scopes(
-                    "test-client-id", ["read", "admin_super_secret"]
-                )
+                oauth2_service.process_scopes("test-client-id", ["read", "admin_super_secret"])
             )
+
+
+class TestVerifyClientProductionGate:
+    """VAPT-014: The settings-based fallback client must be disabled in production."""
+
+    def test_fallback_disabled_in_production(self, oauth2_service):
+        import asyncio
+
+        oauth2_service.settings.app_env = "production"
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", "test-client-secret"))
+        assert result is False, "Fallback client must be rejected in production"
+
+    def test_fallback_works_in_development(self, oauth2_service):
+        import asyncio
+
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", "test-client-secret"))
+        assert result is True, "Fallback client must work in development"
+
+    def test_fallback_wrong_secret_constant_time(self, oauth2_service):
+        import asyncio
+
+        result = asyncio.run(oauth2_service.verify_client("test-client-id", "wrong-secret"))
+        assert result is False
+
+    def test_verify_client_nonexistent_in_production(self, oauth2_service):
+        import asyncio
+
+        oauth2_service.settings.app_env = "production"
+        result = asyncio.run(oauth2_service.verify_client("nonexistent-client", "any-secret"))
+        assert result is False
+
+    def test_verify_redirect_uri_fallback_disabled_in_production(self, oauth2_service):
+        import asyncio
+
+        oauth2_service.settings.app_env = "production"
+        result = asyncio.run(
+            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:8000/callback")
+        )
+        assert result is False
+
+    def test_verify_scopes_fallback_disabled_in_production(self, oauth2_service):
+        import asyncio
+
+        oauth2_service.settings.app_env = "production"
+        result = asyncio.run(oauth2_service.verify_scopes("test-client-id", ["read", "write"]))
+        assert result is False
+
+    def test_verify_grant_type_fallback_disabled_in_production(self, oauth2_service):
+        import asyncio
+
+        oauth2_service.settings.app_env = "production"
+        result = asyncio.run(
+            oauth2_service.verify_grant_type("test-client-id", "authorization_code")
+        )
+        assert result is False

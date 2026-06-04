@@ -161,12 +161,13 @@ class JWTService:
         return self._encode_token(token_data)
 
     def create_refresh_token(self, user_id: str, email: str, scopes: List[str]) -> str:
-        """Create a refresh token."""
+        """Create a refresh token with jti for individual revocation."""
         expire = datetime.now(timezone.utc) + timedelta(
             days=self.settings.refresh_token_expire_days
         )
         token_data = {
             "iss": self.settings.issuer,
+            "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
             "scopes": scopes,
@@ -177,10 +178,11 @@ class JWTService:
         return self._encode_token(token_data)
 
     def create_mfa_session_token(self, user_id: str, email: str) -> str:
-        """Create a temporary session token for MFA verification."""
+        """Create a temporary session token for MFA verification with jti for revocation."""
         expire = datetime.now(timezone.utc) + timedelta(minutes=5)
         token_data = {
             "iss": self.settings.issuer,
+            "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
             "exp": expire,

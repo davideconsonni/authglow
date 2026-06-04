@@ -896,14 +896,43 @@ async def cookie_logout(
     jwt_service: JWTService = Depends(get_jwt_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
-    """Logout — clears auth cookies and revokes the refresh token if present."""
+    """Logout — clears auth cookies, blacklists access/refresh JWT jti, revokes refresh tokens."""
+    from authglow.core.token_blacklist import token_blacklist as get_blacklist
+
     settings = get_settings()
+
+    # Decode access token before revocation so we can extract its jti
+    access_token = request.cookies.get(settings.auth_cookie_access_name)
+    access_jti: Optional[str] = None
+    access_exp: Optional[float] = None
+    if access_token:
+        at_data = jwt_service.decode_token(access_token)
+        if at_data and at_data.jti:
+            access_jti = at_data.jti
+            access_exp = at_data.exp.timestamp()
+
+    # Revoke disk-based refresh token and decode JWT refresh token for jti
     rt_cookie = request.cookies.get(settings.auth_cookie_refresh_name)
+    rt_jti: Optional[str] = None
+    rt_exp: Optional[float] = None
     if rt_cookie:
         try:
             await refresh_token_service.revoke_token(rt_cookie, reason="logout")
         except Exception:
             pass
+        # Also attempt JWT decode — JWT-based refresh tokens carry jti for blacklisting
+        rt_data = jwt_service.decode_token(rt_cookie)
+        if rt_data and rt_data.jti:
+            rt_jti = rt_data.jti
+            rt_exp = rt_data.exp.timestamp()
+
+    # Blacklist access token JWT id so it cannot be replayed
+    if access_jti and access_exp:
+        await get_blacklist().revoke(access_jti, access_exp)
+
+    # Blacklist refresh token JWT id if it was a JWT-based refresh token
+    if rt_jti and rt_exp:
+        await get_blacklist().revoke(rt_jti, rt_exp)
 
     _clear_auth_cookies(response, settings)
     return {"ok": True}

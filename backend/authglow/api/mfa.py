@@ -326,6 +326,12 @@ async def verify_mfa_login(
         user_agent=request.headers.get("user-agent") if request else None,
     )
 
+    # Blacklist the MFA session token so it cannot be replayed (VAPT-013)
+    if token_data.jti:
+        from authglow.core.token_blacklist import token_blacklist as get_blacklist
+
+        await get_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
+
     # Create refresh token and set httpOnly auth cookies
     from authglow.services.refresh_token import RefreshTokenService
 

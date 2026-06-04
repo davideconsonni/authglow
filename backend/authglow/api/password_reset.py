@@ -2,9 +2,9 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from authglow.api.auth import get_current_user
+from authglow.api.auth import _clear_auth_cookies, get_current_user
 from authglow.core.config import get_settings
 from authglow.core.password import validate_password_strength
 from authglow.core.rate_limit import limiter
@@ -179,15 +179,21 @@ async def confirm_password_reset(
     # Mark token as used
     await reset_service.mark_token_used(token.token_lookup)
 
-    # Revoke any other active tokens for this user
+    # Revoke any other active password-reset tokens for this user
     await reset_service.revoke_user_tokens(user.id)
+
+    # Revoke all active refresh tokens so the previous session is invalidated
+    from authglow.services.refresh_token import RefreshTokenService
+
+    rt_service = RefreshTokenService()
+    await rt_service.revoke_user_tokens(user.id)
 
     # Log successful reset
     await audit_service.log_event(
         event_type="password_reset_completed",
         user_id=user.id,
         email=user.email,
-        metadata={"token_id": token.token_id},
+        metadata={"token_id": token.token_id, "sessions_revoked": True},
         ip_address=request.client.host if request.client else None,
     )
 
@@ -198,6 +204,7 @@ async def confirm_password_reset(
 @limiter.limit("20/hour")
 async def change_password(
     request: Request,
+    response: Response,
     password_change: PasswordChange,
     current_user: User = Depends(get_current_user),
     user_storage: UserStorage = Depends(get_user_storage),
@@ -205,8 +212,15 @@ async def change_password(
 ):
     """Change password for authenticated user.
 
-    Requires current password for verification.
+    Requires current password for verification.  Revokes all existing
+    sessions (access token JTI blacklist + all refresh tokens) so an
+    attacker with a stolen token cannot retain access.
     """
+    from authglow.core.token_blacklist import token_blacklist as get_blacklist
+    from authglow.services.jwt import JWTService
+
+    settings = get_settings()
+
     # Verify current password
     if not verify_password(password_change.current_password, current_user.hashed_password):
         await audit_service.log_event(
@@ -241,11 +255,30 @@ async def change_password(
     current_user.hashed_password = hashed_password
     await user_storage.update_user(current_user)
 
+    # Revoke all sessions: blacklist current access token JTI, revoke all refresh tokens
+    auth_header = request.headers.get("Authorization", "")
+    access_token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+    if not access_token:
+        access_token = request.cookies.get(settings.auth_cookie_access_name)
+    if access_token:
+        jwt_svc = JWTService()
+        at_data = jwt_svc.decode_token(access_token)
+        if at_data and at_data.jti:
+            await get_blacklist().revoke(at_data.jti, at_data.exp.timestamp())
+
+    from authglow.services.refresh_token import RefreshTokenService
+
+    rt_service = RefreshTokenService()
+    await rt_service.revoke_user_tokens(current_user.id)
+
+    _clear_auth_cookies(response, settings)
+
     # Log successful change
     await audit_service.log_event(
         event_type="password_changed",
         user_id=current_user.id,
         email=current_user.email,
+        metadata={"sessions_revoked": True},
         ip_address=request.client.host if request.client else None,
     )
 

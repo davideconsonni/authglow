@@ -91,23 +91,25 @@ class TestSecretKeyValidation:
             assert len(w) == 1
 
 
-def _make_settings_with(tmp_path, secret_key, app_env):
+def _make_settings_with(tmp_path, secret_key, app_env, **kwargs):
     storage_path = str(tmp_path / "data" / "users")
     os.makedirs(storage_path, exist_ok=True)
     keys_dir = str(tmp_path / "keys")
     os.makedirs(keys_dir, exist_ok=True)
-    return Settings(
-        secret_key=secret_key,
-        app_env=app_env,
-        storage_path=storage_path,
-        storage_backend="file",
-        keys_dir=keys_dir,
-        private_key_path=str(tmp_path / "keys" / "private_key.pem"),
-        public_key_path=str(tmp_path / "keys" / "public_key.pem"),
-        jwt_auto_rotate=False,
-        oauth2_client_id="test-client-id",
-        oauth2_client_secret="test-client-secret",
-    )
+    settings_kwargs: dict = {
+        "secret_key": secret_key,
+        "app_env": app_env,
+        "storage_path": storage_path,
+        "storage_backend": "file",
+        "keys_dir": keys_dir,
+        "private_key_path": str(tmp_path / "keys" / "private_key.pem"),
+        "public_key_path": str(tmp_path / "keys" / "public_key.pem"),
+        "jwt_auto_rotate": False,
+        "oauth2_client_id": "test-client-id",
+        "oauth2_client_secret": "test-client-secret",
+    }
+    settings_kwargs.update(kwargs)
+    return Settings(**settings_kwargs)
 
 
 class TestSecretKeyHardFailsInProduction:
@@ -158,6 +160,83 @@ class TestSecretKeyHardFailsInProduction:
             )
             assert settings.app_env == "development"
             assert any("placeholder" in str(x.message).lower() for x in w)
+
+
+class TestOauth2DefaultsHardFailInProduction:
+    """VAPT-014: OAuth2 client credentials using placeholder/default values must
+    hard-fail at boot in production."""
+
+    def test_placeholder_oauth2_id_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="OAUTH2_CLIENT_ID"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                oauth2_client_id="default-client-id",
+                oauth2_client_secret="unique-non-placeholder-secret-value",
+            )
+
+    def test_placeholder_oauth2_secret_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="OAUTH2_CLIENT_SECRET"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                oauth2_client_id="custom-client-id-for-production",
+                oauth2_client_secret="change-me-in-production",
+            )
+
+    def test_custom_oauth2_credentials_ok_in_production(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="production",
+            oauth2_client_id="prod-custom-client-id",
+            oauth2_client_secret="prod-custom-client-secret-32chars!!",
+        )
+        assert settings.is_production is True
+        assert settings.oauth2_client_id == "prod-custom-client-id"
+        assert (
+            settings.oauth2_client_secret.get_secret_value()
+            == "prod-custom-client-secret-32chars!!"
+        )
+
+    def test_placeholder_oauth2_credentials_ok_in_development(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="development",
+            oauth2_client_id="default-client-id",
+            oauth2_client_secret="change-me-in-production",
+        )
+        assert settings.app_env == "development"
+        assert settings.oauth2_client_id == "default-client-id"
+
+    def test_placeholder_change_me_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="OAUTH2_CLIENT_ID"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="PRODUCTION",
+                oauth2_client_id="change-me-in-production",
+                oauth2_client_secret="unique-non-placeholder-secret-value",
+            )
+
+    def test_default_client_secret_patterns_blocked(self, tmp_path):
+        blocked_defaults = [
+            "default-client-id",
+            "replace-me",
+            "replace_me",
+        ]
+        for bad_id in blocked_defaults:
+            with pytest.raises(ValueError):
+                _make_settings_with(
+                    tmp_path,
+                    secret_key="k" * 64,
+                    app_env="production",
+                    oauth2_client_id=bad_id,
+                    oauth2_client_secret="good-secret-value-for-testing-ok!",
+                )
 
 
 class TestSettingsInstantiation:

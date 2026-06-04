@@ -324,3 +324,109 @@ class TestTokenBlacklist:
             auth=("valid-client", "valid-secret"),
         )
         assert resp.json()["active"] is False
+
+    async def test_http_revoke_refresh_token_jti(self, test_settings):
+        """POST /oauth2/revoke with a JWT refresh token must blacklist its jti."""
+        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+        from authglow.services.jwt import JWTService
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from unittest.mock import AsyncMock, MagicMock
+
+        _reset_token_blacklist()
+
+        with patch("authglow.services.jwt.get_settings", return_value=test_settings):
+            real_jwt_svc = JWTService()
+
+        real_token = real_jwt_svc.create_refresh_token(
+            user_id="u-revoke-rt", email="rt-jti@test.com", scopes=["read"]
+        )
+        decoded = real_jwt_svc.decode_token(real_token)
+        assert decoded is not None
+        assert decoded.jti is not None
+
+        from authglow.api.oauth2_advanced import (
+            router,
+            get_refresh_token_service,
+            get_jwt_service,
+            get_oauth2_service,
+            get_audit_service,
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        mock_rt_svc = MagicMock()
+        mock_rt_svc.get_refresh_token = AsyncMock(return_value=None)
+        mock_oauth2_svc = MagicMock()
+        mock_oauth2_svc.verify_client = AsyncMock(return_value=True)
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+
+        app.dependency_overrides[get_refresh_token_service] = lambda: mock_rt_svc
+        app.dependency_overrides[get_jwt_service] = lambda: real_jwt_svc
+        app.dependency_overrides[get_oauth2_service] = lambda: mock_oauth2_svc
+        app.dependency_overrides[get_audit_service] = lambda: mock_audit
+
+        client = TestClient(app)
+
+        resp = client.post(
+            "/oauth2/revoke",
+            data={"token": real_token, "token_type_hint": "access_token"},
+        )
+
+        assert resp.status_code == 200
+        assert token_blacklist().is_revoked(decoded.jti)
+
+    async def test_http_revoke_mfa_session_token_jti(self, test_settings):
+        """POST /oauth2/revoke with an MFA session JWT must blacklist its jti."""
+        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+        from authglow.services.jwt import JWTService
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from unittest.mock import AsyncMock, MagicMock
+
+        _reset_token_blacklist()
+
+        with patch("authglow.services.jwt.get_settings", return_value=test_settings):
+            real_jwt_svc = JWTService()
+
+        real_token = real_jwt_svc.create_mfa_session_token(
+            user_id="u-revoke-mfa", email="mfa-jti@test.com"
+        )
+        decoded = real_jwt_svc.decode_token(real_token)
+        assert decoded is not None
+        assert decoded.jti is not None
+
+        from authglow.api.oauth2_advanced import (
+            router,
+            get_refresh_token_service,
+            get_jwt_service,
+            get_oauth2_service,
+            get_audit_service,
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        mock_rt_svc = MagicMock()
+        mock_rt_svc.get_refresh_token = AsyncMock(return_value=None)
+        mock_oauth2_svc = MagicMock()
+        mock_oauth2_svc.verify_client = AsyncMock(return_value=True)
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+
+        app.dependency_overrides[get_refresh_token_service] = lambda: mock_rt_svc
+        app.dependency_overrides[get_jwt_service] = lambda: real_jwt_svc
+        app.dependency_overrides[get_oauth2_service] = lambda: mock_oauth2_svc
+        app.dependency_overrides[get_audit_service] = lambda: mock_audit
+
+        client = TestClient(app)
+
+        resp = client.post(
+            "/oauth2/revoke",
+            data={"token": real_token, "token_type_hint": "access_token"},
+        )
+
+        assert resp.status_code == 200
+        assert token_blacklist().is_revoked(decoded.jti)

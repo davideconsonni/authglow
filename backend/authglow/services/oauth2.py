@@ -1,5 +1,6 @@
 """OAuth2 authorization service."""
 
+import secrets
 from datetime import timedelta
 from typing import List, Optional
 
@@ -140,43 +141,46 @@ class OAuth2Service:
         """
         Verify client credentials using dynamic client storage.
 
-        Falls back to the settings-based client for backwards compatibility.
+        The settings-based fallback client is only available in non-production
+        environments.  In production, operators must provision dynamic OAuth2
+        clients through the admin API and the fallback is always rejected.
         """
         # Try dynamic client storage first
         client = await self.client_storage.get_client(client_id)
 
         if client:
-            # Check if the client is active
             if not client.is_active:
                 return False
-
-            # Update last used timestamp
             await self.client_storage.update_last_used(client_id)
-
-            # If secret provided, verify it
             if client_secret:
                 return await self.client_storage.verify_client_secret(client, client_secret)
-
             return True
 
-        # Fallback to settings-based client (backwards compatibility)
+        # Settings-based fallback client — disabled in production (VAPT-014)
+        if self.settings.is_production:
+            return False
+
         if client_id != self.settings.oauth2_client_id:
             return False
 
-        if client_secret and client_secret != self.settings.oauth2_client_secret:
-            return False
+        if client_secret:
+            if not secrets.compare_digest(
+                client_secret, self.settings.oauth2_client_secret.get_secret_value()
+            ):
+                return False
 
         return True
 
     async def verify_redirect_uri(self, client_id: str, redirect_uri: str) -> bool:
         """Verify if redirect_uri is allowed for the client."""
-        # Try dynamic client storage first
         client = await self.client_storage.get_client(client_id)
 
         if client:
             return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
 
-        # Fallback: only allow specific callback for settings-based client
+        if self.settings.is_production:
+            return False
+
         if client_id == self.settings.oauth2_client_id:
             return redirect_uri == "http://localhost:8000/callback"
 
@@ -184,13 +188,14 @@ class OAuth2Service:
 
     async def verify_scopes(self, client_id: str, requested_scopes: list[str]) -> bool:
         """Verify if client is allowed to request these scopes."""
-        # Try dynamic client storage first
         client = await self.client_storage.get_client(client_id)
 
         if client:
             return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
 
-        # Fallback: allow all scopes for settings-based client
+        if self.settings.is_production:
+            return False
+
         return client_id == self.settings.oauth2_client_id
 
     async def process_scopes(self, client_id: str, requested_scopes: List[str]) -> List[str]:
@@ -201,7 +206,6 @@ class OAuth2Service:
         OIDC standard scopes (openid, profile, email, phone, address, offline_access)
         are always allowed as per OIDC spec.
         """
-        # OIDC standard scopes that are always allowed
         OIDC_STANDARD_SCOPES = {
             "openid",
             "profile",
@@ -214,13 +218,12 @@ class OAuth2Service:
         client = await self.client_storage.get_client(client_id)
         allowed_scopes = list(client.allowed_scopes) if client else []
 
-        # Fallback for settings-based client
+        # Settings-based fallback client — only permissible in non-production
         if not client and client_id == self.settings.oauth2_client_id:
-            # In permissive mode, allow any scope for the default client
-            if not self.settings.oauth2_reject_unknown_scopes:
-                return requested_scopes
-            # In strict mode, default client has no defined scopes
-            allowed_scopes = []
+            if not self.settings.is_production:
+                if not self.settings.oauth2_reject_unknown_scopes:
+                    return requested_scopes
+                allowed_scopes = []
 
         # Always include OIDC standard scopes in allowed list
         allowed_scopes_set = set(allowed_scopes) | OIDC_STANDARD_SCOPES
@@ -230,13 +233,11 @@ class OAuth2Service:
 
         if unknown_scopes:
             if self.settings.oauth2_reject_unknown_scopes:
-                # Strict mode: reject immediately with error
                 raise ValueError(
                     f"Unauthorized scopes: {', '.join(sorted(unknown_scopes))}. "
                     f"Allowed: {', '.join(sorted(allowed_scopes_set))}"
                 )
             else:
-                # Permissive mode: filter out unauthorized scopes and allow request to proceed
                 filtered_scopes = [s for s in requested_scopes if s in allowed_scopes_set]
                 return filtered_scopes
 
@@ -244,11 +245,12 @@ class OAuth2Service:
 
     async def verify_grant_type(self, client_id: str, grant_type: str) -> bool:
         """Verify if client is allowed to use this grant type."""
-        # Try dynamic client storage first
         client = await self.client_storage.get_client(client_id)
 
         if client:
             return await self.client_storage.is_grant_type_allowed(client_id, grant_type)
 
-        # Fallback: allow all grant types for settings-based client
+        if self.settings.is_production:
+            return False
+
         return client_id == self.settings.oauth2_client_id

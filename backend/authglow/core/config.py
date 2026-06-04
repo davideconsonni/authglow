@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _KEYRING_FILENAME = "keyring.json"
@@ -287,8 +287,8 @@ class Settings(BaseSettings):
         default="change-me-in-production",
         description="OAuth2 client ID. Must be overridden in production.",
     )
-    oauth2_client_secret: str = Field(
-        default="change-me-in-production",
+    oauth2_client_secret: SecretStr = Field(
+        default=SecretStr("change-me-in-production"),
         description="OAuth2 client secret. Must be overridden in production.",
     )
     oauth2_reject_unknown_scopes: bool = False
@@ -480,7 +480,8 @@ class Settings(BaseSettings):
             "replace_me",
         )
         client_id_lower = self.oauth2_client_id.lower()
-        client_secret_lower = self.oauth2_client_secret.lower()
+        client_secret_val = self.oauth2_client_secret.get_secret_value()
+        client_secret_lower = client_secret_val.lower()
         if any(d in client_id_lower for d in known_defaults):
             raise ValueError(
                 "OAUTH2_CLIENT_ID appears to be a placeholder or default value "

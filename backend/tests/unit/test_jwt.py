@@ -247,3 +247,65 @@ class TestJWTIssuerValidation:
         )
         result = jwt_service._decode_token(wrong_issuer_token)
         assert result is None
+
+
+class TestJWTJtiRevocation:
+    """VAPT-013: Refresh and MFA-session tokens must carry jti for individual revocation."""
+
+    def test_refresh_token_has_jti(self, jwt_service):
+        token = jwt_service.create_refresh_token(
+            user_id="u-jti-rf", email="rf@test.com", scopes=["read"]
+        )
+        decoded = jwt_service.decode_token(token)
+        assert decoded is not None
+        assert decoded.jti is not None, "refresh token must have a jti"
+        assert len(decoded.jti) == 36, "jti should be a UUID4 (36 chars)"
+
+    def test_mfa_session_token_has_jti(self, jwt_service):
+        token = jwt_service.create_mfa_session_token(user_id="u-jti-mfa", email="mfa@test.com")
+        decoded = jwt_service.decode_token(token)
+        assert decoded is not None
+        assert decoded.jti is not None, "MFA session token must have a jti"
+        assert len(decoded.jti) == 36, "jti should be a UUID4 (36 chars)"
+
+    def test_access_token_has_jti(self, jwt_service):
+        token = jwt_service.create_access_token(
+            user_id="u-jti-at", email="at@test.com", scopes=["read"]
+        )
+        decoded = jwt_service.decode_token(token)
+        assert decoded is not None
+        assert decoded.jti is not None, "access token must have a jti"
+
+    async def test_refresh_token_jti_revoked_rejected(self, jwt_service, test_settings):
+        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+
+        _reset_token_blacklist()
+
+        token = jwt_service.create_refresh_token(
+            user_id="u-jti-rf-rev", email="rf-rev@test.com", scopes=["read"]
+        )
+        decoded = jwt_service.decode_token(token)
+        assert decoded is not None
+        assert decoded.jti is not None
+
+        await token_blacklist().revoke(decoded.jti, decoded.exp.timestamp())
+        assert token_blacklist().is_revoked(decoded.jti)
+
+        assert jwt_service.decode_token(token) is None
+
+    async def test_mfa_session_token_jti_revoked_rejected(self, jwt_service, test_settings):
+        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+
+        _reset_token_blacklist()
+
+        token = jwt_service.create_mfa_session_token(
+            user_id="u-jti-mfa-rev", email="mfa-rev@test.com"
+        )
+        decoded = jwt_service.decode_token(token)
+        assert decoded is not None
+        assert decoded.jti is not None
+
+        await token_blacklist().revoke(decoded.jti, decoded.exp.timestamp())
+        assert token_blacklist().is_revoked(decoded.jti)
+
+        assert jwt_service.decode_token(token) is None

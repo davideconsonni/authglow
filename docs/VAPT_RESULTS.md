@@ -11,14 +11,14 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ## Severity summary
 
-| Severity | Count | Action |
-|---|---|---|
-| CRITICAL | 11 | Block VAPT until remediated |
-| HIGH | 26 | Fix before VAPT |
-| MEDIUM | 53 | Fix or document risk-acceptance |
-| LOW | 26 | Hardening backlog |
-| INFO | 10 | Process / hygiene |
-| **Total** | **126** | — |
+| Severity | Count | Fixed | Remaining | Action |
+|---|---|---|---|---|
+| CRITICAL | 11 | 11 | 0 | All remediated |
+| HIGH | 26 | 4 | 22 | Fix before VAPT |
+| MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
+| LOW | 26 | 0 | 26 | Hardening backlog |
+| INFO | 10 | 0 | 10 | Process / hygiene |
+| **Total** | **126** | **14** | **112** | — |
 
 ---
 
@@ -76,15 +76,15 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 - [x] **VAPT-012** — JWT access tokens are not verified for `iss`/`aud` (multi-tenant confusion, federated replay)
   - **Fix**: Added `"iss"` to access/refresh/MFA-session tokens. `_decode_token` now enforces `issuer` + requires `["exp","iat","sub"]`. `verify_aud` left to call sites (ID token consumers already validate it).
 
-- [ ] **VAPT-013** — Refresh and MFA-session tokens have no `jti` (cannot be individually revoked)
+- [x] **VAPT-013** — Refresh and MFA-session tokens have no `jti` (cannot be individually revoked)
   - **Location**: `backend/authglow/services/jwt.py:156-181`
   - **Description**: Only the access token has `jti`. Refresh tokens and MFA session tokens are invisible to the blacklist; a stolen refresh token remains valid for its full 30-day lifetime.
-  - **Fix**: Add `jti` to every token type and write the corresponding blacklist entry on logout / password change.
+  - **Fix**: Added `jti` to `create_refresh_token` and `create_mfa_session_token` in `jwt.py`. Blacklist the JWT jti on: logout (`auth.py:cookie_logout`), password change (`password_reset.py:change_password`), MFA verification (`mfa.py:verify_mfa_login`). Password change and password reset now also revoke all disk-based refresh tokens via `RefreshTokenService.revoke_user_tokens()`. Tests: `test_jwt.py` (`TestJWTJtiRevocation`), `test_revoke_api.py` (HTTP revoke for refresh/MFA session JTIs).
 
-- [ ] **VAPT-014** — Default `oauth2_client_id` / `oauth2_client_secret` (`default-client-id` / `default-client-secret`) are not hard-failed in production
+- [x] **VAPT-014** — Default `oauth2_client_id` / `oauth2_client_secret` not hard-failed at runtime in production
   - **Location**: `backend/authglow/core/config.py:286-287`; `backend/authglow/services/oauth2.py:162-169`
-  - **Description**: The defaults are public knowledge. The settings-based fallback in `verify_client` accepts them, and the SECRET_KEY validator's `model_validator` does not check the OAuth2 defaults. An operator who forgets to override in production has a publicly known client credential.
-  - **Fix**: Make both `SecretStr` with no default; add a `model_validator` that hard-fails in production when they equal the defaults.
+  - **Description**: The runtime fallback in `verify_client` accepted the settings-based client in production with a plain string comparison.
+  - **Fix**: Disabled the settings-based fallback client entirely when `is_production` in `verify_client`, `verify_redirect_uri`, `verify_scopes`, `verify_grant_type`, and `process_scopes`. Changed `oauth2_client_secret` to `SecretStr` for repr/log safety. Replaced plain `!=` comparison with `secrets.compare_digest`. Tests: `test_config.py` (`TestOauth2DefaultsHardFailInProduction`), `test_oauth2.py` (`TestVerifyClientProductionGate` — 7 tests).
 
 - [ ] **VAPT-015** — Federation OIDC `id_token` algorithm taken from unverified JWT header (classic alg-confusion footgun)
   - **Location**: `backend/authglow/services/federation.py:82-89`

@@ -215,3 +215,4 @@ nul
 /frontend/dist/
 ./backend/.idea
 ./frontend/.playwright-data
+/data/
