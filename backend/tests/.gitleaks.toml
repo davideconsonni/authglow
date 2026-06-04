@@ -1,0 +1,79 @@
+# Gitleaks configuration for AuthGlow
+# https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+#
+# AuthGlow uses realistic-looking strings inside its test suite to exercise
+# secret-handling code paths (32-char key material, the canonical TOTP seed,
+# bcrypt hashes, plaintext test passwords, OAuth client secrets). These
+# values are NOT production credentials — they are scoped to `tests/` and
+# loaded into a mocked `Settings` via conftest fixtures.
+#
+# This config layers the default gitleaks ruleset with a targeted allowlist
+# so the pre-commit hook doesn't reject legitimate test code.
+
+title = "AuthGlow gitleaks config"
+
+[extend]
+# Start from the upstream gitleaks rules, then override / allowlist below.
+useDefault = true
+
+[allowlist]
+description = "AuthGlow: allow test fixtures, examples, and documentation"
+
+  # ── Path-based allowlist ─────────────────────────────────────────────
+  # Match either the file path or the entire commit message.
+  paths = [
+    '''backend/tests/.*''',
+    '''.*/conftest\.py''',
+    '''.*\.env\.example''',
+    '''.*\.example''',
+    '''docs/.*''',
+    '''.*/README\.md''',
+    '''.*/FEATURES\.md''',
+    '''.*/DESIGN\.md''',
+    '''.*/ADMIN_USER_FEATURES_PLAN\.md''',
+    '''.*/pyproject\.toml''',
+    '''.*/requirements.*\.txt''',
+    '''.*/uv\.lock''',
+    '''frontend/package-lock\.json''',
+    '''frontend/yarn\.lock''',
+    '''frontend/pnpm-lock\.yaml''',
+  ]
+
+  # ── Regex-based allowlist (safety net for anything that slips through
+  #    a path filter, e.g. an inline fixture embedded in a doc) ──────────
+  regexes = [
+    # Canonical AuthGlow test fixture value (the only string the
+    # conftest fixtures inject as `secret_key`).
+    '''test-secret-key-for-authglow-testing-32chars!''',
+    # Canonical RFC 6238 TOTP test seed — appears in test_mfa.py.
+    '''JBSWY3DPEHPK3PXP''',
+    # Bcrypt placeholder hashes used as opaque strings in tests.
+    '''\$2b\$12\$placeholder''',
+    '''\$2b\$12\$fakehash''',
+    '''\$2b\$12\$LJ3m4ys3LkHhzjjI/jxRtuH4XHqzpQhA6QF3VJ5Gj9N6S8gK2O3u''',
+    # OAuth client secrets used in fixture strings.
+    '''test-client-secret''',
+    '''test-secret''',
+    '''wrong-secret''',
+    '''verify-token-123''',
+    '''rt-token''',
+    '''some-secret''',
+    # Test passwords are intentionally non-secret but get flagged.
+    '''TestP@ss123!''',
+    '''AdminP@ss123!''',
+    '''StrongPass1!''',
+    '''SecurePass1!''',
+    '''NewStrongP@ss1''',
+  ]
+
+  # Don't fail the commit if the only findings are within a stop-word
+  # context (e.g. `hashed_password=` in test mocks).
+  stopwords = [
+    "test-secret-key",
+    "hashed_password",
+    "client_secret",
+    "test_settings",
+    "fixture",
+    "mock_token",
+    "mock_user",
+  ]

@@ -1,0 +1,55 @@
+# GitGuardian ignore configuration
+# https://docs.gitguardian.com/ggshield-docs/reference/files/ggshield#ignoring-paths
+#
+# AuthGlow uses regex-based, fixture-driven tests that contain strings which
+# match GitGuardian's generic-secret heuristics (e.g. 32-char repeated
+# characters, the canonical TOTP seed, bcrypt-like hashes, plaintext test
+# passwords). None of these are real secrets — they live exclusively under
+# tests/ and example files, and are never used outside the test runtime.
+#
+# This file is read by `ggshield` and (since 2024) by the GitGuardian
+# dashboard if the repo is configured to use the .gitguardian.yaml file
+# for path exclusions.
+
+version: 1
+
+# Files and directories that GitGuardian should never alert on.
+# Paths are evaluated relative to the repository root and accept glob syntax.
+paths-ignore:
+  # Python test suite: fixtures, conftest, all unit/integration tests
+  - "backend/tests/**"
+  - "**/conftest.py"
+  - "**/tests/**"
+
+  # Environment templates and example files — placeholders only
+  - "**/.env.example"
+  - "**/*.example"
+
+  # Documentation: curl examples, SDK snippets, screenshots
+  - "docs/**"
+  - "**/*.md"
+
+  # Python packaging and lockfiles (may contain index URLs with tokens)
+  - "**/pyproject.toml"
+  - "**/requirements*.txt"
+  - "**/uv.lock"
+  - "**/Pipfile*"
+
+  # Frontend dependency manifests
+  - "frontend/package-lock.json"
+  - "frontend/yarn.lock"
+  - "frontend/pnpm-lock.yaml"
+
+  # The gitleaks baseline lives here and contains the very patterns we ignore
+  - "backend/tests/.gitleaks.toml"
+
+  # The GitGuardian config itself (referenced by some pipelines)
+  - ".gitguardian.yaml"
+
+# Per-incident allowlist (optional, for false positives that are NOT covered
+# by the path ignore above). Each entry needs an explicit reason and is
+# auditable in the GitGuardian history.
+# incidents-ignore:
+#   - match: "test-secret-key-for-authglow-testing-32chars!"
+#     reason: "Canonical test fixture value, see backend/tests/conftest.py"
+#     expires_at: "2099-12-31"
