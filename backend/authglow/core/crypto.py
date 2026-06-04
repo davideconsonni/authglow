@@ -1,6 +1,8 @@
-"""AES-256-GCM encryption for sensitive fields (TOTP secrets, RSA keys, etc.)."""
+"""AES-256-GCM encryption for sensitive fields (TOTP secrets, RSA keys, user PII)."""
 
 import base64
+import hashlib
+import hmac
 import os
 from typing import Optional
 
@@ -15,6 +17,8 @@ _AAD = b"authglow-totp"
 _KEY_PREFIX = "agk1:"
 _KEY_INFO = b"authglow-key-encryption-v1"
 _KEY_AAD = b"authglow-private-key"
+
+_USER_INFO = b"authglow-user-field-v1"
 
 
 def _resolve_secret_key(secret_key: Optional[str] = None) -> str:
@@ -76,3 +80,42 @@ def decrypt_private_key(encrypted: bytes, secret_key: Optional[str] = None) -> b
     key = _derive_key(secret_key=secret_key, info=_KEY_INFO)
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(iv, ciphertext, _KEY_AAD)
+
+
+def encrypt_field(plaintext: str) -> str:
+    """Encrypt a single PII field (email, name, phone) using AES-256-GCM.
+
+    Uses the same ``ag1:`` prefix and HKDF as TOTP secrets for consistency.
+    """
+    if not plaintext:
+        return plaintext
+    iv = os.urandom(12)
+    key = _derive_key(info=_USER_INFO)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, plaintext.encode(), _AAD)
+    return _PREFIX + base64.b64encode(iv + ciphertext).decode()
+
+
+def decrypt_field(ciphertext: str) -> str:
+    """Decrypt a field encrypted with ``encrypt_field``.
+
+    Automatically handles plaintext (backward-compatible migration path).
+    """
+    if not ciphertext or not ciphertext.startswith(_PREFIX):
+        return ciphertext
+    raw = base64.b64decode(ciphertext[len(_PREFIX) :])
+    iv = raw[:12]
+    encrypted = raw[12:]
+    key = _derive_key(info=_USER_INFO)
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(iv, encrypted, _AAD).decode()
+
+
+def hash_index_key(email_lower: str) -> str:
+    """Compute HMAC-SHA256 index key from an email address.
+
+    Used as the lookup key in the email index so that plaintext
+    email addresses are never persisted to disk.
+    """
+    secret = _resolve_secret_key().encode()
+    return hmac.new(secret, email_lower.encode(), hashlib.sha256).hexdigest()

@@ -37,10 +37,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 - [x] **VAPT-003** — Verification/MFA/CSRF tokens used as filenames (directory listing harvests all bearer tokens)
   - **Fix**: Applied HMAC-SHA256 filename + bcrypt (or SHA-256 for CSRF) to `EmailVerificationToken`, `MFASession`, and `CSRFTokenService`. Plaintext tokens never persisted.
 
-- [ ] **VAPT-004** — All user PII stored in plaintext JSON (email, name, phone, scopes, login history)
-  - **Location**: `backend/authglow/services/storage.py:69-77`; `backend/authglow/models/user.py:12-65`
-  - **Description**: Every user record — including PII and lockout metadata — is written to `{storage_path}/{user_id}.json` with no encryption. Only the TOTP secret is wrapped. Phone, email, name are explicit GDPR/CCPA PII categories.
-  - **Fix**: Wrap the JSON in AES-256-GCM with a per-user DEK wrapped by `SECRET_KEY`, or at minimum field-level encrypt email/phone/name/IP.
+- [x] **VAPT-004** — All user PII stored in plaintext JSON (email, name, phone, scopes, login history)
+  - **Fix**: Field-level AES-256-GCM encryption for PII fields (`encrypt_field`/`decrypt_field` with `ag1:` prefix). Email index uses HMAC-SHA256 keys. Non-PII fields (is_active, scopes, mfa_enabled) remain plaintext for filtering performance.
 
 ### Crypto / RNG
 
@@ -58,10 +56,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 - [x] **VAPT-008** — `create_role` lets any `roles.write` holder instantiate a new role with arbitrary permissions
   - **Fix**: Same as VAPT-006 — `require_admin()` now gates `create_role`.
 
-- [ ] **VAPT-009** — MFA backup codes are multi-use (single-use invariant broken)
-  - **Location**: `backend/authglow/services/mfa.py:130-166`; `backend/authglow/models/mfa.py:22-29`
-  - **Description**: `verify_user_backup_code` only increments `used_count`; the matched code is never removed from `backup_codes.codes`. A stolen backup code can be reused indefinitely (subject to the 3/30s brute-force lockout). No tests assert single-use semantics.
-  - **Fix**: Remove the matched code from `backup_codes.codes` after a successful verify, then persist the modified list.
+- [x] **VAPT-009** — MFA backup codes are multi-use (single-use invariant broken)
+  - **Fix**: `backup_codes.codes.remove(hashed_code)` after successful verification.
 
 ### Open redirect
 

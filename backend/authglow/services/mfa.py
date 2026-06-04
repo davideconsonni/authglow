@@ -157,6 +157,7 @@ class MFAService:
                 if self.verify_backup_code(code, hashed_code):
                     await self._reset_backup_code_attempts(user_id)
                     backup_codes.used_count += 1
+                    backup_codes.codes.remove(hashed_code)
                     path = f"{self.storage_path}/backup_codes/{user_id}.json"
                     await self._afs.write_json(path, backup_codes.model_dump(mode="json"), indent=2)
                     return True

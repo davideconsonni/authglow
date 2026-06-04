@@ -522,3 +522,148 @@ class TestListUsersFilters:
         )
         assert total == 1
         assert results[0].email == "target@test.com"
+
+
+class TestEncryptedPIIStorage:
+    """VAPT-004: PII fields must be encrypted at rest."""
+
+    def _make_user(self, email: str) -> User:
+        return User(
+            email=email,
+            hashed_password=hash_password("TestP@ss123!"),
+            first_name="Alice",
+            last_name="Smith",
+            phone="+39123456789",
+            avatar_url="https://example.com/avatar.png",
+            scopes=["read"],
+        )
+
+    def test_email_encrypted_on_disk(self, storage):
+        import asyncio
+
+        user = self._make_user("encrypted-email@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        assert "encrypted-email@test.com".encode() not in raw_data
+
+    def test_name_encrypted_on_disk(self, storage):
+        import asyncio
+
+        user = self._make_user("encrypted-name@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        assert b"Alice" not in raw_data
+        assert b"Smith" not in raw_data
+
+    def test_phone_encrypted_on_disk(self, storage):
+        import asyncio
+
+        user = self._make_user("encrypted-phone@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        assert b"+39123456789" not in raw_data
+
+    def test_ag1_prefix_present(self, storage):
+        import asyncio
+
+        user = self._make_user("prefix-test@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        decoded = raw_data.decode()
+        assert "ag1:" in decoded
+
+    def test_get_user_decrypts_correctly(self, storage):
+        import asyncio
+
+        user = self._make_user("decrypt-test@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        fetched = asyncio.get_event_loop().run_until_complete(storage.get_user(created.id))
+        assert fetched is not None
+        assert fetched.email == "decrypt-test@test.com"
+        assert fetched.first_name == "Alice"
+        assert fetched.last_name == "Smith"
+        assert fetched.phone == "+39123456789"
+
+    def test_get_user_by_email_with_hmac_index(self, storage):
+        import asyncio
+
+        user = self._make_user("hmac-lookup@test.com")
+        asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        fetched = asyncio.get_event_loop().run_until_complete(
+            storage.get_user_by_email("hmac-lookup@test.com")
+        )
+        assert fetched is not None
+        assert fetched.email == "hmac-lookup@test.com"
+
+    def test_email_index_no_plaintext(self, storage):
+        import asyncio
+
+        user = self._make_user("index-no-pii@test.com")
+        asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        index_data = storage.fs.cat(storage._get_email_index_path()).decode()
+        assert "index-no-pii" not in index_data
+
+    def test_update_user_preserves_encryption(self, storage):
+        import asyncio
+
+        user = self._make_user("update-preserve@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        created.first_name = "Bob"
+        created.last_name = "Jones"
+        asyncio.get_event_loop().run_until_complete(storage.update_user(created))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        assert b"Bob" not in raw_data
+        assert b"Jones" not in raw_data
+
+        fetched = asyncio.get_event_loop().run_until_complete(storage.get_user(created.id))
+        assert fetched.first_name == "Bob"
+        assert fetched.last_name == "Jones"
+
+    def test_non_pii_fields_plaintext(self, storage):
+        import asyncio
+
+        user = self._make_user("nonpii-plain@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        path = storage._get_user_path(created.id)
+        raw_data = storage.fs.cat(path)
+        decoded = raw_data.decode()
+        # Non-PII fields should still be in plaintext for filtering
+        assert '"is_active": true' in decoded
+        assert '"mfa_enabled": false' in decoded
+        assert '"scopes":' in decoded
+
+    def test_update_email_moves_hmac_key(self, storage):
+        import asyncio
+        from authglow.core.crypto import hash_index_key
+
+        user = self._make_user("old-email@test.com")
+        created = asyncio.get_event_loop().run_until_complete(storage.create_user(user))
+
+        old_key = hash_index_key("old-email@test.com")
+        asyncio.get_event_loop().run_until_complete(
+            storage.update_email(created.id, "new-email@test.com")
+        )
+
+        index = asyncio.get_event_loop().run_until_complete(storage._load_email_index())
+        assert old_key not in index
+
+        new_key = hash_index_key("new-email@test.com")
+        assert index[new_key] == created.id
+
+        fetched = asyncio.get_event_loop().run_until_complete(storage.get_user(created.id))
+        assert fetched.email == "new-email@test.com"

@@ -120,7 +120,7 @@ class TestBackupCodes:
         is_valid1 = asyncio.run(mfa_service.verify_user_backup_code(user_id, first_code))
         assert is_valid1
         is_valid2 = asyncio.run(mfa_service.verify_user_backup_code(user_id, first_code))
-        assert is_valid2
+        assert not is_valid2  # VAPT-009: single-use — code removed after first use
 
     def test_delete_backup_codes(self, mfa_service):
         import asyncio
@@ -333,7 +333,7 @@ class TestBackupCodeLockout:
         attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
         assert attempts is None
 
-        asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
+        asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[1]))
         attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
         assert attempts is None
 

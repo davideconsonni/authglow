@@ -1,4 +1,8 @@
-"""User storage service using fsspec."""
+"""User storage service using fsspec.
+
+All PII fields (email, name, phone) are encrypted at rest with AES-256-GCM.
+The email index uses HMAC-SHA256 keys — plaintext email never stored on disk.
+"""
 
 import json
 import os
@@ -11,6 +15,7 @@ from authglow.core.async_io import AsyncFileSystem
 from authglow.core.cache import user_cache
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
+from authglow.core.crypto import decrypt_field, encrypt_field, hash_index_key
 from authglow.core.datetime import utcnow
 from authglow.models.user import User
 
@@ -32,13 +37,10 @@ class UserStorage:
         self.storage_path = self.settings.storage_path
         self.storage_options = self.settings.get_storage_options()
 
-        # Initialize filesystem
         if self.settings.storage_backend == "file":
-            # For local filesystem, ensure directory exists
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
         else:
-            # For cloud backends (s3, gcs, abfs)
             self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
 
         self._afs = AsyncFileSystem(self.fs)
@@ -66,6 +68,35 @@ class UserStorage:
         index_path = self._get_email_index_path()
         await self._afs.write_json(index_path, index)
 
+    def _encrypt_user_for_storage(self, user: User) -> dict:
+        """Prepare user dict for storage — encrypts PII fields."""
+        data = user.model_dump(mode="json")
+        if data.get("email"):
+            data["email"] = encrypt_field(data["email"])
+        if data.get("first_name"):
+            data["first_name"] = encrypt_field(data["first_name"])
+        if data.get("last_name"):
+            data["last_name"] = encrypt_field(data["last_name"])
+        if data.get("phone"):
+            data["phone"] = encrypt_field(data["phone"])
+        if data.get("avatar_url"):
+            data["avatar_url"] = encrypt_field(data["avatar_url"])
+        return data
+
+    def _decrypt_user_from_storage(self, data: dict) -> dict:
+        """Decrypt PII fields from a user dict read from disk."""
+        if data.get("email"):
+            data["email"] = decrypt_field(data["email"])
+        if data.get("first_name"):
+            data["first_name"] = decrypt_field(data["first_name"])
+        if data.get("last_name"):
+            data["last_name"] = decrypt_field(data["last_name"])
+        if data.get("phone"):
+            data["phone"] = decrypt_field(data["phone"])
+        if data.get("avatar_url"):
+            data["avatar_url"] = decrypt_field(data["avatar_url"])
+        return data
+
     async def _write_user(self, user: User) -> User:
         """Write user data to storage without acquiring any lock.
 
@@ -73,7 +104,7 @@ class UserStorage:
         """
         user.updated_at = utcnow()
         user_path = self._get_user_path(user.id)
-        user_data = user.model_dump(mode="json")
+        user_data = self._encrypt_user_for_storage(user)
         await self._afs.write_json(user_path, user_data)
         user_cache.pop(user.email.lower(), None)
         return user
@@ -81,19 +112,16 @@ class UserStorage:
     async def create_user(self, user: User) -> User:
         """Create a new user."""
         async with self._lock(f"user:{user.id}"), self._lock("email_index"):
-            # Check if email already exists
             email_index = await self._load_email_index()
-            if user.email.lower() in email_index:
+            index_key = hash_index_key(user.email.lower())
+            if index_key in email_index:
                 raise ValueError(f"User with email {user.email} already exists")
 
-            # Save user
             user_path = self._get_user_path(user.id)
-            user_data = user.model_dump(mode="json")
-
+            user_data = self._encrypt_user_for_storage(user)
             await self._afs.write_json(user_path, user_data)
 
-            # Update email index
-            email_index[user.email.lower()] = user.id
+            email_index[index_key] = user.id
             await self._save_email_index(email_index)
 
         return user
@@ -101,26 +129,14 @@ class UserStorage:
     async def get_user(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
         user_path = self._get_user_path(user_id)
-
         try:
             user_data = await self._afs.read_json(user_path)
-            return User(**user_data)
+            return User(**self._decrypt_user_from_storage(user_data))
         except FileNotFoundError:
             return None
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email.
-
-        Results are cached (TTLCache, max 2000 entries, 300s TTL) to avoid
-        repeated storage I/O on the same user within the same process.
-
-        When ``timing_leak_protection`` is enabled (default), the method
-        normalises the I/O profile of the "user not found" path so that
-        it resembles the "user found" path (an extra file read attempt),
-        then adds a small random jitter on top to mask residual timing
-        differences.  This prevents an attacker from measuring response
-        times to determine whether an email address is registered.
-        """
+        """Get user by email."""
         import asyncio
         import secrets
 
@@ -130,7 +146,8 @@ class UserStorage:
             return cached
 
         email_index = await self._load_email_index()
-        user_id = email_index.get(key)
+        index_key = hash_index_key(key)
+        user_id = email_index.get(index_key)
 
         result = None
         if user_id:
@@ -162,8 +179,8 @@ class UserStorage:
             if not user:
                 return None
 
-            old_key = user.email.lower()
-            new_key = new_email.lower()
+            old_key = hash_index_key(user.email.lower())
+            new_key = hash_index_key(new_email.lower())
 
             if old_key == new_key:
                 user.email = new_email  # type: ignore[assignment]
@@ -171,20 +188,17 @@ class UserStorage:
 
             email_index = await self._load_email_index()
 
-            # Check new email not already taken
             if new_key in email_index and email_index[new_key] != user_id:
                 raise ValueError(f"User with email {new_email} already exists")
 
-            # Update index
             if old_key in email_index:
                 del email_index[old_key]
             email_index[new_key] = user_id
             await self._save_email_index(email_index)
 
-            # Update user
             user.email = new_email  # type: ignore[assignment]
-            user_cache.pop(old_key, None)
-            user_cache.pop(new_key, None)
+            user_cache.pop(user.email.lower(), None)
+            user_cache.pop(new_email.lower(), None)
             return await self._write_user(user)
 
     async def delete_user(self, user_id: str) -> bool:
@@ -194,12 +208,11 @@ class UserStorage:
             if not user:
                 return False
 
-            # Remove from email index
             email_index = await self._load_email_index()
-            email_index.pop(user.email.lower(), None)
+            index_key = hash_index_key(user.email.lower())
+            email_index.pop(index_key, None)
             await self._save_email_index(email_index)
 
-            # Delete user file
             user_path = self._get_user_path(user_id)
             try:
                 await self._afs.rm(user_path)
@@ -214,11 +227,7 @@ class UserStorage:
         return len(email_index)
 
     async def get_user_stats(self) -> dict:
-        """Compute aggregate user statistics in a single pass.
-
-        Returns counts without keeping all User objects in memory
-        simultaneously — each user object is processed and released.
-        """
+        """Compute aggregate user statistics in a single pass."""
         email_index = await self._load_email_index()
         now = utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -267,10 +276,7 @@ class UserStorage:
         last_login_after: Optional[datetime] = None,
         last_login_before: Optional[datetime] = None,
     ) -> tuple[List[User], int]:
-        """List users with optional server-side filtering and pagination.
-
-        Returns a tuple of (filtered_page, total_matching_count).
-        """
+        """List users with optional server-side filtering and pagination."""
         email_index = await self._load_email_index()
         all_user_ids = list(email_index.values())
 
@@ -341,7 +347,6 @@ class UserStorage:
                 user.failed_login_attempts += 1
                 user.failed_login_count = user.failed_login_count + 1
 
-                # Lock account if max attempts exceeded
                 if user.failed_login_attempts >= max_attempts:
                     user.locked_until = utcnow() + timedelta(minutes=lockout_duration_minutes)
 
@@ -364,9 +369,7 @@ class UserStorage:
             if not user or not user.locked_until:
                 return False
 
-            # Check if lockout period has expired
             if utcnow() >= user.locked_until:
-                # Auto-unlock account
                 user.locked_until = None
                 user.failed_login_attempts = 0
                 await self._write_user(user)
