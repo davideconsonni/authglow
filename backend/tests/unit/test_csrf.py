@@ -54,9 +54,10 @@ class TestCSRFTokenService:
             assert token is not None
             assert len(token) >= 32
 
-            path = f"{svc.storage_path}/{session_id}.json"
+            lookup = svc._compute_lookup(session_id)
+            path = f"{svc.storage_path}/{lookup}.json"
             data = json.loads(svc.fs.cat(path))
-            assert data["token"] == token
+            assert data["token_hash"] == svc._hash_token(token)
             assert "expires_at" in data
             assert data["expires_at"] > time.time()
 
@@ -109,7 +110,8 @@ class TestCSRFTokenService:
             session_id = "test-session-expired"
             token = asyncio_run(svc.generate_token(session_id))
 
-            path = f"{svc.storage_path}/{session_id}.json"
+            lookup = svc._compute_lookup(session_id)
+            path = f"{svc.storage_path}/{lookup}.json"
             data = json.loads(svc.fs.cat(path))
             data["expires_at"] = time.time() - 60
             svc.fs.pipe(path, json.dumps(data).encode())

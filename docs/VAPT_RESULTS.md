@@ -34,10 +34,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 - [x] **VAPT-002** — Refresh tokens stored in plaintext on disk (file-system compromise = full account takeover)
   - **Fix**: Mirror `PasswordResetToken` pattern — `token_hash` (bcrypt) for verification + `token_lookup` (HMAC-SHA256) for O(1) file lookup. Plaintext token NEVER persisted.
 
-- [ ] **VAPT-003** — Verification/MFA/CSRF tokens used as filenames (directory listing harvests all bearer tokens)
-  - **Location**: `backend/authglow/services/email_verification.py:55-57`; `backend/authglow/services/session.py:57-58`; `backend/authglow/services/csrf.py:86-94`
-  - **Description**: Tokens are bearer credentials stored at a path whose filename is the token itself. `ls data/email_verifications/` is sufficient to harvest every active verification token. They are also not deleted on email change or user deactivation.
-  - **Fix**: Use the password_reset pattern — store hash + HMAC lookup key, never the raw token.
+- [x] **VAPT-003** — Verification/MFA/CSRF tokens used as filenames (directory listing harvests all bearer tokens)
+  - **Fix**: Applied HMAC-SHA256 filename + bcrypt (or SHA-256 for CSRF) to `EmailVerificationToken`, `MFASession`, and `CSRFTokenService`. Plaintext tokens never persisted.
 
 - [ ] **VAPT-004** — All user PII stored in plaintext JSON (email, name, phone, scopes, login history)
   - **Location**: `backend/authglow/services/storage.py:69-77`; `backend/authglow/models/user.py:12-65`

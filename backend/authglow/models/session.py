@@ -9,9 +9,14 @@ from authglow.core.datetime import utcnow
 
 
 class MFASession(BaseModel):
-    """Temporary session after first auth step, waiting for MFA."""
+    """Temporary session after first auth step, waiting for MFA.
 
-    session_token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    Security: The ``session_token`` is never persisted. Only
+    ``token_lookup`` (HMAC-SHA256) is stored as the filename.
+    """
+
+    session_token: str | None = Field(default=None, exclude=True)
+    token_lookup: str = ""
     user_id: str
     client_id: str
     redirect_uri: str

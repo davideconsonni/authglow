@@ -1,8 +1,12 @@
 """Email verification service."""
 
+import hashlib
+import hmac
 import os
-from typing import Optional
+import secrets
+from typing import Optional, Tuple
 
+import bcrypt
 import fsspec
 
 from authglow.core.async_io import AsyncFileSystem
@@ -18,8 +22,8 @@ from authglow.services.storage import UserStorage
 class EmailVerificationService:
     """Service for email verification.
 
-    The ``mark_token_used`` operation is protected by a named lock and
-    optimistic-concurrency versioning to prevent token reuse.
+    Tokens are stored using HMAC-SHA256 for the filename and bcrypt
+    for verification — the plaintext token is NEVER persisted to disk.
     """
 
     MAX_CAS_RETRIES = 3
@@ -30,8 +34,8 @@ class EmailVerificationService:
         self.storage_path = f"{self.settings.storage_path}/email_verifications"
         self.storage_options = self.settings.get_storage_options()
         self.user_storage = UserStorage()
+        self._secret_bytes = self.settings.secret_key.encode()
 
-        # Initialize filesystem
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
             self.fs = fsspec.filesystem("file")
@@ -41,53 +45,64 @@ class EmailVerificationService:
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
 
-    async def create_verification_token(self, user: User) -> EmailVerificationToken:
-        """Create a new email verification token.
-
-        Args:
-            user: User to create token for
+    def _generate_token(self) -> Tuple[str, str, str]:
+        """Generate a secure verification token.
 
         Returns:
-            EmailVerificationToken
+            tuple: (plaintext_token, token_hash, token_lookup)
         """
-        token = EmailVerificationToken(user_id=user.id, email=user.email)
+        plaintext = secrets.token_urlsafe(32)
+        token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
+        token_lookup = hmac.new(self._secret_bytes, plaintext.encode(), hashlib.sha256).hexdigest()
+        return plaintext, token_hash, token_lookup
 
-        # Save token
-        file_path = f"{self.storage_path}/{token.token}.json"
+    def _find_lookup(self, token: str) -> str:
+        """Compute HMAC lookup key from a plaintext token."""
+        return hmac.new(self._secret_bytes, token.encode(), hashlib.sha256).hexdigest()
+
+    async def create_verification_token(self, user: User) -> EmailVerificationToken:
+        """Create a new email verification token."""
+        plaintext, token_hash, token_lookup = self._generate_token()
+
+        token = EmailVerificationToken(
+            token=plaintext,
+            token_hash=token_hash,
+            token_lookup=token_lookup,
+            user_id=user.id,
+            email=user.email,
+        )
+
+        file_path = f"{self.storage_path}/{token_lookup}.json"
         await self._afs.write_json(file_path, token.model_dump())
 
         return token
 
     async def get_token(self, token: str) -> Optional[EmailVerificationToken]:
-        """Get a verification token by token string.
+        """Get a verification token by plaintext string.
 
-        Args:
-            token: Token string
-
-        Returns:
-            EmailVerificationToken if found, None otherwise
+        Uses O(1) HMAC lookup — no directory scanning.
         """
+        token_lookup = self._find_lookup(token)
+        file_path = f"{self.storage_path}/{token_lookup}.json"
+
         try:
-            file_path = f"{self.storage_path}/{token}.json"
             data = await self._afs.read_json(file_path)
-            return EmailVerificationToken(**data)
+            vt = EmailVerificationToken(**data)
         except Exception:
             return None
 
+        if not bcrypt.checkpw(token.encode(), vt.token_hash.encode()):
+            return None
+
+        vt.token = token
+        return vt
+
     async def mark_token_used(self, token: str) -> bool:
-        """Mark a token as used.
+        """Mark a token as used."""
+        token_lookup = self._find_lookup(token)
 
-        Protected by a named lock and optimistic-concurrency versioning
-        to prevent the same verification token from being used twice.
-
-        Args:
-            token: Token string
-
-        Returns:
-            True if successful, False otherwise
-        """
-        async with self._lock(f"email_token:{token}"):
-            for attempt in range(self.MAX_CAS_RETRIES):
+        async with self._lock(f"email_token:{token_lookup}"):
+            for _ in range(self.MAX_CAS_RETRIES):
                 verification_token = await self.get_token(token)
                 if not verification_token:
                     return False
@@ -98,8 +113,7 @@ class EmailVerificationService:
                 verification_token.used = True
                 verification_token.used_at = utcnow()
 
-                # Save updated token
-                file_path = f"{self.storage_path}/{token}.json"
+                file_path = f"{self.storage_path}/{token_lookup}.json"
                 try:
                     _, version = await self._afs.read_json_versioned(file_path)
                     await self._afs.write_json_versioned(
@@ -111,56 +125,34 @@ class EmailVerificationService:
 
             return False
 
-    async def verify_email(self, token: str) -> tuple[bool, Optional[str]]:
-        """Verify an email using a token.
-
-        Args:
-            token: Verification token
-
-        Returns:
-            Tuple of (success, error_message)
-        """
-        # Get token
+    async def verify_email(self, token: str) -> Tuple[bool, Optional[str]]:
+        """Verify an email using a token."""
         verification_token = await self.get_token(token)
         if not verification_token:
             return False, "Invalid verification token"
 
-        # Check if already used
         if verification_token.used:
             return False, "Token already used"
 
-        # Check if expired
         if utcnow() > verification_token.expires_at:
             return False, "Token expired"
 
-        # Get user
         user = await self.user_storage.get_user(verification_token.user_id)
         if not user:
             return False, "User not found"
 
-        # Mark email as verified
         user.email_verified = True
         user.email_verified_at = utcnow()
         await self.user_storage.update_user(user)
 
-        # Mark token as used
         await self.mark_token_used(token)
 
         return True, None
 
     async def send_verification_email(self, user: User, token: str) -> bool:
-        """Send verification email to user.
-
-        Args:
-            user: User to send email to
-            token: Verification token
-
-        Returns:
-            True if email sent successfully, False otherwise
-        """
+        """Send verification email to user."""
         email_service = get_email_service()
 
-        # Generate verification URL
         verification_url = f"{self.settings.base_url}/verify-email?token={token}"
 
         context = {
@@ -182,40 +174,25 @@ class EmailVerificationService:
             print(f"Failed to send verification email: {e}")
             return False
 
-    async def resend_verification_email(self, email: str) -> tuple[bool, Optional[str]]:
-        """Resend verification email for a user.
-
-        Args:
-            email: User email address
-
-        Returns:
-            Tuple of (success, error_message)
-        """
-        # Find user by email
+    async def resend_verification_email(self, email: str) -> Tuple[bool, Optional[str]]:
+        """Resend verification email for a user."""
         user = await self.user_storage.get_user_by_email(email)
         if not user:
             return False, "User not found"
 
-        # Check if already verified
         if user.email_verified:
             return False, "Email already verified"
 
-        # Create new token
         token = await self.create_verification_token(user)
 
-        # Send email
-        success = await self.send_verification_email(user, token.token)
+        success = await self.send_verification_email(user, token.token)  # type: ignore[arg-type]
         if not success:
             return False, "Failed to send email"
 
         return True, None
 
     async def cleanup_expired_tokens(self) -> int:
-        """Delete all expired tokens.
-
-        Returns:
-            Number of tokens deleted
-        """
+        """Delete all expired tokens."""
         deleted = 0
         try:
             pattern = f"{self.storage_path}/*.json"
@@ -226,7 +203,6 @@ class EmailVerificationService:
                     data = await self._afs.read_json(file_path)
                     token = EmailVerificationToken(**data)
 
-                    # Delete if expired
                     if utcnow() > token.expires_at:
                         await self._afs.rm(file_path)
                         deleted += 1

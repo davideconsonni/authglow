@@ -46,9 +46,7 @@ class TestCreateVerificationToken:
             email_verified=False,
         )
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        uuid_pattern = re.compile(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        )
+        uuid_pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
         assert not uuid_pattern.match(token.token)
 
 
@@ -118,16 +116,12 @@ class TestVerifyEmail:
         email_verification_service.user_storage.update_user = AsyncMock()
 
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        success, error = asyncio_run(
-            email_verification_service.verify_email(token.token)
-        )
+        success, error = asyncio_run(email_verification_service.verify_email(token.token))
         assert success is True
         assert error is None
 
     def test_verify_email_invalid_token(self, email_verification_service):
-        success, error = asyncio_run(
-            email_verification_service.verify_email("invalid-token")
-        )
+        success, error = asyncio_run(email_verification_service.verify_email("invalid-token"))
         assert success is False
         assert "Invalid" in error
 
@@ -143,9 +137,7 @@ class TestVerifyEmail:
 
         token = asyncio_run(email_verification_service.create_verification_token(user))
         asyncio_run(email_verification_service.mark_token_used(token.token))
-        success, error = asyncio_run(
-            email_verification_service.verify_email(token.token)
-        )
+        success, error = asyncio_run(email_verification_service.verify_email(token.token))
         assert success is False
         assert "already used" in error
 
@@ -161,15 +153,13 @@ class TestVerifyEmail:
             email_verified=False,
         )
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        path = f"{email_verification_service.storage_path}/{token.token}.json"
+        path = f"{email_verification_service.storage_path}/{token.token_lookup}.json"
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(hours=1)).isoformat()
         with email_verification_service.fs.open(path, "w") as f:
             json.dump(data, f)
 
-        success, error = asyncio_run(
-            email_verification_service.verify_email(token.token)
-        )
+        success, error = asyncio_run(email_verification_service.verify_email(token.token))
         assert success is False
         assert "expired" in error.lower()
 
@@ -184,11 +174,33 @@ class TestVerifyEmail:
         email_verification_service.user_storage.get_user = AsyncMock(return_value=None)
 
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        success, error = asyncio_run(
-            email_verification_service.verify_email(token.token)
-        )
+        success, error = asyncio_run(email_verification_service.verify_email(token.token))
         assert success is False
         assert "not found" in error.lower()
+
+
+class TestHashedTokenStorage:
+    """VAPT-003: Plaintext token must never be on disk."""
+
+    def test_plaintext_not_on_disk(self, email_verification_service):
+        user = User(
+            id="user-ev-hash",
+            email="ev-hash@example.com",
+            hashed_password=hash_password("TestP@ss1!"),
+            is_active=True,
+            email_verified=False,
+        )
+        token = asyncio_run(email_verification_service.create_verification_token(user))
+
+        assert token.token is not None
+        pat = f"{email_verification_service.storage_path}/*.json"
+        files = email_verification_service.fs.glob(pat)
+        raw = b""
+        for fp in files:
+            raw += email_verification_service.fs.cat(fp)
+
+        assert token.token.encode() not in raw
+        assert token.token_hash.encode() in raw
 
 
 class TestCleanupExpiredTokens:
@@ -204,7 +216,7 @@ class TestCleanupExpiredTokens:
             email_verified=False,
         )
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        path = f"{email_verification_service.storage_path}/{token.token}.json"
+        path = f"{email_verification_service.storage_path}/{token.token_lookup}.json"
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(hours=25)).isoformat()
         with email_verification_service.fs.open(path, "w") as f:

@@ -101,9 +101,7 @@ class TestMFASession:
                 scope="read",
             )
         )
-        uuid_pattern = re.compile(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        )
+        uuid_pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
         assert not uuid_pattern.match(session.session_token), (
             "MFA session token should not be UUID4"
         )
@@ -119,7 +117,7 @@ class TestMFAExpiry:
                 scope="read",
             )
         )
-        path = f"{session_service.storage_path}/{session.session_token}.json"
+        path = f"{session_service.storage_path}/{session.token_lookup}.json"
         data = session.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
         with session_service.fs.open(path, "w") as f:
@@ -213,13 +211,9 @@ class TestConsentSession:
                 scope="read",
             )
         )
-        uuid_pattern = re.compile(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        )
+        uuid_pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
         token = result["session_token"]
-        assert not uuid_pattern.match(token), (
-            "Consent session token should not be UUID4"
-        )
+        assert not uuid_pattern.match(token), "Consent session token should not be UUID4"
         assert len(token) > 20
 
 
@@ -234,7 +228,7 @@ class TestConsentSessionExpiry:
             )
         )
         token = result["session_token"]
-        path = f"{session_service.storage_path}/consent_{token}.json"
+        path = f"{session_service.storage_path}/consent_{result['token_lookup']}.json"
         result["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
         with session_service.fs.open(path, "w") as f:
             json.dump(result, f)

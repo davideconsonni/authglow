@@ -1,10 +1,12 @@
 """CSRF protection service.
 
 File-based CSRF token store with 30-minute expiry.
-Uses secrets.token_urlsafe(32) for token generation and a
-browser cookie (csrf_session_id) to bind tokens to a session.
+Tokens are stored with HMAC-SHA256 filenames and SHA-256 token hashes
+— the plaintext token is never persisted.
 """
 
+import hashlib
+import hmac
 import os
 import secrets
 import time
@@ -28,14 +30,16 @@ class CSRFTokenService:
     """File-based CSRF token service.
 
     Each browser session (identified by a ``csrf_session_id`` cookie)
-    has at most one active CSRF token. The token is regenerated after
-    every successful validation to prevent reuse.
+    has at most one active CSRF token. The file is stored at
+    ``HMAC(secret_key, session_id).json`` — directory listing cannot
+    enumerate session IDs. The token is stored as a SHA-256 hash.
     """
 
     def __init__(self):
         self.settings = get_settings()
         self.storage_path = f"{self.settings.storage_path}/csrf_tokens"
         self.storage_options = self.settings.get_storage_options()
+        self._secret_bytes = self.settings.secret_key.encode()
 
         if self.settings.storage_backend == "file":
             os.makedirs(self.storage_path, exist_ok=True)
@@ -52,6 +56,15 @@ class CSRFTokenService:
     @staticmethod
     def _new_token() -> str:
         return secrets.token_urlsafe(32)
+
+    def _compute_lookup(self, session_id: str) -> str:
+        """Compute HMAC lookup key from session_id."""
+        return hmac.new(self._secret_bytes, session_id.encode(), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        """Compute SHA-256 hash of a token string."""
+        return hashlib.sha256(token.encode()).hexdigest()
 
     async def _cleanup_expired(self) -> None:
         """Delete expired token files. Throttled to every CLEANUP_INTERVAL seconds."""
@@ -81,13 +94,15 @@ class CSRFTokenService:
         await self._cleanup_expired()
 
         token = self._new_token()
+        token_hash = self._hash_token(token)
         expires_at = time.time() + TOKEN_EXPIRY_SECONDS
+        lookup = self._compute_lookup(session_id)
 
-        path = f"{self.storage_path}/{session_id}.json"
+        path = f"{self.storage_path}/{lookup}.json"
         await self._afs.write_json(
             path,
             {
-                "token": token,
+                "token_hash": token_hash,
                 "expires_at": expires_at,
                 "created_at": time.time(),
             },
@@ -96,18 +111,19 @@ class CSRFTokenService:
         return token
 
     async def validate_token(self, session_id: str, submitted_token: str) -> bool:
-        """Validate a submitted CSRF token against the stored token.
+        """Validate a submitted CSRF token against the stored hash.
 
         Returns True if valid, False otherwise.
-        On successful validation the stored token is deleted to prevent reuse.
+        On successful validation the stored file is deleted to prevent reuse.
         """
         await self._cleanup_expired()
 
-        path = f"{self.storage_path}/{session_id}.json"
+        lookup = self._compute_lookup(session_id)
+        path = f"{self.storage_path}/{lookup}.json"
 
         try:
             data = await self._afs.read_json(path)
-        except FileNotFoundError:
+        except Exception:
             return False
 
         if time.time() > data.get("expires_at", 0):
@@ -117,8 +133,10 @@ class CSRFTokenService:
                 pass
             return False
 
-        stored_token = data.get("token", "")
-        if not secrets.compare_digest(stored_token, submitted_token):
+        stored_hash = data.get("token_hash", "")
+        submitted_hash = self._hash_token(submitted_token)
+
+        if not secrets.compare_digest(stored_hash, submitted_hash):
             return False
 
         return True
@@ -131,7 +149,6 @@ def get_csrf_service() -> CSRFTokenService:
 
 def get_or_create_session_id(request: "Request") -> str:
     """Read csrf_session_id from cookie, or generate a new one."""
-
     cookie: str | None = request.cookies.get(SESSION_ID_COOKIE)
     if cookie:
         return cookie

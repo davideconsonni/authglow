@@ -8,10 +8,17 @@ from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
 
-class EmailVerificationToken(BaseModel):
-    """Email verification token model."""
 
-    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+class EmailVerificationToken(BaseModel):
+    """Email verification token model.
+
+    Security: The plaintext ``token`` is never persisted. Only ``token_hash``
+    (bcrypt) and ``token_lookup`` (HMAC-SHA256) are stored on disk.
+    """
+
+    token: Optional[str] = Field(default=None, exclude=True)
+    token_hash: str = ""
+    token_lookup: str = ""
     user_id: str
     email: EmailStr
     created_at: datetime = Field(default_factory=utcnow)
@@ -20,11 +27,11 @@ class EmailVerificationToken(BaseModel):
     used_at: Optional[datetime] = None
 
 
-
 class EmailVerificationRequest(BaseModel):
     """Request to verify email."""
 
     token: str
+
 
 class ResendVerificationRequest(BaseModel):
     """Request to resend verification email."""
