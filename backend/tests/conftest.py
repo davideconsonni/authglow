@@ -285,3 +285,23 @@ def security_notification_service(test_settings):
             mock.return_value = mock_email
             svc = SecurityNotificationService()
             return svc
+
+
+@pytest.fixture(autouse=True)
+def _ensure_event_loop(request):
+    """Ensure an event loop exists for each sync test (Python 3.12+ compat).
+
+    Creates a fresh loop per sync test function.  Async tests are skipped
+    because pytest-asyncio manages their loops.
+    """
+    import asyncio
+    import inspect
+
+    if inspect.iscoroutinefunction(request.node.function):
+        yield
+        return
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield
+    loop.close()
