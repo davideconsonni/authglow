@@ -46,9 +46,7 @@ class TestRateLimiterWiring:
 
     @patch("authglow.core.config.get_settings")
     @patch("authglow.core.config.Settings")
-    def test_app_state_has_limiter(
-        self, mock_settings_cls, mock_get_settings, test_settings
-    ):
+    def test_app_state_has_limiter(self, mock_settings_cls, mock_get_settings, test_settings):
         """app.state.limiter must be set to the central limiter instance."""
         mock_get_settings.return_value = test_settings
         mock_settings_cls.return_value = test_settings
@@ -126,14 +124,12 @@ class TestSetupRateLimit:
         from authglow.core.rate_limit import limiter
 
         limits = self._get_rate_limits_for(check_setup_needed, limiter)
-        assert len(limits) > 0, (
-            "H4 Bug: check_setup_needed has no rate-limit decorator."
-        )
+        assert len(limits) > 0, "H4 Bug: check_setup_needed has no rate-limit decorator."
 
     def test_setup_page_has_rate_limit(self):
-        """GET /setup must have a @limiter.limit() decorator."""
-        from authglow.api.setup import setup_page
+        """POST /api/setup/create-admin must have a @limiter.limit() decorator."""
+        from authglow.api.setup import create_admin_user
         from authglow.core.rate_limit import limiter
 
-        limits = self._get_rate_limits_for(setup_page, limiter)
-        assert len(limits) > 0, "H4 Bug: setup_page has no rate-limit decorator."
+        limits = self._get_rate_limits_for(create_admin_user, limiter)
+        assert len(limits) > 0, "H4 Bug: create_admin_user has no rate-limit decorator."

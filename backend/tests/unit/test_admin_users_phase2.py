@@ -1,8 +1,12 @@
 """Tests for Phase 2 admin endpoints: password management, lockout, etc."""
 
+import asyncio
+
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi import Request
+
+asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 def _make_admin_user():

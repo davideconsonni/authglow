@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from authglow.models.api_key import APIKeyCreate
 from authglow.core.datetime import utcnow
 
+asyncio.set_event_loop(asyncio.new_event_loop())
+
 
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
@@ -25,9 +27,7 @@ class TestAPIKeyLifecycle:
         assert plaintext.startswith("ak_")
 
     def test_validate_api_key(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Validate Key", scopes=["read", "write"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Validate Key", scopes=["read", "write"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-api-2", key_data=key_data, created_by="admin-1"
@@ -38,9 +38,7 @@ class TestAPIKeyLifecycle:
         assert validated.key_id == api_key.key_id
 
     def test_validate_api_key_wrong_key(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Wrong Key Test", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Wrong Key Test", scopes=["read"], never_expires=True)
         _run(
             api_key_service.create_key(
                 user_id="user-api-3", key_data=key_data, created_by="admin-1"
@@ -86,9 +84,7 @@ class TestAPIKeyPrefixIndex:
         assert api_key.key_id in index_ids
 
     def test_validate_uses_prefix_index_only(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Prefix Lookup", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Prefix Lookup", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-idx-2", key_data=key_data, created_by="admin-1"
@@ -102,9 +98,7 @@ class TestAPIKeyPrefixIndex:
         assert api_key.key_id in index_ids
 
     def test_validate_invalid_prefix_returns_none_quickly(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Quick Reject", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Quick Reject", scopes=["read"], never_expires=True)
         _run(
             api_key_service.create_key(
                 user_id="user-idx-3", key_data=key_data, created_by="admin-1"
@@ -117,9 +111,7 @@ class TestAPIKeyPrefixIndex:
         assert validated is None
 
     def test_delete_key_removes_from_prefix_index(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Delete Index", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Delete Index", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-idx-4", key_data=key_data, created_by="admin-1"
@@ -158,12 +150,8 @@ class TestAPIKeyPrefixIndex:
         assert validated is None
 
     def test_prefix_index_handles_prefix_collision(self, api_key_service):
-        key_data_a = APIKeyCreate(
-            name="Collision A", scopes=["read"], never_expires=True
-        )
-        key_data_b = APIKeyCreate(
-            name="Collision B", scopes=["read"], never_expires=True
-        )
+        key_data_a = APIKeyCreate(name="Collision A", scopes=["read"], never_expires=True)
+        key_data_b = APIKeyCreate(name="Collision B", scopes=["read"], never_expires=True)
         api_a, _ = _run(
             api_key_service.create_key(
                 user_id="user-col-1", key_data=key_data_a, created_by="admin-1"
@@ -195,9 +183,7 @@ class TestAPIKeyIPRestrictions:
                 user_id="user-api-ip", key_data=key_data, created_by="admin-1"
             )
         )
-        result = _run(
-            api_key_service.track_usage(api_key.key_id, ip_address="192.168.1.100")
-        )
+        result = _run(api_key_service.track_usage(api_key.key_id, ip_address="192.168.1.100"))
         assert result is True
 
     def test_track_usage_blocked_ip(self, api_key_service):
@@ -212,9 +198,7 @@ class TestAPIKeyIPRestrictions:
                 user_id="user-api-ip2", key_data=key_data, created_by="admin-1"
             )
         )
-        result = _run(
-            api_key_service.track_usage(api_key.key_id, ip_address="10.0.0.1")
-        )
+        result = _run(api_key_service.track_usage(api_key.key_id, ip_address="10.0.0.1"))
         assert result is False
 
 
@@ -245,9 +229,7 @@ class TestAPIKeyBruteForceLockout:
         assert _run(api_key_service.is_key_locked(api_key.key_id)) is True
 
     def test_key_not_locked_below_threshold(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Lockout Below", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Lockout Below", scopes=["read"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-lock-3", key_data=key_data, created_by="admin-1"
@@ -261,9 +243,7 @@ class TestAPIKeyBruteForceLockout:
         assert _run(api_key_service.is_key_locked(api_key.key_id)) is False
 
     def test_is_key_locked_auto_unlock_on_expiry(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Auto Unlock", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Auto Unlock", scopes=["read"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-lock-4", key_data=key_data, created_by="admin-1"
@@ -300,9 +280,7 @@ class TestAPIKeyBruteForceLockout:
         assert _run(api_key_service.is_key_locked(api_key.key_id)) is False
 
     def test_validate_key_records_failed_and_locks(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Validate Lock", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Validate Lock", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-lock-6", key_data=key_data, created_by="admin-1"
@@ -319,9 +297,7 @@ class TestAPIKeyBruteForceLockout:
     def test_validate_key_raises_locked_exception(self, api_key_service):
         from authglow.services.api_key import APIKeyLockedException
 
-        key_data = APIKeyCreate(
-            name="Raise Locked", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Raise Locked", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-lock-7", key_data=key_data, created_by="admin-1"
@@ -335,9 +311,7 @@ class TestAPIKeyBruteForceLockout:
         assert exc_info.value.key_id == api_key.key_id
 
     def test_validate_key_resets_on_success(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Reset On Success", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Reset On Success", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-lock-8", key_data=key_data, created_by="admin-1"
@@ -360,9 +334,7 @@ class TestAPIKeyBruteForceLockout:
         assert result is None
 
     def test_validate_key_real_prefix_wrong_bcrypt(self, api_key_service):
-        key_data = APIKeyCreate(
-            name="Wrong Bcrypt", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Wrong Bcrypt", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-lock-9", key_data=key_data, created_by="admin-1"
@@ -379,9 +351,7 @@ class TestAPIKeyBruteForceLockout:
     def test_locked_key_auto_unlock_allows_retry(self, api_key_service):
         from authglow.services.api_key import APIKeyLockedException
 
-        key_data = APIKeyCreate(
-            name="Auto Retry", scopes=["read"], never_expires=True
-        )
+        key_data = APIKeyCreate(name="Auto Retry", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-lock-10", key_data=key_data, created_by="admin-1"

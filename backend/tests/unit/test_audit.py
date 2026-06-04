@@ -8,6 +8,8 @@ import hashlib
 import pytest
 from unittest.mock import patch, MagicMock
 
+asyncio.set_event_loop(asyncio.new_event_loop())
+
 
 class TestAuditLogging:
     def test_log_event_returns_entry(self, audit_service):
@@ -78,24 +80,16 @@ class TestEmailMasking:
     def test_mask_email_deterministic(self, test_settings):
         from authglow.services.audit import AuditService
 
-        a = AuditService._mask_email(
-            "john@example.com", "mask", test_settings.secret_key
-        )
-        b = AuditService._mask_email(
-            "john@example.com", "mask", test_settings.secret_key
-        )
+        a = AuditService._mask_email("john@example.com", "mask", test_settings.secret_key)
+        b = AuditService._mask_email("john@example.com", "mask", test_settings.secret_key)
         assert a == b
         assert a == "jo***@ex***.com"
 
     def test_hash_level_deterministic(self, test_settings):
         from authglow.services.audit import AuditService
 
-        a = AuditService._mask_email(
-            "john@example.com", "hash", test_settings.secret_key
-        )
-        b = AuditService._mask_email(
-            "john@example.com", "hash", test_settings.secret_key
-        )
+        a = AuditService._mask_email("john@example.com", "hash", test_settings.secret_key)
+        b = AuditService._mask_email("john@example.com", "hash", test_settings.secret_key)
         assert a == b
         assert len(a) == 16
         assert "@" not in a
@@ -103,9 +97,7 @@ class TestEmailMasking:
     def test_none_level_preserves_email(self, test_settings):
         from authglow.services.audit import AuditService
 
-        result = AuditService._mask_email(
-            "john@example.com", "none", test_settings.secret_key
-        )
+        result = AuditService._mask_email("john@example.com", "none", test_settings.secret_key)
         assert result == "john@example.com"
 
     def test_mask_short_email(self, test_settings):
@@ -114,15 +106,11 @@ class TestEmailMasking:
         result = AuditService._mask_email("a@b.com", "mask", test_settings.secret_key)
         assert result == "a***@b***.com"
 
-    def test_log_event_respects_config_level(
-        self, monkeypatch, tmp_path, test_settings
-    ):
+    def test_log_event_respects_config_level(self, monkeypatch, tmp_path, test_settings):
         from authglow.services.audit import AuditService
 
         test_settings.audit_email_log_level = "none"
-        monkeypatch.setattr(
-            "authglow.services.audit.get_settings", lambda: test_settings
-        )
+        monkeypatch.setattr("authglow.services.audit.get_settings", lambda: test_settings)
         svc = AuditService()
 
         entry = asyncio.get_event_loop().run_until_complete(

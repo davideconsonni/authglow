@@ -1,6 +1,10 @@
+import asyncio
+
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi import Request
+
+asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 def _make_admin_user():
@@ -53,7 +57,6 @@ class TestUpdateUserFields:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -81,7 +84,6 @@ class TestUpdateUserFields:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -109,7 +111,6 @@ class TestUpdateUserFields:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -136,7 +137,6 @@ class TestUpdateUserFields:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -171,7 +171,6 @@ class TestUpdateUserFields:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -201,7 +200,6 @@ class TestUpdateUserFields:
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(
                 update_user(
-                    request=_make_request(),
                     user_id="nonexistent-id",
                     update_data=update_data,
                     current_user=_make_admin_user(),
@@ -230,7 +228,6 @@ class TestUpdateUserScopes:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -257,7 +254,6 @@ class TestUpdateUserScopes:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -284,7 +280,6 @@ class TestUpdateUserScopes:
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),
@@ -312,7 +307,6 @@ class TestUpdateUserAuditLogging:
 
         asyncio.get_event_loop().run_until_complete(
             update_user(
-                request=_make_request(),
                 user_id="user-to-update",
                 update_data=update_data,
                 current_user=_make_admin_user(),

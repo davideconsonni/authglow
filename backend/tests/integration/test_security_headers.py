@@ -33,7 +33,8 @@ class TestSecurityHeadersOnHealth:
         response = client_with_test_settings.get("/health")
         assert (
             response.headers.get("content-security-policy")
-            == "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+            == "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'"
         )
 
     def test_x_frame_options_deny(self, client_with_test_settings):
@@ -46,9 +47,7 @@ class TestSecurityHeadersOnHealth:
 
     def test_referrer_policy(self, client_with_test_settings):
         response = client_with_test_settings.get("/health")
-        assert (
-            response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
-        )
+        assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
 
     def test_x_xss_protection(self, client_with_test_settings):
         response = client_with_test_settings.get("/health")
@@ -102,9 +101,7 @@ class TestHSTSInProduction:
         response = prod_client.get("/health")
         assert response.headers.get("x-frame-options") == "DENY"
         assert response.headers.get("x-content-type-options") == "nosniff"
-        assert (
-            response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
-        )
+        assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
         assert response.headers.get("x-xss-protection") == "0"
 
 
@@ -175,16 +172,15 @@ class TestHeadersNotOverridden:
 
     def test_overridden_x_frame_options_respected(self, app_with_existing_headers):
         response = app_with_existing_headers.get("/custom")
-        assert (
-            response.headers["x-frame-options"]
-            == "ALLOW-FROM https://trusted.example.com"
-        )
+        assert response.headers["x-frame-options"] == "ALLOW-FROM https://trusted.example.com"
 
 
 def _make_prod_settings():
     settings = _FakeSettings()
     settings.app_env = "production"
-    settings.csp_header = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    settings.csp_header = (
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    )
     settings.x_frame_options = "DENY"
     settings.x_content_type_options = "nosniff"
     settings.referrer_policy = "strict-origin-when-cross-origin"

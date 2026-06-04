@@ -1,6 +1,10 @@
+import asyncio
+
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime, timedelta, timezone
+
+asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 class TestUserStoragePagination:
@@ -254,9 +258,7 @@ class TestRefreshTokenListAllTokens:
                 expires_in_days=30,
             )
         )
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(token.token)
-        )
+        asyncio.get_event_loop().run_until_complete(refresh_token_service.revoke_token(token.token))
 
         tokens, total = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.list_all_tokens(active_only=True)
