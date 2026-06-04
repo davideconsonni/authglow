@@ -81,7 +81,7 @@ async def delete_permission(permission_id: str, _: str = require_admin()):
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def create_role(role: RoleCreate, _: str = require_permission("roles.write")):
+async def create_role(role: RoleCreate, _: str = require_admin()):
     """Create a new role."""
     rbac_service = RBACService()
 
@@ -141,9 +141,7 @@ async def get_role(role_id: str, _: str = require_permission("roles.read")):
 
 
 @router.patch("/roles/{role_id}", response_model=RoleResponse)
-async def update_role(
-    role_id: str, role_update: RoleUpdate, _: str = require_permission("roles.write")
-):
+async def update_role(role_id: str, role_update: RoleUpdate, _: str = require_admin()):
     """Update a role."""
     rbac_service = RBACService()
     role = await rbac_service.get_role(role_id)
@@ -187,7 +185,7 @@ async def update_role(
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_role(role_id: str, _: str = require_permission("roles.write")):
+async def delete_role(role_id: str, _: str = require_admin()):
     """Delete a role (cannot delete system roles)."""
     rbac_service = RBACService()
     success = await rbac_service.delete_role(role_id)
@@ -203,7 +201,7 @@ async def delete_role(role_id: str, _: str = require_permission("roles.write")):
 
 @router.post("/user-roles", response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role_to_user(
-    assignment: AssignRoleRequest, current_user_id: str = require_permission("roles.write")
+    assignment: AssignRoleRequest, current_user_id: str = require_admin()
 ):
     """Assign a role to a user."""
     rbac_service = RBACService()
@@ -250,9 +248,7 @@ async def assign_role_to_user(
 
 
 @router.delete("/user-roles/{user_id}/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_role_from_user(
-    user_id: str, role_id: str, _: str = require_permission("roles.write")
-):
+async def remove_role_from_user(user_id: str, role_id: str, _: str = require_admin()):
     """Remove a role from a user."""
     rbac_service = RBACService()
     success = await rbac_service.remove_role_from_user(user_id, role_id)

@@ -5,12 +5,11 @@ export function useAuth() {
 
   return {
     user: store.user,
-    token: store.token,
     isAuthenticated: store.isAuthenticated,
     isLoading: store.isLoading,
     login: store.login,
     logout: store.logout,
-    setToken: store.setToken,
+    setAuthenticated: store.setAuthenticated,
     setUser: store.setUser,
     fetchCurrentUser: store.fetchCurrentUser,
   }

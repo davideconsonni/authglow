@@ -367,7 +367,6 @@ describe('Fase 1.7 — stores/authStore.ts (Zustand)', () => {
     const mod = await import(resolve(ROOT, 'src', 'stores', 'authStore.ts'))
     const state = mod.useAuthStore.getState()
     expect(state.isAuthenticated).toBe(false)
-    expect(state.token).toBeNull()
     expect(state.user).toBeNull()
   })
 })

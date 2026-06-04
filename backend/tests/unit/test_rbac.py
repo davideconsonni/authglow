@@ -180,9 +180,7 @@ class TestUserRoleAssignment:
             assigned_by="admin-1",
         )
         asyncio_run(rbac_service.assign_role_to_user(assignment))
-        result = asyncio_run(
-            rbac_service.remove_role_from_user("user-2", created_role.role_id)
-        )
+        result = asyncio_run(rbac_service.remove_role_from_user("user-2", created_role.role_id))
         assert result is True
 
     def test_remove_nonexistent_role(self, rbac_service):
@@ -229,12 +227,8 @@ class TestGetUserPermissions:
             assigned_by="admin-1",
         )
         asyncio_run(rbac_service.assign_role_to_user(assignment))
-        assert asyncio_run(
-            rbac_service.user_has_permission("user-has-1", "test.perm.has")
-        )
-        assert not asyncio_run(
-            rbac_service.user_has_permission("user-has-1", "nonexistent")
-        )
+        assert asyncio_run(rbac_service.user_has_permission("user-has-1", "test.perm.has"))
+        assert not asyncio_run(rbac_service.user_has_permission("user-has-1", "nonexistent"))
 
     def test_user_has_role(self, rbac_service):
         role = Role(name="test-has-role-check", permissions=[])
@@ -245,9 +239,7 @@ class TestGetUserPermissions:
             assigned_by="admin-1",
         )
         asyncio_run(rbac_service.assign_role_to_user(assignment))
-        assert asyncio_run(
-            rbac_service.user_has_role("user-role-1", "test-has-role-check")
-        )
+        assert asyncio_run(rbac_service.user_has_role("user-role-1", "test-has-role-check"))
         assert not asyncio_run(rbac_service.user_has_role("user-role-1", "nonexistent"))
 
 
@@ -270,3 +262,61 @@ class TestInitializeDefaults:
         asyncio_run(rbac_service.initialize_defaults())
         admin_role = asyncio_run(rbac_service.get_role_by_name("admin"))
         assert admin_role is not None
+
+
+class TestPrivilegeEscalationPrevention:
+    """VAPT-006/007/008: RBAC endpoints must require admin, not just roles.write."""
+
+    def test_create_role_requires_admin(self):
+        import inspect
+        from authglow.api.rbac import create_role
+
+        source = inspect.getsource(create_role)
+        assert "require_admin" in source
+        assert "require_permission" not in source
+
+    def test_update_role_requires_admin(self):
+        import inspect
+        from authglow.api.rbac import update_role
+
+        source = inspect.getsource(update_role)
+        assert "require_admin" in source
+        assert "require_permission" not in source
+
+    def test_delete_role_requires_admin(self):
+        import inspect
+        from authglow.api.rbac import delete_role
+
+        source = inspect.getsource(delete_role)
+        assert "require_admin" in source
+        assert "require_permission" not in source
+
+    def test_assign_role_to_user_requires_admin(self):
+        import inspect
+        from authglow.api.rbac import assign_role_to_user
+
+        source = inspect.getsource(assign_role_to_user)
+        assert "require_admin" in source
+        assert "require_permission" not in source
+
+    def test_remove_role_from_user_requires_admin(self):
+        import inspect
+        from authglow.api.rbac import remove_role_from_user
+
+        source = inspect.getsource(remove_role_from_user)
+        assert "require_admin" in source
+        assert "require_permission" not in source
+
+    def test_list_roles_allows_roles_read(self):
+        import inspect
+        from authglow.api.rbac import list_roles
+
+        source = inspect.getsource(list_roles)
+        assert "require_permission" in source
+
+    def test_get_role_allows_roles_read(self):
+        import inspect
+        from authglow.api.rbac import get_role
+
+        source = inspect.getsource(get_role)
+        assert "require_permission" in source

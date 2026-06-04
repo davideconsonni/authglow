@@ -4,11 +4,12 @@ import base64
 import hashlib
 from typing import Dict, NoReturn, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-from authglow.core.config import get_settings
+from authglow.core.config import Settings, get_settings
 from authglow.core.crypto import decrypt_totp_secret
+from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
 from authglow.models.token import Token
 from authglow.models.user import (
@@ -31,6 +32,49 @@ from authglow.services.storage import UserStorage
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
+
+
+def _cookie_kwargs(settings: Settings) -> dict:
+    """Build standard kwargs for httpOnly auth cookies."""
+    kw: dict = {
+        "httponly": True,
+        "secure": settings.auth_cookie_secure,
+        "samesite": settings.auth_cookie_samesite,
+        "path": settings.auth_cookie_path,
+    }
+    if settings.auth_cookie_domain:
+        kw["domain"] = settings.auth_cookie_domain
+    return kw
+
+
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: Optional[str],
+    settings: Settings,
+) -> None:
+    """Set httpOnly auth cookies on the response."""
+    kw = _cookie_kwargs(settings)
+    response.set_cookie(
+        key=settings.auth_cookie_access_name,
+        value=access_token,
+        max_age=settings.access_token_expire_minutes * 60,
+        **kw,
+    )
+    if refresh_token:
+        response.set_cookie(
+            key=settings.auth_cookie_refresh_name,
+            value=refresh_token,
+            max_age=settings.refresh_token_expire_days * 86400,
+            **kw,
+        )
+
+
+def _clear_auth_cookies(response: Response, settings: Settings) -> None:
+    """Clear all auth cookies."""
+    kw = _cookie_kwargs(settings)
+    response.delete_cookie(settings.auth_cookie_access_name, **kw)
+    response.delete_cookie(settings.auth_cookie_refresh_name, **kw)
 
 
 def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]:
@@ -122,7 +166,10 @@ async def get_current_user(
     if bearer_token and bearer_token.startswith("ak_"):
         api_key = bearer_token
     elif not api_key:
-        # If no API key in header or as bearer token, proceed with JWT flow
+        # If no API key in header or as bearer token, try JWT from header or cookie
+        if not bearer_token:
+            settings = get_settings()
+            bearer_token = request.cookies.get(settings.auth_cookie_access_name)
         if not bearer_token:
             raise credentials_exception
         token = bearer_token
@@ -349,6 +396,7 @@ async def authorize_post(
 @router.post("/oauth2/token", response_model=Token)
 async def token_endpoint(
     request: Request,
+    response: Response,
     grant_type: str = Form(...),
     code: Optional[str] = Form(None),
     redirect_uri: Optional[str] = Form(None),
@@ -363,6 +411,7 @@ async def token_endpoint(
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
     """OAuth2 token endpoint - exchanges code for tokens."""
+    settings = get_settings()
 
     if grant_type == "authorization_code":
         # Validate authorization code
@@ -527,7 +576,9 @@ async def token_endpoint(
         )
 
     elif grant_type == "refresh_token":
-        # Refresh token flow with rotation
+        # Refresh token flow with rotation (supports body + cookie)
+        if not refresh_token:
+            refresh_token = request.cookies.get(settings.auth_cookie_refresh_name)
         if not refresh_token or not client_id:
             raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
 
@@ -556,24 +607,29 @@ async def token_endpoint(
         # Add new refresh token to response
         access_token_response.refresh_token = new_rt.token
 
+        # Set httpOnly auth cookies
+        _set_auth_cookies(response, access_token_response.access_token, new_rt.token, settings)
+
         return access_token_response
 
     else:
         raise HTTPException(status_code=400, detail="Unsupported grant_type")
 
 
-# Traditional token endpoint (for testing)
+# Traditional token endpoint (for browser login)
 @router.post("/api/token")
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login_for_access_token(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     audit_service: AuditService = Depends(get_audit_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
-    """Direct token endpoint (username/password)."""
+    """Direct token endpoint (username/password). Sets httpOnly auth cookies."""
+    settings = get_settings()
     user = await storage.get_user_by_email(form_data.username)
 
     # Unified failure handling to prevent user enumeration
@@ -708,6 +764,9 @@ async def login_for_access_token(
 
     token_response.refresh_token = rt.token
 
+    # Set httpOnly auth cookies for browser-based clients
+    _set_auth_cookies(response, token_response.access_token, rt.token, settings)
+
     return token_response
 
 
@@ -785,6 +844,69 @@ async def exchange_api_key_for_token(
 
     # Return access token with API key scopes
     return jwt_service.create_token_response(user.id, user.email, key_data.scopes)
+
+
+# Cookie-based auth endpoints for browser clients
+
+
+@router.post("/api/auth/refresh")
+@limiter.limit("10/minute")
+async def cookie_refresh(
+    request: Request,
+    response: Response,
+    storage: UserStorage = Depends(get_user_storage),
+    jwt_service: JWTService = Depends(get_jwt_service),
+    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+):
+    """Refresh tokens using httpOnly cookie (no request body needed).
+
+    Reads the refresh_token cookie, rotates it, and sets new cookies.
+    The client must send `credentials: include` so the cookie is sent.
+    """
+    settings = get_settings()
+    rt_cookie = request.cookies.get(settings.auth_cookie_refresh_name)
+    if not rt_cookie:
+        raise HTTPException(status_code=401, detail="No refresh token cookie")
+
+    new_rt, error = await refresh_token_service.validate_and_rotate(
+        token=rt_cookie,
+        client_id="cookie_grant",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    if error or not new_rt:
+        _clear_auth_cookies(response, settings)
+        raise HTTPException(status_code=401, detail=error or "Invalid refresh token")
+
+    user = await storage.get_user(new_rt.user_id)
+    if not user or not user.is_active:
+        _clear_auth_cookies(response, settings)
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    access_token = jwt_service.create_access_token(user.id, user.email, new_rt.scopes)
+    _set_auth_cookies(response, access_token, new_rt.token, settings)
+
+    return {"ok": True}
+
+
+@router.post("/api/auth/logout")
+async def cookie_logout(
+    request: Request,
+    response: Response,
+    jwt_service: JWTService = Depends(get_jwt_service),
+    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+):
+    """Logout — clears auth cookies and revokes the refresh token if present."""
+    settings = get_settings()
+    rt_cookie = request.cookies.get(settings.auth_cookie_refresh_name)
+    if rt_cookie:
+        try:
+            await refresh_token_service.revoke_token(rt_cookie, reason="logout")
+        except Exception:
+            pass
+
+    _clear_auth_cookies(response, settings)
+    return {"ok": True}
 
 
 # User management endpoints

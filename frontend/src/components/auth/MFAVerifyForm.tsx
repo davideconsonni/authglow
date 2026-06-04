@@ -17,7 +17,7 @@ export function MFAVerifyForm() {
   const [attemptsLeft, setAttemptsLeft] = useState(3)
   const [generalError, setGeneralError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const setToken = useAuthStore((s) => s.setToken)
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
   const fetchCurrentUser = useAuthStore((s) => s.fetchCurrentUser)
   const navigate = useNavigate()
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -43,7 +43,7 @@ export function MFAVerifyForm() {
         }
 
         if (response.access_token) {
-          setToken(response.access_token, response.refresh_token)
+          setAuthenticated(true)
           await fetchCurrentUser()
           navigate(ROUTES.DASHBOARD)
           return

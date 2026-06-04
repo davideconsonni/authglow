@@ -26,15 +26,13 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Token storage and bearer credentials
 
-- [ ] **VAPT-001** — JWT access + refresh tokens stored in `localStorage` (XSS-stealable)
+- [x] **VAPT-001** — JWT access + refresh tokens stored in `localStorage` (XSS-stealable)
   - **Location**: `frontend/src/stores/authStore.ts:39-110`; `frontend/src/lib/api.ts:21-34`
   - **Description**: Zustand `persist` middleware writes both tokens to `localStorage` under the key `auth-storage`. Any XSS or third-party script exfiltrates them via `localStorage.getItem('auth-storage')`. For a CIAM/OIDC provider, `httpOnly; Secure; SameSite=Lax` cookies are the correct primitive.
   - **Fix**: Move tokens to `httpOnly` cookies set by the backend; remove from the persisted Zustand store.
 
-- [ ] **VAPT-002** — Refresh tokens stored in plaintext on disk (file-system compromise = full account takeover)
-  - **Location**: `backend/authglow/models/refresh_token.py:15-16`; `backend/authglow/services/refresh_token.py:151-153, 201`
-  - **Description**: `RefreshToken.token` is generated with `secrets.token_urlsafe(32)` but written to JSON in cleartext. The 30-day expiry and `PREFIX_LENGTH=12` prefix index make enumeration trivial. A storage breach yields every active refresh token.
-  - **Fix**: Mirror the `PasswordResetToken` pattern — store `bcrypt(plaintext)` for verification and `HMAC-SHA256(secret, token)` for the lookup key.
+- [x] **VAPT-002** — Refresh tokens stored in plaintext on disk (file-system compromise = full account takeover)
+  - **Fix**: Mirror `PasswordResetToken` pattern — `token_hash` (bcrypt) for verification + `token_lookup` (HMAC-SHA256) for O(1) file lookup. Plaintext token NEVER persisted.
 
 - [ ] **VAPT-003** — Verification/MFA/CSRF tokens used as filenames (directory listing harvests all bearer tokens)
   - **Location**: `backend/authglow/services/email_verification.py:55-57`; `backend/authglow/services/session.py:57-58`; `backend/authglow/services/csrf.py:86-94`
@@ -55,20 +53,12 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Authorization / privilege escalation
 
-- [ ] **VAPT-006** — `assign_role_to_user` allows any `roles.write` holder to grant the `admin` role to themselves
-  - **Location**: `backend/authglow/api/rbac.py:204-249`
-  - **Description**: Endpoint gated by `require_permission("roles.write")` with no check that the assigned role's privilege level is below the caller's. A user holding `roles.write` (e.g. via a custom role) can self-assign the system `admin` role.
-  - **Fix**: Require `require_admin()`; reject assignments where the target role grants permissions the caller does not already have.
-
-- [ ] **VAPT-007** — `update_role` allows any `roles.write` holder to add `users.delete` etc. to a custom role and then assign it
-  - **Location**: `backend/authglow/api/rbac.py:143-186`
-  - **Description**: Only system roles are protected. An attacker can escalate a non-system role by adding `users.write`, `users.delete`, `audit.read`, then assign the upgraded role to themselves.
-  - **Fix**: Require `require_admin()`; reject updates that grant permissions the caller does not already possess.
-
-- [ ] **VAPT-008** — `create_role` lets any `roles.write` holder instantiate a new role with arbitrary permissions
-  - **Location**: `backend/authglow/api/rbac.py:83-109`
-  - **Description**: A user can build a "super-user" role bundling `users.delete`, `audit.read`, etc., then assign it to themselves via VAPT-006.
-  - **Fix**: Require `require_admin()`; validate no requested permission exceeds the caller's own permission set.
+- [x] **VAPT-006** — `assign_role_to_user` allows any `roles.write` holder to grant the `admin` role to themselves
+  - **Fix**: Changed all RBAC write endpoints (`create_role`, `update_role`, `delete_role`, `assign_role_to_user`, `remove_role_from_user`) from `require_permission("roles.write")` to `require_admin()`.
+- [x] **VAPT-007** — `update_role` allows any `roles.write` holder to add `users.delete` etc. to a custom role and then assign it
+  - **Fix**: Same as VAPT-006 — `require_admin()` now gates `update_role`.
+- [x] **VAPT-008** — `create_role` lets any `roles.write` holder instantiate a new role with arbitrary permissions
+  - **Fix**: Same as VAPT-006 — `require_admin()` now gates `create_role`.
 
 - [ ] **VAPT-009** — MFA backup codes are multi-use (single-use invariant broken)
   - **Location**: `backend/authglow/services/mfa.py:130-166`; `backend/authglow/models/mfa.py:22-29`
@@ -120,10 +110,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: If `client_id`/`client_secret` are missing or invalid, the function silently returns 200 but still proceeds to attempt revocation of any matching refresh/access token found via the unauthenticated path. An unauthenticated attacker can revoke arbitrary users' refresh tokens.
   - **Fix**: Require authenticated client credentials (HTTP Basic or form post) before honoring any revocation; verify the token belongs to the authenticated client.
 
-- [ ] **VAPT-017** — `delete_role` lets any `roles.write` holder wipe any non-system role (DoS / stale assignments)
-  - **Location**: `backend/authglow/api/rbac.py:189-198`
-  - **Description**: A user with `roles.write` can delete any non-system role in active use, wiping the role and leaving any user-role assignments that depend on it stale.
-  - **Fix**: Require `require_admin()`; refuse to delete a role that is still assigned to any user.
+- [x] **VAPT-017** — `delete_role` lets any `roles.write` holder wipe any non-system role (DoS / stale assignments)
+  - **Fix**: Changed from `require_permission("roles.write")` to `require_admin()`.
 
 ### Passwords
 

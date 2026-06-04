@@ -3,7 +3,7 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -232,6 +232,7 @@ async def begin_authentication(
 @limiter.limit("10/minute")  # Max 10 passkey verification attempts per minute per IP
 async def complete_authentication(
     request: Request,
+    response: Response,
     verification: PasskeyAuthenticationVerification,
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
@@ -242,8 +243,12 @@ async def complete_authentication(
     """
     Complete passkey authentication ceremony.
 
-    Verifies the authentication assertion and returns access + refresh token.
+    Verifies the authentication assertion, sets httpOnly auth cookies,
+    and returns access + refresh token.
     """
+    settings = get_settings()
+    from authglow.api.auth import _set_auth_cookies
+
     try:
         # Extract challenge from client_data_json
         import base64
@@ -314,6 +319,8 @@ async def complete_authentication(
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )
+
+        _set_auth_cookies(response, access_token, rt.token, settings)
 
         return {
             "access_token": access_token,

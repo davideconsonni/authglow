@@ -152,6 +152,7 @@ class TestTokenEndpointClientAuth:
         with pytest.raises(HTTPException) as exc_info:
             await token_endpoint(
                 request=mock_request,
+                response=MagicMock(),
                 grant_type="authorization_code",
                 code=auth_code.code,
                 redirect_uri=auth_code.redirect_uri,
@@ -198,6 +199,7 @@ class TestTokenEndpointClientAuth:
         with pytest.raises(HTTPException) as exc_info:
             await token_endpoint(
                 request=mock_request,
+                response=MagicMock(),
                 grant_type="authorization_code",
                 code=auth_code.code,
                 redirect_uri=auth_code.redirect_uri,
@@ -238,6 +240,7 @@ class TestTokenEndpointClientAuth:
         with pytest.raises(HTTPException) as exc_info:
             await token_endpoint(
                 request=mock_request,
+                response=MagicMock(),
                 grant_type="authorization_code",
                 code=auth_code.code,
                 redirect_uri=auth_code.redirect_uri,
@@ -278,6 +281,7 @@ class TestTokenEndpointClientAuth:
         with pytest.raises(HTTPException) as exc_info:
             await token_endpoint(
                 request=mock_request,
+                response=MagicMock(),
                 grant_type="authorization_code",
                 code=auth_code.code,
                 redirect_uri=auth_code.redirect_uri,
@@ -324,14 +328,13 @@ class TestTokenEndpointClientAuth:
         mock_client.is_active = True
         oauth2_service.client_storage = MagicMock()
         oauth2_service.client_storage.get_client = AsyncMock(return_value=mock_client)
-        oauth2_service.get_authorization_code = AsyncMock(
-            return_value=auth_code_no_pkce
-        )
+        oauth2_service.get_authorization_code = AsyncMock(return_value=auth_code_no_pkce)
         oauth2_service.verify_client = AsyncMock(return_value=True)
 
         with pytest.raises(HTTPException) as exc_info:
             await token_endpoint(
                 request=mock_request,
+                response=MagicMock(),
                 grant_type="authorization_code",
                 code=auth_code.code,
                 redirect_uri=auth_code.redirect_uri,
@@ -346,9 +349,7 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 400
-        assert (
-            "PKCE" in exc_info.value.detail or "code_challenge" in exc_info.value.detail
-        )
+        assert "PKCE" in exc_info.value.detail or "code_challenge" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_basic_auth_credentials_extracted(self, oauth2_service):
@@ -408,6 +409,7 @@ class TestTokenEndpointClientAuth:
 
         result = await token_endpoint(
             request=mock_request,
+            response=MagicMock(),
             grant_type="authorization_code",
             code=auth_code_pkce.code,
             redirect_uri=auth_code_pkce.redirect_uri,
@@ -422,6 +424,4 @@ class TestTokenEndpointClientAuth:
             refresh_token_service=mock_rt_service,
         )
 
-        oauth2_service.verify_client.assert_called_once_with(
-            "test-client-id", "test-client-secret"
-        )
+        oauth2_service.verify_client.assert_called_once_with("test-client-id", "test-client-secret")

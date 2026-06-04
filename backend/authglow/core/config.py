@@ -330,6 +330,18 @@ class Settings(BaseSettings):
     backup_code_max_failed_attempts: int = 3
     backup_code_lockout_seconds: int = 30
 
+    # Auth cookie settings (httpOnly cookies for secure token storage)
+    auth_cookie_access_name: str = "access_token"
+    auth_cookie_refresh_name: str = "refresh_token"
+    auth_cookie_path: str = "/api"
+    auth_cookie_samesite: str = "lax"
+    auth_cookie_domain: Optional[str] = None
+
+    @property
+    def auth_cookie_secure(self) -> bool:
+        """Secure flag: True in production (HTTPS), False for local dev (HTTP)."""
+        return self.is_production
+
     # HTTPS Enforcement
     enforce_https: bool = True
     https_redirect_status: int = 301

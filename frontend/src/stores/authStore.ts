@@ -18,18 +18,16 @@ export interface AuthUser {
 }
 
 interface AuthState {
-  token: string | null
-  refreshToken: string | null
   user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
 }
 
 interface AuthActions {
-  setToken: (token: string, refreshToken?: string) => void
+  setAuthenticated: (value: boolean) => void
   setUser: (user: AuthUser) => void
   login: (email: string, password: string) => Promise<AuthUser | { mfa_required: boolean }>
-  logout: () => void
+  logout: () => Promise<void>
   fetchCurrentUser: () => Promise<void>
 }
 
@@ -38,14 +36,15 @@ type AuthStore = AuthState & AuthActions
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      token: null,
-      refreshToken: null,
       user: null,
       isAuthenticated: false,
       isLoading: false,
 
-      setToken: (token: string, refreshToken?: string) => {
-        set({ token, refreshToken: refreshToken || null, isAuthenticated: true })
+      setAuthenticated: (value: boolean) => {
+        set({ isAuthenticated: value })
+        if (!value) {
+          set({ user: null })
+        }
       },
 
       setUser: (user: AuthUser) => {
@@ -72,8 +71,6 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           set({
-            token: response.access_token,
-            refreshToken: response.refresh_token || null,
             isAuthenticated: true,
             isLoading: false,
           })
@@ -87,10 +84,13 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        try {
+          await api.post('/api/auth/logout')
+        } catch {
+          // Clear even if the server call fails
+        }
         set({
-          token: null,
-          refreshToken: null,
           user: null,
           isAuthenticated: false,
         })
@@ -107,6 +107,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
     },
   ),
 )

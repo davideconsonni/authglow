@@ -1,12 +1,17 @@
+import asyncio
+import json
+import os
+import secrets
+
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch, MagicMock
+
+from authglow.core.datetime import utcnow
 
 
 class TestRefreshTokenLifecycle:
     def test_create_refresh_token(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-1",
@@ -20,24 +25,23 @@ class TestRefreshTokenLifecycle:
         assert rt.client_id == "test-client"
         assert not rt.used
         assert not rt.revoked
+        assert rt.token is not None
+        assert len(rt.token) > 30
 
     def test_get_refresh_token(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-2", client_id="test-client", scopes=["read"]
             )
         )
         fetched = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
+            refresh_token_service.get_refresh_token(rt.token)  # type: ignore[arg-type]
         )
         assert fetched is not None
         assert fetched.token_id == rt.token_id
+        assert fetched.token == rt.token  # plaintext restored in memory
 
     def test_validate_and_rotate(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-3", client_id="test-client", scopes=["read"]
@@ -45,7 +49,8 @@ class TestRefreshTokenLifecycle:
         )
         new_rt, error = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="test-client"
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
             )
         )
         assert new_rt is not None
@@ -53,8 +58,6 @@ class TestRefreshTokenLifecycle:
         assert new_rt.parent_token_id == rt.token_id
 
     def test_validate_and_rotate_wrong_client(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-4", client_id="test-client", scopes=["read"]
@@ -62,34 +65,32 @@ class TestRefreshTokenLifecycle:
         )
         new_rt, error = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="wrong-client"
+                token=rt.token,
+                client_id="wrong-client",  # type: ignore[arg-type]
             )
         )
         assert new_rt is None
         assert "Client mismatch" in error
 
     def test_validate_and_rotate_revoked_token(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-5", client_id="test-client", scopes=["read"]
             )
         )
         asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token)
+            refresh_token_service.revoke_token(rt.token)  # type: ignore[arg-type]
         )
         new_rt, error = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="test-client"
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
             )
         )
         assert new_rt is None
         assert "revoked" in error.lower()
 
     def test_reuse_detection_revokes_family(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-6", client_id="test-client", scopes=["read"]
@@ -97,34 +98,32 @@ class TestRefreshTokenLifecycle:
         )
         new_rt, _ = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="test-client"
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
             )
         )
         assert new_rt is not None
         reuse_result, error = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="test-client"
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
             )
         )
         assert reuse_result is None
         assert "reuse" in error.lower() or "revoked" in error.lower()
 
     def test_revoke_token(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-7", client_id="test-client", scopes=["read"]
             )
         )
         result = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token, reason="Manual revoke")
+            refresh_token_service.revoke_token(rt.token, reason="Manual revoke")  # type: ignore[arg-type]
         )
         assert result is True
 
     def test_revoke_user_tokens(self, refresh_token_service):
-        import asyncio
-
         asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-rt-8", client_id="test-client", scopes=["read"]
@@ -141,333 +140,123 @@ class TestRefreshTokenLifecycle:
         assert count >= 2
 
 
-class TestRefreshTokenPrefixIndex:
-    """Tests for prefix-indexed refresh token lookup (P1 performance fix)."""
+class TestRefreshTokenHashedStorage:
+    """VAPT-002: Tokens must NOT be stored in plaintext on disk."""
 
-    def test_prefix_index_file_created_on_create(self, refresh_token_service):
-        import asyncio
-
+    def test_plaintext_not_on_disk(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
-                user_id="user-pi-1",
+                user_id="user-h-1",
                 client_id="test-client",
                 scopes=["read"],
-                expires_in_days=30,
             )
         )
-        from authglow.services.refresh_token import PREFIX_LENGTH
+        path = refresh_token_service._get_token_path(rt.token_lookup)
+        raw = open(path, "r").read()
 
-        prefix = rt.token[:PREFIX_LENGTH]
-        index_file = f"{refresh_token_service.index_path}/{prefix}.json"
+        assert rt.token not in raw
+        assert rt.token_hash in raw
+        assert rt.token_lookup in raw
 
-        import os
-
-        assert os.path.exists(index_file)
-        import json
-
-        with open(index_file, "r") as f:
-            idx = json.load(f)
-        assert rt.token_id in idx["token_ids"]
-
-    def test_get_refresh_token_no_glob(self, refresh_token_service):
-        import asyncio
-
+    def test_token_lookup_is_hmac(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
-                user_id="user-pi-2",
+                user_id="user-h-2",
+                client_id="test-client",
+                scopes=["read"],
+            )
+        )
+        assert len(rt.token_lookup) == 64
+        assert all(c in "0123456789abcdef" for c in rt.token_lookup)
+
+    def test_token_hash_is_bcrypt(self, refresh_token_service):
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-h-3",
+                client_id="test-client",
+                scopes=["read"],
+            )
+        )
+        assert rt.token_hash.startswith("$2b$") or rt.token_hash.startswith("$2a$")
+
+    def test_direct_hmac_lookup_o1(self, refresh_token_service):
+        """O(1) lookup via HMAC — no directory scanning."""
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-h-4",
                 client_id="test-client",
                 scopes=["read"],
             )
         )
         original_glob = refresh_token_service._afs.glob
 
-        def _glob_should_not_be_called(*args, **kwargs):
-            raise AssertionError("glob() was called — prefix index NOT used!")
+        def _glob_must_not_be_called(*args, **kwargs):
+            raise AssertionError("glob() was called — should use O(1) HMAC lookup!")
 
-        refresh_token_service._afs.glob = _glob_should_not_be_called
+        refresh_token_service._afs.glob = _glob_must_not_be_called
         try:
             fetched = asyncio.get_event_loop().run_until_complete(
-                refresh_token_service.get_refresh_token(rt.token)
+                refresh_token_service.get_refresh_token(rt.token)  # type: ignore[arg-type]
             )
             assert fetched is not None
             assert fetched.token_id == rt.token_id
         finally:
             refresh_token_service._afs.glob = original_glob
 
-    def test_unknown_prefix_returns_none(self, refresh_token_service):
-        import asyncio
-        import secrets
-
+    def test_unknown_token_returns_none(self, refresh_token_service):
         fake_token = secrets.token_urlsafe(32)
         result = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.get_refresh_token(fake_token)
         )
         assert result is None
 
-    def test_revoke_preserves_index_entry(self, refresh_token_service):
-        import asyncio
-
+    def test_wrong_secret_does_not_match(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
-                user_id="user-pi-3",
+                user_id="user-h-5",
                 client_id="test-client",
                 scopes=["read"],
             )
         )
-        from authglow.services.refresh_token import PREFIX_LENGTH
+        import hmac, hashlib
 
-        prefix = rt.token[:PREFIX_LENGTH]
+        wrong_lookup = hmac.new(b"wrong-secret", rt.token.encode(), hashlib.sha256).hexdigest()  # type: ignore[union-attr]
+        assert wrong_lookup != rt.token_lookup
 
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token, reason="test revoke")
-        )
-        candidate_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_prefix_index(prefix)
-        )
-        assert rt.token_id in candidate_ids
-
-    def test_cleanup_removes_from_index(self, refresh_token_service):
-        import asyncio
-
+    def test_get_by_token_id_uses_id_index(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
-                user_id="user-pi-4",
+                user_id="user-h-6",
+                client_id="test-client",
+                scopes=["read"],
+            )
+        )
+        fetched = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.get_refresh_token_by_id(rt.token_id)
+        )
+        assert fetched is not None
+        assert fetched.token_id == rt.token_id
+
+    def test_id_index_cleaned_up(self, refresh_token_service):
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-h-7",
                 client_id="test-client",
                 scopes=["read"],
                 expires_in_days=-1,
             )
         )
-        from authglow.services.refresh_token import PREFIX_LENGTH
-
-        prefix = rt.token[:PREFIX_LENGTH]
-
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.cleanup_expired_tokens()
-        )
-        candidate_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_prefix_index(prefix)
-        )
-        assert rt.token_id not in candidate_ids
-
-    def test_prefix_index_isolates_lookups(self, refresh_token_service):
-        import asyncio
-
-        target_rt = None
-        for i in range(10):
-            rt = asyncio.get_event_loop().run_until_complete(
-                refresh_token_service.create_refresh_token(
-                    user_id=f"user-pi-5-{i}",
-                    client_id="test-client",
-                    scopes=["read"],
-                )
-            )
-            if i == 5:
-                target_rt = rt
-
-        from authglow.services.refresh_token import PREFIX_LENGTH
-
-        prefix = target_rt.token[:PREFIX_LENGTH]
-        candidate_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_prefix_index(prefix)
-        )
-        assert len(candidate_ids) <= 2
-
-        original_glob = refresh_token_service._afs.glob
-
-        def _glob_must_not_called(*args, **kwargs):
-            raise AssertionError("glob() was called — prefix index NOT used!")
-
-        refresh_token_service._afs.glob = _glob_must_not_called
-        try:
-            fetched = asyncio.get_event_loop().run_until_complete(
-                refresh_token_service.get_refresh_token(target_rt.token)
-            )
-            assert fetched is not None
-            assert fetched.token_id == target_rt.token_id
-        finally:
-            refresh_token_service._afs.glob = original_glob
-
-    def test_prefix_collision_both_resolved(self, refresh_token_service):
-        import asyncio
-
-        rt_a = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-pi-a",
-                client_id="test-client",
-                scopes=["read"],
-            )
-        )
-        rt_b = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-pi-b",
-                client_id="test-client",
-                scopes=["write"],
-            )
-        )
-        from authglow.services.refresh_token import PREFIX_LENGTH
-
-        prefix_a = rt_a.token[:PREFIX_LENGTH]
-        prefix_b = rt_b.token[:PREFIX_LENGTH]
-
-        if prefix_a == prefix_b:
-            pytest.skip("Prefixes happen to collide naturally — test already covered")
-
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._save_prefix_index(prefix_a, rt_b.token_id)
-        )
-
-        candidate_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_prefix_index(prefix_a)
-        )
-        assert rt_a.token_id in candidate_ids
-        assert rt_b.token_id in candidate_ids
-
-        fetched_a = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt_a.token)
-        )
-        assert fetched_a is not None
-        assert fetched_a.token_id == rt_a.token_id
-
-        fetched_b = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt_b.token)
-        )
-        assert fetched_b is not None
-        assert fetched_b.token_id == rt_b.token_id
-
-    def test_revoked_token_still_found_via_index(self, refresh_token_service):
-        import asyncio
-
-        rt = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-pi-6",
-                client_id="test-client",
-                scopes=["read"],
-            )
-        )
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token, reason="test")
-        )
+        asyncio.get_event_loop().run_until_complete(refresh_token_service.cleanup_expired_tokens())
         fetched = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
+            refresh_token_service.get_refresh_token_by_id(rt.token_id)
         )
-        assert fetched is not None
-        assert fetched.revoked is True
-
-
-class TestRefreshTokenCache:
-    """Tests for in-memory TTL cache on get_refresh_token (P6 performance)."""
-
-    def test_cache_hit_skips_prefix_index(self, refresh_token_service):
-        import asyncio
-
-        rt = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-cache-1",
-                client_id="test-client",
-                scopes=["read"],
-            )
-        )
-        fetched_1 = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched_1 is not None
-
-        original_load = refresh_token_service._load_prefix_index
-
-        def _load_must_not_be_called(*args, **kwargs):
-            raise AssertionError("_load_prefix_index() called — cache was NOT hit!")
-
-        refresh_token_service._load_prefix_index = _load_must_not_be_called
-        try:
-            fetched_2 = asyncio.get_event_loop().run_until_complete(
-                refresh_token_service.get_refresh_token(rt.token)
-            )
-            assert fetched_2 is not None
-            assert fetched_2.token_id == rt.token_id
-        finally:
-            refresh_token_service._load_prefix_index = original_load
-
-    def test_cache_stale_entry_evicted_on_file_missing(self, refresh_token_service):
-        import asyncio
-        import os
-
-        rt = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-cache-1b",
-                client_id="test-client",
-                scopes=["read"],
-            )
-        )
-        fetched = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched is not None
-
-        token_path = refresh_token_service._get_token_path(rt.token_id)
-        os.remove(token_path)
-
-        fetched_2 = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched_2 is None
-
-    def test_cache_invalidation_on_revoke(self, refresh_token_service):
-        import asyncio
-
-        rt = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-cache-2",
-                client_id="test-client",
-                scopes=["read"],
-            )
-        )
-        fetched = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched is not None
-        assert fetched.revoked is False
-
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token, reason="test")
-        )
-        fetched_after = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched_after is not None
-        assert fetched_after.revoked is True
-
-    def test_cache_invalidation_on_cleanup(self, refresh_token_service):
-        import asyncio
-
-        rt = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.create_refresh_token(
-                user_id="user-cache-3",
-                client_id="test-client",
-                scopes=["read"],
-                expires_in_days=-1,
-            )
-        )
-        fetched = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched is not None
-
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.cleanup_expired_tokens()
-        )
-        fetched_after = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.get_refresh_token(rt.token)
-        )
-        assert fetched_after is None
+        assert fetched is None
 
 
 class TestRefreshTokenActiveIndex:
     """Tests for active token index (P4 performance fix)."""
 
     def test_active_index_created_on_create(self, refresh_token_service):
-        import asyncio
-        import os, json
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-1",
@@ -476,15 +265,12 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-
         assert os.path.exists(refresh_token_service._active_index_path)
         with open(refresh_token_service._active_index_path, "r") as f:
             idx = json.load(f)
         assert rt.token_id in idx["token_ids"]
 
     def test_revoked_token_removed_from_active_index(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-2",
@@ -493,19 +279,15 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-
         asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt.token, reason="test revoke")
+            refresh_token_service.revoke_token(rt.token, reason="test revoke")  # type: ignore[arg-type]
         )
-
         active_ids = asyncio.get_event_loop().run_until_complete(
             refresh_token_service._load_active_index()
         )
         assert rt.token_id not in active_ids
 
     def test_rotation_updates_active_index(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-3",
@@ -516,7 +298,8 @@ class TestRefreshTokenActiveIndex:
         )
         new_rt, error = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.validate_and_rotate(
-                token=rt.token, client_id="test-client"
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
             )
         )
         assert new_rt is not None
@@ -529,8 +312,6 @@ class TestRefreshTokenActiveIndex:
         assert new_rt.token_id in active_ids
 
     def test_cleanup_removes_expired_from_active_index(self, refresh_token_service):
-        import asyncio
-
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-4",
@@ -539,21 +320,13 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=-1,
             )
         )
-
-        asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.cleanup_expired_tokens()
-        )
-
+        asyncio.get_event_loop().run_until_complete(refresh_token_service.cleanup_expired_tokens())
         active_ids = asyncio.get_event_loop().run_until_complete(
             refresh_token_service._load_active_index()
         )
         assert rt.token_id not in active_ids
 
-    def test_list_all_tokens_active_only_uses_index_not_glob(
-        self, refresh_token_service
-    ):
-        import asyncio
-
+    def test_list_all_tokens_active_only_uses_index_not_glob(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-5",
@@ -562,7 +335,6 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-
         original_glob = refresh_token_service._afs.glob
 
         def _glob_must_not_be_called(*args, **kwargs):
@@ -579,8 +351,6 @@ class TestRefreshTokenActiveIndex:
             refresh_token_service._afs.glob = original_glob
 
     def test_list_all_tokens_active_only_excludes_revoked(self, refresh_token_service):
-        import asyncio
-
         rt_active = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-6a",
@@ -598,20 +368,15 @@ class TestRefreshTokenActiveIndex:
             )
         )
         asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.revoke_token(rt_revoked.token, reason="test")
+            refresh_token_service.revoke_token(rt_revoked.token, reason="test")  # type: ignore[arg-type]
         )
-
         tokens, total = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.list_all_tokens(active_only=True)
         )
         assert total == 1
         assert tokens[0].token_id == rt_active.token_id
 
-    def test_list_all_tokens_active_only_filters_by_user_id(
-        self, refresh_token_service
-    ):
-        import asyncio
-
+    def test_list_all_tokens_active_only_filters_by_user_id(self, refresh_token_service):
         asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-7a",
@@ -628,18 +393,13 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-
         tokens, total = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.list_all_tokens(
-                active_only=True, user_id="user-ai-7a"
-            )
+            refresh_token_service.list_all_tokens(active_only=True, user_id="user-ai-7a")
         )
         assert total == 1
         assert tokens[0].user_id == "user-ai-7a"
 
     def test_list_all_tokens_active_only_pagination(self, refresh_token_service):
-        import asyncio
-
         for i in range(5):
             asyncio.get_event_loop().run_until_complete(
                 refresh_token_service.create_refresh_token(
@@ -649,7 +409,6 @@ class TestRefreshTokenActiveIndex:
                     expires_in_days=30,
                 )
             )
-
         tokens, total = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.list_all_tokens(active_only=True, limit=2, offset=0)
         )
@@ -666,8 +425,6 @@ class TestRefreshTokenActiveIndex:
         assert page1_ids.isdisjoint(page2_ids)
 
     def test_empty_active_index_returns_empty_list(self, refresh_token_service):
-        import asyncio
-
         tokens, total = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.list_all_tokens(active_only=True)
         )
@@ -675,8 +432,6 @@ class TestRefreshTokenActiveIndex:
         assert total == 0
 
     def test_user_id_no_match_returns_empty(self, refresh_token_service):
-        import asyncio
-
         asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-10",
@@ -685,11 +440,8 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-
         tokens, total = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service.list_all_tokens(
-                active_only=True, user_id="non-existent-user"
-            )
+            refresh_token_service.list_all_tokens(active_only=True, user_id="non-existent-user")
         )
         assert tokens == []
         assert total == 0

@@ -2,9 +2,10 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from authglow.api.auth import get_current_user
+from authglow.api.auth import _set_auth_cookies, get_current_user
+from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
 from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
@@ -216,6 +217,7 @@ async def regenerate_backup_codes(
 @router.post("/api/mfa/verify-login")
 @limiter.limit("3/minute")
 async def verify_mfa_login(
+    response: Response,
     verify_request: MFAVerifyRequest,
     storage: UserStorage = Depends(get_user_storage),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -223,7 +225,8 @@ async def verify_mfa_login(
     audit_service: AuditService = Depends(get_audit_service),
     request: Request = None,  # type: ignore[assignment]
 ):
-    """Verify MFA code during login and return access token."""
+    """Verify MFA code during login and return access token. Sets httpOnly auth cookies."""
+    settings = get_settings()
     # Decode session token (should be in Authorization header or in body)
 
     # Try to get session token from request
@@ -323,5 +326,20 @@ async def verify_mfa_login(
         user_agent=request.headers.get("user-agent") if request else None,
     )
 
-    # Return full access token
-    return jwt_service.create_token_response(user.id, user.email, user.scopes)
+    # Create refresh token and set httpOnly auth cookies
+    from authglow.services.refresh_token import RefreshTokenService
+
+    rt_service = RefreshTokenService()
+    rt = await rt_service.create_refresh_token(
+        user_id=user.id,
+        client_id="password_grant",
+        scopes=user.scopes,
+        issued_ip=request.client.host if request and request.client else None,
+        expires_in_days=settings.refresh_token_expire_days,
+    )
+
+    token_response = jwt_service.create_token_response(user.id, user.email, user.scopes)
+    token_response.refresh_token = rt.token
+    _set_auth_cookies(response, token_response.access_token, rt.token, settings)
+
+    return token_response

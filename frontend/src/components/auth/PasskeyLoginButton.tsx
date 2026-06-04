@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Fingerprint, Loader2 } from 'lucide-react'
 import { startAuthentication } from '@simplewebauthn/browser'
 import { api } from '@/lib/api'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuthStore } from '@/stores/authStore'
 import { getSavedEmail } from '@/components/auth/LoginForm'
 
 export function PasskeyLoginButton() {
-  const { setToken, fetchCurrentUser } = useAuth()
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
+  const fetchCurrentUser = useAuthStore((s) => s.fetchCurrentUser)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -30,7 +31,7 @@ export function PasskeyLoginButton() {
         user_handle: authResult.response.userHandle || null,
       })
       if (completeResp.access_token) {
-        setToken(completeResp.access_token, completeResp.refresh_token)
+        setAuthenticated(true)
         await fetchCurrentUser()
       }
     } catch (err: unknown) {
