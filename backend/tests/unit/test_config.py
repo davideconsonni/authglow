@@ -113,28 +113,31 @@ class TestSecretKeyHardFailsInProduction:
     starting with a placeholder SECRET_KEY must hard-fail at boot."""
 
     def test_placeholder_key_raises_in_production(self, tmp_path):
-        with pytest.raises(ValueError, match="placeholder"):
-            _make_settings_with(
-                tmp_path,
-                secret_key="your-secret-key-change-me-in-production-min-32-chars!",
-                app_env="production",
-            )
+        with pytest.warns(UserWarning, match="placeholder"):
+            with pytest.raises(ValueError, match="placeholder"):
+                _make_settings_with(
+                    tmp_path,
+                    secret_key="your-secret-key-change-me-in-production-min-32-chars!",
+                    app_env="production",
+                )
 
     def test_underscore_placeholder_raises_in_production(self, tmp_path):
-        with pytest.raises(ValueError, match="placeholder"):
-            _make_settings_with(
-                tmp_path,
-                secret_key="your_super_secret_key_for_sessions_at_least_32_chars",
-                app_env="production",
-            )
+        with pytest.warns(UserWarning, match="placeholder"):
+            with pytest.raises(ValueError, match="placeholder"):
+                _make_settings_with(
+                    tmp_path,
+                    secret_key="your_super_secret_key_for_sessions_at_least_32_chars",
+                    app_env="production",
+                )
 
     def test_change_in_production_raises_in_production(self, tmp_path):
-        with pytest.raises(ValueError, match="placeholder"):
-            _make_settings_with(
-                tmp_path,
-                secret_key="change_in_production_min_32_chars_aaaa",
-                app_env="PRODUCTION",
-            )
+        with pytest.warns(UserWarning, match="placeholder"):
+            with pytest.raises(ValueError, match="placeholder"):
+                _make_settings_with(
+                    tmp_path,
+                    secret_key="change_in_production_min_32_chars_aaaa",
+                    app_env="PRODUCTION",
+                )
 
     def test_real_key_starts_in_production(self, tmp_path):
         # 64 hex chars = 32 bytes = a real cryptographic key

@@ -4,6 +4,7 @@ and admin CRUD authentication."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
+import secrets
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -212,7 +213,7 @@ class TestFederationCallbackIdTokenNonce:
             "aud": "test-client",
             "nonce": "fixed-nonce-for-tests",
         }
-        id_token = pyjwt.encode(id_token_claims, "whatever", algorithm="HS256")
+        id_token = pyjwt.encode(id_token_claims, secrets.token_bytes(32), algorithm="HS256")
 
         with patch("authglow.api.federation.FederationStorage") as MockStorage:
             MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
@@ -264,7 +265,7 @@ class TestFederationCallbackIdTokenNonce:
             "aud": "test-client",
             "nonce": "WRONG-NONCE",
         }
-        id_token = pyjwt.encode(id_token_claims, "whatever", algorithm="HS256")
+        id_token = pyjwt.encode(id_token_claims, secrets.token_bytes(32), algorithm="HS256")
 
         with patch("authglow.api.federation.FederationStorage") as MockStorage:
             MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
@@ -408,7 +409,7 @@ class TestFederationCallbackIdTokenSignature:
             "aud": "test-client",
             "nonce": "fixed-nonce-for-tests",
         }
-        id_token = pyjwt.encode(id_token_claims, "whatever", algorithm="HS256")
+        id_token = pyjwt.encode(id_token_claims, secrets.token_bytes(32), algorithm="HS256")
 
         with patch("authglow.api.federation.FederationStorage") as MockStorage:
             MockStorage.return_value.get_provider = AsyncMock(return_value=provider)
@@ -460,7 +461,7 @@ class TestFederationCallbackIdTokenSignature:
         provider = _make_provider()
         id_token = pyjwt.encode(
             {"iss": "https://accounts.google.com", "sub": "user-123", "aud": "test-client"},
-            "whatever",
+            secrets.token_bytes(32),
             algorithm="HS256",
         )
 

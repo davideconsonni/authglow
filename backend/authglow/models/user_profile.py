@@ -67,9 +67,6 @@ class UserPreferences(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
-
 
 class UserPreferencesUpdate(BaseModel):
     """Update user preferences request."""

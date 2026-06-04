@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from authglow.core.datetime import utcnow
 
@@ -41,8 +41,8 @@ class ExternalIdpConfig(BaseModel):
     updated_at: datetime = Field(default_factory=utcnow)
     created_by: Optional[str] = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "label": "CIE",
                 "issuer": "https://idserver.servizicie.interno.gov.it",
@@ -51,6 +51,7 @@ class ExternalIdpConfig(BaseModel):
                 "auth_levels": ["L1", "L2", "L3"],
             }
         }
+    )
 
 
 class ExternalIdpConfigCreate(BaseModel):

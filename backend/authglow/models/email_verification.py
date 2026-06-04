@@ -8,7 +8,6 @@ from pydantic import BaseModel, EmailStr, Field
 
 from authglow.core.datetime import utcnow
 
-
 class EmailVerificationToken(BaseModel):
     """Email verification token model."""
 
@@ -20,15 +19,12 @@ class EmailVerificationToken(BaseModel):
     used: bool = False
     used_at: Optional[datetime] = None
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class EmailVerificationRequest(BaseModel):
     """Request to verify email."""
 
     token: str
-
 
 class ResendVerificationRequest(BaseModel):
     """Request to resend verification email."""

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class IDTokenClaims(BaseModel):
@@ -25,9 +25,6 @@ class IDTokenClaims(BaseModel):
     acr: Optional[str] = None  # Authentication Context Class Reference
     amr: Optional[List[str]] = None  # Authentication Methods References
     azp: Optional[str] = None  # Authorized party (client_id if multiple audiences)
-
-    class Config:
-        json_encoders = {datetime: lambda v: int(v.timestamp()) if v else None}
 
 
 class UserInfoResponse(BaseModel):
@@ -66,7 +63,7 @@ class UserInfoResponse(BaseModel):
     # Address scope claims
     address: Optional[dict] = None
 
-    model_config = {"json_encoders": {datetime: lambda v: int(v.timestamp()) if v else None}}
+    model_config = ConfigDict()
 
 
 class OpenIDConfiguration(BaseModel):

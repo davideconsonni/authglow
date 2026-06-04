@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from authglow.core.datetime import utcnow
 
@@ -46,8 +46,8 @@ class OAuth2Client(BaseModel):
     access_token_lifetime: int = 3600  # seconds (1 hour)
     refresh_token_lifetime: int = 2592000  # seconds (30 days)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "client_name": "My Application",
                 "redirect_uris": ["https://myapp.com/callback"],
@@ -55,6 +55,7 @@ class OAuth2Client(BaseModel):
                 "description": "My awesome application",
             }
         }
+    )
 
 
 class OAuth2ClientCreate(BaseModel):

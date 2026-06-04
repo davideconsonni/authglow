@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
-
 class RefreshToken(BaseModel):
     """Refresh token model with rotation support."""
 
@@ -35,8 +34,6 @@ class RefreshToken(BaseModel):
     issued_ip: Optional[str] = None
     last_used_ip: Optional[str] = None
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class RefreshTokenFamily(BaseModel):

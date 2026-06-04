@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 from authglow.core.datetime import utcnow
 
@@ -55,14 +55,15 @@ class User(BaseModel):
     # Temporary suspension
     suspended_until: Optional[datetime] = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "is_active": True,
                 "scopes": ["read", "write"],
             }
         }
+    )
 
 
 class UserCreate(BaseModel):

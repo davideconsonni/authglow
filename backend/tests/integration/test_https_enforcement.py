@@ -61,7 +61,7 @@ class TestNoRedirectInDevelopment:
         assert response.status_code == 200
 
     def test_no_redirect_header(self, dev_client):
-        response = dev_client.get("/health", allow_redirects=False)
+        response = dev_client.get("/health", follow_redirects=False)
         assert response.status_code == 200
         assert "location" not in response.headers
 
@@ -94,26 +94,26 @@ class TestRedirectInProduction:
         return TestClient(app)
 
     def test_redirect_301_on_http(self, prod_client):
-        response = prod_client.get("/health", allow_redirects=False)
+        response = prod_client.get("/health", follow_redirects=False)
         assert response.status_code == 301
         assert "location" in response.headers
 
     def test_redirect_to_https(self, prod_client):
-        response = prod_client.get("/health", allow_redirects=False)
+        response = prod_client.get("/health", follow_redirects=False)
         location = response.headers["location"]
         assert location.startswith("https://")
 
     def test_redirect_preserves_path(self, prod_client):
-        response = prod_client.get("/test/path", allow_redirects=False)
+        response = prod_client.get("/test/path", follow_redirects=False)
         location = response.headers["location"]
         assert "https://testserver/test/path" in location or "/test/path" in location
 
     def test_redirect_empty_body(self, prod_client):
-        response = prod_client.get("/health", allow_redirects=False)
+        response = prod_client.get("/health", follow_redirects=False)
         assert response.content == b"" or response.text == ""
 
     def test_post_also_redirected(self, prod_client):
-        response = prod_client.post("/health", json={"k": "v"}, allow_redirects=False)
+        response = prod_client.post("/health", json={"k": "v"}, follow_redirects=False)
         assert response.status_code == 301
 
     def test_https_requests_not_redirected(self, prod_client):
@@ -137,7 +137,7 @@ class TestRedirectInProduction:
             return "OK"
 
         client = TestClient(app)
-        response = client.get("/", allow_redirects=False)
+        response = client.get("/", follow_redirects=False)
         assert response.status_code == 302
 
 
@@ -161,7 +161,7 @@ class TestHttpsEnforcementDisabled:
         return TestClient(app)
 
     def test_no_redirect_when_disabled(self, disabled_client):
-        response = disabled_client.get("/health", allow_redirects=False)
+        response = disabled_client.get("/health", follow_redirects=False)
         assert response.status_code == 200
         assert "location" not in response.headers
 
@@ -189,7 +189,7 @@ class TestXForwardedProtoHeader:
         response = proxy_client.get(
             "/health",
             headers={"X-Forwarded-Proto": "https"},
-            allow_redirects=False,
+            follow_redirects=False,
         )
         assert response.status_code == 200
 
@@ -197,7 +197,7 @@ class TestXForwardedProtoHeader:
         response = proxy_client.get(
             "/health",
             headers={"X-Forwarded-Proto": "http"},
-            allow_redirects=False,
+            follow_redirects=False,
         )
         assert response.status_code == 301
 
@@ -205,7 +205,7 @@ class TestXForwardedProtoHeader:
         response = proxy_client.get(
             "/health",
             headers={"x-forwarded-proto": "https"},
-            allow_redirects=False,
+            follow_redirects=False,
         )
         assert response.status_code == 200
 
@@ -227,5 +227,5 @@ class TestProductionCaseInsensitive:
             return "OK"
 
         client = TestClient(app)
-        response = client.get("/", allow_redirects=False)
+        response = client.get("/", follow_redirects=False)
         assert response.status_code == 301

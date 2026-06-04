@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
-
 class APIKey(BaseModel):
     """API Key model."""
 
@@ -44,8 +43,6 @@ class APIKey(BaseModel):
     # IP restrictions (optional)
     allowed_ips: List[str] = Field(default_factory=list)
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 class APIKeyCreate(BaseModel):
@@ -57,7 +54,6 @@ class APIKeyCreate(BaseModel):
     expires_in_days: Optional[int] = Field(None, ge=1, le=365)
     never_expires: bool = False
     allowed_ips: List[str] = Field(default_factory=list)
-
 
 class APIKeyResponse(BaseModel):
     """Response model for API key (without sensitive data)."""
@@ -84,12 +80,10 @@ class APIKeyResponse(BaseModel):
         """Alias for total_requests for backward compatibility."""
         return self.total_requests
 
-
 class APIKeyWithSecret(APIKeyResponse):
     """Response model including the plaintext key (only returned on creation)."""
 
     api_key: str  # Full plaintext key, only shown once
-
 
 class APIKeyUpdate(BaseModel):
     """Request model for updating an API key."""
@@ -99,7 +93,6 @@ class APIKeyUpdate(BaseModel):
     scopes: Optional[List[str]] = None
     is_active: Optional[bool] = None
     allowed_ips: Optional[List[str]] = None
-
 
 class APIKeyUsageStats(BaseModel):
     """Usage statistics for an API key."""
