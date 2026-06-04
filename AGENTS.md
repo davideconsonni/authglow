@@ -139,6 +139,12 @@ Lazy imports inside functions for circular-dependency avoidance.
 - `pytest.raises` for exception testing.
 - Test files: `tests/unit/`, `tests/integration/`, `tests/conftest.py`.
 
+**Running tests — token-saving rules:**
+
+- When running the full suite, always use `pytest -q --tb=line` to minimize output.
+- Show only failures and warning summary — never dump full tracebacks unless debugging a specific failure.
+- **Pre-existing test failures**: this repo has known failures (Python 3.13 event loop, CSP mismatch, `setup_page` import). After every test run, separate failures into two buckets: (a) files you modified — fix these immediately; (b) untouched files — report them clearly and **ask the user** whether to investigate. Never auto-fix pre-existing failures without asking.
+
 ### Other Conventions
 
 - **UTC everywhere**: use `utcnow()` from `authglow.core.datetime`, never naive datetimes.
