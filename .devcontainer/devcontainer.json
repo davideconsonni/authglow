@@ -1,16 +1,12 @@
 {
   "name": "AuthGlow",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "image": "mcr.microsoft.com/devcontainers/python:3.13",
   "features": {
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.13",
-      "installTools": true
-    },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     }
   },
-  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=\"$HOME/.local/bin:$PATH\" && cd backend && uv venv .venv && uv pip install -r requirements.txt && cd ../frontend && npm install && npx playwright install chromium --with-deps",
+  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=\"$HOME/.local/bin:$PATH\" && (cd backend && uv venv .venv && uv pip install -r requirements.txt) & (cd frontend && npm install && npx playwright install chromium --with-deps) & wait",
   "forwardPorts": [5173, 8080],
   "portsAttributes": {
     "5173": {
