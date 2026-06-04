@@ -24,7 +24,7 @@ from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
 
 router = APIRouter(prefix="/api/passkey")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 settings = get_settings()
 
 
@@ -67,12 +67,21 @@ def get_jwt_service() -> JWTService:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     storage: Annotated[UserStorage, Depends(get_user_storage)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
 ) -> User:
     """Get current authenticated user."""
-    token = credentials.credentials
+    if credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get(settings.auth_cookie_access_name)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
     token_data = jwt_service.decode_token(token)
 
     if not token_data or token_data.token_type != "access":

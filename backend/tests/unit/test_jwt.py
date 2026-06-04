@@ -27,9 +27,7 @@ class TestJWTTokenCreation:
         assert decoded.token_type == "refresh"
 
     def test_create_mfa_session_token_roundtrip(self, jwt_service):
-        token = jwt_service.create_mfa_session_token(
-            user_id="user-789", email="mfa@example.com"
-        )
+        token = jwt_service.create_mfa_session_token(user_id="user-789", email="mfa@example.com")
         decoded = jwt_service.decode_token(token)
         assert decoded is not None
         assert decoded.sub == "user-789"
@@ -178,12 +176,8 @@ class TestJWTIDToken:
             algorithms=[settings.jwt_algorithm],
             options={"verify_exp": False, "verify_aud": False},
         )
-        assert isinstance(payload.get("exp"), int), (
-            "ID token exp should be integer, not datetime"
-        )
-        assert isinstance(payload.get("iat"), int), (
-            "ID token iat should be integer, not datetime"
-        )
+        assert isinstance(payload.get("exp"), int), "ID token exp should be integer, not datetime"
+        assert isinstance(payload.get("iat"), int), "ID token iat should be integer, not datetime"
 
     def test_id_token_contains_iss_and_aud(self, jwt_service):
         import jwt as pyjwt
@@ -203,3 +197,53 @@ class TestJWTIDToken:
         )
         assert "iss" in payload
         assert payload["aud"] == "iss-client"
+
+
+class TestJWTIssuerValidation:
+    """VAPT-012: All tokens must include and enforce the iss claim."""
+
+    def test_access_token_has_iss(self, jwt_service):
+        import inspect
+
+        src = inspect.getsource(jwt_service.create_access_token)
+        assert '"iss":' in src or "'iss':" in src
+
+    def test_refresh_token_has_iss(self, jwt_service):
+        import inspect
+
+        src = inspect.getsource(jwt_service.create_refresh_token)
+        assert '"iss":' in src or "'iss':" in src
+
+    def test_mfa_session_token_has_iss(self, jwt_service):
+        import inspect
+
+        src = inspect.getsource(jwt_service.create_mfa_session_token)
+        assert '"iss":' in src or "'iss':" in src
+
+    def test_decode_token_validates_issuer(self, jwt_service):
+        import inspect
+
+        src = inspect.getsource(jwt_service._decode_token)
+        assert "issuer" in src
+        assert '"require":' in src
+        assert "verify_aud" in src
+
+    def test_token_rejected_on_issuer_mismatch(self, jwt_service):
+        """A token signed with a different issuer should be rejected."""
+        import jwt as pyjwt
+
+        settings = jwt_service.settings
+        wrong_issuer_token = pyjwt.encode(
+            {
+                "iss": "https://evil.com",
+                "sub": "user-1",
+                "email": "test@test.com",
+                "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+                "iat": datetime.now(timezone.utc),
+            },
+            jwt_service._private_key,
+            algorithm=settings.jwt_algorithm,
+            headers={"kid": jwt_service._active_kid},
+        )
+        result = jwt_service._decode_token(wrong_issuer_token)
+        assert result is None

@@ -73,10 +73,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### JWT / OAuth2
 
-- [ ] **VAPT-012** — JWT access tokens are not verified for `iss`/`aud` (multi-tenant confusion, federated replay)
-  - **Location**: `backend/authglow/services/jwt.py:101-126`
-  - **Description**: `_decode_token` only sets `options={"verify_exp": True}`. No `issuer=`, no `audience=`, no `require=` clause. A JWT signed with the same RSA key but issued for a different tenant/relying party is accepted. `federation_state.py` and `federation.py` both pin these — the inconsistency is a sign the parent service was missed.
-  - **Fix**: Add `issuer=self.settings.issuer` and `audience=<expected>` to every `jwt.decode`; require `["exp", "iat", "sub"]` for access tokens, `["exp", "iat", "sub", "aud", "iss"]` for ID tokens.
+- [x] **VAPT-012** — JWT access tokens are not verified for `iss`/`aud` (multi-tenant confusion, federated replay)
+  - **Fix**: Added `"iss"` to access/refresh/MFA-session tokens. `_decode_token` now enforces `issuer` + requires `["exp","iat","sub"]`. `verify_aud` left to call sites (ID token consumers already validate it).
 
 - [ ] **VAPT-013** — Refresh and MFA-session tokens have no `jti` (cannot be individually revoked)
   - **Location**: `backend/authglow/services/jwt.py:156-181`

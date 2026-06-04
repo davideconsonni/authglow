@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
 
@@ -71,12 +71,11 @@ class TestPermissionChecker:
             mock_jwt.return_value.decode_token.return_value = token_data
 
             checker = PermissionChecker(required_permissions=["users.delete"])
-            with patch("authglow.core.permissions.security") as mock_security:
-                mock_security.return_value = HTTPAuthorizationCredentials(
-                    scheme="Bearer", credentials="valid-token"
-                )
-                result = asyncio_run(checker.__call__(mock_security.return_value))
-                assert result == "user-1"
+            mock_request = MagicMock(spec=Request)
+            mock_request.cookies = {}
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
+            result = asyncio_run(checker.__call__(mock_request, creds))
+            assert result == "user-1"
 
     def test_any_permission_sufficient(self, test_settings):
         from authglow.core.permissions import PermissionChecker
@@ -95,12 +94,11 @@ class TestPermissionChecker:
                     required_permissions=["users.read", "users.delete"],
                     require_all_permissions=False,
                 )
-                with patch("authglow.core.permissions.security") as mock_security:
-                    mock_security.return_value = HTTPAuthorizationCredentials(
-                        scheme="Bearer", credentials="valid-token"
-                    )
-                    result = asyncio_run(checker(mock_security.return_value))
-                    assert result == "user-1"
+                mock_request = MagicMock(spec=Request)
+                mock_request.cookies = {}
+                creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
+                result = asyncio_run(checker(mock_request, creds))
+                assert result == "user-1"
 
     def test_all_permissions_required(self, test_settings):
         from authglow.core.permissions import PermissionChecker
@@ -119,13 +117,12 @@ class TestPermissionChecker:
                     required_permissions=["users.read", "users.delete"],
                     require_all_permissions=True,
                 )
-                with patch("authglow.core.permissions.security") as mock_security:
-                    mock_security.return_value = HTTPAuthorizationCredentials(
-                        scheme="Bearer", credentials="valid-token"
-                    )
-                    with pytest.raises(HTTPException) as exc_info:
-                        asyncio_run(checker(mock_security.return_value))
-                    assert exc_info.value.status_code == 403
+                mock_request = MagicMock(spec=Request)
+                mock_request.cookies = {}
+                creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
+                with pytest.raises(HTTPException) as exc_info:
+                    asyncio_run(checker(mock_request, creds))
+                assert exc_info.value.status_code == 403
 
     def test_invalid_token_returns_401(self, test_settings):
         from authglow.core.permissions import PermissionChecker
@@ -134,13 +131,12 @@ class TestPermissionChecker:
             mock_jwt.return_value.decode_token.return_value = None
 
             checker = PermissionChecker(required_permissions=["users.read"])
-            with patch("authglow.core.permissions.security") as mock_security:
-                mock_security.return_value = HTTPAuthorizationCredentials(
-                    scheme="Bearer", credentials="invalid-token"
-                )
-                with pytest.raises(HTTPException) as exc_info:
-                    asyncio_run(checker(mock_security.return_value))
-                assert exc_info.value.status_code == 401
+            mock_request = MagicMock(spec=Request)
+            mock_request.cookies = {}
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid-token")
+            with pytest.raises(HTTPException) as exc_info:
+                asyncio_run(checker(mock_request, creds))
+            assert exc_info.value.status_code == 401
 
 
 class TestGetCurrentUser:
@@ -160,12 +156,11 @@ class TestGetCurrentUser:
             )
             mock_jwt.return_value.decode_token.return_value = token_data
 
-            with patch("authglow.core.permissions.security") as mock_security:
-                mock_security.return_value = HTTPAuthorizationCredentials(
-                    scheme="Bearer", credentials="valid-token"
-                )
-                result = asyncio_run(get_current_user(mock_security.return_value))
-                assert result == "user-42"
+            mock_request = MagicMock(spec=Request)
+            mock_request.cookies = {}
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
+            result = asyncio_run(get_current_user(mock_request, creds))
+            assert result == "user-42"
 
     def test_get_current_user_invalid_token(self, test_settings):
         from authglow.core.permissions import get_current_user
@@ -173,13 +168,12 @@ class TestGetCurrentUser:
         with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
             mock_jwt.return_value.decode_token.return_value = None
 
-            with patch("authglow.core.permissions.security") as mock_security:
-                mock_security.return_value = HTTPAuthorizationCredentials(
-                    scheme="Bearer", credentials="invalid"
-                )
-                with pytest.raises(HTTPException) as exc_info:
-                    asyncio_run(get_current_user(mock_security.return_value))
-                assert exc_info.value.status_code == 401
+            mock_request = MagicMock(spec=Request)
+            mock_request.cookies = {}
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid")
+            with pytest.raises(HTTPException) as exc_info:
+                asyncio_run(get_current_user(mock_request, creds))
+            assert exc_info.value.status_code == 401
 
 
 def asyncio_run(coro):

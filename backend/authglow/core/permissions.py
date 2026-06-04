@@ -2,13 +2,14 @@
 
 from typing import List, Optional, Union
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from authglow.core.config import get_settings
 from authglow.services.jwt import JWTService
 from authglow.services.rbac import RBACService
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 _jwt_service: Optional[JWTService] = None
 
@@ -18,6 +19,20 @@ def _get_jwt_service() -> JWTService:
     if _jwt_service is None:
         _jwt_service = JWTService()
     return _jwt_service
+
+
+def _extract_token(request: Request, credentials: Optional[HTTPAuthorizationCredentials]) -> str:
+    """Extract token from Authorization header or access_token cookie."""
+    if isinstance(credentials, HTTPAuthorizationCredentials):
+        return credentials.credentials
+    settings = get_settings()
+    cookie_token = request.cookies.get(settings.auth_cookie_access_name)
+    if cookie_token:
+        return cookie_token
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+    )
 
 
 class PermissionChecker:
@@ -43,7 +58,11 @@ class PermissionChecker:
         self.require_all_permissions = require_all_permissions
         self.require_all_roles = require_all_roles
 
-    async def __call__(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    async def __call__(
+        self,
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ) -> str:
         """Check if user has required permissions/roles.
 
         Returns:
@@ -52,7 +71,7 @@ class PermissionChecker:
         Raises:
             HTTPException: If unauthorized or insufficient permissions
         """
-        token = credentials.credentials
+        token = _extract_token(request, credentials)
 
         # Decode token to get user_id
         token_data = _get_jwt_service().decode_token(token)
@@ -163,7 +182,8 @@ def require_admin():
 
 # Convenience dependency for getting current user from token
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
     """Get current user ID from token.
 
@@ -173,7 +193,7 @@ async def get_current_user(
     Raises:
         HTTPException: If unauthorized
     """
-    token = credentials.credentials
+    token = _extract_token(request, credentials)
     token_data = _get_jwt_service().decode_token(token)
 
     if not token_data:

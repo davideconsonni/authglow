@@ -83,6 +83,9 @@ class JWTService:
         2. If the kid is known and not revoked, verify with that key.
         3. If the kid is missing or unknown, try all non-revoked keys.
         4. A revoked kid always fails.
+
+        All tokens must have a valid issuer matching the configured issuer
+        and the required claims ``exp``, ``iat``, ``sub``.
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -90,6 +93,11 @@ class JWTService:
             return None
 
         kid = unverified_header.get("kid")
+        decode_opts = {
+            "algorithms": [self.settings.jwt_algorithm],
+            "issuer": self.settings.issuer,
+            "options": {"require": ["exp", "iat", "sub"], "verify_aud": False},
+        }
 
         # Check if kid is revoked
         if kid and kid in self._keyring["keys"]:
@@ -102,8 +110,7 @@ class JWTService:
                 result: dict[str, Any] = jwt.decode(
                     token,
                     self._public_keys[kid],
-                    algorithms=[self.settings.jwt_algorithm],
-                    options={"verify_exp": True},
+                    **decode_opts,
                 )
                 return result
             except jwt.PyJWTError:
@@ -118,8 +125,7 @@ class JWTService:
                 decoded: dict[str, Any] = jwt.decode(
                     token,
                     pub_key,
-                    algorithms=[self.settings.jwt_algorithm],
-                    options={"verify_exp": True},
+                    **decode_opts,
                 )
                 return decoded
             except jwt.PyJWTError:
@@ -143,6 +149,7 @@ class JWTService:
             )
 
         token_data = {
+            "iss": self.settings.issuer,
             "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
@@ -159,6 +166,7 @@ class JWTService:
             days=self.settings.refresh_token_expire_days
         )
         token_data = {
+            "iss": self.settings.issuer,
             "sub": user_id,
             "email": email,
             "scopes": scopes,
@@ -172,6 +180,7 @@ class JWTService:
         """Create a temporary session token for MFA verification."""
         expire = datetime.now(timezone.utc) + timedelta(minutes=5)
         token_data = {
+            "iss": self.settings.issuer,
             "sub": user_id,
             "email": email,
             "exp": expire,

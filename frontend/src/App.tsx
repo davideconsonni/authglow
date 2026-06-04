@@ -71,6 +71,15 @@ const queryClient = new QueryClient({
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   const hydrated = useAuthStore((s) => s._hydrated)
+
+  useEffect(() => {
+    const handler = () => {
+      useAuthStore.getState().setAuthenticated(false)
+    }
+    window.addEventListener('auth:session-expired', handler)
+    return () => window.removeEventListener('auth:session-expired', handler)
+  }, [])
+
   if (!hydrated) return <LoadingState />
   if (!isAuthenticated) return <Navigate to={ROUTES.AUTH.LOGIN} replace />
   return <>{children}</>
