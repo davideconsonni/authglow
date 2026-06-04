@@ -59,10 +59,8 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Open redirect
 
-- [ ] **VAPT-010** — OIDC RP-initiated logout open redirect (validation is dead code)
-  - **Location**: `backend/authglow/api/oidc.py:199-267`; `backend/authglow/models/token.py:24-33`
-  - **Description**: `TokenData` has no `aud` field, so `hasattr(token_data, "aud")` is always False, the entire `post_logout_redirect_uri` allowlist check is skipped, and the endpoint follows any URL the caller supplies. The subsequent `state` append uses string concat (no URL-encoding) compounding the issue.
-  - **Fix**: Add `aud` to `TokenData` and `decode_token`; require `post_logout_redirect_uri` to be in the client's allowlist with no localhost bypass in production; URL-encode `state`.
+- [x] **VAPT-010** — OIDC RP-initiated logout open redirect (validation is dead code)
+  - **Fix**: Added `aud` field to `TokenData` + `decode_token`. Replaced `hasattr(token_data, "aud")` (always False) with `token_data.aud`. Localhost bypass gated behind `not is_production`. State parameter now URL-encoded via `urlencode()`.
 
 ### Tokens in logs
 

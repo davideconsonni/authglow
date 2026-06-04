@@ -210,8 +210,9 @@ class JWTService:
             scopes=payload.get("scopes", []),
             exp=datetime.fromtimestamp(exp_val, tz=timezone.utc),
             iat=datetime.fromtimestamp(iat_val, tz=timezone.utc),
-            token_type=payload.get("token_type", "access"),
+            token_type=str(payload.get("token_type", "access")),
             jti=jti if isinstance(jti, str) else None,
+            aud=payload.get("aud") if isinstance(payload.get("aud"), str) else None,
         )
 
         if token_data.exp < datetime.now(timezone.utc):

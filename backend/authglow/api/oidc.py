@@ -233,36 +233,35 @@ async def logout_get(
                 event_type="oidc_logout",
                 user_id=token_data.sub,
                 metadata={
-                    "client_id": token_data.aud if hasattr(token_data, "aud") else None,
+                    "client_id": token_data.aud,
                     "has_redirect": post_logout_redirect_uri is not None,
                 },
             )
 
             # Validate post_logout_redirect_uri if provided
-            if post_logout_redirect_uri and hasattr(token_data, "aud"):
+            if post_logout_redirect_uri and token_data.aud:
                 client_id = token_data.aud
-                # Verify the redirect URI is registered for this client
                 client = await oauth2_service.client_storage.get_client(client_id)
                 if client:
-                    # Check if post_logout_redirect_uri is in allowed redirect URIs
-                    # or in a separate list of post_logout_redirect_uris
                     if post_logout_redirect_uri not in client.redirect_uris:
-                        # Allow localhost for development
-                        from urllib.parse import urlparse
-
+                        settings = get_settings()
                         parsed = urlparse(post_logout_redirect_uri)
-                        if parsed.hostname not in ["localhost", "127.0.0.1"]:
+                        if settings.is_production or parsed.hostname not in (
+                            "localhost",
+                            "127.0.0.1",
+                        ):
                             raise HTTPException(
                                 status_code=400, detail="Invalid post_logout_redirect_uri"
                             )
 
     # Redirect to post_logout_redirect_uri if provided
     if post_logout_redirect_uri:
+        from urllib.parse import urlencode
+
         redirect_url = post_logout_redirect_uri
         if state:
-            # Add state parameter to redirect URL
             separator = "&" if "?" in redirect_url else "?"
-            redirect_url = f"{redirect_url}{separator}state={state}"
+            redirect_url = f"{redirect_url}{separator}{urlencode({'state': state})}"
 
         return RedirectResponse(url=redirect_url, status_code=303)
 

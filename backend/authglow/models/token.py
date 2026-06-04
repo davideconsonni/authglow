@@ -31,6 +31,7 @@ class TokenData(BaseModel):
     iat: datetime
     token_type: str = "access"  # access or refresh
     jti: Optional[str] = None  # JWT ID for revocation blacklist
+    aud: Optional[str] = None  # audience — client_id for ID tokens, RP-initiated logout
 
 
 class AuthorizationCode(BaseModel):
