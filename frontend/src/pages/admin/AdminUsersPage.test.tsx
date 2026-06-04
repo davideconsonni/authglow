@@ -288,6 +288,41 @@ describe('AdminUsersPage', () => {
     })
   })
 
+  it('shows error banner inside modal when set-password API returns 400', async () => {
+    mockApi.post.mockRejectedValueOnce(
+      new Error('Password does not meet requirements: Password must be at least 8 characters long'),
+    )
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'u@t.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [], password_expired: false, locked_until: null }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    fireEvent.click(screen.getByTestId('set-password-btn'))
+
+    fireEvent.change(screen.getByTestId('set-password-input'), { target: { value: 'NewStr0ng!' } })
+    fireEvent.click(screen.getByTestId('set-password-submit'))
+
+    const banner = await screen.findByTestId('set-password-error')
+    expect(banner).toHaveAttribute('role', 'alert')
+    expect(banner).toHaveTextContent(/Password does not meet requirements/)
+    expect(screen.getByTestId('set-password-input')).toBeInTheDocument()
+  })
+
+  it('disables set-password submit when password does not meet criteria', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'u@t.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [], password_expired: false, locked_until: null }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    fireEvent.click(screen.getByTestId('set-password-btn'))
+
+    fireEvent.change(screen.getByTestId('set-password-input'), { target: { value: 'abc' } })
+    expect(screen.getByTestId('set-password-submit')).toBeDisabled()
+
+    fireEvent.change(screen.getByTestId('set-password-input'), { target: { value: 'NewStr0ng!' } })
+    expect(screen.getByTestId('set-password-submit')).not.toBeDisabled()
+  })
+
   it('shows Send Password Reset button in drawer', () => {
     mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
     mockQueryData.userDetail = { id: 'user-0', email: 'u@t.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [], password_expired: false, locked_until: null }

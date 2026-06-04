@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock } from 'lucide-react'
+import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock, AlertCircle, Check } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -12,6 +12,22 @@ import { useAuthStore } from '@/stores/authStore'
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
   is_active: boolean; mfa_enabled: boolean; created_at: string; login_count: number
+}
+
+// Mirror of backend defaults (backend/.env.example: PASSWORD_MIN_LENGTH=8,
+// PASSWORD_REQUIRE_UPPERCASE / LOWERCASE / DIGITS / SPECIAL=true).
+// If the operator disables a rule, the server will still enforce it; this
+// client-side check is purely UX.
+const PASSWORD_RULES: { label: string; test: (v: string) => boolean }[] = [
+  { label: 'At least 8 characters', test: (v) => v.length >= 8 },
+  { label: 'One uppercase letter', test: (v) => /[A-Z]/.test(v) },
+  { label: 'One lowercase letter', test: (v) => /[a-z]/.test(v) },
+  { label: 'One digit', test: (v) => /\d/.test(v) },
+  { label: 'One special character', test: (v) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(v) },
+]
+
+function passwordIsValid(value: string): boolean {
+  return PASSWORD_RULES.every((rule) => rule.test(value))
 }
 
 interface AdminUserDetail {
@@ -274,6 +290,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [deletePasskeyId, setDeletePasskeyId] = useState<string | null>(null)
   const [showSuspend, setShowSuspend] = useState(false)
   const [suspendHours, setSuspendHours] = useState(24)
+  const [suspendError, setSuspendError] = useState('')
 
   type EditState = { first: string; last: string; email: string; verified: boolean; scopes: string[]; phone: string; avatar_url: string }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
@@ -310,6 +327,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
 
   const [showSetPassword, setShowSetPassword] = useState(false)
   const [setPasswordForm, setSetPasswordForm] = useState({ password: '', requireChange: false })
+  const [setPasswordError, setSetPasswordError] = useState('')
   const [confirmAction, setConfirmAction] = useState<string | null>(null)
 
   useEffect(() => { if (user) dispatch({ type: 'INIT', user }) }, [user])
@@ -353,15 +371,16 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   }
 
   const handleSetPassword = async () => {
-    setSaving(true); setError('')
+    setSaving(true); setSetPasswordError('')
     try {
       await api.post(`/api/admin/users/${userId}/set-password`, setPasswordForm)
       setShowSetPassword(false)
       setSetPasswordForm({ password: '', requireChange: false })
+      setSetPasswordError('')
       setSuccess('Password set successfully.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to set password')
+      setSetPasswordError(e instanceof Error ? e.message : 'Failed to set password')
     } finally {
       setSaving(false)
     }
@@ -414,16 +433,17 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   }
 
   const handleSuspend = async () => {
-    setSaving(true); setError('')
+    setSaving(true); setSuspendError('')
     try {
       await api.post(`/api/admin/users/${userId}/suspend`, { duration_hours: suspendHours })
       setShowSuspend(false)
+      setSuspendError('')
       setSuccess('User suspended.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       onUserUpdated()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to suspend')
+      setSuspendError(e instanceof Error ? e.message : 'Failed to suspend')
     } finally {
       setSaving(false)
     }
@@ -675,20 +695,39 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
 
           {showSetPassword && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
-              <div className="absolute inset-0 bg-black/50" onClick={() => setShowSetPassword(false)} />
+              <div className="absolute inset-0 bg-black/50" onClick={() => { setShowSetPassword(false); setSetPasswordError('') }} />
               <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
                 <h4 className="text-sm font-semibold text-text-primary">Set Password</h4>
                 <div>
                   <label className="mb-1 block text-xs text-text-muted">New password</label>
-                  <input type="password" value={setPasswordForm.password} onChange={e => setSetPasswordForm({ ...setPasswordForm, password: e.target.value })} data-testid="set-password-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                  <input type="password" value={setPasswordForm.password} onChange={e => { setSetPasswordForm({ ...setPasswordForm, password: e.target.value }); if (setPasswordError) setSetPasswordError('') }} data-testid="set-password-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                  {setPasswordForm.password.length > 0 && (
+                    <ul className="mt-2 space-y-1" data-testid="set-password-rules">
+                      {PASSWORD_RULES.map((rule) => {
+                        const ok = rule.test(setPasswordForm.password)
+                        return (
+                          <li key={rule.label} className={`flex items-center gap-1.5 text-[11px] ${ok ? 'text-semantic-success' : 'text-text-muted'}`}>
+                            {ok ? <Check size={11} /> : <span className="inline-block h-1.5 w-1.5 rounded-full bg-text-muted" />}
+                            <span>{rule.label}</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
                 </div>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={setPasswordForm.requireChange} onChange={e => setSetPasswordForm({ ...setPasswordForm, requireChange: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" />
                   <span className="text-text-primary">Require change at next login</span>
                 </label>
+                {setPasswordError && (
+                  <div role="alert" data-testid="set-password-error" className="flex items-start gap-2 rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-3 py-2 text-xs text-semantic-error">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{setPasswordError}</span>
+                  </div>
+                )}
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }) }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
-                  <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50">
+                  <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }); setSetPasswordError('') }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password || !passwordIsValid(setPasswordForm.password)} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Set Password
                   </button>
@@ -737,7 +776,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 <p className="text-xs text-text-muted">The user will not be able to log in for the selected duration.</p>
                 <div>
                   <label className="mb-1 block text-xs text-text-muted">Duration</label>
-                  <select value={suspendHours} onChange={e => setSuspendHours(Number(e.target.value))} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+                  <select value={suspendHours} onChange={e => { setSuspendHours(Number(e.target.value)); if (suspendError) setSuspendError('') }} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
                     <option value={1}>1 hour</option>
                     <option value={6}>6 hours</option>
                     <option value={12}>12 hours</option>
@@ -748,9 +787,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <option value={720}>30 days</option>
                   </select>
                 </div>
+                {suspendError && (
+                  <div role="alert" data-testid="suspend-error" className="flex items-start gap-2 rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-3 py-2 text-xs text-semantic-error">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{suspendError}</span>
+                  </div>
+                )}
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => setShowSuspend(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
-                  <button onClick={handleSuspend} disabled={saving} data-testid="suspend-confirm-btn" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                  <button onClick={() => { setShowSuspend(false); setSuspendError('') }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={handleSuspend} disabled={saving} data-testid="suspend-confirm-btn" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
                     Suspend
                   </button>
