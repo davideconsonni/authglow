@@ -10,9 +10,6 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python Version">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/AI%20Generated-100%25-blueviolet.svg" alt="AI Generated">
-  <a href="https://codespaces.new/davideconsonni/authglow">
-    <img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces">
-  </a>
 </p>
 
 <br>
