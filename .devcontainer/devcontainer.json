@@ -6,12 +6,11 @@
       "version": "3.13",
       "installTools": true
     },
-    "ghcr.io/devcontainers/features/uv:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     }
   },
-  "postCreateCommand": "cd backend && uv venv .venv && uv pip install -r requirements.txt && cd ../frontend && npm install && npx playwright install chromium --with-deps",
+  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=\"$HOME/.local/bin:$PATH\" && cd backend && uv venv .venv && uv pip install -r requirements.txt && cd ../frontend && npm install && npx playwright install chromium --with-deps",
   "forwardPorts": [5173, 8080],
   "portsAttributes": {
     "5173": {
