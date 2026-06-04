@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 4 | 22 | Fix before VAPT |
+| HIGH | 26 | 5 | 21 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **14** | **112** | — |
+| **Total** | **126** | **15** | **111** | — |
 
 ---
 
@@ -86,10 +86,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: The runtime fallback in `verify_client` accepted the settings-based client in production with a plain string comparison.
   - **Fix**: Disabled the settings-based fallback client entirely when `is_production` in `verify_client`, `verify_redirect_uri`, `verify_scopes`, `verify_grant_type`, and `process_scopes`. Changed `oauth2_client_secret` to `SecretStr` for repr/log safety. Replaced plain `!=` comparison with `secrets.compare_digest`. Tests: `test_config.py` (`TestOauth2DefaultsHardFailInProduction`), `test_oauth2.py` (`TestVerifyClientProductionGate` — 7 tests).
 
-- [ ] **VAPT-015** — Federation OIDC `id_token` algorithm taken from unverified JWT header (classic alg-confusion footgun)
-  - **Location**: `backend/authglow/services/federation.py:82-89`
-  - **Description**: `algorithm = unverified_header.get("alg", "RS256")` is then passed to `pyjwt.decode(algorithms=[algorithm])`. The pinned list is itself attacker-controlled. A misconfigured/compromised IdP returning `alg=HS256` substitutes the operator's `secret_key` as HMAC material.
-  - **Fix**: Pin the allowlist statically (`algorithms=["RS256"]`) and reject any token whose header `alg` is not in that set before calling `decode`.
+- [x] **VAPT-015** — Federation OIDC `id_token` algorithm taken from unverified JWT header (classic alg-confusion footgun)
+   - **Location**: `backend/authglow/services/federation.py:82-89`
+   - **Description**: `algorithm = unverified_header.get("alg", "RS256")` is then passed to `pyjwt.decode(algorithms=[algorithm])`. The pinned list is itself attacker-controlled. A misconfigured/compromised IdP returning `alg=HS256` substitutes the operator's `secret_key` as HMAC material.
+   - **Fix**: Added `_ALLOWED_FEDERATION_ALGORITHMS = frozenset({"RS256"})` at module level. `verify_id_token` now validates `header_alg` against the allowlist before calling `pyjwt.decode`, passing `algorithms=list(_ALLOWED_FEDERATION_ALGORITHMS)` (static, not from header). Tests: `tests/unit/test_federation_verify_id_token.py` (7 tests — valid RS256, nonce match/mismatch, HS256 header rejected, unknown alg rejected, constant validation, wrong-key signature rejection).
 
 - [ ] **VAPT-016** — `/oauth2/revoke` (RFC 7009) accepts unauthenticated revocation requests (DoS)
   - **Location**: `backend/authglow/api/oauth2_advanced.py:47-114`

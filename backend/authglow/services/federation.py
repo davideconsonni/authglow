@@ -10,6 +10,8 @@ import jwt as pyjwt
 from authglow.models.federation import ExternalIdpConfig
 from authglow.services.federation_storage import FederationStorage
 
+_ALLOWED_FEDERATION_ALGORITHMS = frozenset({"RS256"})
+
 
 class OidcDiscoveryData:
     """Parsed OIDC discovery metadata from .well-known/openid-configuration."""
@@ -79,14 +81,18 @@ class FederationService:
             jwks_client = await self._get_jwks_client_async(provider)
             signing_key = jwks_client.get_signing_key_from_jwt(id_token)
 
-            # Determine the algorithm from the token header
             unverified_header = pyjwt.get_unverified_header(id_token)
-            algorithm = unverified_header.get("alg", "RS256")
+            header_alg = unverified_header.get("alg")
+            if header_alg not in _ALLOWED_FEDERATION_ALGORITHMS:
+                raise JWKSVerificationError(
+                    f"alg '{header_alg}' not in allowed algorithms: "
+                    + ", ".join(sorted(_ALLOWED_FEDERATION_ALGORITHMS))
+                )
 
             claims: Dict[str, Any] = pyjwt.decode(
                 id_token,
                 signing_key.key,
-                algorithms=[algorithm],
+                algorithms=list(_ALLOWED_FEDERATION_ALGORITHMS),
                 options={
                     "verify_signature": True,
                     "verify_exp": True,
