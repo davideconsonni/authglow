@@ -69,6 +69,91 @@ class TestSecretKeyValidation:
             Settings.validate_secret_key("YOUR-SECRET-KEY-CHANGE-IN-PRODUCTION-MIN-32")
             assert len(w) == 1
 
+    def test_underscore_placeholder_warns_in_development(self):
+        # The previous validator missed underscore-separated placeholders
+        # like the one shipped in the original .env.example.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            Settings.validate_secret_key("your_super_secret_key_for_sessions_at_least_32_chars")
+            assert len(w) == 1
+            assert "placeholder" in str(w[0].message).lower()
+
+    def test_change_in_production_underscore_warns(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            Settings.validate_secret_key("change_in_production_min_32_chars_aaaa")
+            assert len(w) == 1
+
+    def test_replace_me_marker_warns(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            Settings.validate_secret_key("replace_me_with_a_real_key_aaaaaaaaaaaa")
+            assert len(w) == 1
+
+
+def _make_settings_with(tmp_path, secret_key, app_env):
+    storage_path = str(tmp_path / "data" / "users")
+    os.makedirs(storage_path, exist_ok=True)
+    keys_dir = str(tmp_path / "keys")
+    os.makedirs(keys_dir, exist_ok=True)
+    return Settings(
+        secret_key=secret_key,
+        app_env=app_env,
+        storage_path=storage_path,
+        storage_backend="file",
+        keys_dir=keys_dir,
+        private_key_path=str(tmp_path / "keys" / "private_key.pem"),
+        public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+        jwt_auto_rotate=False,
+    )
+
+
+class TestSecretKeyHardFailsInProduction:
+    """A UserWarning is too easy to miss in production logs. An auth server
+    starting with a placeholder SECRET_KEY must hard-fail at boot."""
+
+    def test_placeholder_key_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="placeholder"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="your-secret-key-change-me-in-production-min-32-chars!",
+                app_env="production",
+            )
+
+    def test_underscore_placeholder_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="placeholder"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="your_super_secret_key_for_sessions_at_least_32_chars",
+                app_env="production",
+            )
+
+    def test_change_in_production_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="placeholder"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="change_in_production_min_32_chars_aaaa",
+                app_env="PRODUCTION",
+            )
+
+    def test_real_key_starts_in_production(self, tmp_path):
+        # 64 hex chars = 32 bytes = a real cryptographic key
+        real_key = "a" * 64
+        settings = _make_settings_with(tmp_path, secret_key=real_key, app_env="production")
+        assert settings.secret_key == real_key
+        assert settings.is_production is True
+
+    def test_placeholder_key_only_warns_in_development(self, tmp_path):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            settings = _make_settings_with(
+                tmp_path,
+                secret_key="your-secret-key-change-me-in-development-min-32!",
+                app_env="development",
+            )
+            assert settings.app_env == "development"
+            assert any("placeholder" in str(x.message).lower() for x in w)
+
 
 class TestSettingsInstantiation:
     def test_can_create_settings_with_valid_key(self, tmp_path):

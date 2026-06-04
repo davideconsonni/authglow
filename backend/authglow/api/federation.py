@@ -21,8 +21,10 @@ from authglow.models.federation import (
 )
 from authglow.services.audit import AuditService
 from authglow.services.federation import FederationService
+from authglow.services.federation_state import FederationStateError, FederationStateToken
 from authglow.services.federation_storage import FederationStorage
 from authglow.services.jwt import JWTService
+from authglow.services.login_history import LoginHistoryService
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
@@ -49,7 +51,15 @@ async def federation_login(
     acr_values: Optional[str] = Query(default=None),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
-    """Initiate federated login — redirect user to the external IdP."""
+    """Initiate federated login — redirect user to the external IdP.
+
+    The CSRF protection for the OAuth2/OIDC authorization code flow
+    (RFC 6749 §10.12) is provided by a signed JWT state token: all
+    callback context (provider_id, redirect_uri, nonce, expiry) is
+    embedded in the token claims and protected by a signature. This
+    keeps the flow stateless — no shared store, no session cookie —
+    which is required for serverless deployments.
+    """
     provider = await storage.get_provider(provider_id)
     if not provider or not provider.enabled:
         raise HTTPException(status_code=404, detail="Provider not found or disabled")
@@ -58,10 +68,21 @@ async def federation_login(
             status_code=400, detail="Provider issuer must start with http:// or https://"
         )
 
+    callback_uri = f"{get_settings().base_url.rstrip('/')}/api/federation/callback"
+    state_token = FederationStateToken()
+    signed = state_token.sign(
+        provider_id=provider.id,
+        redirect_uri=callback_uri,
+    )
+
     try:
         service = FederationService()
-        auth_url, state, nonce = await service.get_authorization_url(
-            provider, redirect_uri, acr_values=acr_values
+        auth_url, _state, _nonce = await service.get_authorization_url(
+            provider,
+            redirect_uri=callback_uri,
+            state=signed["state"],
+            nonce=signed["nonce"],
+            acr_values=acr_values,
         )
         return RedirectResponse(url=auth_url, status_code=302)
     except Exception as e:
@@ -80,23 +101,65 @@ async def federation_callback(
     user_storage: UserStorage = Depends(lambda: UserStorage()),
     audit_service: AuditService = Depends(lambda: AuditService()),
 ):
-    """Handle the redirect callback from the external IdP."""
+    """Handle the redirect callback from the external IdP.
+
+    Security (RFC 6749 §10.12, OIDC Core §3.1.2.1 / §15.5.2):
+        * ``state`` is a signed JWT generated at ``/api/federation/login``.
+          Any tampering, expiry, or signature failure aborts the flow.
+        * The ``provider_id`` claim in the state must match the query
+          parameter, so a state from one provider cannot be replayed
+          against another.
+        * When the IdP returns an ``id_token`` (OIDC), the ``nonce``
+          claim is verified against the value bound to the state.
+    """
+    state_claims: dict = {}
+    try:
+        state_claims = FederationStateToken().verify(state)
+    except FederationStateError as e:
+        await audit_service.log_event(
+            event_type="federation_login_failed",
+            email="unknown",
+            metadata={"provider_id": provider_id, "error": f"state_invalid: {e}"},
+        )
+        raise HTTPException(status_code=400, detail=f"Invalid state: {e}") from e
+
+    if state_claims.get("provider_id") != provider_id:
+        await audit_service.log_event(
+            event_type="federation_login_failed",
+            email="unknown",
+            metadata={
+                "provider_id": provider_id,
+                "error": "provider_mismatch",
+                "state_provider_id": state_claims.get("provider_id"),
+            },
+        )
+        raise HTTPException(status_code=400, detail="State provider does not match request")
+
     provider = await storage.get_provider(provider_id)
     if not provider or not provider.enabled:
         raise HTTPException(status_code=404, detail="Provider not found or disabled")
 
     service = FederationService()
-    settings = get_settings()
-
-    redirect_uri = (
-        f"{settings.base_url.rstrip('/')}/api/federation/callback?provider_id={provider_id}"
-    )
+    redirect_uri = state_claims["redirect_uri"]
 
     try:
         token_response = await service.exchange_code(provider, code, redirect_uri)
         access_token = token_response.get("access_token")
         if not access_token:
             raise HTTPException(status_code=400, detail="No access token in response")
+
+        id_token = token_response.get("id_token")
+        if id_token:
+            try:
+                import jwt as _jwt
+
+                _unverified = _jwt.decode(id_token, options={"verify_signature": False})
+                if _unverified.get("nonce") != state_claims.get("nonce"):
+                    raise ValueError("nonce mismatch")
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=400, detail=f"ID token nonce validation failed: {e}"
+                ) from e
 
         claims = await service.fetch_userinfo(provider, access_token)
         mapped = await service.map_claims_to_user(provider, claims)
@@ -144,10 +207,9 @@ async def federation_callback(
                 "provider_id": provider_id,
                 "provider_label": provider.label,
                 "external_id": external_id,
+                "state_jti": state_claims.get("jti"),
             },
         )
-
-        from authglow.services.login_history import LoginHistoryService
 
         login_svc = LoginHistoryService()
         await login_svc.record_login(
@@ -167,6 +229,8 @@ async def federation_callback(
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         await audit_service.log_event(
             event_type="federation_login_failed",

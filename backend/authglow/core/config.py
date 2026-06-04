@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _KEYRING_FILENAME = "keyring.json"
@@ -385,9 +385,19 @@ class Settings(BaseSettings):
             raise ValueError("Key must be at least 32 characters long")
         placeholder_markers = [
             "change-in-production",
+            "change_in_production",
+            "change-me",
+            "change_me",
             "your-secret",
+            "your_secret",
             "your-jwt",
+            "your_jwt",
             "your-",
+            "your_",
+            "placeholder",
+            "example",
+            "replace-me",
+            "replace_me",
         ]
         if any(marker in v.lower() for marker in placeholder_markers):
             warnings.warn(
@@ -396,6 +406,40 @@ class Settings(BaseSettings):
                 UserWarning,
             )
         return v
+
+    @model_validator(mode="after")
+    def _validate_secret_key_for_environment(self):
+        """Hard-fail in production if SECRET_KEY is a known placeholder.
+
+        A UserWarning is too easy to miss in production logs — for an
+        auth server this is a deploy-blocker, not a footnote.
+        """
+        if not self.app_env or self.app_env.lower() != "production":
+            return self
+        placeholder_markers = [
+            "change-in-production",
+            "change_in_production",
+            "change-me",
+            "change_me",
+            "your-secret",
+            "your_secret",
+            "your-jwt",
+            "your_jwt",
+            "your-",
+            "your_",
+            "placeholder",
+            "example",
+            "replace-me",
+            "replace_me",
+        ]
+        if any(marker in self.secret_key.lower() for marker in placeholder_markers):
+            raise ValueError(
+                "SECRET_KEY appears to be a placeholder value but app_env is "
+                f"'{self.app_env}'. Generate a real cryptographic key with "
+                "openssl rand -hex 32 and set it in the environment before "
+                "starting the service."
+            )
+        return self
 
     def get_storage_options(self) -> dict:
         """Get storage options based on backend."""
