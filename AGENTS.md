@@ -269,3 +269,75 @@ frontend/src/
   pages/          # Route components
   styles/         # globals.css with Tailwind + design tokens
 ```
+
+## Secret Management
+
+AuthGlow is regularly scanned by GitGuardian. The repo's policy is: **no real secret ever touches git history**. This section covers how that's enforced, how to handle test fixtures, and what to do if a real secret is leaked.
+
+### What's already in place
+
+- `.env` is gitignored at the repo root (`.gitignore:138`).
+- RSA signing keys are generated at runtime in `backend/tests/conftest.py:_generate_rsa_keys()` and stored in a session-scoped temp dir — never committed.
+- `.env.example` is the canonical template for new environments and contains placeholder values only.
+- A pre-commit `gitleaks` hook (`.pre-commit-config.yaml`) blocks commits that introduce real secrets.
+- A `.gitguardian.yaml` path-allowlist at the repo root prevents test fixtures from generating false-positive alerts.
+
+### How to generate secrets in dev
+
+```bash
+# Symmetric SECRET_KEY (sessions, encrypted blobs)
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))"
+
+# OAuth 2.0 client secret
+python -c "import secrets; print('OAUTH2_CLIENT_SECRET=' + secrets.token_urlsafe(32))"
+
+# Passkey / WebAuthn challenge entropy uses the same helper internally.
+```
+
+Copy the printed line into `backend/.env` (which is gitignored).
+
+### Rotation policy
+
+| Secret | When to rotate |
+|---|---|
+| `SECRET_KEY` | On every major release, or **immediately** on any suspected leak. Invalidates all sessions and encrypted blobs. |
+| `OAUTH2_CLIENT_SECRET` | On request from a client, or on suspected leak. Requires re-consent flow. |
+| JWT signing key | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. |
+| SMTP / SendGrid / Mailgun credentials | Every 180 days, or on personnel change. |
+
+### What to do if GitGuardian fires a real alert
+
+1. **Revoke the secret immediately** at the issuing provider (rotate, delete, or block the key).
+2. Strip the secret from history:
+   ```bash
+   pip install git-filter-repo
+   git filter-repo --invert-paths --path <file-or-glob>
+   git push --force-with-lease
+   ```
+3. Open a post-mortem issue tagged `security` even for false positives — update `.gitguardian.yaml` or `backend/tests/.gitleaks.toml` so the next scan learns from it.
+4. If a private key was leaked, treat the corresponding public key as compromised: rotate the JWT keyring (`keyring.json`) and force a re-consent for OIDC clients.
+
+### Test fixtures (where the noise comes from)
+
+Most GitGuardian alerts on this repo are **false positives inside `backend/tests/`**: the suite contains strings that match generic-secret heuristics (32-char key material in `test_jwt_key_rotation.py`, the canonical RFC 6238 TOTP seed `JBSWY3DPEHPK3PXP` in `test_mfa.py`, bcrypt-style placeholders in `test_admin_users_phase2.py`, and plaintext test passwords in `test_registration.py`).
+
+When adding new test code:
+
+- **Reuse existing fixtures** from `backend/tests/conftest.py` (`test_user`, `test_admin_user`, `test_settings`, `mfa_service`, etc.) instead of inventing new plaintext passwords or secrets.
+- For one-off values, generate at runtime:
+  ```python
+  import secrets
+  fake_token = secrets.token_urlsafe(16)
+  ```
+- Never copy a real-looking secret into a test. If a test must exercise a *specific* format, derive it from `secrets` rather than hardcoding it.
+- If a new fixture value keeps tripping gitleaks, add a targeted regex to the `[allowlist]` block in `backend/tests/.gitleaks.toml` **with a comment explaining why it's safe**.
+
+### Pre-commit setup for new contributors
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run gitleaks --all-files   # one-time full scan
+```
+
+Once installed, every `git commit` automatically runs gitleaks on staged files. To skip (not recommended): `git commit --no-verify`.
