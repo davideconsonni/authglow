@@ -33,6 +33,9 @@ class User(BaseModel):
     scopes: List[str] = Field(default_factory=list)
     api_key_scopes: Optional[List[str]] = None
 
+    # Federation related
+    is_federated: bool = False
+
     # MFA related
     mfa_enabled: bool = False
     mfa_secret: Optional[str] = (
@@ -101,6 +104,7 @@ class UserResponse(BaseModel):
     mfa_enabled: bool = False
     mfa_verified: bool = False
     email_verified: bool = False
+    is_federated: bool = False
 
 
 class RegisterUser(BaseModel):

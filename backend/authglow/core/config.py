@@ -390,6 +390,7 @@ class Settings(BaseSettings):
 
     # Base URL for links in emails
     base_url: str = "http://localhost:8000"
+    frontend_base_url: str = "http://localhost:5173"
     company_name: str = "AuthGlow"
 
     # UI Customization

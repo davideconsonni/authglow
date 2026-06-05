@@ -169,6 +169,48 @@ class TestGetCurrentUserReadsCookie:
 
         assert exc.value.status_code == 401
 
+    async def test_rejects_inactive_user_with_valid_jwt(self, test_settings):
+        """get_current_user raises 400 when user exists but is_active=False."""
+        from authglow.api.auth import get_current_user
+        from fastapi import HTTPException
+
+        request = MagicMock()
+        request.headers.get.return_value = ""
+        request.cookies.get.return_value = "valid-token"
+
+        jwt_service = MagicMock()
+        token_data = MagicMock()
+        token_data.token_type = "access"
+        token_data.sub = "inactive-user-1"
+        token_data.scopes = ["read"]
+        jwt_service.decode_token.return_value = token_data
+
+        storage = MagicMock()
+        user_mock = MagicMock()
+        user_mock.is_active = False
+        user_mock.scopes = ["read"]
+        storage.get_user = AsyncMock(return_value=user_mock)
+
+        api_key_service = MagicMock()
+        audit_service = MagicMock()
+        audit_service.log_event = AsyncMock()
+        oauth2_service = MagicMock()
+
+        with patch("authglow.api.auth.get_settings", return_value=test_settings):
+            with pytest.raises(HTTPException) as exc:
+                await get_current_user(
+                    request=request,
+                    token=None,
+                    storage=storage,
+                    jwt_service=jwt_service,
+                    api_key_service=api_key_service,
+                    audit_service=audit_service,
+                    oauth2_service=oauth2_service,
+                )
+
+        assert exc.value.status_code == 400
+        assert "Inactive user" in exc.value.detail
+
 
 class TestAuthCookieEndpointsRegistered:
     def test_refresh_endpoint_registered(self):

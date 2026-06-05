@@ -15,7 +15,7 @@ export function LoginPage() {
     >
       <LoginForm />
       <PasskeyLoginButton />
-      <FederationLoginButtons />
+      <FederationLoginButtons context="dashboard" />
       <p className="text-center text-sm text-text-muted">
         Don't have an account?{' '}
         <Link to={ROUTES.AUTH.REGISTER} className="font-medium text-brand-violet hover:text-brand-blue transition-colors">

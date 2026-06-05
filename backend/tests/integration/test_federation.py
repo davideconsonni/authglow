@@ -235,10 +235,13 @@ class TestFederationCallbackIdTokenNonce:
                     user.email = "u@x.com"
                     user.name = "U"
                     user.suspended_until = None
-                    MockUserStorage.return_value.get_by_external_id = AsyncMock(return_value=user)
+                    mock_us = MagicMock()
+                    mock_us.get_user_by_email = AsyncMock(return_value=user)
+                    mock_us.create_user = AsyncMock(return_value=user)
+                    MockUserStorage.return_value = mock_us
                     with patch("authglow.api.federation.JWTService") as MockJWT:
-                        MockJWT.return_value.create_user_tokens = AsyncMock(
-                            return_value={"access_token": "issued-at", "refresh_token": "issued-rt"}
+                        MockJWT.return_value.create_token_response = lambda **kw: MagicMock(
+                            access_token="issued-at", refresh_token="issued-rt"
                         )
                         with patch("authglow.api.federation.AuditService") as MockAudit:
                             MockAudit.return_value.log_event = AsyncMock()
@@ -431,7 +434,10 @@ class TestFederationCallbackIdTokenSignature:
                     user.email = "u@x.com"
                     user.name = "U"
                     user.suspended_until = None
-                    MockUserStorage.return_value.get_by_external_id = AsyncMock(return_value=user)
+                    mock_us = MagicMock()
+                    mock_us.get_user_by_email = AsyncMock(return_value=user)
+                    mock_us.create_user = AsyncMock(return_value=user)
+                    MockUserStorage.return_value = mock_us
                     with patch("authglow.api.federation.JWTService") as MockJWT:
                         MockJWT.return_value.create_user_tokens = AsyncMock(
                             return_value={
@@ -488,3 +494,126 @@ class TestFederationCallbackIdTokenSignature:
 
         assert resp.status_code == 400
         assert "signature" in resp.json()["detail"].lower()
+
+
+class TestVisibleContexts:
+    def test_model_defaults_to_both_contexts(self):
+        from authglow.models.federation import ExternalIdpConfig
+
+        provider = ExternalIdpConfig(
+            label="Test",
+            issuer="https://idp.example.com",
+            client_id="cid",
+            client_secret="csec",
+        )
+        assert "dashboard" in provider.visible_contexts
+        assert "oauth2" in provider.visible_contexts
+
+    def test_list_providers_filters_by_dashboard(self, test_settings):
+        import asyncio
+        from authglow.models.federation import ExternalIdpConfig
+        from authglow.services.federation import FederationService
+        from authglow.services.federation_storage import FederationStorage
+
+        async def _run():
+            storage = FederationStorage()
+            p1 = ExternalIdpConfig(
+                id="ctx-dash",
+                label="DashboardOnly",
+                issuer="https://dash.example.com",
+                client_id="c1",
+                client_secret="s1",
+                visible_contexts=["dashboard"],
+            )
+            p2 = ExternalIdpConfig(
+                id="ctx-oauth",
+                label="OAuth2Only",
+                issuer="https://oauth.example.com",
+                client_id="c2",
+                client_secret="s2",
+                visible_contexts=["oauth2"],
+            )
+            p3 = ExternalIdpConfig(
+                id="ctx-both",
+                label="Both",
+                issuer="https://both.example.com",
+                client_id="c3",
+                client_secret="s3",
+                visible_contexts=["dashboard", "oauth2"],
+            )
+            await storage.create_provider(p1)
+            await storage.create_provider(p2)
+            await storage.create_provider(p3)
+
+            service = FederationService()
+            dashboard_providers = await service.get_providers_for_ui(context="dashboard")
+            oauth2_providers = await service.get_providers_for_ui(context="oauth2")
+            all_providers = await service.get_providers_for_ui()
+
+            return dashboard_providers, oauth2_providers, all_providers
+
+        dash, oauth, all_p = asyncio.run(_run())
+
+        dash_ids = {p["id"] for p in dash}
+        assert "ctx-dash" in dash_ids
+        assert "ctx-both" in dash_ids
+        assert "ctx-oauth" not in dash_ids
+
+        oauth_ids = {p["id"] for p in oauth}
+        assert "ctx-oauth" in oauth_ids
+        assert "ctx-both" in oauth_ids
+        assert "ctx-dash" not in oauth_ids
+
+        all_ids = {p["id"] for p in all_p}
+        assert all_ids == {"ctx-dash", "ctx-oauth", "ctx-both"}
+
+    def test_list_providers_without_context_returns_all(self, test_settings):
+        import asyncio
+        from authglow.models.federation import ExternalIdpConfig
+        from authglow.services.federation import FederationService
+        from authglow.services.federation_storage import FederationStorage
+
+        async def _run():
+            storage = FederationStorage()
+            p = ExternalIdpConfig(
+                id="ctx-default",
+                label="Default",
+                issuer="https://default.example.com",
+                client_id="c1",
+                client_secret="s1",
+            )
+            await storage.create_provider(p)
+            service = FederationService()
+            return await service.get_providers_for_ui()
+
+        result = asyncio.run(_run())
+        assert len(result) >= 1
+        ids = {p["id"] for p in result}
+        assert "ctx-default" in ids
+
+    def test_provider_without_visible_contexts_uses_default(self, test_settings):
+        import asyncio
+        from authglow.models.federation import ExternalIdpConfig
+        from authglow.services.federation import FederationService
+        from authglow.services.federation_storage import FederationStorage
+
+        async def _run():
+            storage = FederationStorage()
+            p = ExternalIdpConfig(
+                id="ctx-legacy",
+                label="Legacy",
+                issuer="https://legacy.example.com",
+                client_id="c1",
+                client_secret="s1",
+            )
+            await storage.create_provider(p)
+            service = FederationService()
+            dash = await service.get_providers_for_ui(context="dashboard")
+            oauth = await service.get_providers_for_ui(context="oauth2")
+            return dash, oauth
+
+        dash, oauth = asyncio.run(_run())
+        dash_ids = {p["id"] for p in dash}
+        oauth_ids = {p["id"] for p in oauth}
+        assert "ctx-legacy" in dash_ids
+        assert "ctx-legacy" in oauth_ids

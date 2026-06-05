@@ -17,6 +17,7 @@ interface FederationProvider {
   logo_uri?: string | null
   enabled: boolean
   auth_levels?: string[] | null
+  visible_contexts: string[]
   claims_mapping: Record<string, string>
   created_at: string
   updated_at: string
@@ -30,7 +31,8 @@ const emptyForm: FederationProvider = {
   client_id: '',
   scopes: ['openid', 'profile', 'email'],
   enabled: true,
-  claims_mapping: { sub: 'external_id', email: 'email', name: 'name', picture: 'picture' },
+  visible_contexts: ['dashboard', 'oauth2'],
+  claims_mapping: { sub: 'external_id', email: 'email', name: 'name', given_name: 'given_name', family_name: 'family_name', picture: 'picture' },
   created_at: '',
   updated_at: '',
 }
@@ -62,6 +64,7 @@ export function AdminFederationPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [rawScopes, setRawScopes] = useState('openid profile email')
   const [rawAuthLevels, setRawAuthLevels] = useState('')
+  const [rawClaimsMapping, setRawClaimsMapping] = useState('')
   const [clientSecret, setClientSecret] = useState('')
 
   const { data: providers, refetch } = useApiQuery<FederationProvider[]>(
@@ -73,6 +76,7 @@ export function AdminFederationPage() {
     setForm({ ...emptyForm })
     setRawScopes('openid profile email')
     setRawAuthLevels('')
+    setRawClaimsMapping('')
     setClientSecret('')
     setEditId(null)
     setError(null)
@@ -87,6 +91,7 @@ export function AdminFederationPage() {
     setForm({ ...p })
     setRawScopes((p.scopes || []).join(' '))
     setRawAuthLevels((p.auth_levels || []).join(', '))
+    setRawClaimsMapping(JSON.stringify(p.claims_mapping, null, 2))
     setClientSecret('')
     setEditId(p.id)
     setShowForm(true)
@@ -97,6 +102,17 @@ export function AdminFederationPage() {
     setError(null)
     const scopes = rawScopes.trim().split(/\s+/).filter(Boolean)
     const authLevels = rawAuthLevels.split(/[, ]+/).map(s => s.trim()).filter(Boolean)
+    const visibleContexts = form.visible_contexts ?? ['dashboard', 'oauth2']
+    let claimsMapping = form.claims_mapping
+    if (rawClaimsMapping.trim()) {
+      try {
+        claimsMapping = JSON.parse(rawClaimsMapping)
+      } catch {
+        setError('Invalid JSON in Claims Mapping')
+        setSaving(false)
+        return
+      }
+    }
     try {
       if (editId) {
         const updatePayload: Record<string, unknown> = {
@@ -109,7 +125,8 @@ export function AdminFederationPage() {
           logo_uri: form.logo_uri || '',
           enabled: form.enabled,
           auth_levels: authLevels,
-          claims_mapping: form.claims_mapping,
+          visible_contexts: visibleContexts,
+          claims_mapping: claimsMapping,
         }
         if (clientSecret) updatePayload.client_secret = clientSecret
         await api.put(`/api/federation/admin/providers/${editId}`, updatePayload)
@@ -126,7 +143,8 @@ export function AdminFederationPage() {
           logo_uri: form.logo_uri || null,
           enabled: form.enabled,
           auth_levels: authLevels.length > 0 ? authLevels : null,
-          claims_mapping: form.claims_mapping,
+          visible_contexts: visibleContexts,
+          claims_mapping: claimsMapping,
         })
         setSuccess('Provider created.')
       }
@@ -261,13 +279,64 @@ export function AdminFederationPage() {
                 <TextInput label="Logo URI" value={form.logo_uri || ''} onChange={(v) => setForm({ ...form, logo_uri: v })} placeholder="https://example.com/logo.png" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-muted">Auth Levels (CIE: L1, L2, L3)</label>
+                <label className="mb-1 block text-[11px] font-medium text-text-muted">ACR Values (space-separated URIs)</label>
                 <input
                   value={rawAuthLevels}
                   onChange={(e) => setRawAuthLevels(e.target.value)}
-                  placeholder="L1, L2, L3"
+                  placeholder="https://www.spid.gov.it/SpidL1 https://www.spid.gov.it/SpidL2"
                   className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
                 />
+                <p className="mt-0.5 text-[10px] text-text-muted">Standard OIDC acr_values. CIE: https://www.spid.gov.it/SpidL1, L2, L3. Vuoto = non richiesto.</p>
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] font-medium text-text-muted">Visible In</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.visible_contexts?.includes('dashboard')}
+                      onChange={(e) => {
+                        const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
+                        setForm({
+                          ...form,
+                          visible_contexts: e.target.checked
+                            ? [...ctxs, 'dashboard']
+                            : ctxs.filter(c => c !== 'dashboard'),
+                        })
+                      }}
+                      className="rounded accent-brand-violet"
+                    />
+                    Dashboard
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.visible_contexts?.includes('oauth2')}
+                      onChange={(e) => {
+                        const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
+                        setForm({
+                          ...form,
+                          visible_contexts: e.target.checked
+                            ? [...ctxs, 'oauth2']
+                            : ctxs.filter(c => c !== 'oauth2'),
+                        })
+                      }}
+                      className="rounded accent-brand-violet"
+                    />
+                    OAuth2
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-text-muted">Claims Mapping (JSON)</label>
+                <textarea
+                  rows={5}
+                  value={rawClaimsMapping}
+                  onChange={(e) => setRawClaimsMapping(e.target.value)}
+                  placeholder={`{\n  "sub": "external_id",\n  "email": "email",\n  "name": "name"\n}`}
+                  className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none font-mono"
+                />
+                <p className="mt-0.5 text-[10px] text-text-muted">Mappa i claim dell'IdP esterno ai campi AuthGlow. Default già compatibile con OIDC standard.</p>
               </div>
             </div>
 

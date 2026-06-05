@@ -45,16 +45,17 @@ export function DashboardPage() {
   const sessionCount = sessionsData?.total ?? 0
   const keyCount = keysData?.length ?? 0
 
-  const emailVerified = profile?.email_verified ?? user?.email_verified ?? false
-  const mfaEnabled = profile?.mfa_enabled ?? user?.mfa_enabled ?? false
-  const missingChecks = (!emailVerified ? 1 : 0) + (!mfaEnabled ? 1 : 0)
-  const allSecure = missingChecks === 0
+  const isFederated = user?.is_federated ?? false
+  const emailVerified = user?.email_verified ?? profile?.email_verified ?? false
+  const mfaEnabled = user?.mfa_enabled ?? profile?.mfa_enabled ?? false
+  const missingChecks = isFederated ? 0 : ((!emailVerified ? 1 : 0) + (!mfaEnabled ? 1 : 0))
+  const allSecure = isFederated || missingChecks === 0
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">
-          Welcome back, {profile?.first_name || user?.first_name || 'User'}
+          Welcome back, {user?.first_name || profile?.first_name || 'User'}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
           Here's a snapshot of your account.
@@ -66,32 +67,43 @@ export function DashboardPage() {
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-violet/15 text-lg font-bold text-brand-violet">
-                {(profile?.first_name || user?.first_name || '?').charAt(0).toUpperCase()}
-                {(profile?.last_name || user?.last_name || '').charAt(0).toUpperCase()}
+                {(user?.first_name || profile?.first_name || '?').charAt(0).toUpperCase()}
+                {(user?.last_name || profile?.last_name || '').charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
                 <p className="text-xl font-bold text-text-primary">
-                  {profile?.first_name || user?.first_name || 'User'}{' '}
-                  {profile?.last_name || user?.last_name || ''}
+                  {user?.first_name || profile?.first_name || 'User'}{' '}
+                  {user?.last_name || profile?.last_name || ''}
                 </p>
                 <p className="mt-0.5 break-all text-sm text-text-muted">
-                  {profile?.email || user?.email || '-'}
+                  {user?.email || profile?.email || '-'}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <StatusBadge
-                    status={emailVerified}
-                    trueLabel="Email verified"
-                    falseLabel="Email unverified"
-                    trueClass="bg-semantic-success/10 text-semantic-success"
-                    falseClass="bg-semantic-warning/10 text-semantic-warning"
-                  />
-                  <StatusBadge
-                    status={mfaEnabled}
-                    trueLabel="MFA enabled"
-                    falseLabel="MFA not enabled"
-                    trueClass="bg-semantic-success/10 text-semantic-success"
-                    falseClass="bg-semantic-warning/10 text-semantic-warning"
-                  />
+                  {isFederated ? (
+                    <StatusBadge
+                      status={null}
+                      trueLabel=""
+                      falseLabel="Provider managed"
+                      falseClass="bg-surface-2 text-text-muted"
+                    />
+                  ) : (
+                    <>
+                      <StatusBadge
+                        status={emailVerified}
+                        trueLabel="Email verified"
+                        falseLabel="Email unverified"
+                        trueClass="bg-semantic-success/10 text-semantic-success"
+                        falseClass="bg-semantic-warning/10 text-semantic-warning"
+                      />
+                      <StatusBadge
+                        status={mfaEnabled}
+                        trueLabel="MFA enabled"
+                        falseLabel="MFA not enabled"
+                        trueClass="bg-semantic-success/10 text-semantic-success"
+                        falseClass="bg-semantic-warning/10 text-semantic-warning"
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -114,7 +126,9 @@ export function DashboardPage() {
           <div className="flex items-center gap-3 rounded-2xl border border-semantic-success/20 bg-semantic-success/5 px-5 py-4">
             <CheckCircle2 size={20} className="shrink-0 text-semantic-success" />
             <p className="text-sm font-medium text-text-primary">
-              All security recommendations completed.
+              {isFederated
+                ? 'Email and MFA are managed by your identity provider.'
+                : 'All security recommendations completed.'}
             </p>
           </div>
         </Section>

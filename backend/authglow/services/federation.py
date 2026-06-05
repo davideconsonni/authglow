@@ -211,9 +211,17 @@ class FederationService:
                 mapped[local_field] = str(value)
         return mapped
 
-    async def get_providers_for_ui(self) -> list:
-        """Get a lightweight list of enabled providers for the login UI."""
+    async def get_providers_for_ui(self, context: Optional[str] = None) -> list:
+        """Get a lightweight list of enabled providers for the login UI.
+
+        Args:
+            context: Optional filter — ``"dashboard"`` or ``"oauth2"``.
+        """
         providers = await self.storage.list_providers(enabled_only=True)
+        if context:
+            providers = [
+                p for p in providers if context in (p.visible_contexts or ["dashboard", "oauth2"])
+            ]
         return [
             {
                 "id": p.id,

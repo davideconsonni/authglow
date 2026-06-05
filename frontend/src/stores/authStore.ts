@@ -15,6 +15,7 @@ export interface AuthUser {
   roles: string[]
   scopes: string[]
   permissions: string[]
+  is_federated: boolean
 }
 
 interface AuthState {
@@ -75,6 +76,7 @@ export const useAuthStore = create<AuthStore>()(
           set({
             isAuthenticated: true,
             isLoading: false,
+            user: null,
           })
 
           await get().fetchCurrentUser()
@@ -101,9 +103,9 @@ export const useAuthStore = create<AuthStore>()(
       fetchCurrentUser: async () => {
         try {
           const user = await api.get<AuthUser>('/api/users/me')
-          set({ user })
+          set({ user, isAuthenticated: true })
         } catch {
-          // User info might not be available yet
+          set({ user: null, isAuthenticated: false })
         }
       },
     }),

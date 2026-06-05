@@ -248,6 +248,27 @@ export function OAuthAuthorizePage() {
     return () => { cancelled = true }
   }, [clientId, redirectUri, responseType])
 
+  useEffect(() => {
+    if (phase !== 'login' || !clientInfo) return
+
+    let cancelled = false
+    const checkFederatedSession = async () => {
+      try {
+        const data = await api.postForm<AuthorizeResponse & { consent_required?: boolean }>(
+          '/api/oauth2/federated-consent', {}
+        )
+        if (!cancelled && data.consent_required) {
+          setConsentData(data)
+          setPhase('consent')
+        }
+      } catch {
+        // no pending federated session — normal login flow
+      }
+    }
+    checkFederatedSession()
+    return () => { cancelled = true }
+  }, [phase, clientInfo])
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
     if (!email || !password) return
@@ -416,7 +437,19 @@ export function OAuthAuthorizePage() {
             </form>
           )}
 
-          <FederationLoginButtons />
+          <FederationLoginButtons
+            context="oauth2"
+            oauth2Context={{
+              client_id: clientId,
+              oauth_redirect_uri: redirectUri,
+              scope,
+              app_state: state,
+              code_challenge: codeChallenge,
+              code_challenge_method: codeChallengeMethod,
+              response_type: responseType,
+              oidc_nonce: nonce,
+            }}
+          />
         </div>
       </div>
     </>

@@ -14,6 +14,11 @@ Why JWT and not server-side state:
     claims and is protected by a signature. Any instance can verify
     the state independently: no shared store, no session cookie.
 
+    When the federation flow is initiated from an OAuth2 authorize page,
+    the OAuth2 context (client_id, scope, redirect_uri, …) is also
+    embedded in the state token claims so the callback can bridge back
+    into the OAuth2 authorization code flow.
+
 Security properties:
     * HS256 with ``SECRET_KEY`` — constant-time signature check.
     * ``exp`` claim, 10-minute lifetime (matches typical OIDC round-trip).
@@ -52,8 +57,18 @@ class FederationStateToken:
         provider_id: str,
         redirect_uri: str,
         nonce: Optional[str] = None,
+        oauth2_context: Optional[Dict[str, str]] = None,
     ) -> Dict[str, str]:
         """Generate a signed state token and matching nonce.
+
+        Args:
+            provider_id: The federated IdP identifier.
+            redirect_uri: Where to redirect after the callback completes.
+            nonce: Optional nonce; generated if not provided.
+            oauth2_context: Optional OAuth2 authorization context dict
+                with keys: client_id, oauth_redirect_uri, scope,
+                app_state, code_challenge, code_challenge_method,
+                response_type, oidc_nonce.
 
         Returns:
             A dict with ``state`` (the JWT to send to the IdP) and
@@ -73,6 +88,9 @@ class FederationStateToken:
             "iat": issued_at,
             "exp": issued_at + EXPIRY_SECONDS,
         }
+        if oauth2_context:
+            claims["oauth2_context"] = oauth2_context
+
         token = jwt.encode(claims, self.settings.secret_key, algorithm=ALGORITHM)
         return {"state": token, "nonce": nonce}
 
@@ -117,3 +135,17 @@ class FederationStateToken:
             raise FederationStateError("State token missing context claims")
 
         return claims
+
+    @staticmethod
+    def get_oauth2_context(claims: Dict[str, Any]) -> Optional[Dict[str, str]]:
+        """Extract OAuth2 authorization context from verified state claims.
+
+        Returns None if the federation flow was not initiated from an
+        OAuth2 authorize page.
+        """
+        ctx = claims.get("oauth2_context")
+        if not ctx or not isinstance(ctx, dict):
+            return None
+        if not ctx.get("client_id") or not ctx.get("oauth_redirect_uri"):
+            return None
+        return ctx

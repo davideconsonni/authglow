@@ -153,3 +153,103 @@ class TestVerify:
         token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
         with pytest.raises(FederationStateError, match="nonce"):
             state_token.verify(token)
+
+
+class TestOAuth2Context:
+    def test_sign_embeds_oauth2_context(self, state_token, test_settings):
+        oauth2_ctx = {
+            "client_id": "my-client",
+            "oauth_redirect_uri": "https://app.example.com/cb",
+            "scope": "openid email",
+            "app_state": "xyz",
+            "code_challenge": "challenge123",
+            "code_challenge_method": "S256",
+            "response_type": "code",
+            "oidc_nonce": "n123",
+        }
+        signed = state_token.sign(
+            "google",
+            "https://idp.example.com/cb",
+            oauth2_context=oauth2_ctx,
+        )
+        claims = pyjwt.decode(signed["state"], options={"verify_signature": False})
+        assert "oauth2_context" in claims
+        assert claims["oauth2_context"] == oauth2_ctx
+
+    def test_sign_without_oauth2_context_omits_field(self, state_token):
+        signed = state_token.sign("google", "https://idp.example.com/cb")
+        claims = pyjwt.decode(signed["state"], options={"verify_signature": False})
+        assert "oauth2_context" not in claims
+
+    def test_verify_roundtrip_with_oauth2_context(self, state_token):
+        oauth2_ctx = {
+            "client_id": "my-client",
+            "oauth_redirect_uri": "https://app.example.com/cb",
+            "scope": "openid profile",
+            "app_state": "app-state-123",
+            "code_challenge": "",
+            "code_challenge_method": "",
+            "response_type": "code",
+            "oidc_nonce": "",
+        }
+        signed = state_token.sign(
+            "google",
+            "https://idp.example.com/cb",
+            oauth2_context=oauth2_ctx,
+        )
+        claims = state_token.verify(signed["state"])
+        assert claims["provider_id"] == "google"
+        assert claims["oauth2_context"] == oauth2_ctx
+
+    def test_get_oauth2_context_returns_none_when_missing(self, state_token):
+        signed = state_token.sign("google", "https://idp.example.com/cb")
+        claims = state_token.verify(signed["state"])
+        assert FederationStateToken.get_oauth2_context(claims) is None
+
+    def test_get_oauth2_context_returns_none_when_no_client_id(self, state_token):
+        oauth2_ctx = {
+            "client_id": "",
+            "oauth_redirect_uri": "https://app.example.com/cb",
+        }
+        signed = state_token.sign(
+            "google",
+            "https://idp.example.com/cb",
+            oauth2_context=oauth2_ctx,
+        )
+        claims = state_token.verify(signed["state"])
+        assert FederationStateToken.get_oauth2_context(claims) is None
+
+    def test_get_oauth2_context_returns_none_when_no_redirect_uri(self, state_token):
+        oauth2_ctx = {
+            "client_id": "my-client",
+            "oauth_redirect_uri": "",
+        }
+        signed = state_token.sign(
+            "google",
+            "https://idp.example.com/cb",
+            oauth2_context=oauth2_ctx,
+        )
+        claims = state_token.verify(signed["state"])
+        assert FederationStateToken.get_oauth2_context(claims) is None
+
+    def test_get_oauth2_context_returns_context_when_valid(self, state_token):
+        oauth2_ctx = {
+            "client_id": "my-client",
+            "oauth_redirect_uri": "https://app.example.com/cb",
+            "scope": "openid",
+            "app_state": "xyz",
+            "code_challenge": "",
+            "code_challenge_method": "",
+            "response_type": "code",
+            "oidc_nonce": "",
+        }
+        signed = state_token.sign(
+            "google",
+            "https://idp.example.com/cb",
+            oauth2_context=oauth2_ctx,
+        )
+        claims = state_token.verify(signed["state"])
+        result = FederationStateToken.get_oauth2_context(claims)
+        assert result is not None
+        assert result["client_id"] == "my-client"
+        assert result["oauth_redirect_uri"] == "https://app.example.com/cb"

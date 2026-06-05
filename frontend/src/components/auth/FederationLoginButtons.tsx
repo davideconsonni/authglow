@@ -11,18 +11,51 @@ interface FedProvider {
   logo_uri?: string | null
 }
 
-export function FederationLoginButtons() {
+interface OAuth2Context {
+  client_id: string
+  oauth_redirect_uri: string
+  scope: string
+  app_state: string
+  code_challenge: string
+  code_challenge_method: string
+  response_type: string
+  oidc_nonce: string
+}
+
+interface FederationLoginButtonsProps {
+  oauth2Context?: OAuth2Context
+  context?: 'dashboard' | 'oauth2'
+}
+
+export function FederationLoginButtons({ oauth2Context, context }: FederationLoginButtonsProps) {
   const [providers, setProviders] = useState<FedProvider[]>([])
 
   useEffect(() => {
     let cancelled = false
-    api.get<FedProvider[]>('/api/federation/providers')
+    const params = context ? `?context=${context}` : ''
+    api.get<FedProvider[]>(`/api/federation/providers${params}`)
       .then((data) => { if (!cancelled) setProviders(data) })
       .catch(() => { /* federation not available */ })
     return () => { cancelled = true }
-  }, [])
+  }, [context])
 
   if (providers.length === 0) return null
+
+  const buildLoginUrl = (providerId: string) => {
+    const params = new URLSearchParams()
+    params.set('redirect_uri', window.location.origin + window.location.pathname)
+    if (oauth2Context) {
+      params.set('client_id', oauth2Context.client_id)
+      params.set('oauth_redirect_uri', oauth2Context.oauth_redirect_uri)
+      params.set('scope', oauth2Context.scope)
+      if (oauth2Context.app_state) params.set('app_state', oauth2Context.app_state)
+      if (oauth2Context.code_challenge) params.set('code_challenge', oauth2Context.code_challenge)
+      if (oauth2Context.code_challenge_method) params.set('code_challenge_method', oauth2Context.code_challenge_method)
+      if (oauth2Context.response_type) params.set('response_type', oauth2Context.response_type)
+      if (oauth2Context.oidc_nonce) params.set('oidc_nonce', oauth2Context.oidc_nonce)
+    }
+    return `${API_URL}/api/federation/login/${providerId}?${params.toString()}`
+  }
 
   return (
     <div className="fed-buttons-wrapper">
@@ -85,7 +118,7 @@ export function FederationLoginButtons() {
       {providers.map((p) => (
         <a
           key={p.id}
-          href={`${API_URL}/api/federation/login/${p.id}?redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`}
+          href={buildLoginUrl(p.id)}
           className="fed-btn"
           data-testid={`fed-provider-${p.id}`}
         >

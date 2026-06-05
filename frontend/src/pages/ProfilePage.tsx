@@ -140,7 +140,7 @@ export function ProfilePage() {
     }
   }
 
-  const p = profile || user
+  const p = user || profile
 
   const handleDeactivate = async () => {
     try {
@@ -253,13 +253,22 @@ export function ProfilePage() {
                   <Shield size={16} className="text-text-muted" />
                   <span className="text-sm text-text-secondary">MFA</span>
                 </div>
-                <StatusBadge
-                  status={!!p?.mfa_enabled}
-                  trueLabel="Enabled"
-                  falseLabel="Disabled"
-                  trueClass="bg-semantic-success/10 text-semantic-success"
-                  falseClass="bg-surface-3 text-text-muted"
-                />
+                {user?.is_federated ? (
+                  <StatusBadge
+                    status={null}
+                    trueLabel=""
+                    falseLabel="Provider"
+                    falseClass="bg-surface-3 text-text-muted"
+                  />
+                ) : (
+                  <StatusBadge
+                    status={!!p?.mfa_enabled}
+                    trueLabel="Enabled"
+                    falseLabel="Disabled"
+                    trueClass="bg-semantic-success/10 text-semantic-success"
+                    falseClass="bg-surface-3 text-text-muted"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3">
@@ -267,13 +276,22 @@ export function ProfilePage() {
                   <Mail size={16} className="text-text-muted" />
                   <span className="text-sm text-text-secondary">Email</span>
                 </div>
-                <StatusBadge
-                  status={!!p?.email_verified}
-                  trueLabel="Verified"
-                  falseLabel="Not verified"
-                  trueClass="bg-semantic-success/10 text-semantic-success"
-                  falseClass="bg-semantic-warning/10 text-semantic-warning"
-                />
+                {user?.is_federated ? (
+                  <StatusBadge
+                    status={null}
+                    trueLabel=""
+                    falseLabel="Provider"
+                    falseClass="bg-surface-3 text-text-muted"
+                  />
+                ) : (
+                  <StatusBadge
+                    status={!!p?.email_verified}
+                    trueLabel="Verified"
+                    falseLabel="Not verified"
+                    trueClass="bg-semantic-success/10 text-semantic-success"
+                    falseClass="bg-semantic-warning/10 text-semantic-warning"
+                  />
+                )}
               </div>
             </div>
 

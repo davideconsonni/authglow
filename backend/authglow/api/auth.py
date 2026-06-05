@@ -72,10 +72,11 @@ def _set_auth_cookies(
 
 
 def _clear_auth_cookies(response: Response, settings: Settings) -> None:
-    """Clear all auth cookies."""
-    kw = _cookie_kwargs(settings)
-    response.delete_cookie(settings.auth_cookie_access_name, **kw)
-    response.delete_cookie(settings.auth_cookie_refresh_name, **kw)
+    """Clear all auth cookies on every known path."""
+    for path in ("/", settings.auth_cookie_path):
+        kw = _cookie_kwargs(settings) | {"path": path}
+        response.delete_cookie(settings.auth_cookie_access_name, **kw)
+        response.delete_cookie(settings.auth_cookie_refresh_name, **kw)
 
 
 def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]:
@@ -214,19 +215,7 @@ async def get_current_user(
 
     user = await storage.get_user(token_data.sub)
     if user is None:
-        # Check if it's a client_credentials token
-        client = await oauth2_service.client_storage.get_client(token_data.sub)
-        if client:
-            # It's a valid client, create a synthetic user
-            user = User(
-                id=client.client_id,
-                email=f"{client.client_id}@client.internal",
-                hashed_password="",  # Not relevant here
-                is_active=client.is_active,
-                scopes=token_data.scopes,
-            )
-        else:
-            raise credentials_exception
+        raise credentials_exception
 
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")

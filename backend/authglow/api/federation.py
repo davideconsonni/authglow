@@ -27,9 +27,14 @@ from authglow.services.federation_state import FederationStateError, FederationS
 from authglow.services.federation_storage import FederationStorage
 from authglow.services.jwt import JWTService
 from authglow.services.login_history import LoginHistoryService
+from authglow.services.session import SessionService
 from authglow.services.storage import UserStorage
 
 router = APIRouter()
+
+
+def get_audit_service():
+    return AuditService()
 
 
 # ---------------------------------------------------------------------------
@@ -39,11 +44,17 @@ router = APIRouter()
 
 @router.get("/api/federation/providers")
 async def list_public_providers(
+    context: Optional[str] = Query(default=None),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
-    """Return the list of enabled external IdPs for the login UI."""
+    """Return the list of enabled external IdPs for the login UI.
+
+    When ``context`` is provided (``dashboard`` or ``oauth2``), only
+    providers whose ``visible_contexts`` includes that value are
+    returned.  Without ``context``, all enabled providers are returned.
+    """
     service = FederationService()
-    return await service.get_providers_for_ui()
+    return await service.get_providers_for_ui(context=context)
 
 
 @router.get("/api/federation/login/{provider_id}")
@@ -51,6 +62,14 @@ async def federation_login(
     provider_id: str,
     redirect_uri: str = Query(default="/auth/callback"),
     acr_values: Optional[str] = Query(default=None),
+    client_id: Optional[str] = Query(default=None),
+    oauth_redirect_uri: Optional[str] = Query(default=None),
+    scope: Optional[str] = Query(default=None),
+    app_state: Optional[str] = Query(default=None),
+    code_challenge: Optional[str] = Query(default=None),
+    code_challenge_method: Optional[str] = Query(default=None),
+    response_type: Optional[str] = Query(default=None),
+    oidc_nonce: Optional[str] = Query(default=None),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
     """Initiate federated login — redirect user to the external IdP.
@@ -61,6 +80,12 @@ async def federation_login(
     embedded in the token claims and protected by a signature. This
     keeps the flow stateless — no shared store, no session cookie —
     which is required for serverless deployments.
+
+    When optional OAuth2 authorization context parameters are provided
+    (``client_id``, ``oauth_redirect_uri``, ``scope``, …), they are
+    embedded in the state token so the callback can bridge back into
+    the OAuth2 authorization-code flow instead of returning plain JSON
+    tokens.
     """
     provider = await storage.get_provider(provider_id)
     if not provider or not provider.enabled:
@@ -72,9 +97,24 @@ async def federation_login(
 
     callback_uri = f"{get_settings().base_url.rstrip('/')}/api/federation/callback"
     state_token = FederationStateToken()
+
+    oauth2_context: Optional[dict] = None
+    if client_id and oauth_redirect_uri:
+        oauth2_context = {
+            "client_id": client_id,
+            "oauth_redirect_uri": oauth_redirect_uri,
+            "scope": scope or "read",
+            "app_state": app_state or "",
+            "code_challenge": code_challenge or "",
+            "code_challenge_method": code_challenge_method or "",
+            "response_type": response_type or "code",
+            "oidc_nonce": oidc_nonce or "",
+        }
+
     signed = state_token.sign(
         provider_id=provider.id,
         redirect_uri=callback_uri,
+        oauth2_context=oauth2_context,
     )
 
     try:
@@ -98,10 +138,10 @@ async def federation_login(
 async def federation_callback(
     code: str,
     state: str,
-    provider_id: str,
+    provider_id: Optional[str] = Query(default=None),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
+    audit_service: AuditService = Depends(get_audit_service),
     user_storage: UserStorage = Depends(lambda: UserStorage()),
-    audit_service: AuditService = Depends(lambda: AuditService()),
 ):
     """Handle the redirect callback from the external IdP.
 
@@ -125,7 +165,15 @@ async def federation_callback(
         )
         raise HTTPException(status_code=400, detail=f"Invalid state: {e}") from e
 
-    if state_claims.get("provider_id") != provider_id:
+    resolved_provider_id = provider_id or state_claims.get("provider_id")
+    if not resolved_provider_id:
+        raise HTTPException(status_code=400, detail="Missing provider_id in request or state")
+
+    if (
+        provider_id
+        and state_claims.get("provider_id")
+        and state_claims.get("provider_id") != provider_id
+    ):
         await audit_service.log_event(
             event_type="federation_login_failed",
             email="unknown",
@@ -137,7 +185,7 @@ async def federation_callback(
         )
         raise HTTPException(status_code=400, detail="State provider does not match request")
 
-    provider = await storage.get_provider(provider_id)
+    provider = await storage.get_provider(resolved_provider_id)
     if not provider or not provider.enabled:
         raise HTTPException(status_code=404, detail="Provider not found or disabled")
 
@@ -165,27 +213,41 @@ async def federation_callback(
         external_id = mapped.get("external_id", "")
         email = mapped.get("email", "")
 
-        existing_user = (
-            await user_storage.get_by_external_id(provider.id, external_id)
-            if hasattr(user_storage, "get_by_external_id")
-            else None
-        )
-
-        if not existing_user and email:
-            existing_user = await user_storage.get_by_email(email)
+        existing_user = None
+        if email:
+            existing_user = await user_storage.get_user_by_email(email)
 
         if existing_user:
             user = existing_user
+            requires_update = False
+            if not user.is_federated:
+                user.is_federated = True
+                user.email_verified = True
+                requires_update = True
+            first_name = mapped.get("given_name") or mapped.get("name", "")
+            last_name = mapped.get("family_name", "")
+            if first_name:
+                user.first_name = first_name
+                requires_update = True
+            if last_name:
+                user.last_name = last_name
+                requires_update = True
+            if requires_update:
+                await user_storage.update_user(user)
         else:
-            from authglow.models.user import UserCreate
+            from authglow.models.user import User
             from authglow.services.password import hash_password
 
-            new_user = UserCreate(
+            user = User(
                 email=email or f"{external_id}@federated.local",
-                password=hash_password(secrets.token_urlsafe(32)),
-                name=mapped.get("name", email or external_id),
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                first_name=mapped.get("given_name") or mapped.get("name", ""),
+                last_name=mapped.get("family_name", ""),
+                scopes=["read"],
+                is_federated=True,
+                email_verified=True,
             )
-            user = await user_storage.create_user(new_user)
+            user = await user_storage.create_user(user)
 
         # Check if account is suspended
         if user.suspended_until and utcnow() < user.suspended_until:
@@ -194,15 +256,109 @@ async def federation_callback(
                 detail=f"Account suspended until {user.suspended_until.isoformat()}",
             )
 
+        oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
+
         jwt_service = JWTService()
-        tokens = await jwt_service.create_user_tokens(user)
+        token_response = jwt_service.create_token_response(
+            user_id=user.id,
+            email=user.email,
+            scopes=user.scopes,
+            include_refresh=True,
+        )
+
+        from authglow.services.refresh_token import RefreshTokenService
+
+        refresh_svc = RefreshTokenService()
+        stored_rt = await refresh_svc.create_refresh_token(
+            user_id=user.id,
+            client_id="federation_grant",
+            scopes=user.scopes,
+            expires_in_days=30,
+        )
+
+        if oauth2_ctx:
+            from authglow.services.oauth2 import OAuth2Service
+            from authglow.services.oauth_client import OAuth2ClientStorage
+            from authglow.services.session import SessionService
+
+            oauth2_svc = OAuth2Service()
+
+            client = await OAuth2ClientStorage().get_client(oauth2_ctx["client_id"])
+            if not client or not client.is_active:
+                raise HTTPException(status_code=400, detail="Invalid OAuth2 client_id")
+
+            if not await oauth2_svc.verify_redirect_uri(
+                oauth2_ctx["client_id"], oauth2_ctx["oauth_redirect_uri"]
+            ):
+                raise HTTPException(status_code=400, detail="Invalid OAuth2 redirect_uri")
+
+            requested_scopes = oauth2_ctx["scope"].split() if oauth2_ctx.get("scope") else ["read"]
+            try:
+                processed_scopes = await oauth2_svc.process_scopes(
+                    oauth2_ctx["client_id"], requested_scopes
+                )
+                validated_scope = " ".join(processed_scopes)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid scope")
+
+            consent_session = await SessionService().create_consent_session(
+                user_id=user.id,
+                client_id=oauth2_ctx["client_id"],
+                redirect_uri=oauth2_ctx["oauth_redirect_uri"],
+                scope=validated_scope,
+                state=oauth2_ctx.get("app_state") or None,
+                code_challenge=oauth2_ctx.get("code_challenge") or None,
+                code_challenge_method=oauth2_ctx.get("code_challenge_method") or None,
+                nonce=oauth2_ctx.get("oidc_nonce") or None,
+            )
+
+            settings = get_settings()
+            cookie_name = settings.auth_cookie_access_name
+
+            response = RedirectResponse(
+                url=f"{settings.frontend_base_url}/oauth2/authorize?fed=1",
+                status_code=302,
+            )
+            response.set_cookie(
+                key=cookie_name,
+                value=token_response.access_token,
+                httponly=True,
+                secure=settings.auth_cookie_secure,
+                samesite="lax",
+                max_age=int(settings.access_token_expire_minutes * 60),
+                path=settings.auth_cookie_path,
+            )
+            response.set_cookie(
+                key="__Host-authglow-consent-session",
+                value=consent_session["session_token"],
+                httponly=True,
+                secure=settings.auth_cookie_secure,
+                samesite="lax",
+                max_age=600,
+                path="/oauth2",
+            )
+
+            await audit_service.log_event(
+                event_type="federation_login_success",
+                user_id=user.id,
+                email=user.email,
+                metadata={
+                    "provider_id": resolved_provider_id,
+                    "provider_label": provider.label,
+                    "external_id": external_id,
+                    "state_jti": state_claims.get("jti"),
+                    "oauth2_client_id": oauth2_ctx["client_id"],
+                },
+            )
+
+            return response
 
         await audit_service.log_event(
             event_type="federation_login_success",
             user_id=user.id,
             email=user.email,
             metadata={
-                "provider_id": provider_id,
+                "provider_id": resolved_provider_id,
                 "provider_label": provider.label,
                 "external_id": external_id,
                 "state_jti": state_claims.get("jti"),
@@ -216,16 +372,30 @@ async def federation_callback(
             success=True,
         )
 
-        return {
-            "access_token": tokens["access_token"],
-            "refresh_token": tokens.get("refresh_token"),
-            "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "name": user.name,
-            },
-        }
+        settings = get_settings()
+        response = RedirectResponse(
+            url=f"{settings.frontend_base_url}/dashboard?fed=1",
+            status_code=302,
+        )
+        response.set_cookie(
+            key=settings.auth_cookie_access_name,
+            value=token_response.access_token,
+            httponly=True,
+            secure=settings.auth_cookie_secure,
+            samesite="lax",
+            max_age=int(settings.access_token_expire_minutes * 60),
+            path=settings.auth_cookie_path,
+        )
+        response.set_cookie(
+            key=settings.auth_cookie_refresh_name,
+            value=stored_rt.token,
+            httponly=True,
+            secure=settings.auth_cookie_secure,
+            samesite="lax",
+            max_age=int(settings.refresh_token_expire_days * 86400),
+            path=settings.auth_cookie_path,
+        )
+        return response
 
     except HTTPException:
         raise
@@ -245,6 +415,62 @@ async def federation_callback(
 # ---------------------------------------------------------------------------
 # Admin CRUD
 # ---------------------------------------------------------------------------
+
+
+@router.post("/api/oauth2/federated-consent")
+async def federated_consent_check(
+    request: Request,
+    session_service: SessionService = Depends(lambda: SessionService()),
+):
+    """Check for a pending federated-login consent session.
+
+    Called by the OAuth authorize page after a federation callback
+    redirect. Reads the ``__Host-authglow-consent-session`` httpOnly
+    cookie, validates the session, and returns consent data the frontend
+    can render. Deletes the cookie on success.
+    """
+    session_token = request.cookies.get("__Host-authglow-consent-session")
+    if not session_token:
+        return {"consent_required": False}
+
+    session = await session_service.get_consent_session(session_token)
+    if not session:
+        return {"consent_required": False}
+
+    from authglow.services.oauth_client import OAuth2ClientStorage
+    from authglow.services.oauth2 import OAuth2Service
+
+    client_storage = OAuth2ClientStorage()
+    client = await client_storage.get_client(session["client_id"])
+    if not client or not client.is_active:
+        await session_service.delete_consent_session(session_token)
+        return {"consent_required": False}
+
+    scope_labels: dict = {
+        "openid": "Verify your identity",
+        "profile": "Access your profile information (name, picture)",
+        "email": "Access your email address",
+        "offline_access": "Allow offline access (refresh tokens)",
+        "read": "Read access to your data",
+        "write": "Write access to your data",
+    }
+    scope_items = [
+        {"name": s, "description": scope_labels.get(s, f"Access to {s}")}
+        for s in (session["scope"].split() if session.get("scope") else ["read"])
+    ]
+
+    return {
+        "consent_required": True,
+        "session_token": session["session_token"],
+        "client_name": client.client_name,
+        "client_description": client.description,
+        "client_logo_uri": client.logo_uri,
+        "client_homepage_uri": client.homepage_uri,
+        "client_terms_uri": client.terms_uri,
+        "client_privacy_uri": client.privacy_uri,
+        "custom_css": client.custom_css,
+        "scopes": scope_items,
+    }
 
 
 @router.post("/api/federation/providers", response_model=ExternalIdpConfigResponse)

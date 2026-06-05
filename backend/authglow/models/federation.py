@@ -28,11 +28,18 @@ class ExternalIdpConfig(BaseModel):
 
     auth_levels: Optional[List[str]] = None
 
+    visible_contexts: List[str] = Field(
+        default_factory=lambda: ["dashboard", "oauth2"],
+        description="Contexts where this provider is visible: dashboard, oauth2.",
+    )
+
     claims_mapping: Dict[str, str] = Field(
         default_factory=lambda: {
             "sub": "external_id",
             "email": "email",
             "name": "name",
+            "given_name": "given_name",
+            "family_name": "family_name",
             "picture": "picture",
         }
     )
@@ -67,6 +74,7 @@ class ExternalIdpConfigCreate(BaseModel):
     logo_uri: Optional[str] = None
     enabled: bool = True
     auth_levels: Optional[List[str]] = None
+    visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
 
 
@@ -83,6 +91,7 @@ class ExternalIdpConfigUpdate(BaseModel):
     logo_uri: Optional[str] = None
     enabled: Optional[bool] = None
     auth_levels: Optional[List[str]] = None
+    visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
 
 
@@ -99,6 +108,7 @@ class ExternalIdpConfigResponse(BaseModel):
     logo_uri: Optional[str] = None
     enabled: bool
     auth_levels: Optional[List[str]] = None
+    visible_contexts: List[str]
     claims_mapping: Dict[str, str]
     created_at: datetime
     updated_at: datetime
