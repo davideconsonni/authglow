@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Loader2, RefreshCw, User } from 'lucide-react'
+import { Loader2, RefreshCw, User, Key, Zap } from 'lucide-react'
 import { api } from '@/lib/api'
 import { decodeJwt } from '@/lib/jwt'
 import { usePlaygroundStore } from '@/stores/playgroundStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useAuth } from '@/hooks/useAuth'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { FlowStepper } from '../FlowStepper'
 import { JsonHighlight } from '../JsonHighlight'
@@ -15,6 +17,7 @@ const STEPS = [
 
 export function UserInfoFlow() {
   const store = usePlaygroundStore()
+  const { user } = useAuth()
 
   const [currentStep, setCurrentStep] = useState('token')
   const [completed, setCompleted] = useState<string[]>([])
@@ -35,7 +38,7 @@ export function UserInfoFlow() {
     setResponse(null)
     setHttpStatus(null)
     try {
-      const result = await api.get('/oauth2/userinfo')
+      const result = await api.get('/oauth2/userinfo', { headers: { Authorization: `Bearer ${localToken}` } })
       setHttpStatus(200)
       setResponse(JSON.stringify(result, null, 2))
       setCompleted(['token'])
@@ -48,6 +51,21 @@ export function UserInfoFlow() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleUseMySession = () => {
+    const token = useAuthStore.getState().accessToken
+    if (token) {
+      setLocalToken(token)
+      store.setAccessToken(token)
+    }
+  }
+
+  const handleFetchMyUserInfo = () => {
+    if (!user) return
+    setHttpStatus(200)
+    setResponse(JSON.stringify(user, null, 2))
+    setCurrentStep('result')
   }
 
   const handleReset = () => {
@@ -103,14 +121,31 @@ export function UserInfoFlow() {
             </div>
           )}
 
-          <button
-            onClick={handleFetch}
-            disabled={loading || !localToken}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <User size={16} />}
-            Fetch UserInfo
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleFetch}
+              disabled={loading || !localToken}
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <User size={16} />}
+              Fetch UserInfo
+            </button>
+            <button
+              onClick={handleFetchMyUserInfo}
+              disabled={!user}
+              className="flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-2 text-sm font-medium text-brand-violet hover:bg-surface-3 disabled:opacity-50"
+            >
+              <Zap size={16} />
+              Fetch My UserInfo
+            </button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            <button onClick={handleUseMySession} className="underline hover:text-text-primary">
+              Use my session token
+            </button>
+            {' · '}
+            {user?.email || 'Not logged in'}
+          </p>
         </div>
       )}
 

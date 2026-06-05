@@ -30,7 +30,6 @@ async def create_permission(permission: PermissionCreate, _: str = require_admin
     """Create a new permission (admin only)."""
     rbac_service = RBACService()
 
-    # Check if permission name already exists
     existing = await rbac_service.get_permission_by_name(permission.name)
     if existing:
         raise HTTPException(
@@ -40,7 +39,16 @@ async def create_permission(permission: PermissionCreate, _: str = require_admin
 
     from authglow.models.rbac import Permission
 
-    perm = Permission(**permission.model_dump())
+    parts = permission.name.rsplit(".", 1)
+    resource = parts[0] if len(parts) > 1 else ""
+    action = parts[1] if len(parts) > 1 else permission.name
+
+    perm = Permission(
+        name=permission.name,
+        description=permission.description,
+        resource=resource,
+        action=action,
+    )
     created = await rbac_service.create_permission(perm)
 
     return PermissionResponse(**created.model_dump())

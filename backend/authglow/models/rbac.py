@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
+
 class Permission(BaseModel):
     """Permission model.
 
@@ -21,7 +22,6 @@ class Permission(BaseModel):
     resource: str  # e.g., "users", "api_keys", "oauth_clients"
     action: str  # e.g., "read", "write", "delete", "create"
     created_at: datetime = Field(default_factory=utcnow)
-
 
 
 class Role(BaseModel):
@@ -40,7 +40,6 @@ class Role(BaseModel):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-
 class UserRole(BaseModel):
     """User-Role assignment model."""
 
@@ -52,17 +51,19 @@ class UserRole(BaseModel):
     expires_at: Optional[datetime] = None  # Optional expiration
 
 
-
-
 # Request/Response models
 
+
 class PermissionCreate(BaseModel):
-    """Create permission request."""
+    """Create permission request.
+
+    …resource and …action are derived from …name by splitting on the
+    last dot, e.g. ``users.read`` → resource=users, action=read.
+    """
 
     name: str
     description: Optional[str] = None
-    resource: str
-    action: str
+
 
 class PermissionResponse(BaseModel):
     """Permission response."""
@@ -74,6 +75,7 @@ class PermissionResponse(BaseModel):
     action: str
     created_at: datetime
 
+
 class RoleCreate(BaseModel):
     """Create role request."""
 
@@ -81,12 +83,14 @@ class RoleCreate(BaseModel):
     description: Optional[str] = None
     permissions: List[str] = Field(default_factory=list)
 
+
 class RoleUpdate(BaseModel):
     """Update role request."""
 
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
+
 
 class RoleResponse(BaseModel):
     """Role response."""
@@ -99,10 +103,12 @@ class RoleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class RoleWithPermissions(RoleResponse):
     """Role response with full permission details."""
 
     permission_details: List[PermissionResponse] = Field(default_factory=list)
+
 
 class AssignRoleRequest(BaseModel):
     """Assign role to user request."""
@@ -110,6 +116,7 @@ class AssignRoleRequest(BaseModel):
     user_id: str
     role_id: str
     expires_at: Optional[datetime] = None
+
 
 class UserRoleResponse(BaseModel):
     """User role assignment response."""
@@ -122,6 +129,7 @@ class UserRoleResponse(BaseModel):
     assigned_by: str
     assigned_at: datetime
     expires_at: Optional[datetime]
+
 
 class UserPermissions(BaseModel):
     """User's aggregated permissions."""

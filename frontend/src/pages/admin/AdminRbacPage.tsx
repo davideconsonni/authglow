@@ -8,16 +8,17 @@ import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface Permission {
-  id: string
+  permission_id?: string
   name: string
   description: string
 }
 
 interface Role {
-  id: string
+  id?: string
+  role_id?: string
   name: string
   description: string
-  permissions: Permission[]
+  permissions: string[]
   is_system: boolean
 }
 
@@ -111,10 +112,10 @@ function RolesTab({
   }
 
   const openEdit = (r: Role) => {
-    setEditId(r.id)
+    setEditId(r.role_id || r.id)
     setName(r.name)
     setDescription(r.description || '')
-    setSelPerms(r.permissions.map((p) => p.id))
+    setSelPerms(r.permissions)
     setShowCreate(true)
   }
 
@@ -156,8 +157,8 @@ function RolesTab({
     }
   }
 
-  const togglePerm = (id: string) => {
-    setSelPerms((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  const togglePerm = (permName: string) => {
+    setSelPerms((p) => (p.includes(permName) ? p.filter((x) => x !== permName) : [...p, permName]))
   }
 
   return (
@@ -205,7 +206,7 @@ function RolesTab({
             </thead>
             <tbody className="divide-y divide-surface-2">
               {roleList.map((r, idx) => (
-                <tr key={r.id || idx} className="hover:bg-surface-2/50">
+                <tr key={r.role_id || r.id || idx} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-text-primary">{r.name}</span>
@@ -222,7 +223,7 @@ function RolesTab({
                       {r.permissions?.length > 0 ? (
                         r.permissions.map((p, i) => (
                           <span
-                            key={p.id || i}
+                            key={p.permission_id || p.name || i}
                             className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary"
                           >
                             {p.name}
@@ -245,7 +246,7 @@ function RolesTab({
                             <Edit size={14} />
                           </button>
                           <button
-                            onClick={() => setDeleteId(r.id)}
+                            onClick={() => setDeleteId(r.role_id || r.id)}
                             className="text-text-muted hover:text-semantic-error transition-colors"
                             title="Delete role"
                           >
@@ -294,13 +295,13 @@ function RolesTab({
               <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-surface-2 bg-surface-1 p-2">
                 {permList.map((p, i) => (
                   <label
-                    key={p.id || i}
+                    key={p.permission_id || p.name || i}
                     className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2/50 cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={selPerms.includes(p.id)}
-                      onChange={() => togglePerm(p.id)}
+                      checked={selPerms.includes(p.name)}
+                      onChange={() => togglePerm(p.name)}
                       className="accent-brand-violet"
                     />
                     <div className="flex flex-col">
@@ -440,12 +441,12 @@ function PermissionsTab({
             </thead>
             <tbody className="divide-y divide-surface-2">
               {permList.map((p, i) => (
-                <tr key={p.id || i} className="hover:bg-surface-2/50">
+                <tr key={p.permission_id || p.name || i} className="hover:bg-surface-2/50">
                   <td className="px-6 py-3 text-sm font-medium text-text-primary">{p.name}</td>
                   <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{p.description || '-'}</td>
                   <td className="px-6 py-3">
                     <button
-                      onClick={() => setDeleteId(p.id)}
+                      onClick={() => setDeleteId(p.permission_id || p.name)}
                       className="text-text-muted hover:text-semantic-error transition-colors"
                       title="Delete permission"
                     >
@@ -535,9 +536,9 @@ function UserRoleAssignments({
 
   // Fetch user roles only when searching for a specific user
   const { data: userRolesRaw, refetch, isLoading } = useApiQuery<any>(
-    searchUserId ? ['user-roles', searchUserId] as string[] : (['user-roles-empty'] as string[]),
-    searchUserId ? `/api/rbac/user-roles/${searchUserId}` : '/api/rbac/user-roles/__none__',
-    { enabled: !!searchUserId },
+    ['user-roles', searchUserId] as string[],
+    `/api/rbac/user-roles/${searchUserId}`,
+    { enabled: Boolean(searchUserId) },
   )
   const userRoles = Array.isArray(userRolesRaw) ? userRolesRaw : []
 
@@ -549,7 +550,6 @@ function UserRoleAssignments({
       if (items.length > 0) {
         setSearchUserId(items[0].id)
         setSearched(true)
-        await refetch()
       } else {
         onError('User not found')
       }
@@ -562,7 +562,7 @@ function UserRoleAssignments({
     if (!searchUserId || !selectedRole) return
     setAssigning(true)
     try {
-      const body: Record<string, unknown> = { user_email: userEmail, role_id: selectedRole }
+      const body: Record<string, unknown> = { user_id: searchUserId, role_id: selectedRole }
       if (expiresAt) body.expires_at = expiresAt
       await api.post('/api/rbac/user-roles', body)
       setSelectedRole(''); setExpiresAt('')
@@ -619,7 +619,7 @@ function UserRoleAssignments({
                 className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
               >
                 <option value="">Select a role...</option>
-                {roleOptions.map(r => <option key={r.id} value={r.id}>{r.name || r.id}</option>)}
+                {roleOptions.map(r => <option key={r.role_id || r.id} value={r.role_id || r.id}>{r.name || r.role_id || r.id}</option>)}
               </select>
             </div>
             <div>
@@ -661,7 +661,7 @@ function UserRoleAssignments({
                 </thead>
                 <tbody className="divide-y divide-surface-2">
                   {userRoles.map((ur: any, i: number) => (
-                    <tr key={ur.id || ur.role_id || i}>
+                    <tr key={ur.role_id || r.id || ur.role_id || i}>
                       <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email || userEmail}</td>
                       <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{ur.role_name || ur.role_id || '-'}</td>
                       <td className="px-6 py-3 text-sm text-text-muted hidden md:table-cell">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
