@@ -71,9 +71,8 @@ const queryClient = new QueryClient({
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   const hydrated = useAuthStore((s) => s._hydrated)
-  const [probing, setProbing] = useState(true)
-  const probed = useRef(false)
   const loc = useLocation()
+  const probed = useRef(false)
 
   useEffect(() => {
     const handler = () => {
@@ -84,25 +83,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!hydrated || probed.current) return
-    const shouldProbe = new URLSearchParams(loc.search).has('fed') || useAuthStore.getState().isAuthenticated
-    if (!shouldProbe) {
-      setProbing(false)
-      return
-    }
+    const isFed = new URLSearchParams(loc.search).has('fed')
+    if (!hydrated || probed.current || !isFed) return
     probed.current = true
-    const probe = async () => {
-      try {
-        await useAuthStore.getState().fetchCurrentUser()
-      } catch {
-        // No valid session — stay on login
-      }
-      setProbing(false)
-    }
-    probe()
+    useAuthStore.getState().fetchCurrentUser().catch(() => {})
   }, [hydrated, loc.search])
 
-  if (!hydrated || probing) return <LoadingState />
+  if (!hydrated) return <LoadingState />
   if (!isAuthenticated) return <Navigate to={ROUTES.AUTH.LOGIN} replace />
   return <>{children}</>
 }
