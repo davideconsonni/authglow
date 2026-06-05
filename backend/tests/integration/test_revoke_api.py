@@ -81,7 +81,12 @@ class TestRevokeEndpoint:
 
         response = _revoke_app.post(
             "/oauth2/revoke",
-            data={"token": "refresh-token-value", "token_type_hint": "refresh_token"},
+            data={
+                "token": "refresh-token-value",
+                "token_type_hint": "refresh_token",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
         )
 
         assert response.status_code == 200
@@ -97,7 +102,11 @@ class TestRevokeEndpoint:
 
         response = _revoke_app.post(
             "/oauth2/revoke",
-            data={"token": "refresh-token-value"},
+            data={
+                "token": "refresh-token-value",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
         )
 
         assert response.status_code == 200
@@ -126,7 +135,12 @@ class TestRevokeEndpoint:
 
         response = _revoke_app.post(
             "/oauth2/revoke",
-            data={"token": "access-token-value", "token_type_hint": "access_token"},
+            data={
+                "token": "access-token-value",
+                "token_type_hint": "access_token",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
         )
 
         assert response.status_code == 200
@@ -153,7 +167,12 @@ class TestRevokeEndpoint:
 
         response = _revoke_app.post(
             "/oauth2/revoke",
-            data={"token": "legacy-access-token", "token_type_hint": "access_token"},
+            data={
+                "token": "legacy-access-token",
+                "token_type_hint": "access_token",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
         )
 
         assert response.status_code == 200
@@ -168,18 +187,20 @@ class TestRevokeEndpoint:
             "/oauth2/revoke",
             data={
                 "token": "refresh-token-value",
-                "client_id": "valid-client",
-                "client_secret": "valid-secret",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
             },
         )
 
         assert response.status_code == 200
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
-            "valid-client", "valid-secret"
+            "test-client", "test-secret"
         )
         _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
 
     def test_revoke_with_invalid_client_returns_200(self, _revoke_app):
+        mock_rt = _make_refresh_token()
+        _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
         _revoke_app._mock_oauth2_svc.verify_client = AsyncMock(return_value=False)
 
         response = _revoke_app.post(
@@ -196,11 +217,20 @@ class TestRevokeEndpoint:
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
             "invalid-client", "invalid-secret"
         )
+        _revoke_app._mock_rt_svc.get_refresh_token.assert_not_awaited()
 
     def test_revoke_unknown_token_returns_200(self, _revoke_app):
+        mock_rt = _make_refresh_token(client_id="unknown-client")
+        _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
+        _revoke_app._mock_rt_svc.revoke_token = AsyncMock(return_value=True)
+
         response = _revoke_app.post(
             "/oauth2/revoke",
-            data={"token": "nonexistent-token"},
+            data={
+                "token": "nonexistent-token",
+                "client_id": "unknown-client",
+                "client_secret": "test-secret",
+            },
         )
 
         assert response.status_code == 200
@@ -209,6 +239,64 @@ class TestRevokeEndpoint:
     def test_revoke_missing_token_returns_422(self, _revoke_app):
         response = _revoke_app.post("/oauth2/revoke", data={})
         assert response.status_code == 422
+
+    def test_revoke_without_credentials_noops(self, _revoke_app):
+        mock_rt = _make_refresh_token()
+        _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
+        _revoke_app._mock_rt_svc.revoke_token = AsyncMock(return_value=True)
+
+        response = _revoke_app.post(
+            "/oauth2/revoke",
+            data={"token": "refresh-token-value"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {}
+        _revoke_app._mock_rt_svc.get_refresh_token.assert_not_awaited()
+        _revoke_app._mock_rt_svc.revoke_token.assert_not_awaited()
+
+    def test_revoke_cross_client_token_noops(self, _revoke_app):
+        mock_rt = _make_refresh_token(client_id="other-client")
+        _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
+        _revoke_app._mock_rt_svc.revoke_token = AsyncMock(return_value=True)
+
+        response = _revoke_app.post(
+            "/oauth2/revoke",
+            data={
+                "token": "cross-client-token",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {}
+        _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
+        _revoke_app._mock_rt_svc.revoke_token.assert_not_awaited()
+
+    def test_revoke_with_basic_auth(self, _revoke_app):
+        mock_rt = _make_refresh_token()
+        _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
+        _revoke_app._mock_rt_svc.revoke_token = AsyncMock(return_value=True)
+
+        import base64
+
+        auth_value = base64.b64encode(b"test-client:test-secret").decode("ascii")
+        response = _revoke_app.post(
+            "/oauth2/revoke",
+            data={
+                "token": "refresh-token-value",
+                "token_type_hint": "refresh_token",
+            },
+            headers={"Authorization": f"Basic {auth_value}"},
+        )
+
+        assert response.status_code == 200
+        _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
+            "test-client", "test-secret"
+        )
+        _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
+        _revoke_app._mock_rt_svc.revoke_token.assert_awaited_once()
 
 
 class TestTokenBlacklist:
@@ -373,6 +461,7 @@ class TestTokenBlacklist:
         resp = client.post(
             "/oauth2/revoke",
             data={"token": real_token, "token_type_hint": "access_token"},
+            auth=("test-client", "test-secret"),
         )
 
         assert resp.status_code == 200
@@ -426,6 +515,7 @@ class TestTokenBlacklist:
         resp = client.post(
             "/oauth2/revoke",
             data={"token": real_token, "token_type_hint": "access_token"},
+            auth=("test-client", "test-secret"),
         )
 
         assert resp.status_code == 200

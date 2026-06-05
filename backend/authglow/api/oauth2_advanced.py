@@ -60,21 +60,25 @@ async def revoke_token(
     """RFC 7009: Token Revocation Endpoint.
 
     Allows clients to revoke access or refresh tokens.
+    Requires authenticated client credentials (HTTP Basic or form post).
 
     https://datatracker.ietf.org/doc/html/rfc7009
     """
-    # Verify client credentials if provided
-    if client_id and client_secret:
-        if not await oauth2_service.verify_client(client_id, client_secret):
-            # Per RFC 7009, we should return success even for invalid clients
-            # to prevent token scanning attacks
-            return JSONResponse(status_code=200, content={})
+    basic_client_id, basic_client_secret = _extract_basic_auth(request)
+    resolved_client_id = client_id or basic_client_id
+    resolved_client_secret = client_secret or basic_client_secret
+
+    if not resolved_client_id or not resolved_client_secret:
+        return JSONResponse(status_code=200, content={})
+
+    if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+        return JSONResponse(status_code=200, content={})
 
     # Determine token type
     if token_type_hint == "refresh_token" or not token_type_hint:
         # Try as refresh token first
         rt = await refresh_token_service.get_refresh_token(token)
-        if rt:
+        if rt and rt.client_id == resolved_client_id:
             success = await refresh_token_service.revoke_token(
                 token, reason="Revoked via revocation endpoint"
             )

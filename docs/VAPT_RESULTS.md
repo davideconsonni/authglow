@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 5 | 21 | Fix before VAPT |
+| HIGH | 26 | 7 | 19 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **15** | **111** | — |
+| **Total** | **126** | **17** | **109** | — |
 
 ---
 
@@ -91,20 +91,20 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
    - **Description**: `algorithm = unverified_header.get("alg", "RS256")` is then passed to `pyjwt.decode(algorithms=[algorithm])`. The pinned list is itself attacker-controlled. A misconfigured/compromised IdP returning `alg=HS256` substitutes the operator's `secret_key` as HMAC material.
    - **Fix**: Added `_ALLOWED_FEDERATION_ALGORITHMS = frozenset({"RS256"})` at module level. `verify_id_token` now validates `header_alg` against the allowlist before calling `pyjwt.decode`, passing `algorithms=list(_ALLOWED_FEDERATION_ALGORITHMS)` (static, not from header). Tests: `tests/unit/test_federation_verify_id_token.py` (7 tests — valid RS256, nonce match/mismatch, HS256 header rejected, unknown alg rejected, constant validation, wrong-key signature rejection).
 
-- [ ] **VAPT-016** — `/oauth2/revoke` (RFC 7009) accepts unauthenticated revocation requests (DoS)
+- [x] **VAPT-016** — `/oauth2/revoke` (RFC 7009) accepts unauthenticated revocation requests (DoS)
   - **Location**: `backend/authglow/api/oauth2_advanced.py:47-114`
   - **Description**: If `client_id`/`client_secret` are missing or invalid, the function silently returns 200 but still proceeds to attempt revocation of any matching refresh/access token found via the unauthenticated path. An unauthenticated attacker can revoke arbitrary users' refresh tokens.
-  - **Fix**: Require authenticated client credentials (HTTP Basic or form post) before honoring any revocation; verify the token belongs to the authenticated client.
+  - **Fix**: Require authenticated client credentials (HTTP Basic or form post) before honoring any revocation; verify the token belongs to the authenticated client. Credential extraction now mirrors the introspection endpoint pattern. Refresh tokens are only revoked when `rt.client_id == authenticated_client_id`. Tests updated with 3 new security tests (no-creds noop, cross-client noop, HTTP Basic Auth).
 
 - [x] **VAPT-017** — `delete_role` lets any `roles.write` holder wipe any non-system role (DoS / stale assignments)
   - **Fix**: Changed from `require_permission("roles.write")` to `require_admin()`.
 
 ### Passwords
 
-- [ ] **VAPT-018** — Password reset / change use a weaker validator than registration (`password1!` accepted on reset)
+- [x] **VAPT-018** — Password reset / change use a weaker validator than registration (`password1!` accepted on reset)
   - **Location**: `backend/authglow/core/password.py:7-35`; `backend/authglow/api/password_reset.py:163, 226`
   - **Description**: `validate_password_strength` only requires 8+ chars + a letter + a digit/special. The `PasswordValidator` used at registration enforces all four character classes and is configurable to be stricter. An attacker who triggers a reset can set `password1`; the registration validator would have rejected it.
-  - **Fix**: Have reset/change endpoints call the same `PasswordValidator` used at registration.
+  - **Fix**: `confirm_password_reset` and `change_password` endpoints now inject `PasswordValidator` via `Depends(get_password_validator)` and call `password_validator.validate()`, matching the registration flow. Both endpoints now enforce the same configurable policy (uppercase, lowercase, digit, special character).
 
 ### MFA
 

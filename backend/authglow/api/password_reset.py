@@ -4,9 +4,8 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from authglow.api.auth import _clear_auth_cookies, get_current_user
+from authglow.api.auth import _clear_auth_cookies, get_current_user, get_password_validator
 from authglow.core.config import get_settings
-from authglow.core.password import validate_password_strength
 from authglow.core.rate_limit import limiter
 from authglow.models.password_reset import (
     PasswordChange,
@@ -19,7 +18,7 @@ from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.email import EmailService
 from authglow.services.email.factory import get_email_service
-from authglow.services.password import hash_password, verify_password
+from authglow.services.password import PasswordValidator, hash_password, verify_password
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.storage import UserStorage
 
@@ -142,6 +141,7 @@ async def confirm_password_reset(
     reset_service: PasswordResetService = Depends(get_reset_service),
     user_storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
+    password_validator: PasswordValidator = Depends(get_password_validator),
 ):
     """Confirm password reset with token and set new password."""
     # Verify token
@@ -160,9 +160,12 @@ async def confirm_password_reset(
         )
 
     # Validate password strength
-    is_valid, message = validate_password_strength(reset_confirm.new_password)
+    is_valid, errors = password_validator.validate(reset_confirm.new_password)
     if not is_valid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(errors) if errors else "Password does not meet requirements",
+        )
 
     # Get user
     user = await user_storage.get_user(token.user_id)
@@ -209,6 +212,7 @@ async def change_password(
     current_user: User = Depends(get_current_user),
     user_storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
+    password_validator: PasswordValidator = Depends(get_password_validator),
 ):
     """Change password for authenticated user.
 
@@ -237,9 +241,12 @@ async def change_password(
         )
 
     # Validate new password strength
-    is_valid, message = validate_password_strength(password_change.new_password)
+    is_valid, errors = password_validator.validate(password_change.new_password)
     if not is_valid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(errors) if errors else "Password does not meet requirements",
+        )
 
     # Check if new password is same as current
     if verify_password(password_change.new_password, current_user.hashed_password):
