@@ -26,6 +26,7 @@ from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.password import PasswordValidator, hash_password, verify_password
+from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.session import SessionService
 from authglow.services.storage import UserStorage
@@ -984,7 +985,15 @@ async def invite_user(
     verification_service = EmailVerificationService()
     token = await verification_service.create_verification_token(user)
 
-    # Send welcome email with verification link and temporary password
+    # Create password reset token so the invited user can set their own password
+    reset_service = PasswordResetService()
+    reset_token, reset_plaintext = await reset_service.create_reset_token(
+        user_id=user.id,
+        email=user.email,
+        expires_in_minutes=1440,  # 24 hours for invitation
+    )
+
+    # Send welcome email with verification link and set-password link
     email_service = get_email_service()
     try:
         context = {
@@ -994,8 +1003,7 @@ async def invite_user(
             "login_url": f"{settings.base_url}/login",
             "docs_url": f"{settings.base_url}/docs",
             "company_name": settings.company_name,
-            "temp_password": temp_password,
-            "verification_url": f"{settings.base_url}/verify-email?token={token.token}",
+            "set_password_url": f"{settings.base_url}/set-password?token={reset_plaintext}",
         }
 
         await email_service.send_template(
@@ -1163,7 +1171,6 @@ async def register_user(
             "created_at": user.created_at.strftime("%Y-%m-%d %H:%M"),
             "login_url": f"{settings.base_url}/login",
             "company_name": settings.company_name,
-            "verification_url": f"{settings.base_url}/verify-email?token={token.token}",
         }
         await email_service.send_template(
             to=[user.email],

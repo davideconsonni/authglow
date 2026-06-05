@@ -137,3 +137,162 @@ class TestBackupCodeLockoutIntegration:
             assert result_b is True, "User B should not be affected by User A lockout"
 
         asyncio.run(_run())
+
+
+@pytest.fixture
+def _mfa_enroll_app(test_settings, jwt_service, storage):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from unittest.mock import AsyncMock, MagicMock
+    from authglow.api.mfa import router, get_mfa_service, get_user_storage as mfa_get_user_storage
+    from authglow.api.auth import (
+        get_user_storage as auth_get_user_storage,
+        get_jwt_service as auth_get_jwt_service,
+        get_api_key_service,
+        get_oauth2_service,
+        get_audit_service,
+    )
+    from authglow.services.mfa import MFAService
+
+    app = FastAPI()
+    app.include_router(router)
+
+    mock_api_key = MagicMock()
+    mock_oauth2 = MagicMock()
+    mock_audit = MagicMock()
+    mock_audit.log_event = AsyncMock()
+
+    mfa_svc = MFAService()
+
+    app.dependency_overrides[mfa_get_user_storage] = lambda: storage
+    app.dependency_overrides[auth_get_user_storage] = lambda: storage
+    app.dependency_overrides[auth_get_jwt_service] = lambda: jwt_service
+    app.dependency_overrides[get_mfa_service] = lambda: mfa_svc
+    app.dependency_overrides[get_api_key_service] = lambda: mock_api_key
+    app.dependency_overrides[get_oauth2_service] = lambda: mock_oauth2
+    app.dependency_overrides[get_audit_service] = lambda: mock_audit
+
+    return TestClient(app)
+
+
+class TestEnrollMfaEndpoint:
+    def test_enroll_mfa_success(self, _mfa_enroll_app, jwt_service, storage, test_user):
+        import asyncio
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "secret" in data
+        assert len(data["secret"]) > 0
+        assert "qr_code" in data
+        assert data["qr_code"].startswith("data:image/png;base64,")
+        assert "backup_codes" in data
+        assert len(data["backup_codes"]) == 10
+
+    def test_enroll_mfa_blocked_when_enrollment_in_progress(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        import asyncio
+
+        test_user.mfa_enabled = True
+        test_user.mfa_verified = False
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 400
+        assert "already enabled" in response.json()["detail"].lower()
+
+    def test_enroll_mfa_blocked_when_fully_enabled(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        import asyncio
+
+        test_user.mfa_enabled = True
+        test_user.mfa_verified = True
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 400
+        assert "already enabled" in response.json()["detail"].lower()
+
+    def test_enroll_mfa_success_after_disable(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        import asyncio
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        enroll_response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert enroll_response.status_code == 200
+
+        disable_response = _mfa_enroll_app.delete(
+            "/api/mfa/disable",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert disable_response.status_code == 200
+
+        reenroll_response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert reenroll_response.status_code == 200
+        data = reenroll_response.json()
+        assert len(data["backup_codes"]) == 10
+
+    def test_enroll_mfa_guard_is_locked(self, _mfa_enroll_app, jwt_service, storage, test_user):
+        import asyncio
+        from authglow.core.concurrency import named_lock
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert not named_lock().is_held(f"mfa_enroll:{test_user.id}"), (
+            "Lock must be released after enrollment completes"
+        )

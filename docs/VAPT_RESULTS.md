@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 7 | 19 | Fix before VAPT |
+| HIGH | 26 | 10 | 16 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **17** | **109** | — |
+| **Total** | **126** | **20** | **106** | — |
 
 ---
 
@@ -108,22 +108,22 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### MFA
 
-- [ ] **VAPT-019** — MFA enrollment race (check-then-write without per-user lock)
+- [x] **VAPT-019** — MFA enrollment race (check-then-write without per-user lock)
   - **Location**: `backend/authglow/api/mfa.py:46-82`
   - **Description**: Two concurrent enrollments can both pass the `mfa_enabled and mfa_verified` guard, generate different secrets, and the second `update_user` overwrites the first secret while `save_backup_codes` overwrites the first set. The user ends up with mismatched secret↔backup-codes.
-  - **Fix**: Wrap enrollment in a per-user `named_lock(f"user:{user_id}")` for the full read-modify-write sequence.
+  - **Fix**: Wrapped enrollment in `named_lock(f"mfa_enroll:{user_id}")` (separate key from `user:{id}` to avoid deadlock with `update_user`). Re-reads user inside the lock to get fresh state. Changed guard from `if mfa_enabled and mfa_verified` to `if mfa_enabled` — the old guard allowed re-enrollment when `mfa_enabled=True, mfa_verified=False`. Added 5 integration tests (success, blocked in-progress, blocked verified, disable-then-reenroll, lock lifecycle).
 
 ### Email and tokens in URLs
 
-- [ ] **VAPT-020** — Welcome email sends a plaintext temporary password (in the email body and on disk)
+- [x] **VAPT-020** — Welcome email sends a plaintext temporary password (in the email body and on disk)
   - **Location**: `backend/authglow/api/auth.py:817, 846`
   - **Description**: `temp_password = secrets.token_urlsafe(16)` is placed in the email context. The plaintext lives in the email file (file_storage provider) and the email body. Even though the welcome template does not currently render it, the value is still in the rendered email file.
-  - **Fix**: Use a "set-password" link with a one-time token (mirroring the password-reset flow) instead of emailing the password.
+  - **Fix**: Removed `temp_password` from the email context. `invite_user` now generates a password reset token via `PasswordResetService` (24h expiry) and sends a `set_password_url` link in the welcome email instead. The user clicks the link, sets their own password through the existing `POST /api/password/reset/confirm` flow. Templates updated with "Set Your Password" section. 3 integration tests added (no temp_pass in context, reset token generated, admin-scope required).
 
-- [ ] **VAPT-021** — Email verification token embedded in URL (browser history, `Referer`, proxy logs)
+- [x] **VAPT-021** — Email verification token embedded in URL (browser history, `Referer`, proxy logs)
   - **Location**: `backend/authglow/api/auth.py:847, 1015`; `backend/authglow/api/email_verification.py:164`
   - **Description**: `verification_url = f"{base_url}/verify-email?token={token.token}"`. Tokens land in browser history, `Referer` headers to third parties, and CDN/proxy access logs.
-  - **Fix**: Send a one-time short code in the email body that the user enters on a POST endpoint, or use a single-use cookie.
+  - **Fix**: `send_verification_email()` now sends the token as a plain-text `verification_code` in the email body instead of embedding it in a URL. A clean `verify_page_url` (token-less) is provided for navigation. Removed `verification_url` from welcome email contexts in `invite_user` and `register_user`. Updated `email_verification.html` and `.txt` templates to display the code and page URL separately. Integration test verifies `verification_code` present, `verification_url` absent, and `verify_page_url` free of tokens.
 
 - [ ] **VAPT-022** — Password reset plaintext token embedded in URL and emailed
   - **Location**: `backend/authglow/api/password_reset.py:110`; `backend/authglow/api/admin.py:677`

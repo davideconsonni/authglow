@@ -425,3 +425,352 @@ class TestTokenEndpointClientAuth:
         )
 
         oauth2_service.verify_client.assert_called_once_with("test-client-id", "test-client-secret")
+
+
+class TestInviteUserSetPasswordLink:
+    @pytest.fixture
+    def _invite_app(self, test_settings, jwt_service):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from authglow.api.auth import router, get_user_storage
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        app = FastAPI()
+        app.include_router(router)
+
+        admin_user = User(
+            id="admin-inviter",
+            email="admin@test.com",
+            hashed_password=hash_password("AdminP@ss123!"),
+            is_active=True,
+            scopes=["read", "write", "admin"],
+            email_verified=True,
+        )
+
+        mock_storage = MagicMock()
+        mock_storage.get_user = AsyncMock(return_value=admin_user)
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+        mock_storage.create_user = AsyncMock(side_effect=lambda user: user)
+
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+
+        mock_api_key = MagicMock()
+        mock_oauth2 = MagicMock()
+
+        from authglow.api.auth import (
+            get_api_key_service,
+            get_oauth2_service,
+            get_audit_service,
+        )
+
+        app.dependency_overrides[get_user_storage] = lambda: mock_storage
+        app.dependency_overrides[get_api_key_service] = lambda: mock_api_key
+        app.dependency_overrides[get_oauth2_service] = lambda: mock_oauth2
+        app.dependency_overrides[get_audit_service] = lambda: mock_audit
+
+        client = TestClient(app)
+        client._mock_storage = mock_storage
+        return client
+
+    def test_invite_user_sends_set_password_link_not_temp_password(
+        self, _invite_app, test_settings, jwt_service
+    ):
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        invited_user = User(
+            id="invited-user-001",
+            email="invited@test.com",
+            hashed_password=hash_password("placeholder"),
+            first_name="Invited",
+            last_name="User",
+            is_active=True,
+            scopes=["read"],
+            is_invited=True,
+            email_verified=False,
+        )
+
+        mock_storage = MagicMock()
+        mock_storage.get_user = AsyncMock(return_value=invited_user)
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+        mock_storage.create_user = AsyncMock(return_value=invited_user)
+
+        from authglow.services.email_verification import EmailVerificationService
+
+        mock_verification = MagicMock()
+        mock_verification.create_verification_token = AsyncMock(
+            return_value=MagicMock(token="verify-token-abc")
+        )
+
+        captured_context = {}
+
+        async def capture_send_template(**kwargs):
+            for k, v in kwargs.get("context", {}).items():
+                captured_context[k] = v
+
+        mock_email = MagicMock()
+        mock_email.send_template = AsyncMock(side_effect=capture_send_template)
+
+        admin_user = User(
+            id="admin-inviter",
+            email="admin@test.com",
+            hashed_password=hash_password("AdminP@ss123!"),
+            is_active=True,
+            scopes=["read", "write", "admin"],
+            email_verified=True,
+        )
+
+        token = jwt_service.create_access_token(
+            user_id=admin_user.id,
+            email=admin_user.email,
+            scopes=admin_user.scopes,
+        )
+
+        with (
+            patch(
+                "authglow.api.auth.EmailVerificationService",
+                return_value=mock_verification,
+            ),
+            patch(
+                "authglow.api.auth.get_email_service",
+                return_value=mock_email,
+            ),
+            patch(
+                "authglow.api.auth.get_user_storage",
+                return_value=mock_storage,
+            ),
+        ):
+            response = _invite_app.post(
+                "/api/users/invite",
+                json={
+                    "email": "invited@test.com",
+                    "first_name": "Invited",
+                    "last_name": "User",
+                    "scopes": ["read"],
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert response.status_code == 201
+        assert "set_password_url" in captured_context, (
+            "invite_user must include set_password_url in email context"
+        )
+        assert "temp_password" not in captured_context, (
+            "invite_user must NOT include temp_password in email context"
+        )
+        assert "token=" in captured_context.get("set_password_url", ""), (
+            "set_password_url must contain a reset token"
+        )
+
+    def test_invited_user_gets_password_reset_token(self, _invite_app, test_settings, jwt_service):
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import uuid4
+
+        user_id = str(uuid4())
+        email_addr = "invited-flow@test.com"
+
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        invited_user = User(
+            id=user_id,
+            email=email_addr,
+            hashed_password=hash_password("placeholder"),
+            first_name="Flow",
+            last_name="Test",
+            is_active=True,
+            scopes=["read"],
+            is_invited=True,
+            email_verified=True,
+        )
+
+        admin_user = User(
+            id="admin-inviter",
+            email="admin@test.com",
+            hashed_password=hash_password("AdminP@ss123!"),
+            is_active=True,
+            scopes=["read", "write", "admin"],
+            email_verified=True,
+        )
+
+        async def _mock_get_user(uid):
+            if uid == admin_user.id:
+                return admin_user
+            if uid == user_id:
+                return invited_user
+            return None
+
+        _invite_app._mock_storage.get_user = AsyncMock(side_effect=_mock_get_user)
+        _invite_app._mock_storage.create_user = AsyncMock(return_value=invited_user)
+
+        from authglow.services.email_verification import EmailVerificationService
+
+        mock_verification = MagicMock()
+        mock_verification.create_verification_token = AsyncMock(
+            return_value=MagicMock(token="verify-token-flow")
+        )
+
+        captured_set_password_url = {}
+
+        async def capture_send_template(**kwargs):
+            ctx = kwargs.get("context", {})
+            captured_set_password_url["url"] = ctx.get("set_password_url", "")
+
+        mock_email = MagicMock()
+        mock_email.send_template = AsyncMock(side_effect=capture_send_template)
+
+        from authglow.models.password_reset import PasswordResetToken
+        from authglow.core.datetime import utcnow
+        from datetime import timedelta
+
+        mock_reset_plaintext = "reset-plaintext-token-for-test"
+        mock_reset_token = PasswordResetToken(
+            token_lookup="test-reset-lookup",
+            user_id=user_id,
+            email=email_addr,
+            token_hash="$2b$12$hashplaceholder...",
+            expires_at=utcnow() + timedelta(minutes=1440),
+        )
+
+        mock_reset_service = MagicMock()
+        mock_reset_service.create_reset_token = AsyncMock(
+            return_value=(mock_reset_token, mock_reset_plaintext)
+        )
+
+        admin_token = jwt_service.create_access_token(
+            user_id=admin_user.id,
+            email=admin_user.email,
+            scopes=admin_user.scopes,
+        )
+
+        with (
+            patch(
+                "authglow.api.auth.EmailVerificationService",
+                return_value=mock_verification,
+            ),
+            patch(
+                "authglow.api.auth.get_email_service",
+                return_value=mock_email,
+            ),
+            patch(
+                "authglow.api.auth.PasswordResetService",
+                return_value=mock_reset_service,
+            ),
+        ):
+            response = _invite_app.post(
+                "/api/users/invite",
+                json={
+                    "email": email_addr,
+                    "first_name": "Flow",
+                    "last_name": "Test",
+                    "scopes": ["read"],
+                },
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+
+        assert response.status_code == 201
+
+        set_password_url = captured_set_password_url.get("url", "")
+        assert f"token={mock_reset_plaintext}" in set_password_url, (
+            "set_password_url must contain the reset plaintext token"
+        )
+
+        mock_reset_service.create_reset_token.assert_awaited_once_with(
+            user_id=user_id,
+            email=email_addr,
+            expires_in_minutes=1440,
+        )
+
+    def test_invite_user_requires_admin_scope(self, _invite_app, jwt_service):
+        from unittest.mock import AsyncMock, MagicMock
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+
+        non_admin = User(
+            id="regular-user",
+            email="user@test.com",
+            hashed_password=hash_password("UserP@ss123!"),
+            is_active=True,
+            scopes=["read"],
+            email_verified=True,
+        )
+
+        token = jwt_service.create_access_token(
+            user_id=non_admin.id,
+            email=non_admin.email,
+            scopes=non_admin.scopes,
+        )
+
+        response = _invite_app.post(
+            "/api/users/invite",
+            json={
+                "email": "invited@test.com",
+                "first_name": "Test",
+                "last_name": "User",
+                "scopes": ["read"],
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+
+
+class TestVerificationEmailNoTokenInUrl:
+    def test_send_verification_email_sends_code_not_url(self, test_settings):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from authglow.models.user import User
+        from authglow.services.password import hash_password
+        from authglow.services.email_verification import EmailVerificationService
+
+        user = User(
+            id="verify-email-user",
+            email="verify@test.com",
+            hashed_password=hash_password("TestP@ss123!"),
+            is_active=True,
+            email_verified=False,
+            scopes=["read"],
+        )
+
+        captured_context = {}
+
+        async def capture_send_template(**kwargs):
+            ctx = kwargs.get("context", {})
+            for k, v in ctx.items():
+                captured_context[k] = v
+            return MagicMock(success=True)
+
+        mock_email = MagicMock()
+        mock_email.send_template = AsyncMock(side_effect=capture_send_template)
+
+        async def _run():
+            with patch(
+                "authglow.services.email_verification.get_email_service",
+                return_value=mock_email,
+            ):
+                svc = EmailVerificationService()
+                result = await svc.send_verification_email(user, "test-verification-token")
+            return result
+
+        result = asyncio.run(_run())
+
+        assert result is True
+
+        assert "verification_code" in captured_context, (
+            "send_verification_email must include verification_code"
+        )
+        assert captured_context["verification_code"] == "test-verification-token", (
+            "verification_code must be the plaintext token"
+        )
+        assert "verification_url" not in captured_context, (
+            "send_verification_email must NOT include verification_url with token"
+        )
+        assert "verify_page_url" in captured_context, (
+            "send_verification_email must include verify_page_url"
+        )
+        assert "token=" not in captured_context.get("verify_page_url", ""), (
+            "verify_page_url must NOT contain the token"
+        )

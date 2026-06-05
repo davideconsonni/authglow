@@ -5,6 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from authglow.api.auth import _set_auth_cookies, get_current_user
+from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
 from authglow.core.datetime import utcnow
@@ -54,32 +55,38 @@ async def enroll_mfa(
     Start MFA enrollment process.
     Generates TOTP secret, QR code, and backup codes.
     """
-    if current_user.mfa_enabled and current_user.mfa_verified:
-        raise HTTPException(
-            status_code=400,
-            detail="MFA is already enabled. Disable it first to re-enroll.",
-        )
+    lock = named_lock()
+    async with lock(f"mfa_enroll:{current_user.id}"):
+        fresh_user = await storage.get_user(current_user.id)
+        if not fresh_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate TOTP secret
-    secret = mfa_service.generate_totp_secret()
+        if fresh_user.mfa_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="MFA is already enabled. Disable it first to re-enroll.",
+            )
 
-    # Generate QR code
-    uri = mfa_service.get_totp_uri(secret, current_user.email)
-    qr_code = mfa_service.generate_qr_code(uri)
+        # Generate TOTP secret
+        secret = mfa_service.generate_totp_secret()
 
-    # Generate backup codes
-    backup_codes = mfa_service.generate_backup_codes(10)
+        # Generate QR code
+        uri = mfa_service.get_totp_uri(secret, fresh_user.email)
+        qr_code = mfa_service.generate_qr_code(uri)
 
-    # Save encrypted secret to user (not verified yet)
-    current_user.mfa_secret = encrypt_totp_secret(secret)
-    current_user.mfa_enabled = True
-    current_user.mfa_verified = False
-    await storage.update_user(current_user)
+        # Generate backup codes
+        backup_codes = mfa_service.generate_backup_codes(10)
 
-    # Save backup codes
-    await mfa_service.save_backup_codes(current_user.id, backup_codes)
+        # Save encrypted secret to user (not verified yet)
+        fresh_user.mfa_secret = encrypt_totp_secret(secret)
+        fresh_user.mfa_enabled = True
+        fresh_user.mfa_verified = False
+        await storage.update_user(fresh_user)
 
-    return MFAEnrollResponse(secret=secret, qr_code=qr_code, backup_codes=backup_codes)
+        # Save backup codes
+        await mfa_service.save_backup_codes(fresh_user.id, backup_codes)
+
+        return MFAEnrollResponse(secret=secret, qr_code=qr_code, backup_codes=backup_codes)
 
 
 @router.post("/api/mfa/verify", response_model=UserResponse)

@@ -31,6 +31,27 @@
             </p>
         </div>
 
+        <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107; margin-bottom: 25px;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #856404;">
+                <strong>Set Your Password</strong>
+            </p>
+            <p style="margin: 5px 0; font-size: 13px; color: #856404;">
+                Your account has been created with a placeholder password.
+                Please click the button below to set your own password.
+            </p>
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="{{ set_password_url }}"
+                   style="display: inline-block; background: #ffc107; color: #856404; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px;">
+                    Set Your Password
+                </a>
+            </div>
+            {% if set_password_url %}
+            <p style="margin: 10px 0 0 0; font-size: 11px; color: #856404;">
+                Or copy this link: <br><code style="word-break: break-all;">{{ set_password_url }}</code>
+            </p>
+            {% endif %}
+        </div>
+
         <div style="text-align: center; margin: 30px 0;">
             <a href="{{ login_url }}"
                style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">

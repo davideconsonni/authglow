@@ -8,6 +8,11 @@ Your Account Details:
 - Email: {{ email }}
 - Created: {{ created_at }}
 
+IMPORTANT: Set Your Password
+Your account has been created with a placeholder password.
+Please use the link below to set your own password:
+{{ set_password_url }}
+
 Go to Dashboard: {{ login_url }}
 
 Getting Started:

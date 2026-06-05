@@ -150,14 +150,18 @@ class EmailVerificationService:
         return True, None
 
     async def send_verification_email(self, user: User, token: str) -> bool:
-        """Send verification email to user."""
-        email_service = get_email_service()
+        """Send verification email to user.
 
-        verification_url = f"{self.settings.base_url}/verify-email?token={token}"
+        The verification token is sent as a plain-text code in the email body,
+        NOT embedded in a clickable URL.  This prevents token leakage through
+        browser history, ``Referer`` headers, and proxy/CDN access logs.
+        """
+        email_service = get_email_service()
 
         context = {
             "user_name": user.first_name or user.email.split("@")[0],
-            "verification_url": verification_url,
+            "verification_code": token,
+            "verify_page_url": f"{self.settings.base_url}/verify-email",
             "company_name": self.settings.company_name,
             "expires_hours": 24,
         }
