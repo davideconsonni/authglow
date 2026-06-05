@@ -1129,6 +1129,14 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return UserResponse(**current_user.model_dump())
 
 
+@router.get("/api/auth/my-token")
+async def get_my_token(request: Request, current_user: User = Depends(get_current_user)):
+    """Return the current access token (reads httpOnly cookie server-side)."""
+    settings = get_settings()
+    token = request.cookies.get(settings.auth_cookie_access_name, "")
+    return {"access_token": token}
+
+
 @router.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def register_user(

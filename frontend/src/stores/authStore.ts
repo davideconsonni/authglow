@@ -106,6 +106,9 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const user = await api.get<AuthUser>('/api/users/me')
           set({ user, isAuthenticated: true })
+          api.get<{ access_token: string }>('/api/auth/my-token').then(
+            ({ access_token }) => set({ accessToken: access_token }),
+          ).catch(() => {})
         } catch {
           set({ user: null, isAuthenticated: false })
         }

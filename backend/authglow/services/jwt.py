@@ -24,8 +24,12 @@ async def resolve_rbac_permissions(user_id: str) -> tuple:
 
         rbac = RBACService()
         perms = list(await rbac.get_user_permissions(user_id))
-        roles = await rbac.get_user_roles(user_id)
-        role_names = [r.role_id for r in roles] if roles else []
+        user_roles = await rbac.get_user_roles(user_id)
+        role_names: list[str] = []
+        for ur in user_roles or []:
+            role = await rbac.get_role(ur.role_id)
+            if role:
+                role_names.append(role.name)
         return perms, role_names
     except Exception:
         return [], []

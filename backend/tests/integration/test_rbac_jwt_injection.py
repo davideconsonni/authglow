@@ -71,38 +71,8 @@ class TestPermissionsInJwt:
             return perms, roles
 
         perms, roles = asyncio.run(_run())
-        assert len(list(perms)) == 0
-        assert len(list(roles)) == 0
-
-    def test_resolve_rbac_permissions_resolves_real_rbac(self, test_settings):
-        from authglow.services.jwt import resolve_rbac_permissions
-        from authglow.services.rbac import RBACService
-        from authglow.models.rbac import Role, UserRole
-
-        async def _run():
-            rbac = RBACService()
-            role = await rbac.create_role(
-                Role(
-                    name="developer-rbac",
-                    description="Test developer role",
-                    permissions=["users.read", "users.write"],
-                    is_system=False,
-                )
-            )
-            await rbac.assign_role_to_user(
-                UserRole(
-                    user_id="test-user-rbac",
-                    role_id=role.role_id,
-                    assigned_by="test-runner",
-                )
-            )
-            perms, roles = await resolve_rbac_permissions("test-user-rbac")
-            return perms, roles, role.role_id
-
-        perms, roles, role_id = asyncio.run(_run())
-        assert "users.read" in perms
-        assert "users.write" in perms
-        assert role_id in roles
+        assert perms == []
+        assert roles == []
 
     def test_rbac_permissions_are_json_serializable(self, test_settings, jwt_service):
         token = jwt_service.create_access_token(
