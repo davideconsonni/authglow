@@ -267,6 +267,7 @@ async def federation_callback(
         )
 
         from authglow.services.refresh_token import RefreshTokenService
+        from authglow.services.jwt import resolve_rbac_permissions
 
         refresh_svc = RefreshTokenService()
         stored_rt = await refresh_svc.create_refresh_token(
@@ -274,6 +275,16 @@ async def federation_callback(
             client_id="federation_grant",
             scopes=user.scopes,
             expires_in_days=30,
+        )
+
+        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+        token_response = jwt_service.create_token_response(
+            user_id=user.id,
+            email=user.email,
+            scopes=user.scopes,
+            include_refresh=True,
+            permissions=rbac_perms,
+            roles=rbac_roles,
         )
 
         if oauth2_ctx:

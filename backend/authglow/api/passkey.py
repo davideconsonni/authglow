@@ -19,6 +19,7 @@ from authglow.models.passkey import (
 from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
+from authglow.services.jwt import resolve_rbac_permissions
 from authglow.services.passkey import PasskeyService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage
@@ -293,10 +294,13 @@ async def complete_authentication(
         await storage.update_last_login(user.id)
 
         # Generate access token
+        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
         access_token = jwt_service.create_access_token(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
+            permissions=rbac_perms,
+            roles=rbac_roles,
         )
 
         # Create persistent refresh token for session tracking

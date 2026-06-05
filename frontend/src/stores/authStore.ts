@@ -74,6 +74,8 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           set({
+            accessToken: response.access_token,
+            refreshToken: response.refresh_token || null,
             isAuthenticated: true,
             isLoading: false,
             user: null,
@@ -111,7 +113,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated, accessToken: state.accessToken }),
       onRehydrateStorage: () => {
         return (state) => {
           if (state) {

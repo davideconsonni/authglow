@@ -58,13 +58,27 @@ export function UserInfoFlow() {
     if (token) {
       setLocalToken(token)
       store.setAccessToken(token)
+    } else {
+      setResponse(JSON.stringify({ info: 'No access token available. Login via password to see JWT claims. Federated login does not store tokens in browser.' }, null, 2))
+      setCurrentStep('result')
     }
   }
 
   const handleFetchMyUserInfo = () => {
-    if (!user) return
+    const token = useAuthStore.getState().accessToken
+    if (!token) {
+      setResponse(JSON.stringify({ info: 'No access token in session. Login via password to see JWT claims.' }, null, 2))
+      setCurrentStep('result')
+      return
+    }
+    const decoded = decodeJwt(token)
     setHttpStatus(200)
-    setResponse(JSON.stringify(user, null, 2))
+    setResponse(JSON.stringify({
+      header: decoded?.header,
+      payload: decoded?.payload,
+      permissions: decoded?.payload?.permissions,
+      roles: decoded?.payload?.roles,
+    }, null, 2))
     setCurrentStep('result')
   }
 

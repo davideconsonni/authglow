@@ -13,6 +13,24 @@ from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
 
 
+async def resolve_rbac_permissions(user_id: str) -> tuple:
+    """Resolve RBAC permissions and roles for a user.
+
+    Returns (permissions, roles) tuples of lists, both may be empty.
+    Uses lazy imports to avoid circular dependencies.
+    """
+    try:
+        from authglow.services.rbac import RBACService
+
+        rbac = RBACService()
+        perms = list(await rbac.get_user_permissions(user_id))
+        roles = await rbac.get_user_roles(user_id)
+        role_names = [r.role_id for r in roles] if roles else []
+        return perms, role_names
+    except Exception:
+        return [], []
+
+
 class JWTService:
     """Service for creating and validating JWT tokens using RS256.
 
@@ -139,6 +157,8 @@ class JWTService:
         email: str,
         scopes: List[str],
         expires_delta: Optional[timedelta] = None,
+        permissions: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
     ) -> str:
         """Create an access token with a unique jti for revocation support."""
         if expires_delta:
@@ -158,6 +178,10 @@ class JWTService:
             "iat": datetime.now(timezone.utc),
             "token_type": "access",
         }
+        if permissions:
+            token_data["permissions"] = permissions
+        if roles:
+            token_data["roles"] = roles
         return self._encode_token(token_data)
 
     def create_refresh_token(self, user_id: str, email: str, scopes: List[str]) -> str:
@@ -224,6 +248,8 @@ class JWTService:
             token_type=str(payload.get("token_type", "access")),
             jti=jti if isinstance(jti, str) else None,
             aud=payload.get("aud") if isinstance(payload.get("aud"), str) else None,
+            permissions=payload.get("permissions"),
+            roles=payload.get("roles"),
         )
 
         if token_data.exp < datetime.now(timezone.utc):
@@ -283,10 +309,18 @@ class JWTService:
         return claims
 
     def create_token_response(
-        self, user_id: str, email: str, scopes: List[str], include_refresh: bool = True
+        self,
+        user_id: str,
+        email: str,
+        scopes: List[str],
+        include_refresh: bool = True,
+        permissions: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
     ) -> Token:
         """Create a complete token response."""
-        access_token = self.create_access_token(user_id, email, scopes)
+        access_token = self.create_access_token(
+            user_id, email, scopes, permissions=permissions, roles=roles
+        )
         token_response = Token(
             access_token=access_token,
             token_type="bearer",

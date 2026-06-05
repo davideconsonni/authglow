@@ -23,6 +23,7 @@ from authglow.services.audit import AuditService
 from authglow.services.email.factory import get_email_service
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
+from authglow.services.jwt import resolve_rbac_permissions
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.password import PasswordValidator, hash_password, verify_password
@@ -502,8 +503,14 @@ async def token_endpoint(
         scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
 
         # Generate JWT access token
+        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
         access_token_response = jwt_service.create_token_response(
-            user.id, user.email, scopes, include_refresh=False
+            user.id,
+            user.email,
+            scopes,
+            include_refresh=False,
+            permissions=rbac_perms,
+            roles=rbac_roles,
         )
 
         # Create persistent refresh token with rotation
@@ -590,8 +597,14 @@ async def token_endpoint(
         assert user is not None  # help mypy narrow after raise
 
         # Generate new JWT access token
+        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
         access_token_response = jwt_service.create_token_response(
-            user.id, user.email, new_rt.scopes, include_refresh=False
+            user.id,
+            user.email,
+            new_rt.scopes,
+            include_refresh=False,
+            permissions=rbac_perms,
+            roles=rbac_roles,
         )
 
         # Add new refresh token to response
@@ -735,8 +748,14 @@ async def login_for_access_token(
     )
 
     # Generate JWT token response (without refresh token from JWT service)
+    rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
     token_response = jwt_service.create_token_response(
-        user.id, user.email, user.scopes, include_refresh=False
+        user.id,
+        user.email,
+        user.scopes,
+        include_refresh=False,
+        permissions=rbac_perms,
+        roles=rbac_roles,
     )
 
     # Check if password is expired
@@ -833,7 +852,14 @@ async def exchange_api_key_for_token(
     )
 
     # Return access token with API key scopes
-    return jwt_service.create_token_response(user.id, user.email, key_data.scopes)
+    rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+    return jwt_service.create_token_response(
+        user.id,
+        user.email,
+        key_data.scopes,
+        permissions=rbac_perms,
+        roles=rbac_roles,
+    )
 
 
 # Cookie-based auth endpoints for browser clients

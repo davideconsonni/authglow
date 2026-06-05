@@ -193,7 +193,12 @@ async def userinfo(credentials: HTTPAuthorizationCredentials = Depends(security)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Return user info excluding None values
-    return user_info.model_dump(exclude_none=True)
+    result = user_info.model_dump(exclude_none=True)
+    if token_data.permissions:
+        result["permissions"] = token_data.permissions
+    if token_data.roles:
+        result["roles"] = token_data.roles
+    return result
 
 
 @router.get("/oauth2/logout")
