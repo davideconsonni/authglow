@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthStore>()(
         } catch (err) {
           set({ isLoading: false })
           const message = err instanceof Error ? err.message : 'Login failed'
-          throw new Error(message)
+          throw new Error(message, { cause: err })
         }
       },
 
