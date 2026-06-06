@@ -84,7 +84,7 @@ class TestCookiesSetOnLogin:
         from authglow.models.token import Token
 
         response = Response()
-        token_resp = Token(access_token="test-access", token_type="bearer", expires_in=1800)
+        token_resp = Token(access_token="test-access", token_type="Bearer", expires_in=1800)
         token_resp.refresh_token = "test-refresh"
 
         _set_auth_cookies(

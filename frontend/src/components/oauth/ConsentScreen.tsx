@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, Check, Globe, Mail, User, Lock, Key, ExternalLink, type LucideIcon } from 'lucide-react'
+import { Shield, Globe, Mail, User, Lock, Key, ExternalLink, type LucideIcon } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -41,7 +41,6 @@ export function ConsentScreen({
   scopes,
   preview = false,
 }: ConsentScreenProps) {
-  const [remember, setRemember] = useState(false)
   const [approving, setApproving] = useState(false)
   const [denying, setDenying] = useState(false)
   const [generalError, setGeneralError] = useState('')
@@ -56,7 +55,7 @@ export function ConsentScreen({
         {
           session_token: sessionToken,
           approved: 'true',
-          remember: remember ? 'true' : 'false',
+          remember: 'true',
         },
       )
       window.location.href = data.redirect_url
@@ -383,16 +382,6 @@ export function ConsentScreen({
               )
             })}
           </ul>
-
-          {/* Remember checkbox */}
-          {!preview && (
-            <div className="consent-remember" onClick={() => setRemember(!remember)} role="checkbox" aria-checked={remember}>
-              <div className={`consent-remember-box${remember ? ' checked' : ''}`}>
-                {remember && <Check size={12} />}
-              </div>
-              <span className="consent-remember-label">Remember this decision for future requests</span>
-            </div>
-          )}
 
           {/* Branding links */}
           {hasLinks && (

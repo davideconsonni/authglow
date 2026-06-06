@@ -88,7 +88,7 @@ describe('authStore', () => {
         json: () =>
           Promise.resolve({
             access_token: 'test-token',
-            token_type: 'bearer',
+            token_type: 'Bearer',
           }),
       })
 
@@ -103,7 +103,7 @@ describe('authStore', () => {
         json: () =>
           Promise.resolve({
             access_token: 'test-token',
-            token_type: 'bearer',
+            token_type: 'Bearer',
           }),
       })
 

@@ -490,7 +490,7 @@ class TestBackwardCompatibility:
         response = svc.create_token_response("u-resp", "resp@t.com", ["read", "write"])
         assert response.access_token is not None
         assert response.refresh_token is not None
-        assert response.token_type == "bearer"
+        assert response.token_type == "Bearer"
 
         decoded = svc.decode_token(response.access_token)
         assert decoded is not None

@@ -962,7 +962,7 @@ async def get_active_sessions(
                 "id": rt.token_id,
                 "type": "refresh",
                 "user_email": user.email,
-                "client_id": rt.client_id,
+                "client": rt.client_id,
                 "created_at": rt.created_at.isoformat(),
                 "expires_at": rt.expires_at.isoformat() if rt.expires_at else None,
                 "last_used_at": rt.used_at.isoformat() if rt.used_at else None,
@@ -1355,7 +1355,7 @@ async def export_user_data(
             "items": [
                 {
                     "id": rt.token_id,
-                    "client_id": rt.client_id,
+                    "client": rt.client_id,
                     "scopes": rt.scopes,
                     "created_at": rt.created_at.isoformat(),
                     "last_used_at": rt.used_at.isoformat() if rt.used_at else None,

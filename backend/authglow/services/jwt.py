@@ -327,7 +327,7 @@ class JWTService:
         )
         token_response = Token(
             access_token=access_token,
-            token_type="bearer",
+            token_type="Bearer",
             expires_in=self.settings.access_token_expire_minutes * 60,
             scope=" ".join(scopes),
         )

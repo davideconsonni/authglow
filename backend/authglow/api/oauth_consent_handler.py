@@ -131,7 +131,6 @@ async def process_consent(
         raise HTTPException(status_code=400, detail="Invalid or expired session")
 
     is_approved = approved.lower() == "true"
-    should_remember = remember.lower() == "true"
 
     if not is_approved:
         await audit_service.log_event(
@@ -150,13 +149,12 @@ async def process_consent(
 
     requested_scopes = session["scope"].split() if session["scope"] else ["read"]
 
-    if should_remember:
-        await consent_service.create_consent(
-            user_id=session["user_id"],
-            client_id=session["client_id"],
-            scopes=requested_scopes,
-            expires_at=None,
-        )
+    await consent_service.create_consent(
+        user_id=session["user_id"],
+        client_id=session["client_id"],
+        scopes=requested_scopes,
+        expires_at=None,
+    )
 
     await audit_service.log_event(
         event_type="oauth2_consent_granted",
@@ -164,7 +162,7 @@ async def process_consent(
         metadata={
             "client_id": session["client_id"],
             "scopes": requested_scopes,
-            "remembered": should_remember,
+            "remembered": True,
         },
         severity="info",
         ip_address=request.client.host if request.client else None,

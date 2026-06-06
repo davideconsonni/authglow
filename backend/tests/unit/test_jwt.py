@@ -88,7 +88,7 @@ class TestJWTTokenCreation:
         )
         assert response.access_token is not None
         assert response.refresh_token is not None
-        assert response.token_type == "bearer"
+        assert response.token_type == "Bearer"
         assert "read" in response.scope
 
     def test_create_token_response_without_refresh(self, jwt_service):

@@ -13,7 +13,7 @@ class Token(BaseModel):
     """OAuth2 token response."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "Bearer"
     expires_in: int
     refresh_token: Optional[str] = None
     scope: Optional[str] = None

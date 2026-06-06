@@ -379,6 +379,30 @@ async def authorize_post(
             redirect_url += f"&state={state}"
         return {"redirect_url": redirect_url}
 
+    from authglow.services.oauth_consent import OAuth2ConsentService
+
+    consent_svc = OAuth2ConsentService()
+    has_consent, _ = await consent_svc.check_consent(
+        user_id=user.id,
+        client_id=client_id,
+        required_scopes=validated_scope.split() if validated_scope else ["read"],
+    )
+
+    if has_consent:
+        auth_code = await oauth2_service.create_authorization_code(
+            client_id=client_id,
+            user_id=user.id,
+            redirect_uri=redirect_uri,
+            scope=validated_scope,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            nonce=nonce,
+        )
+        redirect_url = f"{redirect_uri}?code={auth_code.code}"
+        if state:
+            redirect_url += f"&state={state}"
+        return {"redirect_url": redirect_url}
+
     consent_session = await session_service.create_consent_session(
         user_id=user.id,
         client_id=client_id,
@@ -583,24 +607,30 @@ async def token_endpoint(
         return access_token_response
 
     elif grant_type == "client_credentials":
-        # Client credentials flow
-        if not client_id or not client_secret:
+        # Client credentials flow (RFC 6749 §4.4)
+        basic_client_id, basic_client_secret = _extract_basic_auth(request)
+        resolved_client_id = client_id or basic_client_id
+        resolved_client_secret = client_secret or basic_client_secret
+
+        if not resolved_client_id or not resolved_client_secret:
             raise HTTPException(status_code=400, detail="Missing client credentials")
 
-        if not await oauth2_service.verify_client(client_id, client_secret):
+        if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
             raise HTTPException(status_code=401, detail="Invalid client credentials")
 
         # Process and validate scopes
         requested_scopes = scope.split() if scope else []
         try:
-            validated_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
+            validated_scopes = await oauth2_service.process_scopes(
+                resolved_client_id, requested_scopes
+            )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid scope")
 
         # Create token for client (no specific user)
         return jwt_service.create_token_response(
-            user_id=client_id,
-            email=f"{client_id}@client.internal",
+            user_id=resolved_client_id,
+            email=f"{resolved_client_id}@client.internal",
             scopes=validated_scopes,
             include_refresh=False,
         )

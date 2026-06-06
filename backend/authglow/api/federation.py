@@ -136,6 +136,7 @@ async def federation_login(
 
 @router.get("/api/federation/callback")
 async def federation_callback(
+    request: Request,
     code: str,
     state: str,
     provider_id: Optional[str] = Query(default=None),
@@ -279,6 +280,7 @@ async def federation_callback(
             user_id=user.id,
             client_id="federation_grant",
             scopes=user.scopes,
+            issued_ip=request.client.host if request.client else None,
             expires_in_days=30,
         )
 
@@ -296,6 +298,7 @@ async def federation_callback(
             from authglow.services.oauth2 import OAuth2Service
             from authglow.services.oauth_client import OAuth2ClientStorage
             from authglow.services.session import SessionService
+            from authglow.services.oauth_consent import OAuth2ConsentService
 
             oauth2_svc = OAuth2Service()
 
@@ -316,6 +319,61 @@ async def federation_callback(
                 validated_scope = " ".join(processed_scopes)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid scope")
+
+            consent_svc = OAuth2ConsentService()
+            has_consent, _ = await consent_svc.check_consent(
+                user_id=user.id,
+                client_id=oauth2_ctx["client_id"],
+                required_scopes=validated_scope.split() if validated_scope else ["read"],
+            )
+
+            if has_consent:
+                auth_code = await oauth2_svc.create_authorization_code(
+                    client_id=oauth2_ctx["client_id"],
+                    user_id=user.id,
+                    redirect_uri=oauth2_ctx["oauth_redirect_uri"],
+                    scope=validated_scope,
+                    code_challenge=oauth2_ctx.get("code_challenge"),
+                    code_challenge_method=oauth2_ctx.get("code_challenge_method"),
+                    nonce=oauth2_ctx.get("oidc_nonce"),
+                )
+                redirect_url = f"{oauth2_ctx['oauth_redirect_uri']}?code={auth_code.code}"
+                if oauth2_ctx.get("app_state"):
+                    redirect_url += f"&state={oauth2_ctx['app_state']}"
+
+                settings = get_settings()
+                response = RedirectResponse(url=redirect_url, status_code=302)
+                response.set_cookie(
+                    key=settings.auth_cookie_access_name,
+                    value=token_response.access_token,
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite="lax",
+                    max_age=int(settings.access_token_expire_minutes * 60),
+                    path=settings.auth_cookie_path,
+                )
+                response.set_cookie(
+                    key=settings.auth_cookie_refresh_name,
+                    value=token_response.refresh_token,
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite="lax",
+                    max_age=settings.refresh_token_expire_days * 24 * 3600,
+                    path=settings.auth_cookie_path,
+                )
+                await audit_service.log_event(
+                    event_type="federation_login_success",
+                    user_id=user.id,
+                    email=user.email,
+                    metadata={
+                        "provider_id": resolved_provider_id,
+                        "provider_label": provider.label,
+                        "external_id": external_id,
+                        "oauth2_client_id": oauth2_ctx["client_id"],
+                        "consent_cached": True,
+                    },
+                )
+                return response
 
             consent_session = await SessionService().create_consent_session(
                 user_id=user.id,
@@ -386,6 +444,8 @@ async def federation_callback(
             user_id=user.id,
             email=user.email,
             success=True,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
 
         settings = get_settings()

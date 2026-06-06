@@ -337,7 +337,7 @@ async def complete_authentication(
 
         return {
             "access_token": access_token,
-            "token_type": "bearer",
+            "token_type": "Bearer",
             "refresh_token": rt.token,
             "user": {
                 "id": user.id,

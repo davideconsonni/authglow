@@ -21,6 +21,7 @@ export function AdminSessionsPage() {
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [cleaning, setCleaning] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const { data, refetch, isLoading } = useApiQuery<any>(
     ['admin-sessions'],
@@ -41,8 +42,11 @@ export function AdminSessionsPage() {
 
   const handleCleanup = async () => {
     setCleaning(true)
+    setError('')
+    setSuccess('')
     try {
-      await api.post('/api/admin/sessions/cleanup')
+      const data = await api.post<{ deleted: number }>('/api/admin/sessions/cleanup')
+      setSuccess(`Cleaned up ${data.deleted} expired session${data.deleted !== 1 ? 's' : ''}.`)
       await refetch()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to cleanup sessions')
@@ -63,12 +67,13 @@ export function AdminSessionsPage() {
             className="flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors disabled:opacity-50"
           >
             {cleaning && <Loader2 size={14} className="animate-spin" />}
-            Cleanup All
+            Cleanup Expired
           </button>
         }
       />
 
       {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
+      {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
 
       {isLoading ? (
         <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
