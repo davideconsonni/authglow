@@ -4,6 +4,8 @@ import { Shield, Loader2, LogIn } from 'lucide-react'
 import { api } from '@/lib/api'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
+import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
+import { LOGIN_EMAIL_KEY } from '@/components/auth/LoginForm'
 
 interface ClientInfo {
   client_name: string
@@ -406,7 +408,10 @@ export function OAuthAuthorizePage() {
                     id="oauth-email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      try { localStorage.setItem(LOGIN_EMAIL_KEY, e.target.value) } catch { /* noop */ }
+                    }}
                     placeholder="admin@authglow.local"
                     autoFocus
                     autoComplete="email"
@@ -440,6 +445,10 @@ export function OAuthAuthorizePage() {
               </button>
             </form>
           )}
+
+          <div className="mt-5 pt-4 border-t border-[#e2e8f0]">
+            <PasskeyLoginButton />
+          </div>
 
           <FederationLoginButtons
             context="oauth2"
