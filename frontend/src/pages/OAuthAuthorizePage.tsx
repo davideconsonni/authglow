@@ -219,6 +219,10 @@ export function OAuthAuthorizePage() {
 
   useEffect(() => {
     if (!clientId || !redirectUri) {
+      if (searchParams.get('fed') === '1') {
+        setPhase('login')
+        return
+      }
       setError('Missing required parameters (client_id and redirect_uri).')
       setPhase('login')
       return
@@ -249,7 +253,7 @@ export function OAuthAuthorizePage() {
   }, [clientId, redirectUri, responseType])
 
   useEffect(() => {
-    if (phase !== 'login' || !clientInfo) return
+    if (phase !== 'login') return
 
     let cancelled = false
     const checkFederatedSession = async () => {

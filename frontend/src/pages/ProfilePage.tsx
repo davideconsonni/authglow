@@ -352,6 +352,7 @@ export function ProfilePage() {
       <PreferencesSection />
 
       {/* Danger Zone */}
+      {!user?.is_federated && (
       <Section title="Danger Zone" description="Irreversible account actions. Please be careful.">
         <div className="rounded-2xl border border-semantic-error/20 bg-surface-1 p-6 space-y-4">
           {p?.is_active ? (
@@ -397,6 +398,18 @@ export function ProfilePage() {
           </div>
         </div>
       </Section>
+      )}
+
+      {user?.is_federated && (
+      <Section title="Account Management" description="Your account is linked to an external identity provider.">
+        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+          <p className="text-sm text-text-muted">
+            This account is managed through an external identity provider.
+            To deactivate or delete your account, please manage it from the provider directly.
+          </p>
+        </div>
+      </Section>
+      )}
 
       <ConfirmDialog open={deactivateDialog} title="Deactivate Account" message="You will be logged out and your account will be inaccessible until reactivated by an administrator." confirmLabel="Deactivate" variant="danger" onConfirm={handleDeactivate} onCancel={() => setDeactivateDialog(false)} />
       <ConfirmDialog open={deleteDialog} title="Delete Account" message="This will permanently delete your account, data, API keys, and all associated information. This action CANNOT be undone." confirmLabel="Delete Forever" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteDialog(false)} />

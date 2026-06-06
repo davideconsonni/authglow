@@ -219,6 +219,11 @@ async def federation_callback(
 
         if existing_user:
             user = existing_user
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account is deactivated. Contact support for assistance.",
+                )
             requires_update = False
             if not user.is_federated:
                 user.is_federated = True
@@ -343,10 +348,10 @@ async def federation_callback(
                 key="__Host-authglow-consent-session",
                 value=consent_session["session_token"],
                 httponly=True,
-                secure=settings.auth_cookie_secure,
+                secure=True,
                 samesite="lax",
                 max_age=600,
-                path="/oauth2",
+                path="/",
             )
 
             await audit_service.log_event(

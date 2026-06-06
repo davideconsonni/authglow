@@ -195,6 +195,12 @@ class UserProfileService:
         if not user:
             return False, "User not found"
 
+        if user.is_federated:
+            return (
+                False,
+                "Federated accounts are managed externally and cannot be deleted from AuthGlow",
+            )
+
         # Verify password
         if not verify_password(password, user.hashed_password):
             return False, "Password is incorrect"
@@ -259,6 +265,12 @@ class UserProfileService:
             user = await self.user_storage.get_user(user_id)
             if not user:
                 return False, "User not found"
+
+            if user.is_federated:
+                return (
+                    False,
+                    "Federated accounts are managed externally and cannot be deactivated from AuthGlow",
+                )
 
             user.is_active = False
             user.updated_at = utcnow()
