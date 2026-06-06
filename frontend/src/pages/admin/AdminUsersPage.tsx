@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore'
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
   is_active: boolean; mfa_enabled: boolean; created_at: string; login_count: number
+  is_federated: boolean
 }
 
 // Mirror of backend defaults (backend/.env.example: PASSWORD_MIN_LENGTH=8,
@@ -39,6 +40,7 @@ interface AdminUserDetail {
   password_expired: boolean; locked_until: string | null
   suspended_until: string | null
   phone: string | null; avatar_url: string | null
+  is_federated: boolean
 }
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
@@ -197,7 +199,7 @@ export function AdminUsersPage() {
               <td className="px-6 py-3" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
               <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{u.login_count ?? 0}</td>
               <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
-              <td className="hidden md:table-cell px-6 py-3" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button><button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button></div></td>
+              <td className="hidden md:table-cell px-6 py-3" onClick={e => e.stopPropagation()}><div className="flex gap-2">{!u.is_federated && <button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button>}{!u.is_federated && <button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button>}</div></td>
             </tr>)}
           </tbody></table>
         </div>
@@ -581,6 +583,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               </div>
             </div>
 
+            {!user?.is_federated && (
             <div className="border-t border-surface-2 pt-3 space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Password &amp; Credentials</h4>
               <div className="grid grid-cols-1 gap-2">
@@ -607,7 +610,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 )}
               </div>
             </div>
+            )}
 
+            {!user?.is_federated && (
             <div className="border-t border-surface-2 pt-3 space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">MFA</h4>
               <div className="grid grid-cols-1 gap-2">
@@ -631,6 +636,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 )}
               </div>
             </div>
+            )}
+
+            {user?.is_federated && (
+            <div className="border-t border-surface-2 pt-3">
+              <p className="text-xs text-text-muted italic">
+                Credentials and MFA for this account are managed by an external identity provider.
+              </p>
+            </div>
+            )}
 
             <div className="border-t border-surface-2 pt-3 space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Account Status</h4>

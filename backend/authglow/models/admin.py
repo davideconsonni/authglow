@@ -49,6 +49,7 @@ class AdminUserDetail(BaseModel):
     password_expired: bool = False
     locked_until: Optional[datetime] = None
     suspended_until: Optional[datetime] = None
+    is_federated: bool = False
 
     @classmethod
     def from_user(cls, user: "User") -> "AdminUserDetail":
@@ -73,6 +74,7 @@ class AdminUserDetail(BaseModel):
             password_expired=user.password_expired,
             locked_until=user.locked_until,
             suspended_until=user.suspended_until,
+            is_federated=user.is_federated,
         )
 
 

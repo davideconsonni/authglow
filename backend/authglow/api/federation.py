@@ -262,6 +262,17 @@ async def federation_callback(
                 detail=f"Account suspended until {user.suspended_until.isoformat()}",
             )
 
+        await user_storage.update_last_login(user.id)
+
+        login_svc = LoginHistoryService()
+        await login_svc.record_login(
+            user_id=user.id,
+            email=user.email,
+            success=True,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
         oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
 
         jwt_service = JWTService()
@@ -437,15 +448,6 @@ async def federation_callback(
                 "external_id": external_id,
                 "state_jti": state_claims.get("jti"),
             },
-        )
-
-        login_svc = LoginHistoryService()
-        await login_svc.record_login(
-            user_id=user.id,
-            email=user.email,
-            success=True,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
         )
 
         settings = get_settings()

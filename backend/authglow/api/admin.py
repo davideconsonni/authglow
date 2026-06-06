@@ -312,6 +312,12 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="Federated accounts are managed externally and cannot be deleted from AuthGlow",
+        )
+
     # Delete user and associated data
     await storage.delete_user(user_id)
     await mfa_service.delete_backup_codes(user_id)
@@ -445,6 +451,12 @@ async def reset_user_mfa(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="MFA for federated accounts is managed by the identity provider",
+        )
+
     # Reset MFA
     user.mfa_enabled = False
     user.mfa_secret = None
@@ -498,6 +510,12 @@ async def disable_user_mfa(
     if not user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
 
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="MFA for federated accounts is managed by the identity provider",
+        )
+
     # Disable MFA (keep backup codes intact)
     user.mfa_enabled = False
     user.mfa_secret = None
@@ -545,6 +563,12 @@ async def regenerate_user_backup_codes(
     user = await storage.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="MFA for federated accounts is managed by the identity provider",
+        )
 
     # Generate new backup codes
     backup_codes = mfa_service.generate_backup_codes(10)
@@ -601,6 +625,12 @@ async def set_user_password(
     user = await storage.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="Federated accounts are managed externally. This operation is not applicable.",
+        )
 
     validator = PasswordValidator()
     is_valid, errors = validator.validate(body.password)
@@ -662,6 +692,12 @@ async def send_password_reset(
     user = await storage.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="Federated accounts are managed externally. This operation is not applicable.",
+        )
 
     reset_service = PasswordResetService()
     token, plaintext = await reset_service.create_reset_token(
@@ -732,6 +768,12 @@ async def expire_user_password(
     user = await storage.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_federated:
+        raise HTTPException(
+            status_code=400,
+            detail="Federated accounts are managed externally. This operation is not applicable.",
+        )
 
     user.password_expired = True
     await storage.update_user(user)
@@ -880,6 +922,12 @@ async def bulk_user_operation(
                     results["failed"] += 1
                     results["errors"].append("Cannot deactivate your own account")
                     continue
+                if user.is_federated:
+                    results["failed"] += 1
+                    results["errors"].append(
+                        f"Federated user {user.email}: deactivation is managed externally"
+                    )
+                    continue
                 user.is_active = False
             elif operation.operation == "assign_scope":
                 if operation.scope and operation.scope not in user.scopes:
@@ -891,6 +939,12 @@ async def bulk_user_operation(
                 if user_id == current_user.id:
                     results["failed"] += 1
                     results["errors"].append("Cannot delete your own account")
+                    continue
+                if user.is_federated:
+                    results["failed"] += 1
+                    results["errors"].append(
+                        f"Federated user {user.email}: cannot be deleted from AuthGlow"
+                    )
                     continue
                 await storage.delete_user(user_id)
                 results["success"] += 1

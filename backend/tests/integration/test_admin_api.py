@@ -109,7 +109,7 @@ class TestGetActiveSessions:
         assert result["sessions"][0]["id"] == token.token_id
         assert result["sessions"][0]["type"] == "refresh"
         assert result["sessions"][0]["user_email"] == "session-user-1@test.io"
-        assert result["sessions"][0]["client_id"] == "test-client"
+        assert result["sessions"][0]["client"] == "test-client"
         assert result["total_sessions"] == 1
         assert result["total_refresh_tokens"] == 1
         assert result["unique_users"] == 1
@@ -1017,4 +1017,161 @@ class TestUpdateUserExtended:
                     )
                 )
 
+
+class TestFederatedUserAdminProtection:
+    def test_delete_user_blocks_federated(self):
+        import asyncio
+        from fastapi import HTTPException
+        from starlette.requests import Request
+        from authglow.api.admin import delete_user
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("federated-1", "fed@test.io")
+        mock_user.is_federated = True
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    delete_user(
+                        request=request,
+                        user_id="federated-1",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                        mfa_service=AsyncMock(),
+                    )
+                )
+
         assert exc.value.status_code == 400
+        assert "federated" in exc.value.detail.lower()
+        mock_storage.delete_user.assert_not_called()
+
+    def test_reset_mfa_blocks_federated(self):
+        import asyncio
+        from fastapi import HTTPException
+        from starlette.requests import Request
+        from authglow.api.admin import reset_user_mfa
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("federated-2", "fed2@test.io")
+        mock_user.is_federated = True
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    reset_user_mfa(
+                        request=request,
+                        user_id="federated-2",
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                        mfa_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400
+        assert "federated" in exc.value.detail.lower()
+        mock_storage.update_user.assert_not_called()
+
+    def test_set_password_blocks_federated(self):
+        import asyncio
+        from fastapi import HTTPException
+        from starlette.requests import Request
+        from authglow.api.admin import set_user_password
+        from authglow.models.admin import SetPasswordRequest
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("federated-3", "fed3@test.io")
+        mock_user.is_federated = True
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+
+        with patch("authglow.api.admin.UserStorage", return_value=mock_storage):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    set_user_password(
+                        request=request,
+                        user_id="federated-3",
+                        body=SetPasswordRequest(password="ValidP@ss1"),
+                        current_user=_make_admin_user(),
+                        storage=mock_storage,
+                        audit_service=AsyncMock(),
+                    )
+                )
+
+        assert exc.value.status_code == 400
+        assert "federated" in exc.value.detail.lower()
+        mock_storage.update_user.assert_not_called()
+
+    def test_non_federated_delete_succeeds(self):
+        import asyncio
+        from starlette.requests import Request
+        from authglow.api.admin import delete_user
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("normal-1", "normal@test.io")
+        mock_user.is_federated = False
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.delete_user = AsyncMock(return_value=True)
+
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+
+        mfa_svc = AsyncMock()
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.MFAService", return_value=mfa_svc),
+            patch("authglow.api.admin.AuditService", return_value=AsyncMock()),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                delete_user(
+                    request=request,
+                    user_id="normal-1",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=AsyncMock(),
+                    mfa_service=mfa_svc,
+                )
+            )
+
+        assert result["message"] == "User deleted successfully"
+        mock_storage.delete_user.assert_called_once_with("normal-1")
