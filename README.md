@@ -14,7 +14,7 @@
 
 <br>
 
-> **The serverless identity provider I always wanted but couldn't find — so I built it and open-sourced it.**
+> **Open-source OAuth 2.0 & OpenID Connect server. Self-hosted IAM. Serverless identity and access management. Zero database, zero lock-in.**
 
 <br>
 
@@ -22,7 +22,9 @@
 
 ## What is AuthGlow?
 
-AuthGlow is a **self-contained, serverless-ready identity provider** — OAuth 2.0 & OpenID Connect authorization server, user management, MFA, Passkeys, RBAC, and admin dashboard. No database required.
+AuthGlow is an **open-source, self-hosted IAM platform** — a full OAuth 2.0 & OpenID Connect authorization server with user management, MFA, Passkeys, RBAC, and admin dashboard. Serverless-ready, file-based, zero external dependencies. No database required.
+
+If you've looked at Keycloak or Ory Hydra and thought "I don't need a database cluster for auth" — AuthGlow is the lighter, simpler alternative. One folder, one config file, one command to run.
 
 It stores everything as files (JSON by default), runs anywhere with zero external dependencies, and scales to cloud storage (S3, GCS, Azure Blob) by changing **one environment variable**. No code changes needed.
 
@@ -193,7 +195,7 @@ I decided what to build and how. The AI wrote the code.
 
 I'm posting this publicly because I genuinely want to see how far this thing can go — and where it fails.
 
-**If you find a security bug, an edge case, or a creative way to exploit something, open an issue or a PR.** Every bug found is a bug fixed. Criticizing is caring.
+**If you find a security bug, please follow the [security policy](SECURITY.md).** For everything else, open an issue or a PR. Every bug found is a bug fixed. Criticizing is caring.
 
 ---
 
