@@ -47,9 +47,9 @@
 - `GET /resend-verification` — HTML page to request resend
 
 ### Account Lifecycle
-- **Deactivation**: `POST /api/profile/me/deactivate` — account deactivated but recoverable
+- **Deactivation**: `POST /api/profile/me/deactivate` — account deactivated but recoverable (blocked for federated users)
 - **Reactivation**: `POST /api/profile/me/reactivate`
-- **Permanent deletion**: `DELETE /api/profile/me` — requires password and explicit confirmation
+- **Permanent deletion**: `DELETE /api/profile/me` — requires password and explicit confirmation (blocked for federated users)
 
 ### Lockout & Brute-Force Protection
 - Account lock after N failed attempts (default 5)
@@ -89,11 +89,11 @@
 - Trust device option available in OAuth2 flow as well
 
 ### MFA in API Token Flow
-- `POST /api/token` returns `mfa_required: true` + session token
-- `POST /api/mfa/verify-login` — verify and return JWT access token
+- `POST /api/token` returns `mfa_required: true` + session token (JWT)
+- `POST /api/mfa/verify-login` — receives `session_token`, `code`, and optional `trust_device` in body, verifies and returns JWT access token
 
 ### MFA Administration
-- Admin can reset a user's MFA: `POST /api/admin/users/{id}/reset-mfa`
+- Admin can reset a user's MFA: `POST /api/admin/users/{id}/reset-mfa` (blocked for federated users — managed by external IdP)
 - Admin dashboard shows percentage of users with MFA enabled
 - User filter by `mfa_enabled` in admin search
 
@@ -114,6 +114,7 @@
 - Rate limit: 10 attempts/minute
 - `POST /api/passkey/auth/complete` — verifies assertion, returns JWT access token
 - Supports platform authenticator (Touch ID, Windows Hello) and cross-platform (YubiKey)
+- Available on both standard login page and OAuth2 authorize page
 
 ### Passkey Metadata
 - Tracking: `device_type`, `transports`, `backup_eligible`, `backup_state`
@@ -137,7 +138,7 @@
 ### Authorization Code Flow (with PKCE)
 - `GET /oauth2/authorize` — single-page login + consent flow (inline)
 - `GET /api/oauth2/authorize-info` — returns public client info (name, logo, branding) for the login page
-- `POST /oauth2/authorize` — authenticates user, returns consent data inline (no separate consent page)
+- `POST /api/oauth2/authorize` — authenticates user, returns consent data inline (no separate consent page)
 - Verifies `client_id`, `redirect_uri` (against client whitelist)
 - Scope validation against client configuration
 - PKCE mandatory for public clients (S256)
@@ -158,7 +159,7 @@
 - Refresh token with automatic rotation
 
 #### Client Credentials
-- `grant_type=client_credentials` with `client_id` + `client_secret`
+- `grant_type=client_credentials` with `client_id` + `client_secret` (form body) or HTTP Basic Auth header (`client_secret_basic`)
 - Token tied to client, no real user
 - Perfect for M2M / service-to-service
 
@@ -249,7 +250,7 @@ direct user interaction with AuthGlow (login, consent — on the same page).
     |  (4) enter email |                   |                       |
     |     + password   |                   |                       |
     |<-----------------|                   |                       |
-    |                  | (5) POST /oauth2/authorize               |
+    |                  | (5) POST /api/oauth2/authorize               |
     |                  |  email, password, client_id, ...         |
     |                  |------------------>|                       |
     |                  |                   | (6) Validation:       |
@@ -276,9 +277,9 @@ direct user interaction with AuthGlow (login, consent — on the same page).
     |  (9) review      | (10) Consent screen (inline)             |
     |   scopes         |<------------------|                       |
     |<-----------------|                   |                       |
-    |                  | (11) POST /oauth2/consent                |
-    |                  |  approved=true, remember=true            |
-    |                  |  session_token                           |
+|                  | (11) POST /oauth2/consent                |
+|                  |  approved=true                           |
+|                  |  session_token                           |
     |                  |------------------>|                       |
     |                  |                   |                       |
     |                  | (12) Redirect with authorization code     |
@@ -318,7 +319,7 @@ direct user interaction with AuthGlow (login, consent — on the same page).
 - **PKCE**: S256 mandatory for public clients (`is_confidential=false`); for confidential clients the code_challenge can be omitted if `require_pkce=false`
 - **MFA**: if the user has MFA active and the device is not trusted, the flow pauses after login and shows the MFA form inline; after MFA verification, consent proceeds
 - **Consent skip**: if `require_consent=false` on the client, consent is skipped entirely and the auth code is returned directly after login
-- **Consent auto-skip**: if the user has already consented with the "remember" option, `POST /oauth2/authorize` returns the redirect directly (no consent phase)
+- **Consent auto-skip**: if the user has already consented (consent is always remembered), authorization returns the redirect directly (no consent phase)
 - **One-time code**: authorization code is single-use (protected by lock + cross-process CAS)
 - **Refresh token rotation**: each refresh token use invalidates the previous one and issues a new one; if an already-used token is presented again, ALL of the user's refresh tokens are revoked (theft detection)
 - **ID token**: issued only if `openid` is among the requested scopes; RS256-signed, contains `nonce` and `auth_time`
@@ -501,7 +502,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 
 | Endpoint | Method | RFC | Description |
 |----------|--------|-----|-------------|
-| `/oauth2/authorize` | GET, POST | 6749 | Authorization endpoint (single-page: login + consent inline) |
+| `/oauth2/authorize` | GET, POST | 6749 | Authorization endpoint (single-page: login + consent inline). POST accepts credentials or existing session cookie. |
 | `/oauth2/token` | POST | 6749 | Token endpoint (code→token, client_credentials, refresh) |
 | `/oauth2/revoke` | POST | 7009 | Token revocation |
 | `/oauth2/introspect` | POST | 7662 | Token introspection |
@@ -557,9 +558,9 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - Per-client custom CSS support via `custom_css` field (scoped to `.authglow-consent`)
 - Neutral default theme (slate/white) when no custom CSS is set — fully overrideable
 - If user `require_consent=false` on client: consent skipped entirely
-- If user already consented with "remember": auto-skip via `GET /api/oauth2/consent/check`
-- `POST /oauth2/consent` — approve/deny with `remember` option
-- "remember" option — saves consent permanently (stored as JSON file)
+- If user already consented: auto-skip consent screen (consent is always persisted automatically)
+- `POST /oauth2/consent` — approve/deny; consent is always persisted automatically
+- "Consent is always persisted automatically — no checkbox required."
 - Denial → redirect with `error=access_denied`
 - `GET /api/oauth2/authorize-info` — public endpoint returning client branding for the login page
 
@@ -675,7 +676,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - `GET /api/admin/users/search` — search and filter
 - `GET /api/admin/users/{id}` — user detail (AdminUserDetail)
 - `PUT /api/admin/users/{id}` — modify (active, email verified, scopes, name)
-- `DELETE /api/admin/users/{id}` — delete (cannot delete self)
+- `DELETE /api/admin/users/{id}` — delete (cannot delete self; blocked for federated users)
 - Prevents self-deactivation/deletion
 
 ### Bulk Operations
