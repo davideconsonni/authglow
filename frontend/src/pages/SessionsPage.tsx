@@ -57,6 +57,7 @@ export function SessionsPage() {
       await refetch()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to revoke session')
+      setRevokeId(null)
     }
   }
 

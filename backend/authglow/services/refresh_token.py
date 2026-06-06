@@ -303,6 +303,30 @@ class RefreshTokenService:
             except Exception:
                 return False
 
+    async def revoke_token_by_id(self, token_id: str, reason: Optional[str] = None) -> bool:
+        """Revoke a refresh token by its database ID.
+
+        Unlike ``revoke_token``, this does not require the plaintext token
+        (which is never persisted to disk). It looks up the token by
+        ``token_id`` via the id_index.
+        """
+        rt = await self.get_refresh_token_by_id(token_id)
+        if not rt:
+            return False
+
+        async with self._lock(f"refresh_token:{rt.token_lookup}"):
+            rt.revoked = True
+            rt.revoked_at = utcnow()
+            rt.revoked_reason = reason
+
+            token_path = self._get_token_path(rt.token_lookup)
+            try:
+                await self._afs.write_json(token_path, rt.model_dump())
+                await self._remove_from_active_index(rt.token_id)
+                return True
+            except Exception:
+                return False
+
     async def _revoke_token_family(self, token: RefreshToken) -> int:
         """Revoke all tokens in a family (security measure)."""
         current = token

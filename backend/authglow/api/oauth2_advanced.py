@@ -268,3 +268,36 @@ async def revoke_all_user_refresh_tokens(
     )
 
     return {"message": f"Successfully revoked {count} refresh tokens", "count": count}
+
+
+@router.delete("/api/tokens/refresh/{token_id}")
+@limiter.limit("10/minute")
+async def revoke_user_refresh_token(
+    request: Request,
+    token_id: str,
+    current_user: User = Depends(get_current_user),
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Revoke a single refresh token (current user only)."""
+    rt = await refresh_token_service.get_refresh_token_by_id(token_id)
+    if not rt:
+        raise HTTPException(status_code=404, detail="Token not found")
+    if rt.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your token")
+
+    success = await refresh_token_service.revoke_token_by_id(
+        token_id, reason="User-initiated revocation"
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to revoke token")
+
+    await audit_service.log_event(
+        event_type="refresh_token_revoked",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"token_id": token_id},
+        severity="info",
+        ip_address=request.client.host if request.client else None,
+    )
+    return JSONResponse(status_code=204, content=None)
