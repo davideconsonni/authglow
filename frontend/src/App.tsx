@@ -7,6 +7,7 @@ import { ROUTES } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/hooks/useTheme'
+import { CommandPalette } from '@/components/admin/CommandPalette'
 import { api } from '@/lib/api'
 
 import { LoginPage } from '@/pages/auth/LoginPage'
@@ -179,6 +180,7 @@ function App() {
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        <CommandPalette />
         </SetupGuard>
         <ToastContainer />
         </ThemeInitializer>

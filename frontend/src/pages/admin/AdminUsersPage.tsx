@@ -54,6 +54,7 @@ export function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [resetMfaId, setResetMfaId] = useState<string | null>(null)
+  const [revokeSessionsId, setRevokeSessionsId] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', first_name: '', last_name: '', scopes: '' })
   const [inviting, setInviting] = useState(false)
@@ -95,6 +96,7 @@ export function AdminUsersPage() {
 
   const handleDelete = async () => { if (!deleteId) return; try { await api.delete(`/api/admin/users/${deleteId}`); setDeleteId(null); setSuccess('User deleted.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
   const handleResetMfa = async () => { if (!resetMfaId) return; try { await api.post(`/api/admin/users/${resetMfaId}/reset-mfa`); setResetMfaId(null); setSuccess('MFA reset.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
+  const handleRevokeSessions = async () => { if (!revokeSessionsId) return; try { await api.post(`/api/admin/users/${revokeSessionsId}/sessions/revoke-all`); setRevokeSessionsId(null); setSuccess('All sessions revoked.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     setError('')
@@ -182,24 +184,24 @@ export function AdminUsersPage() {
         <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
           <table className="w-full"><thead className="border-b border-surface-2"><tr>
             <th className="px-4 py-3 w-10"><button onClick={toggleSelectAll} data-testid="bulk-select-all" className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.size === users.length && users.length > 0 ? '✓' : '☐'}</button></th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Email</th>
-            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">MFA</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Active</th>
-            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Logins</th>
-            <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-            <th className="hidden md:table-cell px-6 py-3" />
+            <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">User</th>
+            <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Email</th>
+            <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">MFA</th>
+            <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Active</th>
+            <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Logins</th>
+            <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+            <th className="hidden md:table-cell px-4 py-2.5" />
           </tr></thead>
           <tbody className="divide-y divide-surface-2">
             {users.map(u => <tr key={u.id} className={`hover:bg-surface-2/50 cursor-pointer ${selected.has(u.id) ? 'bg-brand-violet/5' : ''}`} onClick={() => setDetailUserId(u.id)} data-testid="user-table-row">
               <td className="px-4 py-3" onClick={e => e.stopPropagation()}><button onClick={() => toggleSelect(u.id)} data-testid="user-select-checkbox" className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.has(u.id) ? '✓' : '☐'}</button></td>
-              <td className="px-6 py-3"><div className="flex items-center gap-3"><UserAvatar first={u.first_name} last={u.last_name} /><span className="text-sm font-medium text-text-primary">{u.first_name} {u.last_name}</span></div></td>
-              <td className="px-6 py-3 text-sm text-text-secondary">{u.email}</td>
-              <td className="hidden md:table-cell px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${u.mfa_enabled ? 'bg-semantic-success/10 text-semantic-success' : 'bg-surface-2 text-text-muted'}`}>{u.mfa_enabled ? 'Enabled' : 'Disabled'}</span></td>
-              <td className="px-6 py-3" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
-              <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{u.login_count ?? 0}</td>
-              <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
-              <td className="hidden md:table-cell px-6 py-3" onClick={e => e.stopPropagation()}><div className="flex gap-2">{!u.is_federated && <button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button>}{!u.is_federated && <button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button>}</div></td>
+              <td className="px-4 py-2.5"><div className="flex items-center gap-3"><UserAvatar first={u.first_name} last={u.last_name} /><span className="text-sm font-medium text-text-primary">{u.first_name} {u.last_name}</span></div></td>
+              <td className="px-4 py-2.5 text-sm text-text-secondary">{u.email}</td>
+              <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${u.mfa_enabled ? 'bg-semantic-success/10 text-semantic-success' : 'bg-surface-2 text-text-muted'}`}>{u.mfa_enabled ? 'Enabled' : 'Disabled'}</span></td>
+              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
+              <td className="hidden md:table-cell px-4 py-2.5 text-sm text-text-muted">{u.login_count ?? 0}</td>
+              <td className="hidden md:table-cell px-4 py-2.5 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
+              <td className="hidden md:table-cell px-4 py-2.5" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setRevokeSessionsId(u.id)} className="text-text-muted hover:text-semantic-warning" title="Revoke sessions"><LogOut size={14} /></button>{!u.is_federated && <button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button>}{!u.is_federated && <button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button>}</div></td>
             </tr>)}
           </tbody></table>
         </div>
@@ -209,6 +211,7 @@ export function AdminUsersPage() {
 
       <ConfirmDialog open={!!deleteId} title="Delete User" message="This action cannot be undone." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
       <ConfirmDialog open={!!resetMfaId} title="Reset MFA" message="This will disable MFA for this user." confirmLabel="Reset MFA" variant="danger" onConfirm={handleResetMfa} onCancel={() => setResetMfaId(null)} />
+      <ConfirmDialog open={!!revokeSessionsId} title="Revoke All Sessions" message="This will log out the user from all devices immediately." confirmLabel="Revoke All" variant="danger" onConfirm={handleRevokeSessions} onCancel={() => setRevokeSessionsId(null)} />
       <ConfirmDialog open={!!bulkAction} title={`${bulkAction} ${selected.size} Users`} message={`${bulkAction === 'delete' ? 'Permanently delete' : bulkAction === 'activate' ? 'Activate' : 'Deactivate'} ${selected.size} selected user${selected.size !== 1 ? 's' : ''}.`} confirmLabel="Confirm" variant="danger" onConfirm={handleBulkAction} onCancel={() => setBulkAction(null)} />
 
       {showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowCreate(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">

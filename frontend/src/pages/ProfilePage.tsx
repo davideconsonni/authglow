@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight } from 'lucide-react'
+import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight, Monitor } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
-import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
@@ -17,73 +16,19 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDateTime } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
 
-function PreferencesSection() {
-  const { data: prefs } = useApiQuery<{ theme?: string; language?: string }>(['user-prefs'], '/api/profile/me/preferences')
-  const { theme, setTheme } = useTheme()
-  const [saving, setSaving] = useState(false)
-  const [language, setLanguage] = useState('en')
-  const [prefSuccess, setPrefSuccess] = useState(false)
-
-  useEffect(() => {
-    if (prefs?.language) {
-      setLanguage(prefs.language)
-    }
-  }, [prefs?.language])
-
-  const handleThemeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    await setTheme(e.target.value as Theme)
-  }
-
-  const savePrefs = async () => {
-    setSaving(true)
-    try {
-      await api.patch('/api/profile/me/preferences', { language })
-      setPrefSuccess(true)
-      setTimeout(() => setPrefSuccess(false), 2000)
-    } catch {} finally { setSaving(false) }
-  }
-
+function QuickLink({ icon: Icon, label, to }: { icon: typeof Shield; label: string; to: string }) {
+  const navigate = useNavigate()
   return (
-    <Section title="Preferences" description="Customize your AuthGlow experience.">
-      <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
-        {prefSuccess && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">Preferences saved.</div>}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Theme</label>
-            <select
-              value={theme}
-              onChange={handleThemeChange}
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
-            >
-              <option value="auto">Auto (system)</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Language</label>
-            <select
-              value={language}
-              onChange={e => setLanguage(e.target.value)}
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
-            >
-              <option value="en">English</option>
-              <option value="it">Italiano</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="es">Español</option>
-            </select>
-          </div>
-        </div>
-        <button
-          onClick={savePrefs}
-          disabled={saving}
-          className="mt-4 rounded-xl bg-gradient-cta px-5 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save language'}
-        </button>
+    <button
+      onClick={() => navigate(to)}
+      className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3 hover:bg-surface-3 transition-colors"
+    >
+      <div className="flex items-center gap-2">
+        <Icon size={16} className="text-brand-violet" />
+        <span className="text-sm text-text-secondary">{label}</span>
       </div>
-    </Section>
+      <ArrowRight size={14} className="text-text-muted" />
+    </button>
   )
 }
 
@@ -108,7 +53,6 @@ interface UserProfile {
 export function ProfilePage() {
   useDocumentTitle('Profile')
   const { user, fetchCurrentUser } = useAuth()
-  const navigate = useNavigate()
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -173,7 +117,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <PageHeader title="Your Profile" description="Manage your personal information and account details." />
 
       {success && (
@@ -243,113 +187,68 @@ export function ProfilePage() {
             )}
           </div>
 
-          {/* Security quick card */}
+          {/* Quick Links card */}
           <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-text-primary">Security Status</h3>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Shield size={16} className="text-text-muted" />
-                  <span className="text-sm text-text-secondary">MFA</span>
-                </div>
-                {user?.is_federated ? (
-                  <StatusBadge
-                    status={null}
-                    trueLabel=""
-                    falseLabel="Provider"
-                    falseClass="bg-surface-3 text-text-muted"
-                  />
-                ) : (
-                  <StatusBadge
-                    status={!!p?.mfa_enabled}
-                    trueLabel="Enabled"
-                    falseLabel="Disabled"
-                    trueClass="bg-semantic-success/10 text-semantic-success"
-                    falseClass="bg-surface-3 text-text-muted"
-                  />
-                )}
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Mail size={16} className="text-text-muted" />
-                  <span className="text-sm text-text-secondary">Email</span>
-                </div>
-                {user?.is_federated ? (
-                  <StatusBadge
-                    status={null}
-                    trueLabel=""
-                    falseLabel="Provider"
-                    falseClass="bg-surface-3 text-text-muted"
-                  />
-                ) : (
-                  <StatusBadge
-                    status={!!p?.email_verified}
-                    trueLabel="Verified"
-                    falseLabel="Not verified"
-                    trueClass="bg-semantic-success/10 text-semantic-success"
-                    falseClass="bg-semantic-warning/10 text-semantic-warning"
-                  />
-                )}
-              </div>
+            <h3 className="text-sm font-semibold text-text-primary">Quick Links</h3>
+            <div className="space-y-2">
+              <QuickLink icon={Shield} label="Security" to={ROUTES.SECURITY} />
+              <QuickLink icon={Monitor} label="Sessions" to={ROUTES.SESSIONS} />
+              <QuickLink icon={Key} label="API Keys" to={ROUTES.API_KEYS} />
             </div>
-
-            <button
-              onClick={() => navigate(ROUTES.SECURITY)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-surface-2 py-2.5 text-xs font-medium text-brand-violet hover:bg-surface-3 transition-colors"
-            >
-              Manage security
-              <ArrowRight size={12} />
-            </button>
           </div>
         </div>
       </Section>
 
       {/* SECTION: Technical Details */}
-      <Section title="Technical Details" description="Your account identifiers and permissions.">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-text-primary">User ID</h3>
-            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
-              <Key size={16} className="text-text-muted shrink-0" />
-              <code className="flex-1 break-all text-sm font-mono text-text-secondary">
-                {p?.id || '-'}
-              </code>
-              {p?.id && <CopyButton text={p.id} label="Copy" />}
-            </div>
-            <p className="text-xs text-text-muted">This is your unique identifier. Use it when contacting support.</p>
+      <details className="group rounded-2xl border border-surface-2 bg-surface-1">
+        <summary className="flex cursor-pointer items-center justify-between p-6 list-none">
+          <div>
+            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">Technical Details</h2>
+            <p className="mt-1 text-xs text-text-muted">Your account identifiers and permissions.</p>
           </div>
-
-          <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-text-primary">Permissions</h3>
-            {p?.scopes && p.scopes.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {p.scopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                      scope === 'admin'
-                        ? 'bg-brand-violet/15 text-brand-violet ring-1 ring-brand-violet/30'
-                        : 'bg-surface-2 text-text-secondary'
-                    }`}
-                  >
-                    {scope}
-                  </span>
-                ))}
+          <span className="text-text-muted text-sm transition-transform duration-200 group-open:rotate-90">&#9656;</span>
+        </summary>
+        <div className="px-6 pb-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
+              <h3 className="text-sm font-semibold text-text-primary">User ID</h3>
+              <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
+                <Key size={16} className="text-text-muted shrink-0" />
+                <code className="flex-1 break-all text-sm font-mono text-text-secondary">
+                  {p?.id || '-'}
+                </code>
+                {p?.id && <CopyButton text={p.id} label="Copy" />}
               </div>
-            ) : (
-              <p className="text-sm text-text-muted">No permissions assigned.</p>
-            )}
-            <p className="text-xs text-text-muted">
-              Permissions determine what actions you can perform in the system.
-            </p>
+              <p className="text-xs text-text-muted">This is your unique identifier. Use it when contacting support.</p>
+            </div>
+
+            <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
+              <h3 className="text-sm font-semibold text-text-primary">Permissions</h3>
+              {p?.scopes && p.scopes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {p.scopes.map((scope) => (
+                    <span
+                      key={scope}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                        scope === 'admin'
+                          ? 'bg-brand-violet/15 text-brand-violet ring-1 ring-brand-violet/30'
+                          : 'bg-surface-2 text-text-secondary'
+                      }`}
+                    >
+                      {scope}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-text-muted">No permissions assigned.</p>
+              )}
+              <p className="text-xs text-text-muted">
+                Permissions determine what actions you can perform in the system.
+              </p>
+            </div>
           </div>
         </div>
-      </Section>
-
-      {/* Preferences */}
-      <PreferencesSection />
+      </details>
 
       {/* Danger Zone */}
       {!user?.is_federated && (

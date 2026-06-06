@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Shield, Monitor, Key, Users, CheckCircle2, Mail } from 'lucide-react'
+import { Shield, Monitor, Key, Users, CheckCircle2, Mail, Plus } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
 import { ROUTES } from '@/lib/constants'
@@ -52,7 +52,7 @@ export function DashboardPage() {
   const allSecure = isFederated || missingChecks === 0
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">
           Welcome back, {user?.first_name || profile?.first_name || 'User'}
@@ -134,7 +134,7 @@ export function DashboardPage() {
         </Section>
       ) : (
         <Section title="Security checklist" description="Complete these steps to secure your account.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-3 max-w-xl">
             {!emailVerified && (
               <button
                 onClick={() => navigate(ROUTES.PROFILE)}
@@ -167,26 +167,54 @@ export function DashboardPage() {
         </Section>
       )}
 
+      {!isFederated && (
+        <Section title="Quick Actions" description="Common tasks for your account.">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate(ROUTES.SECURITY)}
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+            >
+              <Key size={16} className="text-brand-violet" />
+              Change Password
+            </button>
+            <button
+              onClick={() => navigate(ROUTES.SECURITY)}
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+            >
+              <Shield size={16} className="text-brand-violet" />
+              Setup MFA
+            </button>
+            <button
+              onClick={() => navigate(ROUTES.API_KEYS)}
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+            >
+              <Plus size={16} className="text-brand-violet" />
+              Create API Key
+            </button>
+          </div>
+        </Section>
+      )}
+
       <Section title="At a glance" description="Live counts based on your account activity.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-wrap gap-4">
           <StatCard
             icon={Monitor} label="Active sessions"
             value={String(sessionCount)} color="brand-violet"
             onClick={() => navigate(ROUTES.SESSIONS)}
-            hint={sessionCount === 1 ? 'device' : 'devices'}
+            detail={sessionCount === 1 ? '1 device' : `${sessionCount} devices`}
           />
           <StatCard
             icon={Key} label="API keys"
             value={String(keyCount)} color="brand-magenta"
             onClick={() => navigate(ROUTES.API_KEYS)}
-            hint={keyCount === 1 ? 'key' : 'keys'}
+            detail={keyCount === 1 ? '1 key' : `${keyCount} keys active`}
           />
           {isAdmin && (
             <StatCard
               icon={Users} label="Total users"
               value={String(stats?.total_users ?? 0)} color="brand-blue"
               onClick={() => navigate(ROUTES.ADMIN.USERS)}
-              hint="platform"
+              detail="total users"
             />
           )}
         </div>
@@ -215,8 +243,8 @@ export function DashboardPage() {
   )
 }
 
-function StatCard({ icon: Icon, label, value, color, onClick, hint }: {
-  icon: typeof Shield; label: string; value: string; color: string; onClick?: () => void; hint?: string
+function StatCard({ icon: Icon, label, value, color, onClick, hint, detail }: {
+  icon: typeof Shield; label: string; value: string; color: string; onClick?: () => void; hint?: string; detail?: string
 }) {
   const colors: Record<string, string> = {
     'brand-violet': 'text-brand-violet bg-brand-violet/10',
@@ -225,17 +253,18 @@ function StatCard({ icon: Icon, label, value, color, onClick, hint }: {
   }
   return (
     <div
-      className="rounded-2xl border border-surface-2 bg-surface-1 p-5 transition-all duration-300 hover:shadow-glow-violet cursor-pointer"
+      className="rounded-2xl border border-surface-2 bg-surface-1 p-4 transition-all duration-300 hover:shadow-glow-violet cursor-pointer min-w-[200px] flex-1"
       onClick={onClick}
     >
-      <div className="flex items-center gap-4">
-        <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', colors[color] || colors['brand-violet'])}>
-          <Icon size={20} />
+      <div className="flex items-center gap-3">
+        <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', colors[color] || colors['brand-violet'])}>
+          <Icon size={18} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs text-text-muted">{label}</p>
-          <p className="text-lg font-bold text-text-primary">{value}</p>
-          {hint && <p className="text-xs text-text-muted">{hint}</p>}
+          <p className="text-base font-bold text-text-primary">{value}</p>
+          {detail && <p className="text-xs text-text-muted">{detail}</p>}
+          {!detail && hint && <p className="text-xs text-text-muted">{hint}</p>}
         </div>
       </div>
     </div>

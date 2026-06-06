@@ -325,6 +325,7 @@ export function AdminOAuthClientsPage() {
 
   const clientDisplayName = (c: OAuthClient) => c.client_name || c.name || c.client_id
   const clientGrantTypes = (c: OAuthClient) => c.grant_types || []
+  const clientScopes = (c: OAuthClient) => c.scopes || c.allowed_scopes || []
 
   return (
     <div className="space-y-6">
@@ -355,26 +356,27 @@ export function AdminOAuthClientsPage() {
           <table className="w-full">
             <thead className="border-b border-surface-2">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client ID</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Redirect URIs</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Grants</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase w-20">Status</th>
-                <th className="px-6 py-3" />
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Name</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Client ID</th>
+                <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Redirect URIs</th>
+                <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Grants</th>
+                <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase w-20">Type</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase w-20">Status</th>
+                <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-2">
               {clients.map((c, idx) => (
                 <tr key={c.client_id || idx} className="hover:bg-surface-2/50">
-                  <td className="px-6 py-3 text-sm font-medium text-text-primary">{clientDisplayName(c)}</td>
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-2.5 text-sm font-medium text-text-primary">{clientDisplayName(c)}</td>
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <code className="text-xs font-mono text-text-secondary">{c.client_id}</code>
                       <CopyButton text={c.client_id} />
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-6 py-3">
+                  <td className="hidden md:table-cell px-4 py-2.5">
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
                       {(c.redirect_uris || []).slice(0, 2).map(u => (
                         <span key={u} className="truncate rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] font-mono text-text-secondary" title={u}>
@@ -384,15 +386,22 @@ export function AdminOAuthClientsPage() {
                       {(c.redirect_uris || []).length > 2 && <span className="text-[10px] text-text-muted">+{c.redirect_uris.length - 2} more</span>}
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-6 py-3"><div className="flex flex-wrap gap-1">{clientGrantTypes(c).map(g => <span key={g} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{g}</span>)}</div></td>
-                  <td className="hidden md:table-cell px-6 py-3"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
-                  <td className="px-6 py-3">
+                  <td className="hidden md:table-cell px-4 py-2.5"><div className="flex flex-wrap gap-1">{clientGrantTypes(c).map(g => <span key={g} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{g}</span>)}</div></td>
+                  <td className="hidden md:table-cell px-4 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {clientScopes(c).slice(0, 3).map((s: string) => <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{s}</span>)}
+                      {clientScopes(c).length > 3 && <span className="text-[10px] text-text-muted">+{clientScopes(c).length - 3} more</span>}
+                      {clientScopes(c).length === 0 && <span className="text-[10px] text-text-muted">-</span>}
+                    </div>
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
+                  <td className="px-4 py-2.5">
                     <button onClick={() => handleToggle(c.client_id, c.is_active)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${c.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${c.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
                       {c.is_active ? 'On' : 'Off'}
                     </button>
                   </td>
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-2.5">
                     <div className="flex gap-2">
                       {c.require_consent !== false && (
                         <button onClick={() => setPreviewClient(c)} className="text-text-muted hover:text-text-secondary" title="Preview consent screen"><Eye size={14} /></button>

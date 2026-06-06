@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -33,6 +33,13 @@ export function ApiKeysPage() {
   const [creating, setCreating] = useState(false)
 
   const { data: keys, refetch } = useApiQuery<ApiKeyData[]>(['my-keys'], '/api/keys')
+
+  const atRiskKeys = (keys ?? []).filter((k) => {
+    if (!k.is_active) return false
+    const noExpiry = !k.expires_at
+    const unused90d = k.last_used_at && (Date.now() - new Date(k.last_used_at).getTime()) > 90 * 24 * 60 * 60 * 1000
+    return noExpiry || unused90d
+  })
 
   const handleCreate = async () => {
     setError('')
@@ -121,6 +128,21 @@ export function ApiKeysPage() {
 
       {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
+      {atRiskKeys.length > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-semantic-warning/20 bg-semantic-warning/5 px-4 py-3">
+          <AlertTriangle size={16} className="shrink-0 text-semantic-warning mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-text-primary">
+              {atRiskKeys.length} key{atRiskKeys.length !== 1 ? 's' : ''} may need attention
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">
+              {atRiskKeys.filter(k => !k.expires_at).length > 0 && 'Keys without expiration are a security risk. '}
+              {atRiskKeys.filter(k => k.last_used_at && (Date.now() - new Date(k.last_used_at).getTime()) > 90 * 24 * 60 * 60 * 1000).length > 0 && 'Some keys have not been used in over 90 days.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeCreate} />
@@ -164,37 +186,41 @@ export function ApiKeysPage() {
             <table className="w-full">
               <thead className="border-b border-surface-2">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
-                  <th className="px-6 py-3"></th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Name</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Used</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Status</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-2">
                 {keys.map((k, i) => (
                   <tr key={k.key_id || i} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
-                    <td className="px-6 py-3 text-sm font-medium text-text-primary">{k.name}</td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2.5 text-sm font-medium text-text-primary">{k.name}</td>
+                    <td className="px-4 py-2.5">
                       <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {k.scopes.map((s) => (
                           <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">{s}</span>
                         ))}
                       </div>
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2.5 text-sm text-text-muted">
+                      {k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}
+                    </td>
+                    <td className="px-4 py-2.5">
                       <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${k.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
                         {k.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-sm text-text-muted">
+                    <td className="px-4 py-2.5 text-sm text-text-muted">
                       {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex gap-2">
                         {k.is_active ? (
                           <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">

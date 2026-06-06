@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Monitor, Globe, Loader2 } from 'lucide-react'
+import { Monitor, Globe, Loader2, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -17,6 +18,7 @@ interface Session {
 export function SessionsPage() {
   useDocumentTitle('Sessions')
   const [revokingAll, setRevokingAll] = useState(false)
+  const [revokeId, setRevokeId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const { data: rawData, refetch, isLoading } = useApiQuery<any>(
@@ -25,6 +27,10 @@ export function SessionsPage() {
   )
 
   const sessions: Session[] = Array.isArray(rawData) ? rawData : (rawData?.sessions || rawData?.items || rawData?.tokens || [])
+
+  const thisDeviceId = sessions.length > 0
+    ? sessions.reduce((a, b) => (new Date(a.last_active) > new Date(b.last_active) ? a : b)).id
+    : null
 
   const handleRevokeAll = async () => {
     setRevokingAll(true)
@@ -39,6 +45,18 @@ export function SessionsPage() {
       setError(err instanceof Error ? err.message : 'Failed to revoke sessions')
     } finally {
       setRevokingAll(false)
+    }
+  }
+
+  const handleRevokeSession = async () => {
+    if (!revokeId) return
+    setError('')
+    try {
+      await api.delete(`/api/tokens/refresh/${revokeId}`)
+      setRevokeId(null)
+      await refetch()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke session')
     }
   }
 
@@ -80,24 +98,40 @@ export function SessionsPage() {
             <table className="w-full">
               <thead className="border-b border-surface-2">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Client</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">IP Address</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Last Active</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase w-32">Device</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Client</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Address</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Active</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-2">
                 {sessions.map((s) => (
                   <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
-                    <td className="px-6 py-3 text-sm text-text-primary">{s.client}</td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2.5">
+                      {s.id === thisDeviceId && (
+                        <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">This device</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-sm text-text-primary">{s.client}</td>
+                    <td className="px-4 py-2.5">
                       <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
                         <Globe size={10} />
                         {s.ip_address}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-sm text-text-secondary">{formatDateTime(s.created_at)}</td>
-                    <td className="px-6 py-3 text-sm text-text-secondary">{formatDateTime(s.last_active)}</td>
+                    <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.created_at)}</td>
+                    <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.last_active)}</td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => setRevokeId(s.id)}
+                        className="text-text-muted hover:text-semantic-error transition-colors"
+                        aria-label="Revoke session"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -105,6 +139,16 @@ export function SessionsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!revokeId}
+        title="Revoke Session"
+        message="This will immediately log out this session. The user will need to re-authenticate."
+        confirmLabel="Revoke"
+        variant="danger"
+        onConfirm={handleRevokeSession}
+        onCancel={() => setRevokeId(null)}
+      />
     </div>
   )
 }

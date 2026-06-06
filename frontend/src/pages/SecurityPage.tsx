@@ -23,6 +23,7 @@ export function SecurityPage() {
   const [error, setError] = useState('')
 
   const { data: mfaStatus } = useApiQuery<{ enabled: boolean; backup_codes_remaining?: number }>(['mfa-status'], '/api/mfa/status')
+  const isFederated = user?.is_federated ?? false
 
   const handleCodesRegenerated = async () => {
     try {
@@ -42,6 +43,20 @@ export function SecurityPage() {
     }
   }
 
+  if (isFederated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Security" description="Managed by your identity provider." />
+        <TrustedDevices />
+        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+          <p className="text-sm text-text-secondary">
+            Password, MFA, and passkeys are managed by your identity provider (Zitadel/Google/CIE).
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Security" description="Two-factor authentication, passkeys, and credentials." />
@@ -50,46 +65,44 @@ export function SecurityPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          {!user?.is_federated && (
-            <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-text-primary">Two-Factor Authentication</h2>
-                <div className="flex items-center gap-2">
-                  {user?.mfa_enabled && (
-                    <button
-                      onClick={() => setDisableMfa(true)}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium border border-semantic-error/30 text-semantic-error hover:bg-semantic-error/10 transition-colors"
-                    >
-                      Disable
-                    </button>
-                  )}
+          <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-text-primary">Two-Factor Authentication</h2>
+              <div className="flex items-center gap-2">
+                {user?.mfa_enabled && (
                   <button
-                    onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                      user?.mfa_enabled && !disableMfa
-                        ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
-                        : 'bg-gradient-cta text-white shadow-glow-violet'
-                    }`}
+                    onClick={() => setDisableMfa(true)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium border border-semantic-error/30 text-semantic-error hover:bg-semantic-error/10 transition-colors"
                   >
-                    {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}
+                    Disable
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    user?.mfa_enabled && !disableMfa
+                      ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
+                      : 'bg-gradient-cta text-white shadow-glow-violet'
+                  }`}
+                >
+                  {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}
+                </button>
               </div>
-              <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
-                <Shield size={20} className={user?.mfa_enabled ? 'text-semantic-success' : 'text-text-muted'} />
-                <div className="flex-1">
-                  <p className="text-sm text-text-primary">MFA is {user?.mfa_enabled ? 'enabled' : 'not enabled'}</p>
-                  <p className="text-xs text-text-muted">
-                    {user?.mfa_enabled
-                      ? `Account protected with authenticator app codes.${mfaStatus?.backup_codes_remaining !== undefined ? ` ${mfaStatus.backup_codes_remaining} backup codes remaining.` : ''}`
-                      : 'Add protection with Google Authenticator or similar app.'}
-                  </p>
-                </div>
-                <StatusBadge status={!!user?.mfa_enabled} trueLabel="On" falseLabel="Off" />
-              </div>
-                  {showMfaSetup && <div className="mt-4 border-t border-surface-2 pt-4"><MFAEnrollment isEnabled={!!user?.mfa_enabled} onRefreshUser={fetchCurrentUser} /></div>}
             </div>
-          )}
+            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
+              <Shield size={20} className={user?.mfa_enabled ? 'text-semantic-success' : 'text-text-muted'} />
+              <div className="flex-1">
+                <p className="text-sm text-text-primary">MFA is {user?.mfa_enabled ? 'enabled' : 'not enabled'}</p>
+                <p className="text-xs text-text-muted">
+                  {user?.mfa_enabled
+                    ? `Account protected with authenticator app codes.${mfaStatus?.backup_codes_remaining !== undefined ? ` ${mfaStatus.backup_codes_remaining} backup codes remaining.` : ''}`
+                    : 'Add protection with Google Authenticator or similar app.'}
+                </p>
+              </div>
+              <StatusBadge status={!!user?.mfa_enabled} trueLabel="On" falseLabel="Off" />
+            </div>
+            {showMfaSetup && <div className="mt-4 border-t border-surface-2 pt-4"><MFAEnrollment isEnabled={!!user?.mfa_enabled} onRefreshUser={fetchCurrentUser} /></div>}
+          </div>
 
           {backupCodes.length > 0 && (
             <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
@@ -100,21 +113,16 @@ export function SecurityPage() {
         </div>
 
         <div className="space-y-6">
-          {!user?.is_federated && <PasskeyManager />}
+          <PasskeyManager />
           <TrustedDevices />
         </div>
       </div>
 
       <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
         <h2 className="text-sm font-semibold text-text-primary mb-4">Credentials</h2>
-        {user?.is_federated && (
-          <p className="text-xs text-text-muted mb-4">
-            Password, MFA, and passkeys are managed by your identity provider (Zitadel/Google/CIE).
-          </p>
-        )}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {!user?.is_federated && <ChangePasswordForm />}
-          {!user?.is_federated && <ChangeEmailForm />}
+        <div className="flex flex-wrap gap-6">
+          <div className="min-w-[300px] flex-1"><ChangePasswordForm /></div>
+          <div className="min-w-[300px] flex-1"><ChangeEmailForm /></div>
         </div>
       </div>
 
