@@ -2,10 +2,7 @@
 
 ## Reporting a Vulnerability
 
-AuthGlow takes security seriously. If you discover a security vulnerability, please report it privately rather than opening a public issue.
-
-**Email:** `security@authglow.dev`  
-**PGP:** [Download public key](https://authglow.dev/.well-known/security.txt)
+AuthGlow takes security seriously. If you discover a security vulnerability, please open a GitHub issue with the details below.
 
 Please include the following in your report:
 
@@ -15,25 +12,6 @@ Please include the following in your report:
 - The version or commit hash you tested against
 - Any potential impact assessment
 
-## Response Timeline
-
-| Step | Timeframe |
-|---|---|
-| Acknowledgment of receipt | Within 48 hours |
-| Initial triage and assessment | Within 5 business days |
-| Status update | Every 5 business days until resolved |
-| Fix released | Coordinated with reporter |
-
-## Disclosure Policy
-
-AuthGlow follows a coordinated disclosure process:
-
-1. Reporter submits vulnerability privately
-2. AuthGlow validates, develops, and releases a fix
-3. After the fix is released, both parties coordinate on a public disclosure timeline
-
-By default, we target **90 days** from receipt to public disclosure. This may be extended by mutual agreement if the fix requires significant coordination.
-
 ## Scope
 
 The following components are in scope:
@@ -41,7 +19,7 @@ The following components are in scope:
 - **Backend** — All API endpoints (`backend/authglow/api/`), authentication flows, JWT handling, session management, encryption/decryption
 - **Frontend** — OAuth2 consent screen, MFA verification, passkey authentication, federation login flow (`frontend/src/components/auth/`, `frontend/src/pages/`)
 - **OAuth2 / OIDC** — Authorization code flow, client credentials flow, token endpoint, token refresh, revocation, introspection, consent persistence
-- **Federation** — Zitadel and generic OIDC federation, state token handling, consent bridging
+- **Federation** — OIDC federation providers, state token handling, consent bridging
 - **MFA / Passkeys** — TOTP enrollment and verification, backup code generation, WebAuthn authentication
 - **RBAC** — Role-based access control, permission enforcement
 - **Admin API** — All endpoints under `/api/admin/`
@@ -70,7 +48,3 @@ We will not pursue legal action against researchers who:
 ## Preferred Languages
 
 We accept reports in **English** and **Italian**.
-
-## Acknowledgments
-
-We maintain a [hall of fame](#) for researchers who report valid vulnerabilities. Thank you for helping keep AuthGlow and its users safe.
