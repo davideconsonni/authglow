@@ -87,7 +87,7 @@ export function SecurityPage() {
                 </div>
                 <StatusBadge status={!!user?.mfa_enabled} trueLabel="On" falseLabel="Off" />
               </div>
-              {showMfaSetup && <div className="mt-4 border-t border-surface-2 pt-4"><MFAEnrollment /></div>}
+                  {showMfaSetup && <div className="mt-4 border-t border-surface-2 pt-4"><MFAEnrollment isEnabled={!!user?.mfa_enabled} onRefreshUser={fetchCurrentUser} /></div>}
             </div>
           )}
 

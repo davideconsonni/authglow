@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,6 +10,8 @@ import {
   Copy,
   Check,
   KeyRound,
+  Shield,
+  RefreshCw,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -25,8 +27,13 @@ interface EnrollmentData {
   backup_codes: string[]
 }
 
-export function MFAEnrollment() {
-  const [step, setStep] = useState<'enroll' | 'loading' | 'verify'>('enroll')
+interface Props {
+  isEnabled?: boolean
+  onRefreshUser?: () => Promise<void>
+}
+
+export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
+  const [step, setStep] = useState<'enroll' | 'loading' | 'verify' | 'manage'>('enroll')
   const [enrollmentData, setEnrollmentData] = useState<EnrollmentData | null>(null)
   const [error, setError] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -39,6 +46,10 @@ export function MFAEnrollment() {
   } = useForm<VerifyFormData>({
     resolver: zodResolver(verifySchema),
   })
+
+  useEffect(() => {
+    if (isEnabled) setStep('manage')
+  }, [isEnabled])
 
   const startEnrollment = async () => {
     setError('')
@@ -78,6 +89,7 @@ export function MFAEnrollment() {
       await api.post('/api/mfa/verify', {
         code: data.code,
       })
+      await onRefreshUser?.()
       navigate('/security')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : ''
@@ -89,6 +101,42 @@ export function MFAEnrollment() {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-brand-violet" />
+      </div>
+    )
+  }
+
+  if (step === 'manage') {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-semantic-success/10">
+          <Shield className="h-7 w-7 text-semantic-success" />
+        </div>
+        <h3 className="text-lg font-semibold text-text-primary">Two-factor authentication is active</h3>
+        <p className="text-sm text-text-muted">
+          Your account is protected with authenticator app codes.
+        </p>
+        {error && (
+          <p className="text-sm text-semantic-error" role="alert">{error}</p>
+        )}
+        <button
+          onClick={async () => {
+            setError('')
+            setStep('loading')
+            try {
+              const data = await api.post<EnrollmentData>('/api/mfa/enroll')
+              setEnrollmentData(data)
+              setStep('verify')
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : ''
+              setError(message || 'Failed to regenerate.')
+              setStep('manage')
+            }
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-6 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-2 transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Regenerate Backup Codes
+        </button>
       </div>
     )
   }

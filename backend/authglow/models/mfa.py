@@ -64,7 +64,7 @@ class MFALoginRequest(BaseModel):
     """MFA code during login."""
 
     session_token: str  # Temporary session token from first auth step
-    code: str = Field(..., min_length=6, max_length=8)  # TOTP or backup code
+    code: str = Field(..., min_length=6, max_length=9)  # TOTP or backup code
     trust_device: bool = False
 
 

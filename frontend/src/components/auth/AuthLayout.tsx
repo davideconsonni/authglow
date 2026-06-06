@@ -20,9 +20,6 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
             <p className="max-w-md text-text-muted">{description}</p>
           )}
         </div>
-        <div className="text-sm text-text-muted">
-          Enterprise CIAM Platform
-        </div>
       </div>
 
       {/* Form column */}

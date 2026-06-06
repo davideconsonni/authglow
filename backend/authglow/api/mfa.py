@@ -12,6 +12,7 @@ from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
 from authglow.models.mfa import (
     MFAEnrollResponse,
+    MFALoginRequest,
     MFAStatus,
     MFAVerifyRequest,
     TrustedDevice,
@@ -114,7 +115,7 @@ async def verify_mfa_enrollment(
     if not mfa_service.verify_totp(
         decrypt_totp_secret(current_user.mfa_secret), verify_request.code
     ):
-        raise HTTPException(status_code=401, detail="Invalid MFA code")
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
 
     # Mark as verified
     current_user.mfa_verified = True
@@ -225,7 +226,7 @@ async def regenerate_backup_codes(
 @limiter.limit("3/minute")
 async def verify_mfa_login(
     response: Response,
-    verify_request: MFAVerifyRequest,
+    login_request: MFALoginRequest,
     storage: UserStorage = Depends(get_user_storage),
     mfa_service: MFAService = Depends(get_mfa_service),
     jwt_service: JWTService = Depends(get_jwt_service),
@@ -234,12 +235,8 @@ async def verify_mfa_login(
 ):
     """Verify MFA code during login and return access token. Sets httpOnly auth cookies."""
     settings = get_settings()
-    # Decode session token (should be in Authorization header or in body)
 
-    # Try to get session token from request
-    session_token = (
-        request.headers.get("Authorization", "").replace("Bearer ", "") if request else None
-    )
+    session_token = login_request.session_token
     if not session_token:
         raise HTTPException(status_code=401, detail="Session token required")
 
@@ -267,18 +264,16 @@ async def verify_mfa_login(
     is_valid = False
     is_backup_code = False
 
-    if len(verify_request.code) == 6 and verify_request.code.isdigit():
+    if len(login_request.code) == 6 and login_request.code.isdigit():
         # Try TOTP
         if not user.mfa_secret:
             raise HTTPException(status_code=500, detail="MFA secret not configured")
 
-        is_valid = mfa_service.verify_totp(
-            decrypt_totp_secret(user.mfa_secret), verify_request.code
-        )
+        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), login_request.code)
     else:
         # Try backup code
         try:
-            if await mfa_service.verify_user_backup_code(user.id, verify_request.code):
+            if await mfa_service.verify_user_backup_code(user.id, login_request.code):
                 is_valid = True
                 is_backup_code = True
         except BackupCodeLockedException as e:
