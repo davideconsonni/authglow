@@ -19,7 +19,7 @@ class TestAuthAPIEndpointStructure:
                         paths.add(sr.path)
         assert "/oauth2/token" in paths
         assert "/api/token" in paths
-        assert "/oauth2/authorize" in paths
+        assert "/api/oauth2/authorize" in paths
         assert "/api/token/api-key" in paths
 
     def test_token_endpoint_code_references_authorization_code(self):

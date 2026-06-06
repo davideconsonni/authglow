@@ -1,7 +1,8 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Shield, Loader2, LogIn } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
@@ -202,6 +203,7 @@ const NEUTRAL_CSS = `
 
 export function OAuthAuthorizePage() {
   const [searchParams] = useSearchParams()
+  const { isAuthenticated } = useAuth()
   const [phase, setPhase] = useState<Phase>('loading')
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null)
   const [consentData, setConsentData] = useState<AuthorizeResponse | null>(null)
@@ -275,6 +277,48 @@ export function OAuthAuthorizePage() {
     return () => { cancelled = true }
   }, [phase, clientInfo])
 
+  const passkeyProbed = useRef(false)
+
+  useEffect(() => {
+    if (!isAuthenticated || phase !== 'login' || !clientId || !redirectUri) return
+    if (passkeyProbed.current) return
+    passkeyProbed.current = true
+
+    let cancelled = false
+    const completeAfterPasskey = async () => {
+      try {
+        const formBody: Record<string, string> = {
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          scope,
+          state,
+        }
+        if (codeChallenge) {
+          formBody.code_challenge = codeChallenge
+          formBody.code_challenge_method = codeChallengeMethod || 'S256'
+        }
+        if (nonce) formBody.nonce = nonce
+
+        const data = await api.postForm<AuthorizeResponse>('/api/oauth2/authorize', formBody)
+
+        if (cancelled) return
+        if (data.redirect_url) {
+          window.location.href = data.redirect_url
+        } else if (data.consent_required) {
+          setConsentData(data)
+          setPhase('consent')
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : ''
+          setError(msg || 'Authorization failed. Please try again.')
+        }
+      }
+    }
+    completeAfterPasskey()
+    return () => { cancelled = true }
+  }, [isAuthenticated, phase, clientId, redirectUri])
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
     if (!email || !password) return
@@ -296,9 +340,10 @@ export function OAuthAuthorizePage() {
       }
       if (nonce) formBody.nonce = nonce
 
-      const data = await api.postForm<AuthorizeResponse>('/oauth2/authorize', formBody)
+        const data = await api.postForm<AuthorizeResponse>('/api/oauth2/authorize', formBody)
 
-      if (data.redirect_url) {
+        if (cancelled) return
+        if (data.redirect_url) {
         window.location.href = data.redirect_url
         return
       }

@@ -231,12 +231,12 @@ async def get_current_user(
 # OAuth2 Authorization Code Flow Endpoints
 
 
-@router.post("/oauth2/authorize")
+@router.post("/api/oauth2/authorize")
 @limiter.limit("10/minute")
 async def authorize_post(
     request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
+    email: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
     client_id: str = Form(...),
     redirect_uri: str = Form(...),
     scope: str = Form("read"),
@@ -249,7 +249,10 @@ async def authorize_post(
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
 ):
-    """Process login and create authorization code (or MFA challenge)."""
+    """Process login and create authorization code (or MFA challenge).
+
+    Accepts either email+password credentials OR an existing session cookie.
+    """
     # Verify client and redirect_uri before processing login
     client = await oauth2_service.client_storage.get_client(client_id)
     if not client:
@@ -271,65 +274,95 @@ async def authorize_post(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
 
-    user = await storage.get_user_by_email(email)
-    if not user or not verify_password(password, user.hashed_password):
-        if user:
-            await storage.record_failed_login(user.id)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    # --- Authentication (cookie-first, then email/password) ---
+    user = None
 
-    if await storage.is_account_locked(user.id):
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
-        )
+    settings = get_settings()
+    access_token = request.cookies.get(settings.auth_cookie_access_name)
+    if access_token:
+        try:
+            jwt_svc = JWTService()
+            token_data = jwt_svc.decode_token(access_token)
+            if token_data:
+                user = await storage.get_user(token_data.sub)
+        except Exception:
+            pass
 
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-
-    await storage.reset_failed_login_attempts(user.id)
-
-    # Check if account is suspended
-    if user.suspended_until and utcnow() < user.suspended_until:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail=f"Account suspended until {user.suspended_until.isoformat()}",
-        )
-
-    from authglow.services.login_history import LoginHistoryService
-
-    login_svc = LoginHistoryService()
-    await login_svc.record_login(
-        user_id=user.id,
-        email=user.email,
-        success=True,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-
-    if user.mfa_enabled and user.mfa_verified:
-        user_agent = request.headers.get("user-agent", "")
-        client_host = request.client.host if request.client else ""
-        device_fingerprint = mfa_service.generate_device_fingerprint(user_agent, client_host)
-        is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
-
-        if not is_trusted:
-            mfa_session = await session_service.create_mfa_session(
-                user_id=user.id,
-                client_id=client_id,
-                redirect_uri=redirect_uri,
-                scope=validated_scope,
-                state=state,
-                code_challenge=code_challenge,
-                code_challenge_method=code_challenge_method,
-                nonce=nonce,
+    if user:
+        if not user.is_active:
+            raise HTTPException(status_code=400, detail="Inactive user")
+        if user.suspended_until and utcnow() < user.suspended_until:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            )
+    else:
+        if not email or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Credentials required. Sign in with email and password, or use an active session.",
             )
 
-            return {
-                "mfa_required": True,
-                "session_token": mfa_session.session_token,
-            }
+        user = await storage.get_user_by_email(email)
+        if not user or not verify_password(password, user.hashed_password):
+            if user:
+                await storage.record_failed_login(user.id)
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    await storage.update_last_login(user.id)
+        if await storage.is_account_locked(user.id):
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+            )
+
+        if not user.is_active:
+            raise HTTPException(status_code=400, detail="Inactive user")
+
+        await storage.reset_failed_login_attempts(user.id)
+
+        if user.suspended_until and utcnow() < user.suspended_until:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            )
+
+        from authglow.services.login_history import LoginHistoryService
+
+        login_svc = LoginHistoryService()
+        await login_svc.record_login(
+            user_id=user.id,
+            email=user.email,
+            success=True,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        if user.mfa_enabled and user.mfa_verified:
+            req_user_agent = request.headers.get("user-agent", "")
+            client_host = request.client.host if request.client else ""
+            device_fingerprint = mfa_service.generate_device_fingerprint(
+                req_user_agent, client_host
+            )
+            is_trusted = await mfa_service.is_device_trusted(user.id, device_fingerprint)
+
+            if not is_trusted:
+                mfa_session = await session_service.create_mfa_session(
+                    user_id=user.id,
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    scope=validated_scope,
+                    state=state,
+                    code_challenge=code_challenge,
+                    code_challenge_method=code_challenge_method,
+                    nonce=nonce,
+                )
+
+                return {
+                    "mfa_required": True,
+                    "session_token": mfa_session.session_token,
+                }
+
+        await storage.update_last_login(user.id)
 
     if not client.require_consent:
         auth_code = await oauth2_service.create_authorization_code(

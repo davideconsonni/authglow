@@ -46,7 +46,7 @@ test.describe('Playground — Create Client → Authorize → Introspect → Rev
       await page.waitForTimeout(500)
 
       // ── Step 4: Authorize via API to get auth code ──
-      const authResp = await page.request.post(`${API_URL}/oauth2/authorize`, {
+      const authResp = await page.request.post(`${API_URL}/api/oauth2/authorize`, {
         form: {
           email: 'admin@example.com',
           password: 'AdminP@ss123!',
