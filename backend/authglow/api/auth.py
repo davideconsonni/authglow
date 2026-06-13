@@ -1065,7 +1065,7 @@ async def invite_user(
 
     # Create password reset token so the invited user can set their own password
     reset_service = PasswordResetService()
-    reset_token, reset_plaintext = await reset_service.create_reset_token(
+    reset_token, _reset_plaintext, reset_code = await reset_service.create_reset_token(
         user_id=user.id,
         email=user.email,
         expires_in_minutes=1440,  # 24 hours for invitation
@@ -1074,14 +1074,18 @@ async def invite_user(
     # Send welcome email with verification link and set-password link
     email_service = get_email_service()
     try:
+        # VAPT-022: never embed the plaintext bearer token in a URL.
+        # The ``set_password_url`` points to a clean page; the human-
+        # friendly ``reset_code`` is rendered in the email body.
         context = {
             "user_name": user.first_name or user.email.split("@")[0],
             "email": user.email,
             "created_at": user.created_at.strftime("%Y-%m-%d %H:%M"),
-            "login_url": f"{settings.base_url}/login",
+            "login_url": f"{settings.frontend_base_url}/auth/login",
             "docs_url": f"{settings.base_url}/docs",
             "company_name": settings.company_name,
-            "set_password_url": f"{settings.base_url}/set-password?token={reset_plaintext}",
+            "set_password_url": f"{settings.frontend_base_url}/auth/reset-password",
+            "reset_code": reset_code,
         }
 
         await email_service.send_template(
@@ -1255,7 +1259,7 @@ async def register_user(
             "user_name": user.first_name or user.email.split("@")[0],
             "email": user.email,
             "created_at": user.created_at.strftime("%Y-%m-%d %H:%M"),
-            "login_url": f"{settings.base_url}/login",
+            "login_url": f"{settings.frontend_base_url}/auth/login",
             "company_name": settings.company_name,
         }
         await email_service.send_template(

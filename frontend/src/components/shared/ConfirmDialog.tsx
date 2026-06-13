@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -7,6 +7,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'danger' | 'default'
+  loading?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -18,6 +19,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'default',
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -25,7 +27,9 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onCancel} data-testid="confirm-dialog-backdrop" />
+      {!loading && (
+        <div className="absolute inset-0 bg-black/50" onClick={onCancel} data-testid="confirm-dialog-backdrop" />
+      )}
       <div className="relative z-10 mx-4 w-full sm:max-w-md sm:rounded-2xl rounded-xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet" data-testid="confirm-dialog">
         <div className="flex items-start gap-4">
           <div
@@ -46,21 +50,23 @@ export function ConfirmDialog({
         <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onCancel}
+            disabled={loading}
             data-testid="confirm-dialog-cancel"
-            className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors"
+            className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
+            disabled={loading}
             data-testid="confirm-dialog-confirm"
-            className={`rounded-xl px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors ${
+            className={`rounded-xl px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               variant === 'danger'
                 ? 'bg-semantic-error hover:bg-semantic-error/90'
                 : 'bg-gradient-cta'
             }`}
           >
-            {confirmLabel}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : confirmLabel}
           </button>
         </div>
       </div>

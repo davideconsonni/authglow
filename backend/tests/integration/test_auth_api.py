@@ -561,9 +561,25 @@ class TestInviteUserSetPasswordLink:
         assert "temp_password" not in captured_context, (
             "invite_user must NOT include temp_password in email context"
         )
-        assert "token=" in captured_context.get("set_password_url", ""), (
-            "set_password_url must contain a reset token"
+        # VAPT-022: set_password_url must be a CLEAN URL with no token
+        # query string. The reset_code is rendered in the email body.
+        set_password_url = captured_context.get("set_password_url", "")
+        assert "token=" not in set_password_url, (
+            f"set_password_url must NOT contain a token query string (VAPT-022): {set_password_url!r}"
         )
+        assert set_password_url.endswith("/set-password"), (
+            f"set_password_url must be the bare set-password page: {set_password_url!r}"
+        )
+        assert "reset_code" in captured_context, (
+            "invite_user must include reset_code in email context (VAPT-022)"
+        )
+        # Note: the mock at the start of this test patches
+        # PasswordResetService only on the email service path, so the
+        # real service generates the code. We just assert the field is
+        # present and well-formed (XXXX-XXXX-XXXX).
+        code = captured_context["reset_code"]
+        assert len(code) == 14, f"reset_code must be 14 chars: {code!r}"
+        assert code[4] == "-" and code[9] == "-", f"reset_code must be XXXX-XXXX-XXXX: {code!r}"
 
     def test_invited_user_gets_password_reset_token(self, _invite_app, test_settings, jwt_service):
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -637,7 +653,7 @@ class TestInviteUserSetPasswordLink:
 
         mock_reset_service = MagicMock()
         mock_reset_service.create_reset_token = AsyncMock(
-            return_value=(mock_reset_token, mock_reset_plaintext)
+            return_value=(mock_reset_token, mock_reset_plaintext, "ABCD-EFGH-JKLM")
         )
 
         admin_token = jwt_service.create_access_token(
@@ -674,8 +690,17 @@ class TestInviteUserSetPasswordLink:
         assert response.status_code == 201
 
         set_password_url = captured_set_password_url.get("url", "")
-        assert f"token={mock_reset_plaintext}" in set_password_url, (
-            "set_password_url must contain the reset plaintext token"
+        # VAPT-022: set_password_url must be a CLEAN URL — the bearer
+        # token is never embedded; the human-friendly reset_code is in
+        # the email body.
+        assert "token=" not in set_password_url, (
+            f"set_password_url must NOT contain the reset plaintext token (VAPT-022): {set_password_url!r}"
+        )
+        assert set_password_url.endswith("/set-password"), (
+            f"set_password_url must be the bare set-password page: {set_password_url!r}"
+        )
+        assert mock_reset_plaintext not in set_password_url, (
+            "set_password_url must not leak the plaintext bearer token"
         )
 
         mock_reset_service.create_reset_token.assert_awaited_once_with(
@@ -774,3 +799,116 @@ class TestVerificationEmailNoTokenInUrl:
         assert "token=" not in captured_context.get("verify_page_url", ""), (
             "verify_page_url must NOT contain the token"
         )
+
+
+class TestPasswordResetEmailNoTokenInUrl:
+    """VAPT-022 — the password reset email must NOT embed the bearer
+    plaintext token in any URL. The token is replaced by a human-friendly
+    ``reset_code`` rendered in the email body; the link in the email
+    points to a clean ``reset_page_url`` with no query string carrying
+    the token.
+    """
+
+    def test_reset_email_context_uses_code_not_url_token(self, test_settings):
+        import asyncio
+        from authglow.api.password_reset import request_password_reset
+        from authglow.models.user import User
+        from fastapi import Request
+
+        user = User(
+            id="reset-email-user",
+            email="reset-target@test.com",
+            hashed_password=hash_password("TestP@ss123!"),
+            is_active=True,
+            email_verified=True,
+            first_name="Reset",
+            scopes=["read"],
+        )
+
+        captured_context: dict = {}
+
+        async def capture_send_template(**kwargs):
+            ctx = kwargs.get("context", {})
+            for k, v in ctx.items():
+                captured_context[k] = v
+            return MagicMock(success=True)
+
+        mock_email = MagicMock()
+        mock_email.send_template = AsyncMock(side_effect=capture_send_template)
+
+        mock_user_storage = MagicMock()
+        mock_user_storage.get_user_by_email = AsyncMock(return_value=user)
+
+        mock_reset_service = MagicMock()
+        mock_reset_service.revoke_user_tokens = AsyncMock(return_value=0)
+
+        fake_token = type("Tok", (), {})()
+        fake_token.token_id = "tok-id-1"
+        # 32-byte base64 plaintext, 43 chars (mimics tokens.token_urlsafe(32))
+        fake_plaintext = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"  # 43 chars
+        fake_code = "ABCD-EFGH-JKLM"
+        mock_reset_service.create_reset_token = AsyncMock(
+            return_value=(fake_token, fake_plaintext, fake_code)
+        )
+
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/password/reset/request",
+            "raw_path": b"/api/password/reset/request",
+            "query_string": b"",
+            "headers": [(b"user-agent", b"TestAgent/1.0")],
+            "client": ("127.0.0.1", 50000),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        request = Request(scope, receive)
+        reset_request = type("R", (), {"email": "reset-target@test.com"})()
+
+        async def _run():
+            with patch(
+                "authglow.api.password_reset.get_email_service",
+                return_value=mock_email,
+            ):
+                result = await request_password_reset(
+                    request=request,
+                    reset_request=reset_request,
+                    reset_service=mock_reset_service,
+                    user_storage=mock_user_storage,
+                    audit_service=mock_audit,
+                    email_service=mock_email,
+                )
+            return result
+
+        asyncio.run(_run())
+
+        # The plaintext bearer token must NEVER appear in the email context.
+        for key, value in captured_context.items():
+            assert fake_plaintext not in str(value), (
+                f"reset_email context[{key!r}] leaked the plaintext token"
+            )
+
+        # The legacy ``reset_url`` (with ?token=) must NOT be sent.
+        assert "reset_url" not in captured_context, (
+            "reset_url must not be present in the email context (VAPT-022)"
+        )
+        assert "token=" not in str(captured_context), (
+            "no field in the email context may contain 'token=' (VAPT-022)"
+        )
+
+        # The new fields must be present and clean.
+        assert "reset_page_url" in captured_context, (
+            "reset_page_url must be present in the email context"
+        )
+        assert "reset_code" in captured_context, "reset_code must be present in the email context"
+        assert captured_context["reset_code"] == fake_code
+        assert fake_plaintext not in captured_context["reset_page_url"]
+        assert "token=" not in captured_context["reset_page_url"]
+        assert captured_context["reset_page_url"].endswith("/password/reset")

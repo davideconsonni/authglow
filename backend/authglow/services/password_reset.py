@@ -15,6 +15,54 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.password_reset import PasswordResetToken
 
+_RESET_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_RESET_CODE_SEGMENT_LEN = 4
+_RESET_CODE_SEGMENTS = 3
+
+# Confusable characters that are NOT in the alphabet (documented for the
+# ``test_code_alphabet_excludes_ambiguous_chars`` invariant test).
+_EXCLUDED_CHARS = frozenset("01OIL")
+
+
+def generate_reset_code() -> str:
+    """Generate a human-friendly reset code (VAPT-022 fix).
+
+    Format: ``XXXX-XXXX-XXXX`` (4+4+4 chars) drawn from a 31-symbol
+    alphabet that excludes visually ambiguous characters (``0``, ``O``,
+    ``1``, ``I``, ``L``). Entropy: ``31^12 ~= 7.9e17`` possibilities,
+    far exceeding the 30-minute token window. The code is intended to be
+    emailed in the message body (never in the URL) and entered by the
+    user into the reset form.
+    """
+    parts = []
+    for _ in range(_RESET_CODE_SEGMENTS):
+        parts.append(
+            "".join(secrets.choice(_RESET_CODE_ALPHABET) for _ in range(_RESET_CODE_SEGMENT_LEN))
+        )
+    code = "-".join(parts)
+    # Defensive: the alphabet is constant, but assert the invariant at
+    # generation time so a future refactor cannot silently re-introduce
+    # confusable characters.
+    assert not (set(code) - {"-"} & _EXCLUDED_CHARS), (
+        f"reset_code {code!r} contains excluded confusable characters"
+    )
+    return code
+
+
+def _reset_code_lookup_key(code: str) -> str:
+    """Compute the HMAC-SHA256 lookup key for a reset code (VAPT-022 fix).
+
+    Normalises the code to upper-case and strips whitespace so user input
+    variants (``abcd-efgh-jklm``) match the stored value. The key mirrors
+    the existing ``token_lookup`` pattern for O(1) file access.
+    """
+    normalised = code.strip().upper().replace(" ", "").replace("\t", "")
+    return hmac.new(
+        get_settings().secret_key.encode(),
+        normalised.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
 
 class PasswordResetService:
     """Service for managing password reset tokens.
@@ -42,6 +90,16 @@ class PasswordResetService:
         """Get file path for a token by its HMAC lookup key."""
         return f"{self.reset_path}/{token_lookup}.json"
 
+    def _get_code_path(self, code_lookup: str) -> str:
+        """Get file path for a token by its reset-code HMAC lookup key.
+
+        VAPT-022: the same token record is indexed by both
+        ``token_lookup`` (HMAC of bearer token) and ``code_lookup``
+        (HMAC of human-friendly reset code), so the email-based flow
+        can resolve a token without the bearer secret.
+        """
+        return f"{self.reset_path}/code_{code_lookup}.json"
+
     def _generate_token(self) -> tuple[str, str, str]:
         """Generate a secure random token.
 
@@ -67,7 +125,7 @@ class PasswordResetService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         expires_in_minutes: int = 30,
-    ) -> tuple[PasswordResetToken, str]:
+    ) -> tuple[PasswordResetToken, str, str]:
         """Create a new password reset token.
 
         Args:
@@ -78,27 +136,42 @@ class PasswordResetService:
             expires_in_minutes: Token expiration time in minutes
 
         Returns:
-            tuple: (PasswordResetToken, plaintext_token)
+            tuple: (PasswordResetToken, plaintext_token, reset_code)
+                - ``plaintext_token`` is the bearer secret, hashed at rest
+                  and suitable for server-to-server confirmation flows.
+                - ``reset_code`` is the human-friendly code to render in
+                  the email body (VAPT-022 fix). Never embed it in a URL.
         """
         plaintext_token, token_hash, token_lookup = self._generate_token()
+        reset_code = generate_reset_code()
 
         reset_token = PasswordResetToken(
             token_lookup=token_lookup,
             user_id=user_id,
             email=email,
             token_hash=token_hash,
+            reset_code=reset_code,
             expires_at=utcnow() + timedelta(minutes=expires_in_minutes),
             ip_address=ip_address,
             user_agent=user_agent,
         )
 
-        # Save token
+        # Save token (primary file indexed by bearer token HMAC)
         token_path = self._get_token_path(reset_token.token_lookup)
         await self._afs.makedirs(self.reset_path, exist_ok=True)
 
-        await self._afs.write_text(token_path, reset_token.model_dump_json(indent=2))
+        payload = reset_token.model_dump_json(indent=2)
+        await self._afs.write_text(token_path, payload)
 
-        return reset_token, plaintext_token
+        # VAPT-022: also write a mirror file indexed by the reset_code
+        # HMAC, so the email-based flow can resolve the same record
+        # without the bearer token. The two files contain the same
+        # payload; ``mark_token_used`` and ``cleanup`` operate on both.
+        code_lookup = _reset_code_lookup_key(reset_code)
+        code_path = self._get_code_path(code_lookup)
+        await self._afs.write_text(code_path, payload)
+
+        return reset_token, plaintext_token, reset_code
 
     async def verify_token(self, plaintext_token: str) -> Optional[PasswordResetToken]:
         """Verify a reset token and return the token object if valid.
@@ -140,11 +213,58 @@ class PasswordResetService:
 
         return token
 
+    async def verify_by_code(self, reset_code: str) -> Optional[PasswordResetToken]:
+        """Verify a reset by the human-friendly code (VAPT-022 fix).
+
+        The code is normalised to upper-case, stripped of whitespace, then
+        hashed with HMAC-SHA256 to derive the same lookup key the
+        plaintext token uses. Returns the token on success, None otherwise.
+        On success, the underlying ``plaintext_token`` is exposed via
+        ``PasswordResetConfirm`` flow when the caller re-renders the form
+        with the verified ``token_lookup``.
+
+        Args:
+            reset_code: The human-friendly code as entered by the user.
+
+        Returns:
+            PasswordResetToken if valid, None otherwise
+        """
+        if not reset_code:
+            return None
+
+        code_lookup = _reset_code_lookup_key(reset_code)
+        code_path = self._get_code_path(code_lookup)
+
+        if not await self._afs.exists(code_path):
+            return None
+
+        try:
+            content = await self._afs.read_text(code_path)
+            token = PasswordResetToken.model_validate_json(content)
+        except Exception:
+            return None
+
+        stored_code = (token.reset_code or "").strip().upper()
+        presented_code = reset_code.strip().upper()
+        if not stored_code or not secrets.compare_digest(stored_code, presented_code):
+            return None
+
+        if token.is_used:
+            return None
+
+        if utcnow() > token.expires_at:
+            return None
+
+        return token
+
     async def mark_token_used(self, token_lookup: str) -> bool:
         """Mark a token as used.
 
         Protected by a named lock and optimistic-concurrency versioning
-        to prevent the same token from being used twice.
+        to prevent the same token from being used twice. When a
+        ``reset_code`` mirror file exists, it is updated too so the
+        email-based lookup path returns the same ``is_used`` state
+        (VAPT-022 fix).
 
         Args:
             token_lookup: HMAC lookup key of the token to mark as used
@@ -167,13 +287,22 @@ class PasswordResetService:
 
                 token.is_used = True
                 token.used_at = utcnow()
+                payload = token.model_dump_json(indent=2)
 
                 try:
                     _, version = await self._afs.read_json_versioned(token_path)
-                    await self._afs.write_text(token_path, token.model_dump_json(indent=2))
-                    return True
+                    await self._afs.write_text(token_path, payload)
                 except ConcurrentWriteError:
                     continue
+
+                # Update the reset_code mirror so the email-based
+                # lookup path also sees the token as used.
+                if token.reset_code:
+                    code_lookup = _reset_code_lookup_key(token.reset_code)
+                    code_path = self._get_code_path(code_lookup)
+                    if await self._afs.exists(code_path):
+                        await self._afs.write_text(code_path, payload)
+                return True
 
             return False
 
@@ -214,6 +343,9 @@ class PasswordResetService:
         for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
+            # VAPT-022: skip reset_code mirror files; primary file wins.
+            if "/code_" in file_path or file_path.endswith("/code_.json"):
+                continue
 
             content = await self._afs.read_text(file_path)
             token = PasswordResetToken.model_validate_json(content)
@@ -249,6 +381,8 @@ class PasswordResetService:
         file_list = await self._afs.ls(self.reset_path)
         for file_path in file_list:
             if not file_path.endswith(".json"):
+                continue
+            if "/code_" in file_path or file_path.endswith("/code_.json"):
                 continue
 
             content = await self._afs.read_text(file_path)
@@ -302,6 +436,8 @@ class PasswordResetService:
         for file_path in file_list:
             if not file_path.endswith(".json"):
                 continue
+            if "/code_" in file_path or file_path.endswith("/code_.json"):
+                continue
 
             content = await self._afs.read_text(file_path)
             token = PasswordResetToken.model_validate_json(content)
@@ -311,6 +447,12 @@ class PasswordResetService:
 
             if should_delete:
                 await self._afs.rm(file_path)
+                # Also delete the reset_code mirror (VAPT-022).
+                if token.reset_code:
+                    code_lookup = _reset_code_lookup_key(token.reset_code)
+                    code_path = self._get_code_path(code_lookup)
+                    if await self._afs.exists(code_path):
+                        await self._afs.rm(code_path)
                 count += 1
 
         return count
@@ -334,6 +476,8 @@ class PasswordResetService:
         file_list = await self._afs.ls(self.reset_path)
         for file_path in file_list:
             if not file_path.endswith(".json"):
+                continue
+            if "/code_" in file_path or file_path.endswith("/code_.json"):
                 continue
 
             content = await self._afs.read_text(file_path)

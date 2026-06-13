@@ -700,7 +700,7 @@ async def send_password_reset(
         )
 
     reset_service = PasswordResetService()
-    token, plaintext = await reset_service.create_reset_token(
+    token, plaintext, reset_code = await reset_service.create_reset_token(
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request.client else None,
@@ -710,14 +710,15 @@ async def send_password_reset(
     from authglow.services.email.factory import get_email_service
 
     email_service = get_email_service()
-    reset_url = f"{get_settings().base_url}/reset-password?token={plaintext}"
+    reset_page_url = f"{get_settings().frontend_base_url}/auth/reset-password"
     await email_service.send_template(
         to=[user.email],
         subject="Password Reset Request - AuthGlow",
         template_name="password_reset",
         context={
-            "user": user,
-            "reset_url": reset_url,
+            "user_name": user.first_name or user.email.split("@")[0],
+            "reset_page_url": reset_page_url,
+            "reset_code": reset_code,
             "company_name": get_settings().company_name,
             "expires_in_minutes": 30,
         },

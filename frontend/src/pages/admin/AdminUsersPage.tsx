@@ -334,6 +334,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [setPasswordForm, setSetPasswordForm] = useState({ password: '', requireChange: false })
   const [setPasswordError, setSetPasswordError] = useState('')
   const [confirmAction, setConfirmAction] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => { if (user) dispatch({ type: 'INIT', user }) }, [user])
 
@@ -392,8 +393,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   }
 
   const handleConfirmAction = async () => {
-    if (!confirmAction) return
+    if (!confirmAction || confirming) return
     setError('')
+    setConfirming(true)
     try {
       if (confirmAction === 'revoke-all-sessions') {
         await api.post(`/api/admin/users/${userId}/sessions/revoke-all`)
@@ -420,6 +422,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       setError(e instanceof Error ? e.message : 'Action failed')
     } finally {
       setConfirmAction(null)
+      setConfirming(false)
     }
   }
 
@@ -753,15 +756,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             </div>
           )}
 
-          <ConfirmDialog open={confirmAction === 'send-password-reset'} title={getActionTitle('send-password-reset')} message={getActionMessage('send-password-reset')} confirmLabel="Send" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'expire-password'} title={getActionTitle('expire-password')} message={getActionMessage('expire-password')} confirmLabel="Expire" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'unlock'} title={getActionTitle('unlock')} message={getActionMessage('unlock')} confirmLabel="Unlock" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'revoke-all-sessions'} title={getActionTitle('revoke-all-sessions')} message={getActionMessage('revoke-all-sessions')} confirmLabel="Revoke All" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'disable-mfa'} title={getActionTitle('disable-mfa')} message={getActionMessage('disable-mfa')} confirmLabel="Disable" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset" variant="danger" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'regenerate-backup-codes'} title={getActionTitle('regenerate-backup-codes')} message={getActionMessage('regenerate-backup-codes')} confirmLabel="Regenerate" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'unsuspend'} title={getActionTitle('unsuspend')} message={getActionMessage('unsuspend')} confirmLabel="Remove Suspension" variant="default" onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'send-password-reset'} title={getActionTitle('send-password-reset')} message={getActionMessage('send-password-reset')} confirmLabel="Send" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'expire-password'} title={getActionTitle('expire-password')} message={getActionMessage('expire-password')} confirmLabel="Expire" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'unlock'} title={getActionTitle('unlock')} message={getActionMessage('unlock')} confirmLabel="Unlock" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'revoke-all-sessions'} title={getActionTitle('revoke-all-sessions')} message={getActionMessage('revoke-all-sessions')} confirmLabel="Revoke All" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'disable-mfa'} title={getActionTitle('disable-mfa')} message={getActionMessage('disable-mfa')} confirmLabel="Disable" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'regenerate-backup-codes'} title={getActionTitle('regenerate-backup-codes')} message={getActionMessage('regenerate-backup-codes')} confirmLabel="Regenerate" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'unsuspend'} title={getActionTitle('unsuspend')} message={getActionMessage('unsuspend')} confirmLabel="Remove Suspension" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={!!revokeSessionId} title="Revoke Session" message="Revoke this session? The user will be logged out of this device." confirmLabel="Revoke" variant="danger" onConfirm={handleRevokeSession} onCancel={() => setRevokeSessionId(null)} />
           <ConfirmDialog open={!!deletePasskeyId} title="Delete Passkey" message="Remove this passkey from the user's account?" confirmLabel="Delete" variant="danger" onConfirm={handleDeletePasskey} onCancel={() => setDeletePasskeyId(null)} />
 

@@ -48,7 +48,7 @@ class SecurityNotificationService:
                 "browser": browser,
                 "location": location,
                 "was_you": was_you,
-                "security_url": f"{self.settings.base_url}/admin",
+                "security_url": f"{self.settings.frontend_base_url}/admin",
                 "company_name": self.settings.company_name,
             }
 
@@ -82,7 +82,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
-                "security_url": f"{self.settings.base_url}/password-reset/request",
+                "security_url": f"{self.settings.frontend_base_url}/auth/forgot-password",
                 "company_name": self.settings.company_name,
             }
 
@@ -122,7 +122,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
-                "security_url": f"{self.settings.base_url}/admin",
+                "security_url": f"{self.settings.frontend_base_url}/admin",
                 "company_name": self.settings.company_name,
             }
 
@@ -164,7 +164,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": True,  # Assume it's them since they just did it
-                "security_url": f"{self.settings.base_url}/admin",
+                "security_url": f"{self.settings.frontend_base_url}/admin",
                 "company_name": self.settings.company_name,
             }
 
@@ -196,7 +196,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
-                "security_url": f"{self.settings.base_url}/admin",
+                "security_url": f"{self.settings.frontend_base_url}/admin",
                 "company_name": self.settings.company_name,
             }
 
@@ -231,7 +231,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": True,  # Assume it's them since they just did it
-                "security_url": f"{self.settings.base_url}/admin/api-keys",
+                "security_url": f"{self.settings.frontend_base_url}/admin/api-keys",
                 "company_name": self.settings.company_name,
             }
 
@@ -269,7 +269,7 @@ class SecurityNotificationService:
                 "timestamp": utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "ip_address": ip_address,
                 "was_you": False,  # Always ask for confirmation
-                "security_url": f"{self.settings.base_url}/password-reset/request",
+                "security_url": f"{self.settings.frontend_base_url}/auth/forgot-password",
                 "company_name": self.settings.company_name,
             }
 

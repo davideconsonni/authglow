@@ -161,7 +161,7 @@ class EmailVerificationService:
         context = {
             "user_name": user.first_name or user.email.split("@")[0],
             "verification_code": token,
-            "verify_page_url": f"{self.settings.base_url}/verify-email",
+            "verify_page_url": f"{self.settings.frontend_base_url}/auth/verify-email",
             "company_name": self.settings.company_name,
             "expires_hours": 24,
         }

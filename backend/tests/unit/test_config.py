@@ -99,6 +99,7 @@ def _make_settings_with(tmp_path, secret_key, app_env, **kwargs):
     settings_kwargs: dict = {
         "secret_key": secret_key,
         "app_env": app_env,
+        "debug": False,
         "storage_path": storage_path,
         "storage_backend": "file",
         "keys_dir": keys_dir,

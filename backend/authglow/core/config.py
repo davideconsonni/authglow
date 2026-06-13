@@ -427,6 +427,16 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def _validate_debug_not_enabled_in_production(self):
+        if self.is_production and self.debug:
+            raise ValueError(
+                "DEBUG must be 'false' when app_env is 'production'. "
+                "Debug mode enables auto-reload and may leak tracebacks "
+                "via HTTP responses."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_secret_key_for_environment(self):
         """Hard-fail in production if SECRET_KEY is a known placeholder.
 

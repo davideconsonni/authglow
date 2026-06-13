@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 10 | 16 | Fix before VAPT |
+| HIGH | 26 | 11 | 15 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **20** | **106** | — |
+| **Total** | **126** | **21** | **105** | — |
 
 ---
 
@@ -125,17 +125,17 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: `verification_url = f"{base_url}/verify-email?token={token.token}"`. Tokens land in browser history, `Referer` headers to third parties, and CDN/proxy access logs.
   - **Fix**: `send_verification_email()` now sends the token as a plain-text `verification_code` in the email body instead of embedding it in a URL. A clean `verify_page_url` (token-less) is provided for navigation. Removed `verification_url` from welcome email contexts in `invite_user` and `register_user`. Updated `email_verification.html` and `.txt` templates to display the code and page URL separately. Integration test verifies `verification_code` present, `verification_url` absent, and `verify_page_url` free of tokens.
 
-- [ ] **VAPT-022** — Password reset plaintext token embedded in URL and emailed
-  - **Location**: `backend/authglow/api/password_reset.py:110`; `backend/authglow/api/admin.py:677`
+- [x] **VAPT-022** — Password reset plaintext token embedded in URL and emailed
+  - **Location**: `backend/authglow/api/password_reset.py` (request handler); `backend/authglow/templates/emails/password_reset.{html,txt}`; `frontend/src/components/auth/ResetPasswordForm.tsx`
   - **Description**: Same risk profile as VAPT-021. RFC 6750 §2.3 and OWASP ASVS V3.5 both warn against bearer tokens in URLs.
-  - **Fix**: Move the token to a one-time POST body or signed cookie.
+  - **Fix**: Mirrored the VAPT-021 pattern. The email now sends a human-friendly ``reset_code`` (``XXXX-XXXX-XXXX``, 12 chars from a 28-symbol alphabet that excludes visually ambiguous ``0/O/1/I/L``) in the body, and the link in the email points to a clean ``reset_page_url`` with no query string carrying the token. The plaintext bearer token is still returned by the service for server-to-server flows, but is NEVER rendered in the email context. The client posts ``{reset_code, new_password}`` to ``/api/password/reset/confirm``. Added ``PasswordResetService.verify_by_code`` (constant-time on the presented code via ``secrets.compare_digest``) backed by an HMAC-SHA256 lookup key, plus the matching ``PasswordResetConfirm`` Pydantic model with legacy ``token`` alias for backward compatibility. Tests: ``tests/unit/test_password_reset_service.py::TestVapt022ResetCodeFlow`` (11 tests covering format, uniqueness, alphabet, lookup, normalisation, wrong/used/expired code rejection, persistence, no-token-leak), ``tests/integration/test_auth_api.py::TestPasswordResetEmailNoTokenInUrl`` (mocked email capture), ``frontend/tests/vapt-022-reset-code.test.ts`` (form, page, templates).
 
 ### Configuration
 
-- [ ] **VAPT-023** — `.env.example` ships with `DEBUG=true` (auto-reload, traceback leakage)
+- [x] **VAPT-023** — `.env.example` ships with `DEBUG=true` (auto-reload, traceback leakage)
   - **Location**: `backend/.env.example:6, 10`; `backend/main.py:96`
   - **Description**: `uvicorn` runs with `--reload` when `DEBUG=true`; `HTTPException(detail=str(e))` paths echo the underlying exception. If an operator forgets to set `APP_ENV=production` and ships the example file, debug mode is on.
-  - **Fix**: Set example defaults to `DEBUG=false`; harden `Settings.__init__` to refuse debug in production.
+  - **Fix**: Set `.env.example` default to `DEBUG=false`. Added `_validate_debug_not_enabled_in_production` model_validator in `config.py` that raises `ValueError` when `app_env=production` + `debug=true`.
 
 - [ ] **VAPT-024** — `https_enforcement` trusts `X-Forwarded-Proto` from any client (HTTPS redirect bypass)
   - **Location**: `backend/authglow/middleware/https_enforcement.py:28-34`

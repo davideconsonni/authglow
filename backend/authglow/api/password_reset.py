@@ -97,7 +97,7 @@ async def request_password_reset(
     await reset_service.revoke_user_tokens(user.id)
 
     # Create new reset token
-    token, plaintext_token = await reset_service.create_reset_token(
+    token, plaintext_token, reset_code = await reset_service.create_reset_token(
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request.client else None,
@@ -106,7 +106,10 @@ async def request_password_reset(
     )
 
     # Send password reset email
-    reset_url = f"{settings.base_url}/password/reset?token={plaintext_token}"
+    # VAPT-022: do NOT embed the plaintext token in the URL. The link
+    # points to a clean page; the human-friendly reset code is rendered
+    # in the email body and entered by the user.
+    reset_page_url = f"{settings.frontend_base_url}/auth/reset-password"
 
     await email_service.send_template(
         to=[user.email],
@@ -114,7 +117,8 @@ async def request_password_reset(
         template_name="password_reset",
         context={
             "user_name": user.first_name or user.email.split("@")[0],
-            "reset_url": reset_url,
+            "reset_page_url": reset_page_url,
+            "reset_code": reset_code,
             "expires_in_minutes": 30,
         },
         from_email=settings.email_from_address,
@@ -143,20 +147,20 @@ async def confirm_password_reset(
     audit_service: AuditService = Depends(get_audit_service),
     password_validator: PasswordValidator = Depends(get_password_validator),
 ):
-    """Confirm password reset with token and set new password."""
-    # Verify token
-    token = await reset_service.verify_token(reset_confirm.token)
+    """Confirm password reset with the human-friendly reset code (VAPT-022)."""
+    # Verify code (VAPT-022: no bearer token in URL, code lives in body)
+    token = await reset_service.verify_by_code(reset_confirm.reset_code)
 
     if not token:
         await audit_service.log_event(
             event_type="password_reset_failed",
-            metadata={"reason": "invalid_or_expired_token"},
+            metadata={"reason": "invalid_or_expired_code"},
             severity="warning",
             ip_address=request.client.host if request.client else None,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
+            detail="Invalid or expired reset code",
         )
 
     # Validate password strength
