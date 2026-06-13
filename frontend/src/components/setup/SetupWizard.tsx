@@ -15,6 +15,7 @@ const setupSchema = z.object({
     .regex(/[a-z]/, 'Must contain a lowercase letter')
     .regex(/[0-9]/, 'Must contain a digit')
     .regex(/[^A-Za-z0-9]/, 'Must contain a special character'),
+  setup_token: z.string().min(1, 'Setup token is required'),
 })
 
 type SetupFormData = z.infer<typeof setupSchema>
@@ -34,12 +35,20 @@ export function SetupWizard() {
   const onSubmit = async (data: SetupFormData) => {
     setError('')
     try {
-      await api.post('/api/setup/create-admin', {
-        email: data.email,
-        password: data.password,
-        first_name: 'Admin',
-        last_name: 'User',
-      })
+      await api.post(
+        '/api/setup/create-admin',
+        {
+          email: data.email,
+          password: data.password,
+          first_name: 'Admin',
+          last_name: 'User',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${data.setup_token}`,
+          },
+        },
+      )
       setSuccess(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : ''
@@ -100,6 +109,24 @@ export function SetupWizard() {
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
         {errors.password && <p className="text-xs text-semantic-error" role="alert">{errors.password.message}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="setup-token" className="block text-sm font-medium text-text-secondary">
+          Setup token
+        </label>
+        <input
+          id="setup-token"
+          type="password"
+          autoComplete="off"
+          placeholder="Paste the token from your server logs"
+          {...register('setup_token')}
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+        />
+        <p className="text-xs text-text-muted">
+          The setup token is printed in the terminal when the server starts.
+        </p>
+        {errors.setup_token && <p className="text-xs text-semantic-error" role="alert">{errors.setup_token.message}</p>}
       </div>
 
       <button

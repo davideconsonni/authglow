@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 14 | 12 | Fix before VAPT |
+| HIGH | 26 | 15 | 11 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **24** | **102** | — |
+| **Total** | **126** | **25** | **101** | — |
 
 ---
 
@@ -152,10 +152,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: Public endpoints `/api/federation/{providers,login/{provider_id},callback}` are un-rate-limited. The callback accepts arbitrary `code` and `state`; admin CRUD is rate-limited, the unauthenticated path is not.
   - **Fix**: Added `@limiter.limit("10/minute")` to `/providers`, `@limiter.limit("5/minute")` to `/login/{provider_id}`, and `@limiter.limit("10/minute")` to `/callback`. Added `request: Request` parameter to providers and login endpoints (required by slowapi decorators). Tests: `tests/integration/test_federation.py::TestVapt026FederationRateLimits` (4 tests — providers 429 after 10, login 429 after 5, callback 429 after 10, login under limit passes).
 
-- [ ] **VAPT-027** — `setup` endpoint is publicly reachable if not completed (admin takeover race)
+- [x] **VAPT-027** — `setup` endpoint is publicly reachable if not completed (admin takeover race)
   - **Location**: `backend/authglow/api/setup.py:44-94`
   - **Description**: `POST /api/setup/create-admin` is unauthenticated and creates the first admin with full scopes and `email_verified=True`. The 5/minute rate limit is not a substitute for a setup token. The TOCTOU lock is in place but a setup token is still missing.
-  - **Fix**: Require a one-time setup token (random, logged to stdout) that the operator presents; add `is_setup_complete` flag that returns 404 for the setup endpoints after completion.
+  - **Fix**: Added `setup_token` field to `Settings` — auto-generates a 32-byte `secrets.token_urlsafe()` token on first startup if not set via `SETUP_TOKEN` env var; logged to stdout via structlog. `POST /api/setup/create-admin` now requires `Authorization: Bearer <token>` (RFC 6750 / RFC 7591 §A.1.2 Initial Access Token pattern), validated with `secrets.compare_digest`. Returns 403 on missing/wrong token, 404 when setup already complete. Frontend `SetupWizard` updated with `setup_token` password field. Tests: `tests/unit/test_setup.py` — 12 tests covering missing/empty/wrong/valid token, 404 post-setup, malformed auth header, and concurrent lock behavior.
 
 - [ ] **VAPT-028** — CSP allows `'unsafe-inline'` for scripts (defeats XSS mitigation)
   - **Location**: `backend/authglow/core/config.py:311-316`

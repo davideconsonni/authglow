@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import warnings
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -36,8 +37,6 @@ def _generate_key_pair(key_size: int = 2048):
 
 def _new_kid() -> str:
     """Generate a unique sortable key ID with timestamp + random suffix."""
-    import secrets
-
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     suffix = secrets.token_hex(2)
     return f"k{ts}{suffix}"
@@ -245,6 +244,14 @@ class Settings(BaseSettings):
             self.jwt_key_rotation_days,
             self.jwt_auto_rotate,
         )
+        if not self.setup_token:
+            import structlog
+
+            self.setup_token = secrets.token_urlsafe(32)
+            structlog.get_logger("authglow.setup").warning(
+                "setup_token_generated",
+                token=self.setup_token,
+            )
         if self.cors_allow_credentials and self.cors_allowed_headers == "*":
             warnings.warn(
                 "CORS misconfiguration: cors_allow_credentials=true combined with "
@@ -397,6 +404,12 @@ class Settings(BaseSettings):
     # UI Customization
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
+
+    # Setup / Bootstrap
+    # One-time token required to call POST /api/setup/create-admin (RFC 7591 Initial Access Token pattern).
+    # If not set via environment variable, a token is generated at startup and printed to stdout.
+    # Set SETUP_TOKEN=<value> in your .env to supply a fixed token (e.g. for CI/CD).
+    setup_token: Optional[str] = None
 
     @field_validator("secret_key")
     @classmethod

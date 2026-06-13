@@ -1,17 +1,21 @@
 """Initial setup API endpoints."""
 
+import secrets
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr
 
 from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.services.password import PasswordValidator, hash_password
 from authglow.services.storage import UserStorage
 
 router = APIRouter(tags=["Setup"])
+setup_security = HTTPBearer(auto_error=False)
 
 
 class CreateAdminRequest(BaseModel):
@@ -43,11 +47,39 @@ async def check_setup_needed(request: Request):
 
 @router.post("/api/setup/create-admin")
 @limiter.limit("5/minute")
-async def create_admin_user(request: Request, admin_request: CreateAdminRequest):
+async def create_admin_user(
+    request: Request,
+    admin_request: CreateAdminRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(setup_security),
+):
     """Create the initial administrator user.
 
+    Requires a one-time setup token in the Authorization header
+    (Bearer <token>). The token is printed to stdout on first startup
+    or configured via the SETUP_TOKEN environment variable.
+
     Uses a named lock to prevent concurrent admin creation (TOCTOU protection).
+    After setup is complete, this endpoint returns 404.
     """
+    settings = get_settings()
+    expected_token = settings.setup_token
+
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Setup token is not configured on the server.",
+        )
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setup token is required to create the initial admin account.",
+        )
+    if not secrets.compare_digest(credentials.credentials, expected_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid setup token.",
+        )
+
     lock = named_lock()
     async with lock("setup:create-admin"):
         storage = UserStorage()
@@ -55,8 +87,8 @@ async def create_admin_user(request: Request, admin_request: CreateAdminRequest)
         user_count = await storage.count_users()
         if user_count > 0:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Setup already completed. Users already exist in the system.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Setup endpoint is not available.",
             )
 
         validator = PasswordValidator()
