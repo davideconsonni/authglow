@@ -15,7 +15,9 @@ class MFASession(BaseModel):
     ``token_lookup`` (HMAC-SHA256) is stored as the filename.
     """
 
-    session_token: str | None = Field(default=None, exclude=True)
+    session_token: str | None = Field(
+        default_factory=lambda: secrets.token_urlsafe(32), exclude=True
+    )
     token_lookup: str = ""
     user_id: str
     client_id: str

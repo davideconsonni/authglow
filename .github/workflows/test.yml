@@ -25,17 +25,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (allow up to 11 failures)
+      - name: Run tests (allow up to 8 failures)
         run: |
           EXIT_CODE=0
           pytest -q --tb=line -n auto 2>&1 | tee pytest_output.txt || EXIT_CODE=$?
           FAILURES=$(grep -c "^FAILED " pytest_output.txt || echo 0)
           echo "failures=$FAILURES"
-          if [ "$FAILURES" -gt 11 ]; then
-            echo "BUILD FAILED: $FAILURES test failures (max 11 allowed)"
+          if [ "$FAILURES" -gt 8 ]; then
+            echo "BUILD FAILED: $FAILURES test failures (max 8 allowed)"
             exit 1
           fi
-          echo "$FAILURES test failure(s) — within limit (≤11)"
+          echo "$FAILURES test failure(s) — within limit (≤8)"
 
       - name: Run ruff lint
         continue-on-error: true

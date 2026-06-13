@@ -238,6 +238,8 @@ class TestFederationCallbackIdTokenNonce:
                     mock_us = MagicMock()
                     mock_us.get_user_by_email = AsyncMock(return_value=user)
                     mock_us.create_user = AsyncMock(return_value=user)
+                    mock_us.update_user = AsyncMock()
+                    mock_us.update_last_login = AsyncMock()
                     MockUserStorage.return_value = mock_us
                     with patch("authglow.api.federation.JWTService") as MockJWT:
                         MockJWT.return_value.create_token_response = lambda **kw: MagicMock(
@@ -437,13 +439,12 @@ class TestFederationCallbackIdTokenSignature:
                     mock_us = MagicMock()
                     mock_us.get_user_by_email = AsyncMock(return_value=user)
                     mock_us.create_user = AsyncMock(return_value=user)
+                    mock_us.update_user = AsyncMock()
+                    mock_us.update_last_login = AsyncMock()
                     MockUserStorage.return_value = mock_us
                     with patch("authglow.api.federation.JWTService") as MockJWT:
-                        MockJWT.return_value.create_user_tokens = AsyncMock(
-                            return_value={
-                                "access_token": "issued-at",
-                                "refresh_token": "issued-rt",
-                            }
+                        MockJWT.return_value.create_token_response = lambda **kw: MagicMock(
+                            access_token="issued-at", refresh_token="issued-rt"
                         )
                         with patch("authglow.api.federation.AuditService") as MockAudit:
                             MockAudit.return_value.log_event = AsyncMock()

@@ -567,7 +567,7 @@ class TestInviteUserSetPasswordLink:
         assert "token=" not in set_password_url, (
             f"set_password_url must NOT contain a token query string (VAPT-022): {set_password_url!r}"
         )
-        assert set_password_url.endswith("/set-password"), (
+        assert set_password_url.endswith("/auth/reset-password"), (
             f"set_password_url must be the bare set-password page: {set_password_url!r}"
         )
         assert "reset_code" in captured_context, (
@@ -696,7 +696,7 @@ class TestInviteUserSetPasswordLink:
         assert "token=" not in set_password_url, (
             f"set_password_url must NOT contain the reset plaintext token (VAPT-022): {set_password_url!r}"
         )
-        assert set_password_url.endswith("/set-password"), (
+        assert set_password_url.endswith("/auth/reset-password"), (
             f"set_password_url must be the bare set-password page: {set_password_url!r}"
         )
         assert mock_reset_plaintext not in set_password_url, (
@@ -911,4 +911,4 @@ class TestPasswordResetEmailNoTokenInUrl:
         assert captured_context["reset_code"] == fake_code
         assert fake_plaintext not in captured_context["reset_page_url"]
         assert "token=" not in captured_context["reset_page_url"]
-        assert captured_context["reset_page_url"].endswith("/password/reset")
+        assert captured_context["reset_page_url"].endswith("/auth/reset-password")

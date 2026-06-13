@@ -16,7 +16,7 @@ class EmailVerificationToken(BaseModel):
     (bcrypt) and ``token_lookup`` (HMAC-SHA256) are stored on disk.
     """
 
-    token: Optional[str] = Field(default=None, exclude=True)
+    token: Optional[str] = Field(default_factory=lambda: secrets.token_urlsafe(32), exclude=True)
     token_hash: str = ""
     token_lookup: str = ""
     user_id: str
