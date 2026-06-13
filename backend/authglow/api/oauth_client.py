@@ -71,7 +71,7 @@ async def create_oauth_client(
         homepage_uri=client_data.homepage_uri,
         terms_uri=client_data.terms_uri,
         privacy_uri=client_data.privacy_uri,
-        custom_css=client_data.custom_css,
+        branding=client_data.branding,
         access_token_lifetime=client_data.access_token_lifetime,
         refresh_token_lifetime=client_data.refresh_token_lifetime,
         created_by=current_user.id,

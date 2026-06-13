@@ -186,8 +186,6 @@ packaging==26.2
     # via
     #   limits
     #   pytest
-password-strength==0.0.3.post2
-    # via -r requirements.in
 pillow==12.2.0
     # via qrcode
 pluggy==1.6.0
@@ -273,9 +271,7 @@ requests-oauthlib==2.0.0
 s3fs==2026.4.0
     # via -r requirements.in
 six==1.17.0
-    # via
-    #   password-strength
-    #   python-dateutil
+    # via python-dateutil
 slowapi==0.1.10
     # via -r requirements.in
 starlette==1.2.1

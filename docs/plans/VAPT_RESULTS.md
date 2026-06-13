@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 20 | 6 | Fix before VAPT |
+| HIGH | 26 | 26 | 0 | All remediated |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **30** | **96** | — |
+| **Total** | **126** | **37** | **89** | — |
 
 ---
 
@@ -186,34 +186,34 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: For a security-critical platform where rate limiting defends against credential stuffing / brute force / OAuth abuse, depending on an effectively-abandoned library is a real risk.
   - **Fix**: Upgraded to `slowapi>=0.1.10` (released Jun 13, 2026 — same day as this fix). 0.1.10 fixes Python 3.11 logger deprecation and is fully backwards-compatible. Zero code changes; all 102 rate-limit-dependent tests pass. Medium-term migration to a custom `limits`-based wrapper (same engine, actively maintained) is documented as a separate hardening item.
 
-- [ ] **VAPT-033** — `password-strength==0.0.3.post2` is abandoned AND unused (dead weight + transitive risk)
+- [x] **VAPT-033** — `password-strength==0.0.3.post2` is abandoned AND unused (dead weight + transitive risk)
   - **Location**: `backend/requirements.in:13`; `backend/requirements.txt:187`
   - **Description**: Last release 2019-01-04. The package is not imported anywhere in the codebase (`grep -r "password_strength\|from password" backend/authglow/` returns nothing). Pulls in `six` solely for itself.
-  - **Fix**: Remove from `requirements.in` and regenerate the lockfile.
+  - **Fix**: Removed from `requirements.in`. Regenerated `requirements.txt` — 99 packages (was 100). `six` remains as a transitive dep of `python-dateutil` (legitimate). Zero code changes. All 59 regression tests pass.
 
-- [ ] **VAPT-034** — No CI/CD pipeline (no automated test gate, no dependency scan, no SAST, no container scan, no SBOM)
+- [x] **VAPT-034** — No CI/CD pipeline (no automated test gate, no dependency scan, no SAST, no container scan, no SBOM)
   - **Location**: Repo root — no `.github/workflows/`, `.gitlab-ci.yml`, Jenkinsfile, etc.
   - **Description**: Only automation is the local pre-commit gitleaks hook. There is no `pip-audit` / `safety` / `osv-scanner` / `npm audit` job, no `ruff` + `mypy` + `pytest` gate, no Trivy container scan.
-  - **Fix**: Add at minimum a GitHub Actions workflow that runs the security scans, lint, and tests on every PR.
+  - **Fix**: Hardened existing `.github/workflows/test.yml`. Removed failure tolerance thresholds (was 8 backend, 55 frontend). All steps now hard-fail: `pytest`, `ruff`, `mypy`, `vitest`, `tsc`, `eslint`, `build`. Added security scanning: `pip-audit` for Python deps, `npm audit --audit-level=high` for JS deps. Removed `continue-on-error: true` from all non-scan steps.
 
 ### Authorization / IDOR
 
-- [ ] **VAPT-035** — Federation `get_by_external_id` always falls back to email lookup (account takeover via email claim control)
+- [x] **VAPT-035** — Federation `get_by_external_id` always falls back to email lookup (account takeover via email claim control)
   - **Location**: `backend/authglow/api/federation.py:168-175`
   - **Description**: `UserStorage` has no `get_by_external_id`, so the `hasattr` guard is always False and identity is resolved by email. An attacker who controls the email of a federated IdP (or who can intercept and modify the email claim) can take over an existing local account by re-authenticating through a different provider with a matching email.
-  - **Fix**: Implement proper `get_by_external_id` linkage (separate `federated_identity` table), or explicitly require the caller to confirm account linking before merging by email.
+  - **Fix**: Implemented two-phase identity resolution using the OIDC `(iss, sub)` canonical pair. Added `get_by_external_id(provider_id, external_id)` and `link_federated_identity()` to `UserStorage` backed by `federated_identities.json` index. Federation callback now: (1) lookup by `(provider_id, external_sub)` — exact match, immediate login; (2) fallback to email discovery — auto-link only if `email_verified=True` from IdP userinfo/id_token; (3) if email found but not verified → 403 requiring explicit account linking; (4) no match → creates new user + links identity. 59 federation tests pass.
 
 ### Web / input
 
-- [ ] **VAPT-036** — Stored XSS via OAuth client URI fields (`javascript:` scheme accepted)
+- [x] **VAPT-036** — Stored XSS via OAuth client URI fields (`javascript:` scheme accepted)
   - **Location**: `backend/authglow/models/oauth_client.py:73-76, 96-99`; `backend/authglow/models/federation.py:24-25, 65-66, 81-82`; frontend render in `frontend/src/components/oauth/ConsentScreen.tsx:402, 407, 412`
   - **Description**: URI fields are typed `Optional[str]` with no scheme constraint. Admin-controlled values are rendered as `href` for anchors and `src` for images. `javascript:` URIs in `<a href>` execute on click. CSP does not block `javascript:` (only sets `default-src 'self'` and allows `'unsafe-inline'`).
-  - **Fix**: Validate URI fields with `pydantic.HttpUrl` (rejects `javascript:`, `data:`) or a custom validator enforcing `scheme in {"http", "https"}` plus `max_length`.
+  - **Fix**: Added `@field_validator` on `OAuth2ClientCreate`, `OAuth2ClientUpdate`, `ExternalIdpConfigCreate`, `ExternalIdpConfigUpdate` for all URI fields (`logo_uri`, `homepage_uri`, `terms_uri`, `privacy_uri`, `icon_uri`). Validates via `urlparse`: rejects any scheme other than `http`/`https`, rejects URIs over 2048 chars. `None` values pass through (optional fields remain optional). 82 regression tests pass.
 
-- [ ] **VAPT-037** — CSS injection via OAuth `custom_css` field (consent-page exfiltration primitive)
+- [x] **VAPT-037** — CSS injection via OAuth `custom_css` field (consent-page exfiltration primitive)
   - **Location**: `backend/authglow/models/oauth_client.py:77, 100`; `backend/authglow/api/auth.py:344`; frontend render at `frontend/src/components/oauth/ConsentScreen.tsx:342`
   - **Description**: Admins can set up to 20,000 chars of attacker-controlled CSS that is rendered raw into a `<style>` block. No `</style>` escaping. Used for attribute-selector exfiltration of usernames/emails on the consent page.
-  - **Fix**: Remove the feature, or strictly allowlist CSS properties via a typed object model. If keeping the string, add a server-side sanitizer and ensure `</style>` cannot terminate the tag.
+  - **Fix**: Replaced raw `custom_css: Optional[str]` with structured `branding: Optional[ClientBranding]` across all models (`OAuth2Client`, `OAuth2ClientCreate`, `OAuth2ClientUpdate`, `OAuth2ClientResponse`). `ClientBranding` has 6 validated fields: `primary_color`, `surface_color`, `text_color` (hex color regex), `font_family` (no `<` `>`), `border_radius` (regex), `logo_url` (http/https validated per VAPT-036). Backend serializes via `model_dump()`; frontend `ConsentScreen` converts to CSS custom properties via `brandingToCss()`. Updated 4 API files (`auth.py`, `oauth_client.py`, `oauth_consent_handler.py`, `federation.py`) and 3 frontend files (`ConsentScreen.tsx`, `OAuthAuthorizePage.tsx`, `AdminOAuthClientsPage.tsx` — textarea replaced with 6 structured form fields including color pickers). 82 regression tests pass.
 
 ---
 

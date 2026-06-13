@@ -2,9 +2,10 @@
 
 from datetime import datetime
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from authglow.core.datetime import utcnow
 
@@ -77,6 +78,23 @@ class ExternalIdpConfigCreate(BaseModel):
     visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
 
+    @field_validator("icon_uri", "logo_uri")
+    @classmethod
+    def _validate_uri_scheme_create(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"URI scheme must be http or https, got: {parsed.scheme!r}")
+        return v
+
+    @field_validator("icon_uri", "logo_uri")
+    @classmethod
+    def _validate_uri_length_create(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2048:
+            raise ValueError("URI must be at most 2048 characters")
+        return v
+
 
 class ExternalIdpConfigUpdate(BaseModel):
     """Schema for updating an external IdP configuration."""
@@ -93,6 +111,23 @@ class ExternalIdpConfigUpdate(BaseModel):
     auth_levels: Optional[List[str]] = None
     visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
+
+    @field_validator("icon_uri", "logo_uri")
+    @classmethod
+    def _validate_uri_scheme_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"URI scheme must be http or https, got: {parsed.scheme!r}")
+        return v
+
+    @field_validator("icon_uri", "logo_uri")
+    @classmethod
+    def _validate_uri_length_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2048:
+            raise ValueError("URI must be at most 2048 characters")
+        return v
 
 
 class ExternalIdpConfigResponse(BaseModel):

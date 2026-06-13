@@ -17,16 +17,28 @@ function getScopeIcon(scope: string): LucideIcon {
 }
 
 interface ConsentScreenProps {
-  sessionToken?: string
+  sessionToken?: string | null
   clientName: string
   clientDescription?: string | null
   clientLogoUri?: string | null
   clientHomepageUri?: string | null
   clientTermsUri?: string | null
   clientPrivacyUri?: string | null
-  customCss?: string | null
+  branding?: Branding | null
   scopes: Array<{ name: string; description: string }>
   preview?: boolean
+}
+
+function brandingToCss(b: Record<string, unknown> | null | undefined): string {
+  if (!b) return ''
+  const props: string[] = []
+  if (typeof b.primary_color === 'string' && b.primary_color) props.push(`--brand-primary: ${b.primary_color}`)
+  if (typeof b.surface_color === 'string' && b.surface_color) props.push(`--brand-surface: ${b.surface_color}`)
+  if (typeof b.text_color === 'string' && b.text_color) props.push(`--brand-text: ${b.text_color}`)
+  if (typeof b.font_family === 'string' && b.font_family) props.push(`--brand-font: ${b.font_family}`)
+  if (typeof b.border_radius === 'string' && b.border_radius) props.push(`--brand-radius: ${b.border_radius}`)
+  if (typeof b.logo_url === 'string' && b.logo_url) props.push(`--brand-logo: url(${b.logo_url})`)
+  return props.length ? `.authglow-consent { ${props.join('; ')} }` : ''
 }
 
 export function ConsentScreen({
@@ -37,7 +49,7 @@ export function ConsentScreen({
   clientHomepageUri,
   clientTermsUri,
   clientPrivacyUri,
-  customCss,
+  branding,
   scopes,
   preview = false,
 }: ConsentScreenProps) {
@@ -337,8 +349,8 @@ export function ConsentScreen({
         }
         @keyframes consent-spin { to { transform: rotate(360deg); } }
 
-        /* Custom CSS from client — placed last to override all above */
-        ${customCss || ''}
+        /* Branding custom properties — generated from structured branding (VAPT-037) */
+        ${brandingToCss(branding)}
       `}</style>
 
       <div className="consent-card">

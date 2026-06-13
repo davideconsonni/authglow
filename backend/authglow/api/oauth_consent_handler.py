@@ -39,7 +39,7 @@ async def get_authorize_info(
         "client_homepage_uri": client.homepage_uri,
         "client_terms_uri": client.terms_uri,
         "client_privacy_uri": client.privacy_uri,
-        "custom_css": client.custom_css,
+        "branding": client.branding.model_dump() if client.branding else None,
     }
 
 
@@ -108,7 +108,7 @@ async def check_consent_auto(
         "client_homepage_uri": client.homepage_uri if client else None,
         "client_terms_uri": client.terms_uri if client else None,
         "client_privacy_uri": client.privacy_uri if client else None,
-        "custom_css": client.custom_css if client else None,
+        "branding": client.branding.model_dump() if (client and client.branding) else None,
         "scopes": request_scopes,
     }
 

@@ -1,12 +1,52 @@
 """OAuth2 Client models."""
 
+import re
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from authglow.core.datetime import utcnow
+
+_COLOR_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+_BORDER_RADIUS_RE = re.compile(r"^[0-9.]+(px|em|rem|%)$")
+
+
+class ClientBranding(BaseModel):
+    """Structured branding for the OAuth2 consent page.
+
+    Replaces the former raw ``custom_css`` field with a typed object
+    that is safe to render as CSS custom properties — only pre-validated
+    values reach the ``<style>`` tag (VAPT-037 fix).
+    """
+
+    primary_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    surface_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    text_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    font_family: Optional[str] = Field(None, max_length=200)
+    border_radius: Optional[str] = Field(None, pattern=r"^[0-9.]+(px|em|rem|%)$")
+    logo_url: Optional[str] = None
+
+    @field_validator("logo_url")
+    @classmethod
+    def _validate_logo_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"logo_url scheme must be http or https, got: {parsed.scheme!r}")
+        return v
+
+    @field_validator("font_family")
+    @classmethod
+    def _validate_font_family(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if "<" in v or ">" in v:
+            raise ValueError("font_family must not contain < or >")
+        return v
 
 
 class OAuth2Client(BaseModel):
@@ -30,7 +70,8 @@ class OAuth2Client(BaseModel):
     homepage_uri: Optional[str] = None
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
-    custom_css: Optional[str] = None
+    # Structured branding (VAPT-037 — replaces raw custom_css)
+    branding: Optional[ClientBranding] = None
 
     # Status
     is_active: bool = True
@@ -80,6 +121,23 @@ class OAuth2ClientCreate(BaseModel):
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
     refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days
 
+    @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
+    @classmethod
+    def _validate_uri_scheme(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"URI scheme must be http or https, got: {parsed.scheme!r}")
+        return v
+
+    @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
+    @classmethod
+    def _validate_uri_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2048:
+            raise ValueError("URI must be at most 2048 characters")
+        return v
+
 
 class OAuth2ClientUpdate(BaseModel):
     """Schema for updating an OAuth2 client."""
@@ -105,6 +163,23 @@ class OAuth2ClientUpdate(BaseModel):
     access_token_lifetime: Optional[int] = Field(None, ge=300, le=86400)
     refresh_token_lifetime: Optional[int] = Field(None, ge=3600, le=7776000)
 
+    @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
+    @classmethod
+    def _validate_uri_scheme_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"URI scheme must be http or https, got: {parsed.scheme!r}")
+        return v
+
+    @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
+    @classmethod
+    def _validate_uri_length_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > 2048:
+            raise ValueError("URI must be at most 2048 characters")
+        return v
+
 
 class OAuth2ClientResponse(BaseModel):
     """Public OAuth2 client response (without secret)."""
@@ -124,7 +199,8 @@ class OAuth2ClientResponse(BaseModel):
     homepage_uri: Optional[str] = None
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
-    custom_css: Optional[str] = None
+    # Structured branding (VAPT-037 — replaces raw custom_css)
+    branding: Optional[ClientBranding] = None
 
     is_active: bool
     created_at: datetime

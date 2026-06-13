@@ -9,9 +9,6 @@ pyjwt[crypto]
 bcrypt
 cryptography
 
-# Password validation
-password-strength
-
 # MFA / TOTP
 pyotp
 qrcode[pil]

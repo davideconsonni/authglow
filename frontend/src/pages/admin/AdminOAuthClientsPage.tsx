@@ -30,6 +30,7 @@ interface OAuthClient {
   access_token_lifetime?: number
   refresh_token_lifetime?: number
   custom_css?: string | null
+  branding?: Record<string, unknown> | null
   token_endpoint_auth_method?: string
 }
 
@@ -143,6 +144,7 @@ export function AdminOAuthClientsPage() {
   const [accessTokenLifetime, setAccessTokenLifetime] = useState(3600)
   const [refreshTokenLifetime, setRefreshTokenLifetime] = useState(2592000)
   const [customCss, setCustomCss] = useState('')
+  const [branding, setBranding] = useState<Record<string, string>>({})
 
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -208,6 +210,7 @@ export function AdminOAuthClientsPage() {
     setTermsUri(c.terms_uri || '')
     setPrivacyUri(c.privacy_uri || '')
     setCustomCss(c.custom_css || '')
+    setBranding((c.branding as Record<string, string>) || {})
     setAllowedScopes((c.scopes || c.allowed_scopes || []).join(' ') || 'openid profile email')
     setAccessTokenLifetime(c.access_token_lifetime ?? 3600)
     setRefreshTokenLifetime(c.refresh_token_lifetime ?? 2592000)
@@ -260,6 +263,7 @@ export function AdminOAuthClientsPage() {
       terms_uri: termsUri || undefined,
       privacy_uri: privacyUri || undefined,
       custom_css: customCss || undefined,
+      branding: Object.keys(branding).length > 0 ? branding : undefined,
       allowed_scopes: allowedScopes.trim().split(/\s+/).filter(Boolean),
       access_token_lifetime: accessTokenLifetime,
       refresh_token_lifetime: refreshTokenLifetime,
@@ -458,7 +462,7 @@ export function AdminOAuthClientsPage() {
                   name: s,
                   description: getScopeLabel(s),
                 }))}
-                customCss={previewClient.custom_css}
+                branding={previewClient.branding}
                 preview
               />
             </div>
@@ -677,15 +681,45 @@ export function AdminOAuthClientsPage() {
                 </div>
 
                 <div className="pt-3 border-t border-surface-2">
-                  <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Custom CSS</label>
-                  <textarea
-                    value={customCss}
-                    onChange={e => setCustomCss(e.target.value)}
-                    placeholder={`.authglow-consent {\n  --bg-color: #ffffff;\n  --text-color: #1a1a2e;\n}\n.authglow-consent .btn-approve {\n  background: #6366f1;\n  border-radius: 8px;\n}`}
-                    rows={5}
-                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y"
-                  />
-                  <p className="mt-1 text-[10px] text-text-muted">Override consent screen styles. Uses CSS custom properties and scoped selectors.</p>
+                  <h4 className="mb-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Consent Page Branding</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Primary color</label>
+                      <div className="flex gap-2">
+                        <input type="color" value={branding.primary_color || '#6366f1'} onChange={e => setBranding({...branding, primary_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
+                        <input value={branding.primary_color || ''} onChange={e => setBranding({...branding, primary_color: e.target.value})} placeholder="#6366f1" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Surface color</label>
+                      <div className="flex gap-2">
+                        <input type="color" value={branding.surface_color || '#ffffff'} onChange={e => setBranding({...branding, surface_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
+                        <input value={branding.surface_color || ''} onChange={e => setBranding({...branding, surface_color: e.target.value})} placeholder="#ffffff" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Text color</label>
+                      <div className="flex gap-2">
+                        <input type="color" value={branding.text_color || '#1a1a2e'} onChange={e => setBranding({...branding, text_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
+                        <input value={branding.text_color || ''} onChange={e => setBranding({...branding, text_color: e.target.value})} placeholder="#1a1a2e" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Border radius</label>
+                      <input value={branding.border_radius || ''} onChange={e => setBranding({...branding, border_radius: e.target.value})} placeholder="12px" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Font family</label>
+                      <input value={branding.font_family || ''} onChange={e => setBranding({...branding, font_family: e.target.value})} placeholder="Inter, sans-serif" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URL</label>
+                      <input value={branding.logo_url || ''} onChange={e => setBranding({...branding, logo_url: e.target.value})} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-text-muted">Branding is applied as CSS custom properties on the consent page. Leave fields empty to use defaults.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-surface-2">

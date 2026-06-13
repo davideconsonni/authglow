@@ -25,29 +25,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (allow up to 8 failures)
-        run: |
-          EXIT_CODE=0
-          pytest -q --tb=line -n auto 2>&1 | tee pytest_output.txt || EXIT_CODE=$?
-          FAILURES=$(grep -c "^FAILED " pytest_output.txt || echo 0)
-          echo "failures=$FAILURES"
-          if [ "$FAILURES" -gt 8 ]; then
-            echo "BUILD FAILED: $FAILURES test failures (max 8 allowed)"
-            exit 1
-          fi
-          echo "$FAILURES test failure(s) — within limit (≤8)"
+      - name: Run pytest
+        run: pytest -q --tb=line -n auto
 
       - name: Run ruff lint
-        continue-on-error: true
         run: |
           pip install ruff
           ruff check authglow/
 
       - name: Run mypy
-        continue-on-error: true
         run: |
           pip install mypy
           mypy authglow/
+
+      - name: Run dependency audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
 
   frontend-tests:
     name: Frontend (TypeScript)
@@ -67,48 +61,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run vitest (allow up to 55 failures)
-        run: |
-          EXIT_CODE=0
-          npx vitest run --config vitest.config.ts 2>&1 | tee vitest_output.txt || EXIT_CODE=$?
-          FAILURES=$(grep -oP 'Tests\s+\d+\s+failed' vitest_output.txt | tail -1 | grep -oP '\d+' || echo 0)
-          if [ -z "$FAILURES" ]; then
-            FAILURES=0
-          fi
-          echo "failures=$FAILURES"
-          if [ "$FAILURES" -gt 55 ]; then
-            echo "BUILD FAILED: $FAILURES test failures (max 55 allowed)"
-            exit 1
-          fi
-          echo "$FAILURES test failure(s) — within limit (≤55)"
+      - name: Run vitest
+        run: npx vitest run --config vitest.config.ts
 
       - name: Run type-check (tsc)
-        continue-on-error: true
         run: npx tsc -b --noEmit
 
       - name: Run lint
-        continue-on-error: true
         run: npm run lint
 
-  build:
-    name: Build
-    needs: [backend-tests, frontend-tests]
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Run dependency audit (npm)
+        run: npm audit --audit-level=high
 
       - name: Build frontend
-        continue-on-error: true
         run: npm run build

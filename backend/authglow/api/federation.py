@@ -227,10 +227,11 @@ async def federation_callback(
         external_id = mapped.get("external_id", "")
         email = mapped.get("email", "")
 
-        existing_user = None
-        if email:
-            existing_user = await user_storage.get_user_by_email(email)
-
+        # VAPT-035: two-phase identity resolution using (provider_id, external_id)
+        # as the canonical identity pair per OIDC Core §2 (sub claim).
+        existing_user = await user_storage.get_by_external_id(
+            provider.id, external_id
+        )
         if existing_user:
             user = existing_user
             if not user.is_active:
@@ -239,10 +240,6 @@ async def federation_callback(
                     detail="Account is deactivated. Contact support for assistance.",
                 )
             requires_update = False
-            if not user.is_federated:
-                user.is_federated = True
-                user.email_verified = True
-                requires_update = True
             first_name = mapped.get("given_name") or mapped.get("name", "")
             last_name = mapped.get("family_name", "")
             if first_name:
@@ -253,7 +250,62 @@ async def federation_callback(
                 requires_update = True
             if requires_update:
                 await user_storage.update_user(user)
-        else:
+        elif email:
+            # Not found by (provider, sub) — try email as a discovery hint.
+            # Auto-link only if the IdP asserts email_verified (VAPT-035).
+            existing_user = await user_storage.get_user_by_email(email)
+            if existing_user:
+                email_verified = claims.get("email_verified")
+                if not email_verified:
+                    id_token_raw = token_response.get("id_token")
+                    if id_token_raw:
+                        try:
+                            import jwt as _jwt_mod
+
+                            decoded = _jwt_mod.decode(
+                                id_token_raw, options={"verify_signature": False}
+                            )
+                            email_verified = decoded.get("email_verified", False)
+                        except Exception:
+                            pass
+
+                if email_verified:
+                    user = existing_user
+                    if not user.is_active:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Account is deactivated. Contact support for assistance.",
+                        )
+                    requires_update = False
+                    if not user.is_federated:
+                        user.is_federated = True
+                        user.email_verified = True
+                        requires_update = True
+                    first_name = mapped.get("given_name") or mapped.get("name", "")
+                    last_name = mapped.get("family_name", "")
+                    if first_name:
+                        user.first_name = first_name
+                        requires_update = True
+                    if last_name:
+                        user.last_name = last_name
+                        requires_update = True
+                    if requires_update:
+                        await user_storage.update_user(user)
+                    await user_storage.link_federated_identity(
+                        user.id, provider.id, external_id
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            "An account with this email already exists but the "
+                            "identity provider did not verify the email address. "
+                            "Please sign in with your existing credentials and "
+                            "link this provider from your account settings."
+                        ),
+                    )
+
+        if existing_user is None:
             from authglow.models.user import User
             from authglow.services.password import hash_password
 
@@ -267,6 +319,9 @@ async def federation_callback(
                 email_verified=True,
             )
             user = await user_storage.create_user(user)
+            await user_storage.link_federated_identity(
+                user.id, provider.id, external_id
+            )
 
         # Check if account is suspended
         if user.suspended_until and utcnow() < user.suspended_until:
@@ -558,7 +613,7 @@ async def federated_consent_check(
         "client_homepage_uri": client.homepage_uri,
         "client_terms_uri": client.terms_uri,
         "client_privacy_uri": client.privacy_uri,
-        "custom_css": client.custom_css,
+        "branding": client.branding.model_dump() if client.branding else None,
         "scopes": scope_items,
     }
 

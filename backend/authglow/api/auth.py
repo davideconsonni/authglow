@@ -22,8 +22,7 @@ from authglow.services.api_key import APIKeyLockedException, APIKeyService
 from authglow.services.audit import AuditService
 from authglow.services.email.factory import get_email_service
 from authglow.services.email_verification import EmailVerificationService
-from authglow.services.jwt import JWTService
-from authglow.services.jwt import resolve_rbac_permissions
+from authglow.services.jwt import JWTService, resolve_rbac_permissions
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.password import PasswordValidator, hash_password, verify_password
@@ -436,7 +435,7 @@ async def authorize_post(
         "client_homepage_uri": client.homepage_uri,
         "client_terms_uri": client.terms_uri,
         "client_privacy_uri": client.privacy_uri,
-        "custom_css": client.custom_css,
+        "branding": client.branding.model_dump() if client.branding else None,
         "scopes": scope_items,
     }
 

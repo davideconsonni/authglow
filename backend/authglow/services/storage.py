@@ -54,6 +54,10 @@ class UserStorage:
         """Get path for email-to-id index."""
         return f"{self.storage_path}/email_index.json"
 
+    def _get_federated_identities_path(self) -> str:
+        """Get path for federated identity index."""
+        return f"{self.storage_path}/federated_identities.json"
+
     async def _load_email_index(self) -> dict:
         """Load email to user_id mapping."""
         index_path = self._get_email_index_path()
@@ -67,6 +71,48 @@ class UserStorage:
         """Save email to user_id mapping."""
         index_path = self._get_email_index_path()
         await self._afs.write_json(index_path, index)
+
+    async def _load_federated_identities(self) -> dict:
+        """Load (provider_id, external_id) → user_id mapping."""
+        index_path = self._get_federated_identities_path()
+        try:
+            result: dict = await self._afs.read_json(index_path)
+            return result
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    async def _save_federated_identities(self, index: dict):
+        """Save (provider_id, external_id) → user_id mapping."""
+        index_path = self._get_federated_identities_path()
+        await self._afs.write_json(index_path, index)
+
+    def _make_identity_key(self, provider_id: str, external_id: str) -> str:
+        """Create the composite key for a federated identity."""
+        return f"{provider_id}|{external_id}"
+
+    async def get_by_external_id(self, provider_id: str, external_id: str) -> Optional[User]:
+        """Find a user by their federated identity (provider_id, external_id)."""
+        index = await self._load_federated_identities()
+        key = self._make_identity_key(provider_id, external_id)
+        user_id = index.get(key)
+        if not user_id:
+            return None
+        return await self.get_user(user_id)
+
+    async def link_federated_identity(
+        self, user_id: str, provider_id: str, external_id: str
+    ) -> None:
+        """Link a federated (provider_id, external_id) pair to a local user."""
+        async with self._lock("federated_identities"):
+            index = await self._load_federated_identities()
+            key = self._make_identity_key(provider_id, external_id)
+            existing = index.get(key)
+            if existing and existing != user_id:
+                raise ValueError(
+                    f"Identity {key} is already linked to user {existing}"
+                )
+            index[key] = user_id
+            await self._save_federated_identities(index)
 
     def _encrypt_user_for_storage(self, user: User) -> dict:
         """Prepare user dict for storage — encrypts PII fields."""
