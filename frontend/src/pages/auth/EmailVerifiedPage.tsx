@@ -7,13 +7,14 @@ import { ROUTES } from '@/lib/constants'
 export function EmailVerifiedPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
+    token ? 'loading' : 'error'
+  )
+  const [resending, setResending] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   useEffect(() => {
-    if (!token) {
-      setStatus('error')
-      return
-    }
+    if (!token) return
 
     const verify = async () => {
       try {
@@ -26,6 +27,18 @@ export function EmailVerifiedPage() {
 
     verify()
   }, [token])
+
+  const handleResend = async () => {
+    setResending(true)
+    try {
+      await api.post('/api/email/resend-verification')
+      setResendSent(true)
+    } catch {
+      // silently fail, user can retry
+    } finally {
+      setResending(false)
+    }
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
@@ -66,13 +79,23 @@ export function EmailVerifiedPage() {
             <p className="text-sm text-text-muted">
               This verification link is invalid or has expired. You can request a new one.
             </p>
-            <Link
-              to={ROUTES.AUTH.LOGIN}
-              className="inline-flex items-center gap-2 text-sm font-medium text-brand-violet hover:text-brand-blue transition-colors"
-            >
-              <RefreshCw size={14} />
-              Request a new verification email
-            </Link>
+            {resendSent ? (
+              <p className="text-sm text-semantic-success">Verification email sent. Check your inbox.</p>
+            ) : (
+              <button
+                onClick={handleResend}
+                disabled={resending}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                {resending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Resend verification email
+              </button>
+            )}
+            <p className="text-xs text-text-muted">
+              <Link to={ROUTES.AUTH.LOGIN} className="font-medium text-brand-violet hover:text-brand-blue transition-colors">
+                Back to sign in
+              </Link>
+            </p>
           </div>
         )}
       </div>

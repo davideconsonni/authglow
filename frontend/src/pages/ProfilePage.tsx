@@ -13,6 +13,7 @@ import { CopyButton } from '@/components/shared/CopyButton'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Section } from '@/components/shared/Section'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { ResendVerificationBanner } from '@/components/auth/ResendVerificationBanner'
 import { formatDateTime } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
 
@@ -157,6 +158,11 @@ export function ProfilePage() {
                     />
                   )}
                 </div>
+                {p?.email_verified === false && (
+                  <div className="mt-4">
+                    <ResendVerificationBanner />
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setShowForm(!showForm)}
