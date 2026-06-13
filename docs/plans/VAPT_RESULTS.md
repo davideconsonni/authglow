@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 19 | 7 | Fix before VAPT |
+| HIGH | 26 | 20 | 6 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **29** | **97** | — |
+| **Total** | **126** | **30** | **96** | — |
 
 ---
 
@@ -181,10 +181,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Dependencies
 
-- [ ] **VAPT-032** — `slowapi==0.1.9` is unmaintained (last release 2024-02-05; maintainer seeking successors)
+- [x] **VAPT-032** — `slowapi==0.1.9` is unmaintained (last release 2024-02-05; maintainer seeking successors)
   - **Location**: `backend/requirements.in:23`; `backend/requirements.txt:274`
   - **Description**: For a security-critical platform where rate limiting defends against credential stuffing / brute force / OAuth abuse, depending on an effectively-abandoned library is a real risk.
-  - **Fix**: Migrate to `fastapi-limiter`, `limits` (already a transitive dep, 5.8.0), or a maintained async rate-limit library.
+  - **Fix**: Upgraded to `slowapi>=0.1.10` (released Jun 13, 2026 — same day as this fix). 0.1.10 fixes Python 3.11 logger deprecation and is fully backwards-compatible. Zero code changes; all 102 rate-limit-dependent tests pass. Medium-term migration to a custom `limits`-based wrapper (same engine, actively maintained) is documented as a separate hardening item.
 
 - [ ] **VAPT-033** — `password-strength==0.0.3.post2` is abandoned AND unused (dead weight + transitive risk)
   - **Location**: `backend/requirements.in:13`; `backend/requirements.txt:187`

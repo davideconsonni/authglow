@@ -20,7 +20,7 @@ qrcode[pil]
 webauthn
 
 # Rate Limiting
-slowapi
+slowapi>=0.1.10
 wrapt<1.17  # transitive dep of slowapi / limits / deprecated; wrapt>=1.17 removed AdapterFactory
 
 # Structured logging (cloud-native)

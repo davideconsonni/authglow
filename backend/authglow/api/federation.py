@@ -37,6 +37,14 @@ def get_audit_service():
     return AuditService()
 
 
+def get_federation_storage() -> FederationStorage:
+    return FederationStorage()
+
+
+def get_user_storage() -> UserStorage:
+    return UserStorage()
+
+
 # ---------------------------------------------------------------------------
 # Public endpoints — used by the OAuth authorize / login page
 # ---------------------------------------------------------------------------
@@ -47,7 +55,7 @@ def get_audit_service():
 async def list_public_providers(
     request: Request,
     context: Optional[str] = Query(default=None),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Return the list of enabled external IdPs for the login UI.
 
@@ -74,7 +82,7 @@ async def federation_login(
     code_challenge_method: Optional[str] = Query(default=None),
     response_type: Optional[str] = Query(default=None),
     oidc_nonce: Optional[str] = Query(default=None),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Initiate federated login — redirect user to the external IdP.
 
@@ -145,9 +153,9 @@ async def federation_callback(
     code: str,
     state: str,
     provider_id: Optional[str] = Query(default=None),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
     audit_service: AuditService = Depends(get_audit_service),
-    user_storage: UserStorage = Depends(lambda: UserStorage()),
+    user_storage: UserStorage = Depends(get_user_storage),
 ):
     """Handle the redirect callback from the external IdP.
 
@@ -561,7 +569,7 @@ async def create_provider(
     request: Request,
     provider_data: ExternalIdpConfigCreate,
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: create a new external IdP provider."""
 
@@ -589,7 +597,7 @@ async def create_provider(
 @router.get("/api/federation/admin/providers", response_model=List[ExternalIdpConfigResponse])
 async def list_all_providers(
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: list all providers (including disabled)."""
     return await storage.list_providers(enabled_only=False)
@@ -601,7 +609,7 @@ async def list_all_providers(
 async def get_provider(
     provider_id: str,
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: get a single provider."""
     provider = await storage.get_provider(provider_id)
@@ -619,7 +627,7 @@ async def update_provider(
     provider_id: str,
     updates: ExternalIdpConfigUpdate,
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: update a provider."""
     update_data = updates.model_dump(exclude_unset=True)
@@ -635,7 +643,7 @@ async def delete_provider(
     request: Request,
     provider_id: str,
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: delete a provider."""
     deleted = await storage.delete_provider(provider_id)
@@ -648,7 +656,7 @@ async def delete_provider(
 async def toggle_provider(
     provider_id: str,
     current_user: User = Depends(require_admin),
-    storage: FederationStorage = Depends(lambda: FederationStorage()),
+    storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: toggle provider enabled/disabled."""
     provider = await storage.get_provider(provider_id)

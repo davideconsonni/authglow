@@ -276,7 +276,7 @@ six==1.17.0
     # via
     #   password-strength
     #   python-dateutil
-slowapi==0.1.9
+slowapi==0.1.10
     # via -r requirements.in
 starlette==1.2.1
     # via fastapi

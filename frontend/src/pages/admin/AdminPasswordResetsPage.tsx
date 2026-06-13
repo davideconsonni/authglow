@@ -9,9 +9,11 @@ import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface ResetToken {
-  id: string
-  user_email: string
-  token: string
+  token_id: string
+  email: string
+  reset_code: string
+  token_lookup: string
+  token_hash: string
   is_used: boolean
   created_at: string
   expires_at: string
@@ -130,12 +132,12 @@ export function AdminPasswordResetsPage() {
             </thead>
             <tbody className="divide-y divide-surface-2">
               {tokens.map(t => (
-                <tr key={t.id} className="hover:bg-surface-2/50">
-                  <td className="px-6 py-3 text-sm text-text-primary">{t.user_email}</td>
+                <tr key={t.token_id} className="hover:bg-surface-2/50">
+                  <td className="px-6 py-3 text-sm text-text-primary">{t.email}</td>
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-text-secondary">{t.token.slice(0, 12)}...</code>
-                      <CopyButton text={t.token} />
+                      <code className="text-xs font-mono text-text-secondary">{(t.reset_code || t.token_lookup).slice(0, 12)}...</code>
+                      <CopyButton text={t.reset_code || t.token_lookup} />
                     </div>
                   </td>
                   <td className="px-6 py-3">
@@ -148,7 +150,7 @@ export function AdminPasswordResetsPage() {
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(t.created_at)}</td>
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(t.expires_at)}</td>
                   <td className="px-6 py-3">
-                    <button onClick={() => setDeleteId(t.id)} className="text-text-muted hover:text-semantic-error" title="Delete token"><Trash2 size={14} /></button>
+                    <button onClick={() => setDeleteId(t.token_id)} className="text-text-muted hover:text-semantic-error" title="Delete token"><Trash2 size={14} /></button>
                   </td>
                 </tr>
               ))}
