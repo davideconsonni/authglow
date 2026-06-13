@@ -104,10 +104,10 @@ class TestSecurityHeadersMiddleware:
         assert hdrs.get("x-xss-protection") == "0"
         assert hdrs.get("x-permitted-cross-domain-policies") == "none"
 
-    def test_hsts_not_included_in_development(self):
+    def test_hsts_not_included_when_disabled(self):
         from authglow.middleware.security_headers import SecurityHeadersMiddleware
 
-        settings = _make_settings(app_env="development")
+        settings = _make_settings(enforce_hsts=False)
         mw = SecurityHeadersMiddleware(_FakeApp(), settings=settings)
 
         send = _FakeSend()
@@ -301,6 +301,7 @@ def _make_settings(**overrides) -> object:
     settings.permissions_policy = ""
     settings.hsts_max_age = 31536000
     settings.hsts_include_subdomains = True
+    settings.enforce_hsts = True
     for key, value in overrides.items():
         setattr(settings, key, value)
     return settings

@@ -339,6 +339,7 @@ class Settings(BaseSettings):
     permissions_policy: str = ""
     hsts_max_age: int = 31536000
     hsts_include_subdomains: bool = True
+    enforce_hsts: bool = True
 
     # API Key Brute-Force Lockout
     api_key_max_failed_attempts: int = 5

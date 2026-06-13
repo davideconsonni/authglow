@@ -66,9 +66,9 @@ class TestSecurityHeadersOnHealth:
         response = client_with_test_settings.get("/health")
         assert "permissions-policy" not in response.headers
 
-    def test_no_hsts_in_development(self, client_with_test_settings):
+    def test_hsts_present_by_default(self, client_with_test_settings):
         response = client_with_test_settings.get("/health")
-        assert "strict-transport-security" not in response.headers
+        assert "strict-transport-security" in response.headers
 
 
 class TestSecurityHeadersOnRoot:
@@ -199,6 +199,7 @@ def _make_prod_settings():
     settings.permissions_policy = ""
     settings.hsts_max_age = 31536000
     settings.hsts_include_subdomains = True
+    settings.enforce_hsts = True
     return settings
 
 

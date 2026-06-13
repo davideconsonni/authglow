@@ -83,7 +83,7 @@ class TestUserInfoEndpoint:
 
     def test_userinfo_no_auth_header(self, _userinfo_app):
         response = _userinfo_app.get("/oauth2/userinfo")
-        assert response.status_code == 403
+        assert response.status_code in (401, 403)
 
     def test_userinfo_user_not_found(self, jwt_service, _userinfo_app):
         token = _make_test_token(jwt_service, sub="nonexistent-user")

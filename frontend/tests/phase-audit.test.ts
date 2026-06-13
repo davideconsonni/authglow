@@ -18,9 +18,9 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
       expect(source).toContain('/api/tokens/refresh/revoke-all')
     })
 
-    it('non importa piu ConfirmDialog (remove per singola revoca)', async () => {
+    it('usa ConfirmDialog per singola revoca con conferma', async () => {
       const source = readFileSync(resolve(SRC, 'pages', 'SessionsPage.tsx'), 'utf-8')
-      expect(source).not.toContain('ConfirmDialog')
+      expect(source).toContain('ConfirmDialog')
     })
   })
 

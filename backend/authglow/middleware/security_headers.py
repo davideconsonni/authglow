@@ -32,7 +32,6 @@ class SecurityHeadersMiddleware:
             return
 
         settings = self._get_settings()
-        is_production = settings.app_env.lower() == "production"
         path = scope.get("path", "")
 
         headers_to_add: list[tuple[str, str]] = []
@@ -62,7 +61,7 @@ class SecurityHeadersMiddleware:
         if settings.permissions_policy:
             _add_header(headers_to_add, "permissions-policy", settings.permissions_policy)
 
-        if is_production:
+        if settings.enforce_hsts:
             hsts = f"max-age={settings.hsts_max_age}"
             if settings.hsts_include_subdomains:
                 hsts += "; includeSubDomains"
