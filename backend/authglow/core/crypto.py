@@ -19,6 +19,7 @@ _KEY_INFO = b"authglow-key-encryption-v1"
 _KEY_AAD = b"authglow-private-key"
 
 _USER_INFO = b"authglow-user-field-v1"
+_FEDERATION_STATE_INFO = b"authglow-federation-state-v1"
 
 
 def _resolve_secret_key(secret_key: Optional[str] = None) -> str:
@@ -35,6 +36,16 @@ def _derive_key(secret_key: Optional[str] = None, info: bytes = _INFO) -> bytes:
         length=32,
         salt=None,
         info=info,
+    )
+    return hkdf.derive(_resolve_secret_key(secret_key).encode())
+
+
+def derive_federation_state_key(secret_key: Optional[str] = None) -> bytes:
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=_FEDERATION_STATE_INFO,
     )
     return hkdf.derive(_resolve_secret_key(secret_key).encode())
 

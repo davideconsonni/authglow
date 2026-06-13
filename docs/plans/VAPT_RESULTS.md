@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 17 | 9 | Fix before VAPT |
+| HIGH | 26 | 18 | 8 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **27** | **99** | — |
+| **Total** | **126** | **28** | **98** | — |
 
 ---
 
@@ -169,10 +169,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: Key generation, migration, rotation use `print(...)` instead of the project-mandated structlog. They bypass the audit log config, mix unstructured plaintext with the JSON audit stream, and won't be filterable.
   - **Fix**: Replaced all 5 `print()` calls in `get_or_generate_keyring` and `_perform_rotation` with `structlog.get_logger("authglow.keys").info(...)`. Added module-level `_keys_log` logger and removed redundant local `import structlog` from `Settings.__init__` (now at module level). Events: `keyring_migration_started`, `keyring_generation_started`, `keyring_initialised` (with `kid`), `keyring_rotation_started` (with `kid`, `age_days`, `rotation_days`), `keyring_rotated` (with `old_kid`, `new_kid`).
 
-- [ ] **VAPT-030** — `SECRET_KEY` reused across HKDF key derivation and HS256 state JWT
+- [x] **VAPT-030** — `SECRET_KEY` reused across HKDF key derivation and HS256 state JWT
   - **Location**: `backend/authglow/core/crypto.py:20-35`; `backend/authglow/services/federation_state.py:76-95`
   - **Description**: The same `SECRET_KEY` is used (a) as HKDF input for AES-GCM wrapping of TOTP secrets and RSA private keys, and (b) as HMAC-SHA256 secret for the federated-login state JWT. Key-separation violation per NIST SP 800-57 §5.2.
-  - **Fix**: Derive a per-purpose key with HKDF (e.g. `HKDF(secret, salt=b"federation-state-v1", info=b"HS256")`) and use the derived key per subsystem.
+  - **Fix**: Added `derive_federation_state_key()` to `crypto.py` using HKDF with `info=b"authglow-federation-state-v1"`. `FederationStateToken.__init__` now derives a per-purpose key via `derive_federation_state_key()`, and `sign()`/`verify()` use the derived key instead of raw `SECRET_KEY`. The raw `SECRET_KEY` is never used directly as HMAC material for JWT signing. Tests: `tests/unit/test_federation_state.py` (19/19), `tests/integration/test_federation.py` — 4 helper paths updated to derive keys.
 
 - [ ] **VAPT-031** — HSTS only emitted when `APP_ENV=production` (silent downgrade in staging/QA)
   - **Location**: `backend/authglow/middleware/security_headers.py:61-65`

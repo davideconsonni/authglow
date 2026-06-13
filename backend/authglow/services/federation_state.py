@@ -50,7 +50,10 @@ class FederationStateToken:
     """Sign and verify OIDC federation state tokens (HS256 JWT)."""
 
     def __init__(self):
+        from authglow.core.crypto import derive_federation_state_key
+
         self.settings = get_settings()
+        self._signing_key = derive_federation_state_key()
 
     def sign(
         self,
@@ -91,7 +94,7 @@ class FederationStateToken:
         if oauth2_context:
             claims["oauth2_context"] = oauth2_context
 
-        token = jwt.encode(claims, self.settings.secret_key, algorithm=ALGORITHM)
+        token = jwt.encode(claims, self._signing_key, algorithm=ALGORITHM)
         return {"state": token, "nonce": nonce}
 
     def verify(self, token: str) -> Dict[str, Any]:
@@ -110,7 +113,7 @@ class FederationStateToken:
         try:
             claims = jwt.decode(
                 token,
-                self.settings.secret_key,
+                self._signing_key,
                 algorithms=[ALGORITHM],
                 audience=AUDIENCE,
                 issuer=ISSUER,

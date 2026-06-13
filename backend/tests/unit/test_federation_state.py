@@ -6,6 +6,7 @@ from unittest.mock import patch
 import jwt as pyjwt
 import pytest
 
+from authglow.core.crypto import derive_federation_state_key
 from authglow.services.federation_state import (
     EXPIRY_SECONDS,
     FederationStateError,
@@ -99,7 +100,7 @@ class TestVerify:
                 "iat": now,
                 "exp": now + EXPIRY_SECONDS,
             }
-            token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+            token = pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
             with pytest.raises(FederationStateError, match="expired"):
                 state_token.verify(token)
 
@@ -116,7 +117,7 @@ class TestVerify:
             "iat": now,
             "exp": now + EXPIRY_SECONDS,
         }
-        token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+        token = pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
         with pytest.raises(FederationStateError, match="audience"):
             state_token.verify(token)
 
@@ -133,7 +134,7 @@ class TestVerify:
             "iat": now,
             "exp": now + EXPIRY_SECONDS,
         }
-        token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+        token = pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
         with pytest.raises(FederationStateError, match="issuer"):
             state_token.verify(token)
 
@@ -150,7 +151,7 @@ class TestVerify:
             "iat": now,
             "exp": now + EXPIRY_SECONDS,
         }
-        token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+        token = pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
         with pytest.raises(FederationStateError, match="nonce"):
             state_token.verify(token)
 

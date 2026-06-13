@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.api.federation import router as federation_router
+from authglow.core.crypto import derive_federation_state_key
 from authglow.core.token_blacklist import _reset_token_blacklist
 
 
@@ -64,7 +65,7 @@ def _sign_state(test_settings, provider_id="google", redirect_uri=None, **overri
         "exp": now + 600,
     }
     claims.update(overrides)
-    return pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+    return pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
 
 
 def _make_provider(provider_id="google", label="Google"):
@@ -115,7 +116,7 @@ class TestFederationLoginGeneratesState:
         assert state_value.count(".") == 2
         claims = pyjwt.decode(
             state_value,
-            test_settings.secret_key,
+            derive_federation_state_key(test_settings.secret_key),
             algorithms=["HS256"],
             audience="federation",
             issuer="authglow",
@@ -182,7 +183,7 @@ class TestFederationCallbackRejectsBadState:
             "iat": now,
             "exp": now + EXPIRY_SECONDS,
         }
-        token = pyjwt.encode(claims, test_settings.secret_key, algorithm="HS256")
+        token = pyjwt.encode(claims, derive_federation_state_key(test_settings.secret_key), algorithm="HS256")
         resp = federation_app.get(
             "/api/federation/callback",
             params={"code": "abc", "state": token, "provider_id": "google"},
