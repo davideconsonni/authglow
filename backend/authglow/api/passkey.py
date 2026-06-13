@@ -18,8 +18,7 @@ from authglow.models.passkey import (
 )
 from authglow.models.user import User
 from authglow.services.audit import AuditService
-from authglow.services.jwt import JWTService
-from authglow.services.jwt import resolve_rbac_permissions
+from authglow.services.jwt import JWTService, resolve_rbac_permissions
 from authglow.services.passkey import PasskeyService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.storage import UserStorage

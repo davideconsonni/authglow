@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
-from authglow.core.rate_limit import limiter
 from authglow.core.datetime import utcnow
+from authglow.core.rate_limit import limiter
 from authglow.models.admin import (
     AdminUserDetail,
     BulkUserOperation,
@@ -221,7 +221,7 @@ async def update_user(
             user_id=user_id,
             event_type="email_changed_by_admin",
             email=user.email,
-            description=f"Email changed by admin",
+            description="Email changed by admin",
             metadata={"admin_email": current_user.email, "new_email": update_data.email},
         )
 
@@ -1348,13 +1348,13 @@ async def export_user_data(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from authglow.services.login_history import LoginHistoryService
-    from authglow.services.security_event import SecurityEventService
+    from authglow.core.config import get_settings as _get_settings
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.login_history import LoginHistoryService
+    from authglow.services.oauth_client import OAuth2ClientStorage
     from authglow.services.oauth_consent import OAuth2ConsentService
     from authglow.services.passkey import PasskeyService
-    from authglow.services.oauth_client import OAuth2ClientStorage
-    from authglow.core.config import get_settings as _get_settings
+    from authglow.services.security_event import SecurityEventService
 
     login_history, lh_total = await LoginHistoryService().get_login_history(user_id, limit=500)
     security_events, se_total = await SecurityEventService().get_security_events(user_id, limit=500)

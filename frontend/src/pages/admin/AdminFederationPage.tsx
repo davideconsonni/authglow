@@ -328,15 +328,31 @@ export function AdminFederationPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-muted">Claims Mapping (JSON)</label>
+                <label className="mb-1 block text-[11px] font-medium text-text-muted">
+                  Claims Mapping (IdP claim → AuthGlow field)
+                </label>
                 <textarea
-                  rows={5}
+                  rows={6}
                   value={rawClaimsMapping}
                   onChange={(e) => setRawClaimsMapping(e.target.value)}
-                  placeholder={`{\n  "sub": "external_id",\n  "email": "email",\n  "name": "name"\n}`}
+                  placeholder={`{
+  "<IdP claim>": "<AuthGlow field>",
+  "sub": "external_id",
+  "email": "email",
+  "name": "name"
+}`}
                   className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none font-mono"
                 />
-                <p className="mt-0.5 text-[10px] text-text-muted">Mappa i claim dell'IdP esterno ai campi AuthGlow. Default già compatibile con OIDC standard.</p>
+                <p className="mt-1 text-[10px] text-text-muted">
+                  Map each external IdP claim name (left key) to an AuthGlow user field (right value).
+                  Valid AuthGlow fields: <code className="rounded bg-surface-2 px-1">external_id</code>,
+                  <code className="rounded bg-surface-2 px-1">email</code>,
+                  <code className="rounded bg-surface-2 px-1">name</code>,
+                  <code className="rounded bg-surface-2 px-1">given_name</code>,
+                  <code className="rounded bg-surface-2 px-1">family_name</code>,
+                  <code className="rounded bg-surface-2 px-1">picture</code>.
+                  Default is compatible with OIDC standard claims.
+                </p>
               </div>
             </div>
 

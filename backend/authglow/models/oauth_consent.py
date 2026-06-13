@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
+
 class OAuth2Consent(BaseModel):
     """OAuth2 user consent for client access."""
 
@@ -21,7 +22,6 @@ class OAuth2Consent(BaseModel):
     revoked_at: Optional[datetime] = None
 
 
-
 class ConsentRequest(BaseModel):
     """User consent decision."""
 
@@ -29,6 +29,7 @@ class ConsentRequest(BaseModel):
     scopes: List[str]
     approved: bool
     remember: bool = False  # Remember consent for future requests
+
 
 class ConsentInfo(BaseModel):
     """Information shown on consent screen."""

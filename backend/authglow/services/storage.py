@@ -108,9 +108,7 @@ class UserStorage:
             key = self._make_identity_key(provider_id, external_id)
             existing = index.get(key)
             if existing and existing != user_id:
-                raise ValueError(
-                    f"Identity {key} is already linked to user {existing}"
-                )
+                raise ValueError(f"Identity {key} is already linked to user {existing}")
             index[key] = user_id
             await self._save_federated_identities(index)
 

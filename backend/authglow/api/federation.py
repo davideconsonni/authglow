@@ -229,9 +229,7 @@ async def federation_callback(
 
         # VAPT-035: two-phase identity resolution using (provider_id, external_id)
         # as the canonical identity pair per OIDC Core §2 (sub claim).
-        existing_user = await user_storage.get_by_external_id(
-            provider.id, external_id
-        )
+        existing_user = await user_storage.get_by_external_id(provider.id, external_id)
         if existing_user:
             user = existing_user
             if not user.is_active:
@@ -291,9 +289,7 @@ async def federation_callback(
                         requires_update = True
                     if requires_update:
                         await user_storage.update_user(user)
-                    await user_storage.link_federated_identity(
-                        user.id, provider.id, external_id
-                    )
+                    await user_storage.link_federated_identity(user.id, provider.id, external_id)
                 else:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -319,9 +315,7 @@ async def federation_callback(
                 email_verified=True,
             )
             user = await user_storage.create_user(user)
-            await user_storage.link_federated_identity(
-                user.id, provider.id, external_id
-            )
+            await user_storage.link_federated_identity(user.id, provider.id, external_id)
 
         # Check if account is suspended
         if user.suspended_until and utcnow() < user.suspended_until:
