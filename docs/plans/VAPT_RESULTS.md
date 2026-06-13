@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 16 | 10 | Fix before VAPT |
+| HIGH | 26 | 17 | 9 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **26** | **100** | — |
+| **Total** | **126** | **27** | **99** | — |
 
 ---
 
@@ -164,10 +164,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Logging / keys
 
-- [ ] **VAPT-029** — Keyring lifecycle messages use `print()` (bypass audit log; mix plaintext with JSON)
+- [x] **VAPT-029** — Keyring lifecycle messages use `print()` (bypass audit log; mix plaintext with JSON)
   - **Location**: `backend/authglow/core/config.py:91, 113, 138, 150, 215`
   - **Description**: Key generation, migration, rotation use `print(...)` instead of the project-mandated structlog. They bypass the audit log config, mix unstructured plaintext with the JSON audit stream, and won't be filterable.
-  - **Fix**: Switch to `structlog.get_logger("authglow.keys").info(...)`.
+  - **Fix**: Replaced all 5 `print()` calls in `get_or_generate_keyring` and `_perform_rotation` with `structlog.get_logger("authglow.keys").info(...)`. Added module-level `_keys_log` logger and removed redundant local `import structlog` from `Settings.__init__` (now at module level). Events: `keyring_migration_started`, `keyring_generation_started`, `keyring_initialised` (with `kid`), `keyring_rotation_started` (with `kid`, `age_days`, `rotation_days`), `keyring_rotated` (with `old_kid`, `new_kid`).
 
 - [ ] **VAPT-030** — `SECRET_KEY` reused across HKDF key derivation and HS256 state JWT
   - **Location**: `backend/authglow/core/crypto.py:20-35`; `backend/authglow/services/federation_state.py:76-95`

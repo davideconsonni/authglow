@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
+import structlog
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -16,6 +17,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _KEYRING_FILENAME = "keyring.json"
 _LEGACY_KID = "klegacy"
+_keys_log = structlog.get_logger("authglow.keys")
 
 
 def _generate_key_pair(key_size: int = 2048):
@@ -87,7 +89,7 @@ def get_or_generate_keyring(
 
     # --- Migration from legacy single-key format ---
     if keyring is None and os.path.exists(legacy_priv_path) and os.path.exists(legacy_pub_path):
-        print("Migrating legacy RSA keys to keyring...")
+        _keys_log.info("keyring_migration_started")
         kid = _LEGACY_KID
         kid_dir = os.path.join(keys_dir, kid)
         os.makedirs(kid_dir, exist_ok=True)
@@ -109,7 +111,7 @@ def get_or_generate_keyring(
 
     # --- Fresh generation ---
     if keyring is None:
-        print("Generating new RSA keyring...")
+        _keys_log.info("keyring_generation_started")
         kid = _new_kid()
         kid_dir = os.path.join(keys_dir, kid)
         os.makedirs(kid_dir, exist_ok=True)
@@ -134,7 +136,7 @@ def get_or_generate_keyring(
         }
         _save_keyring(keyring_path, keyring)
         _write_active_symlinks(keys_dir, keyring)
-        print(f"RSA keyring initialised — active kid={kid}")
+        _keys_log.info("keyring_initialised", kid=kid)
         return
 
     # --- Auto-rotate ---
@@ -146,9 +148,11 @@ def get_or_generate_keyring(
             created_dt = datetime.fromisoformat(created_str)
             age = datetime.now(timezone.utc) - created_dt
             if age > timedelta(days=rotation_days):
-                print(
-                    f"Active key {active_kid} is {age.days} days old "
-                    f"(> {rotation_days} days). Auto-rotating..."
+                _keys_log.info(
+                    "keyring_rotation_started",
+                    kid=active_kid,
+                    age_days=age.days,
+                    rotation_days=rotation_days,
                 )
                 _perform_rotation(keys_dir, keyring_path, keyring, secret_key, active_kid, key_size)
 
@@ -211,7 +215,7 @@ def _perform_rotation(
 
     _save_keyring(keyring_path, keyring)
     _write_active_symlinks(keys_dir, keyring)
-    print(f"Key rotated: {old_kid} -> {kid} (new active, old is now verifying)")
+    _keys_log.info("keyring_rotated", old_kid=old_kid, new_kid=kid)
 
 
 class Settings(BaseSettings):
@@ -245,8 +249,6 @@ class Settings(BaseSettings):
             self.jwt_auto_rotate,
         )
         if not self.setup_token:
-            import structlog
-
             self.setup_token = secrets.token_urlsafe(32)
             structlog.get_logger("authglow.setup").warning(
                 "setup_token_generated",
