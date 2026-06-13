@@ -24,7 +24,7 @@ interface ConsentScreenProps {
   clientHomepageUri?: string | null
   clientTermsUri?: string | null
   clientPrivacyUri?: string | null
-  branding?: Branding | null
+  branding?: Record<string, unknown> | null
   scopes: Array<{ name: string; description: string }>
   preview?: boolean
 }

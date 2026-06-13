@@ -4,8 +4,8 @@ const API_URL = 'http://localhost:8001'
 
 test.describe('Playground — Create Client → Authorize → Introspect → Revoke', () => {
   test('full OAuth2 playground flow: create client → authorize → introspect → revoke', async ({ page }) => {
-    let clientId = ''
-    let clientSecret = ''
+    let clientId: string
+    let clientSecret: string
 
     try {
       // ── Step 1: Create an OAuth2 client via page-context API call ──

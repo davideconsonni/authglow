@@ -21,7 +21,7 @@ export function SessionsPage() {
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
-  const { data: rawData, refetch, isLoading } = useApiQuery<any>(
+  const { data: rawData, refetch, isLoading } = useApiQuery<Session[] | { items?: Session[]; sessions?: Session[]; tokens?: Session[] }>(
     ['my-sessions'],
     '/api/tokens/refresh/list',
   )

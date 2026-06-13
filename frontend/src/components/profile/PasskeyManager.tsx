@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Shield, Plus, Trash2, Laptop, Smartphone, Key, Loader2, Clock } from 'lucide-react'
-import { startRegistration } from '@simplewebauthn/browser'
+import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -37,7 +37,7 @@ export function PasskeyManager() {
     setError('')
     setSuccessMsg('')
     try {
-      const beginResp = await api.post<any>(
+      const beginResp = await api.post<PublicKeyCredentialCreationOptionsJSON>(
         '/api/passkey/register/begin',
         { name: navigator.userAgent || 'Browser' },
       )

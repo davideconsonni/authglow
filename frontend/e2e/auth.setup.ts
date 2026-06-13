@@ -1,4 +1,4 @@
-import { type Page, type BrowserContext } from '@playwright/test'
+import { type Page } from '@playwright/test'
 
 const BASE_URL = 'http://localhost:5173'
 

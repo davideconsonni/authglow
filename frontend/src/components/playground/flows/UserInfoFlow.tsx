@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Loader2, RefreshCw, User, Key, Zap } from 'lucide-react'
+import { Loader2, RefreshCw, User, Zap } from 'lucide-react'
 import { api } from '@/lib/api'
 import { decodeJwt } from '@/lib/jwt'
 import { usePlaygroundStore } from '@/stores/playgroundStore'

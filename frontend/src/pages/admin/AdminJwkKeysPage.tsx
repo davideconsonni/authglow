@@ -21,7 +21,7 @@ export function AdminJwkKeysPage() {
   const [rotating, setRotating] = useState(false)
   const [error, setError] = useState('')
 
-  const { data, refetch, isLoading } = useApiQuery<any>(
+  const { data, refetch, isLoading } = useApiQuery<JwkKey[] | { items?: JwkKey[]; keys?: JwkKey[] }>(
     ['admin-jwk-keys'],
     '/api/admin/jwk-keys',
   )

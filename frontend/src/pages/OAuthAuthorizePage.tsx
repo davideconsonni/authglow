@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
-import { LOGIN_EMAIL_KEY } from '@/components/auth/LoginForm'
+import { LOGIN_EMAIL_KEY } from '@/lib/loginStorage'
 
 interface ClientInfo {
   client_name: string
@@ -342,7 +342,6 @@ export function OAuthAuthorizePage() {
 
         const data = await api.postForm<AuthorizeResponse>('/api/oauth2/authorize', formBody)
 
-        if (cancelled) return
         if (data.redirect_url) {
         window.location.href = data.redirect_url
         return
@@ -377,6 +376,7 @@ export function OAuthAuthorizePage() {
   const displayTerms = consentData?.client_terms_uri ?? clientInfo?.client_terms_uri
   const displayPrivacy = consentData?.client_privacy_uri ?? clientInfo?.client_privacy_uri
   const displayBranding = consentData?.branding ?? clientInfo?.branding
+  const displayCustomCss = typeof displayBranding?.custom_css === 'string' ? displayBranding.custom_css : ''
 
   if (phase === 'loading') {
     return (

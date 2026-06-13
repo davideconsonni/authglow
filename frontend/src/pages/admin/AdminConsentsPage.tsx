@@ -25,7 +25,7 @@ export function AdminConsentsPage() {
   const [success, setSuccess] = useState('')
 
   const queryParam = search ? `?email=${encodeURIComponent(search)}` : ''
-  const { data, refetch, isLoading } = useApiQuery<any>(
+  const { data, refetch, isLoading } = useApiQuery<ConsentData[] | { items?: ConsentData[]; consents?: ConsentData[] }>(
     ['admin-consents', search],
     `/api/admin/oauth-consents${queryParam}`,
   )

@@ -34,7 +34,7 @@ export function AdminPasswordResetsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const { data, refetch, isLoading } = useApiQuery<any>(['admin-password-resets'], '/api/admin/password-resets')
+  const { data, refetch, isLoading } = useApiQuery<ResetToken[] | { items?: ResetToken[]; tokens?: ResetToken[]; password_resets?: ResetToken[] }>(['admin-password-resets'], '/api/admin/password-resets')
   const tokens: ResetToken[] = Array.isArray(data) ? data : (data?.items || data?.tokens || data?.password_resets || [])
 
   const { data: stats } = useApiQuery<ResetStats>(['admin-reset-stats'], '/api/admin/password-resets/stats')
@@ -43,7 +43,7 @@ export function AdminPasswordResetsPage() {
     if (!revokeEmail.trim()) return
     setError('')
     try {
-      const res = await api.post<any>(`/api/admin/users/${revokeEmail}/revoke-resets`)
+      const res = await api.post<{ message?: string }>(`/api/admin/users/${revokeEmail}/revoke-resets`)
       setSuccess(res?.message || `Reset tokens revoked for ${revokeEmail}`)
       setRevokeEmail('')
       await refetch()

@@ -1,6 +1,7 @@
 import { usePlaygroundStore, type PlaygroundFlow } from '@/stores/playgroundStore'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { FlowSidebar, FLOWS } from '@/components/playground/FlowSidebar'
+import { FlowSidebar } from '@/components/playground/FlowSidebar'
+import { FLOWS } from '@/components/playground/flows'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { AuthorizationCodeFlow } from '@/components/playground/flows/AuthorizationCodeFlow'
 import { ClientCredentialsFlow } from '@/components/playground/flows/ClientCredentialsFlow'

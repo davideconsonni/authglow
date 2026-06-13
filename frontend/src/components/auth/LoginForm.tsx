@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { ROUTES } from '@/lib/constants'
+import { getSavedEmail, saveEmail } from '@/lib/loginStorage'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -13,18 +14,6 @@ const loginSchema = z.object({
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
-
-export const LOGIN_EMAIL_KEY = 'auth-last-email'
-
-export function getSavedEmail(): string {
-  try { return localStorage.getItem(LOGIN_EMAIL_KEY) || '' }
-  catch { return '' }
-}
-
-function saveEmail(email: string) {
-  try { localStorage.setItem(LOGIN_EMAIL_KEY, email) }
-  catch { /* noop */ }
-}
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -57,7 +46,7 @@ export function LoginForm() {
       }
 
       if (redirect) {
-        window.location.href = redirect
+        window.location.assign(redirect)
         return
       }
 

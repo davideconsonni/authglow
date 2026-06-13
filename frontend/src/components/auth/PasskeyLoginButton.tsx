@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Fingerprint, Loader2 } from 'lucide-react'
-import { startAuthentication } from '@simplewebauthn/browser'
+import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
-import { getSavedEmail } from '@/components/auth/LoginForm'
+import { getSavedEmail } from '@/lib/loginStorage'
 
 export function PasskeyLoginButton() {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
@@ -21,7 +21,7 @@ export function PasskeyLoginButton() {
         setLoading(false)
         return
       }
-      const beginResp = await api.post<any>('/api/passkey/auth/begin', { email })
+      const beginResp = await api.post<PublicKeyCredentialRequestOptionsJSON>('/api/passkey/auth/begin', { email })
       const authResult = await startAuthentication({ optionsJSON: beginResp })
       const completeResp = await api.post<{ access_token: string; refresh_token?: string }>('/api/passkey/auth/complete', {
         credential_id: authResult.id,

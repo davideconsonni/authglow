@@ -5,7 +5,7 @@ describe('authStore', () => {
   beforeEach(() => {
     const store = useAuthStore.getState()
     store.setAuthenticated(false)
-    store.setUser(null as any)
+    store.setUser(null as unknown as Parameters<typeof store.setUser>[0])
   })
 
   describe('no token stored in localStorage', () => {
@@ -29,6 +29,7 @@ describe('authStore', () => {
         roles: [],
         scopes: [],
         permissions: [],
+        is_federated: false,
       })
       store.setAuthenticated(true)
 
@@ -56,6 +57,7 @@ describe('authStore', () => {
         roles: [],
         scopes: [],
         permissions: [],
+        is_federated: false,
       })
       useAuthStore.getState().setAuthenticated(false)
       expect(useAuthStore.getState().isAuthenticated).toBe(false)
@@ -74,6 +76,7 @@ describe('authStore', () => {
         roles: [],
         scopes: [],
         permissions: [],
+        is_federated: false,
       }
       useAuthStore.getState().setUser(user)
       expect(useAuthStore.getState().user).toEqual(user)
@@ -82,7 +85,7 @@ describe('authStore', () => {
 
   describe('login', () => {
     it('sets isAuthenticated on success', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         json: () =>
@@ -97,7 +100,7 @@ describe('authStore', () => {
     })
 
     it('loading is false after success', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         json: () =>
@@ -112,7 +115,7 @@ describe('authStore', () => {
     })
 
     it('throws on login failure (non-401)', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
         json: () => Promise.resolve({ detail: 'Invalid credentials' }),
@@ -124,7 +127,7 @@ describe('authStore', () => {
     })
 
     it('throws on login failure (401)', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 401,
         json: () => Promise.resolve({}),
@@ -138,7 +141,7 @@ describe('authStore', () => {
 
   describe('logout', () => {
     it('clears isAuthenticated and user', async () => {
-      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
 
       useAuthStore.getState().setAuthenticated(true)
       useAuthStore.getState().setUser({
@@ -150,6 +153,7 @@ describe('authStore', () => {
         roles: [],
         scopes: [],
         permissions: [],
+        is_federated: false,
       })
 
       await useAuthStore.getState().logout()

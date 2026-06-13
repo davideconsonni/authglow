@@ -23,6 +23,8 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   _hydrated: boolean
+  accessToken: string | null
+  refreshToken: string | null
 }
 
 interface AuthActions {
@@ -42,6 +44,8 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       _hydrated: false,
+      accessToken: null,
+      refreshToken: null,
 
       setAuthenticated: (value: boolean) => {
         set({ isAuthenticated: value })

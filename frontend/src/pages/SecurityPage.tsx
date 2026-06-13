@@ -29,7 +29,9 @@ export function SecurityPage() {
     try {
       const data = await api.post<{ backup_codes: string[] }>('/api/mfa/regenerate-backup-codes')
       setBackupCodes(data.backup_codes)
-    } catch {}
+    } catch {
+      // Backup code regeneration can fail silently — codes stay as previous value
+    }
   }
 
   const handleDisableMfa = async () => {

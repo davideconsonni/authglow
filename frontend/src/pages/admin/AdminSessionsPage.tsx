@@ -23,7 +23,7 @@ export function AdminSessionsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const { data, refetch, isLoading } = useApiQuery<any>(
+  const { data, refetch, isLoading } = useApiQuery<SessionData[] | { items?: SessionData[]; sessions?: SessionData[]; tokens?: SessionData[] }>(
     ['admin-sessions'],
     '/api/admin/sessions',
   )

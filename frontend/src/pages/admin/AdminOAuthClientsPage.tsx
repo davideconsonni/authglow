@@ -160,7 +160,7 @@ export function AdminOAuthClientsPage() {
   const [originalIsConfidential, setOriginalIsConfidential] = useState(true)
 
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
-  const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as any)?.items as OAuthClient[]) ?? []
+  const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as { items?: OAuthClient[] } | undefined)?.items as OAuthClient[]) ?? []
 
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 3000); return () => clearTimeout(t) } }, [success])
 

@@ -55,7 +55,7 @@ export function AdminApiKeysPage() {
   const [copied, setCopied] = useState(false)
 
   const queryParam = search ? `?q=${encodeURIComponent(search)}` : ''
-  const { data, refetch, isLoading } = useApiQuery<any>(
+  const { data, refetch, isLoading } = useApiQuery<ApiKeyData[] | { items?: ApiKeyData[]; keys?: ApiKeyData[] }>(
     ['admin-keys', search],
     `/api/admin/keys${queryParam}`,
   )

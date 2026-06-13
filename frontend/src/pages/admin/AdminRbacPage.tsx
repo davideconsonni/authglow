@@ -22,6 +22,13 @@ interface Role {
   is_system: boolean
 }
 
+interface UserRoleAssignment {
+  role_id: string
+  user_email?: string
+  role_name?: string
+  expires_at?: string | null
+}
+
 export function AdminRbacPage() {
   useDocumentTitle('RBAC')
   const [tab, setTab] = useState<'roles' | 'permissions'>('roles')
@@ -112,7 +119,7 @@ function RolesTab({
   }
 
   const openEdit = (r: Role) => {
-    setEditId(r.role_id || r.id)
+    setEditId(r.role_id ?? r.id ?? null)
     setName(r.name)
     setDescription(r.description || '')
     setSelPerms(r.permissions)
@@ -223,10 +230,10 @@ function RolesTab({
                       {r.permissions?.length > 0 ? (
                         r.permissions.map((p, i) => (
                           <span
-                            key={p.permission_id || p.name || i}
+                            key={p || i}
                             className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary"
                           >
-                            {p.name}
+                            {p}
                           </span>
                         ))
                       ) : (
@@ -246,7 +253,7 @@ function RolesTab({
                             <Edit size={14} />
                           </button>
                           <button
-                            onClick={() => setDeleteId(r.role_id || r.id)}
+                            onClick={() => setDeleteId(r.role_id ?? r.id ?? null)}
                             className="text-text-muted hover:text-semantic-error transition-colors"
                             title="Delete role"
                           >
@@ -535,7 +542,7 @@ function UserRoleAssignments({
   const roleOptions = Array.isArray(allRoles) ? allRoles : []
 
   // Fetch user roles only when searching for a specific user
-  const { data: userRolesRaw, refetch, isLoading } = useApiQuery<any>(
+  const { data: userRolesRaw, refetch, isLoading } = useApiQuery<UserRoleAssignment[]>(
     ['user-roles', searchUserId] as string[],
     `/api/rbac/user-roles/${searchUserId}`,
     { enabled: Boolean(searchUserId) },
@@ -545,7 +552,7 @@ function UserRoleAssignments({
   const handleSearch = async () => {
     if (!userEmail.trim()) return
     try {
-      const res = await api.get<any>(`/api/admin/users/search?q=${encodeURIComponent(userEmail)}&limit=1`)
+      const res = await api.get<{ items?: Array<{ id: string }> }>(`/api/admin/users/search?q=${encodeURIComponent(userEmail)}&limit=1`)
       const items = res?.items || (Array.isArray(res) ? res : [])
       if (items.length > 0) {
         setSearchUserId(items[0].id)
@@ -660,8 +667,8 @@ function UserRoleAssignments({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-2">
-                  {userRoles.map((ur: any, i: number) => (
-                    <tr key={ur.role_id || r.id || ur.role_id || i}>
+                  {userRoles.map((ur, i: number) => (
+                    <tr key={ur.role_id || i}>
                       <td className="px-6 py-3 text-sm text-text-primary">{ur.user_email || userEmail}</td>
                       <td className="px-6 py-3 text-sm text-text-secondary hidden md:table-cell">{ur.role_name || ur.role_id || '-'}</td>
                       <td className="px-6 py-3 text-sm text-text-muted hidden md:table-cell">{ur.expires_at ? formatDateTime(ur.expires_at) : 'Never'}</td>
