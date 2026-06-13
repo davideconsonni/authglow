@@ -26,13 +26,11 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests (allow up to 11 failures)
-        id: pytest
         run: |
-          set -o pipefail
-          pytest -q --tb=line -n auto 2>&1 | tee pytest_output.txt
-          EXIT_CODE=${PIPESTATUS[0]}
+          EXIT_CODE=0
+          pytest -q --tb=line -n auto 2>&1 | tee pytest_output.txt || EXIT_CODE=$?
           FAILURES=$(grep -c "^FAILED " pytest_output.txt || echo 0)
-          echo "failures=$FAILURES" >> $GITHUB_OUTPUT
+          echo "failures=$FAILURES"
           if [ "$FAILURES" -gt 11 ]; then
             echo "BUILD FAILED: $FAILURES test failures (max 11 allowed)"
             exit 1
@@ -64,15 +62,14 @@ jobs:
         run: npm ci
 
       - name: Run vitest (allow up to 55 failures)
-        id: vitest
         run: |
-          set -o pipefail
-          npx vitest run --config vitest.config.ts 2>&1 | tee vitest_output.txt
-          FAILURES=$(grep -m1 -oP 'Tests\s+\|\s+\d+\s+failed\s+\|' vitest_output.txt | grep -oP '\d+' | head -1 || echo 0)
+          EXIT_CODE=0
+          npx vitest run --config vitest.config.ts 2>&1 | tee vitest_output.txt || EXIT_CODE=$?
+          FAILURES=$(grep -oP 'Tests\s+\d+\s+failed' vitest_output.txt | tail -1 | grep -oP '\d+' || echo 0)
           if [ -z "$FAILURES" ]; then
             FAILURES=0
           fi
-          echo "failures=$FAILURES" >> $GITHUB_OUTPUT
+          echo "failures=$FAILURES"
           if [ "$FAILURES" -gt 55 ]; then
             echo "BUILD FAILED: $FAILURES test failures (max 55 allowed)"
             exit 1
