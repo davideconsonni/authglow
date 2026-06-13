@@ -90,7 +90,13 @@ class TestSecurityHeadersMiddleware:
 
         assert (
             hdrs.get("content-security-policy")
-            == "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+            == "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "frame-ancestors 'none'; "
+            "object-src 'none'; "
+            "base-uri 'self'"
         )
         assert hdrs.get("x-frame-options") == "DENY"
         assert hdrs.get("x-content-type-options") == "nosniff"
@@ -279,7 +285,15 @@ class TestSecurityHeadersMiddleware:
 def _make_settings(**overrides) -> object:
     settings = _FakeSettings()
     settings.app_env = "development"
-    settings.csp_header = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    settings.csp_header = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "frame-ancestors 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self'"
+    )
     settings.x_frame_options = "DENY"
     settings.x_content_type_options = "nosniff"
     settings.referrer_policy = "strict-origin-when-cross-origin"

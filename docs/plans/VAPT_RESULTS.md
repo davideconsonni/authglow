@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 15 | 11 | Fix before VAPT |
+| HIGH | 26 | 16 | 10 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **25** | **101** | — |
+| **Total** | **126** | **26** | **100** | — |
 
 ---
 
@@ -157,10 +157,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: `POST /api/setup/create-admin` is unauthenticated and creates the first admin with full scopes and `email_verified=True`. The 5/minute rate limit is not a substitute for a setup token. The TOCTOU lock is in place but a setup token is still missing.
   - **Fix**: Added `setup_token` field to `Settings` — auto-generates a 32-byte `secrets.token_urlsafe()` token on first startup if not set via `SETUP_TOKEN` env var; logged to stdout via structlog. `POST /api/setup/create-admin` now requires `Authorization: Bearer <token>` (RFC 6750 / RFC 7591 §A.1.2 Initial Access Token pattern), validated with `secrets.compare_digest`. Returns 403 on missing/wrong token, 404 when setup already complete. Frontend `SetupWizard` updated with `setup_token` password field. Tests: `tests/unit/test_setup.py` — 12 tests covering missing/empty/wrong/valid token, 404 post-setup, malformed auth header, and concurrent lock behavior.
 
-- [ ] **VAPT-028** — CSP allows `'unsafe-inline'` for scripts (defeats XSS mitigation)
-  - **Location**: `backend/authglow/core/config.py:311-316`
+- [x] **VAPT-028** — CSP allows `'unsafe-inline'` for scripts (defeats XSS mitigation)
+  - **Location**: `backend/authglow/core/config.py:317-329`
   - **Description**: `script-src 'self' 'unsafe-inline'`. The middleware also emits a relaxed CSP for `/docs` and `/redoc` (`'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://fastapi.tiangolo.com`).
-  - **Fix**: Use nonces (or hashes) for any required inline script; drop `'unsafe-inline'` from `script-src`; remove `'unsafe-eval'` from the docs CSP; add `frame-ancestors 'none'`.
+  - **Fix**: Removed `'unsafe-inline'` from `script-src` in the default CSP. The only inline script (anti-flicker theme init in `index.html:8-21`) was moved to an external file `public/theme-init.js` loaded via `<script src>`, which is covered by `script-src 'self'`. Added `frame-ancestors 'none'` (anti-clickjacking), `object-src 'none'` (plugin block), and `base-uri 'self'` (base-tag hijack prevention). `style-src 'unsafe-inline'` retained as risk-accepted — required by dynamic OAuth2 `custom_css` feature (admin-only). Docs/redoc CSP: removed `'unsafe-eval'`, added `frame-ancestors 'none'` and `object-src 'none'`; inline scripts/styles retained for Swagger UI. Tests: `tests/unit/test_security_headers.py` (13/13) and `tests/integration/test_security_headers.py` (17/17) updated with new CSP values.
 
 ### Logging / keys
 

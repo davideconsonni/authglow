@@ -41,8 +41,12 @@ class SecurityHeadersMiddleware:
             _add_header(
                 headers_to_add,
                 "content-security-policy",
-                "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net "
-                "https://fastapi.tiangolo.com; img-src 'self' https://fastapi.tiangolo.com data:;",
+                "default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+                "https://fastapi.tiangolo.com; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' https://fastapi.tiangolo.com data:; "
+                "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
             )
         else:
             _add_header(headers_to_add, "content-security-policy", settings.csp_header)

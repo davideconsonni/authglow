@@ -323,9 +323,12 @@ class Settings(BaseSettings):
     # Security Headers Settings
     csp_header: str = (
         "default-src 'self'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "script-src 'self' 'unsafe-inline'"
+        "frame-ancestors 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self'"
     )
     x_frame_options: str = "DENY"
     x_content_type_options: str = "nosniff"

@@ -33,8 +33,13 @@ class TestSecurityHeadersOnHealth:
         response = client_with_test_settings.get("/health")
         assert (
             response.headers.get("content-security-policy")
-            == "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'"
+            == "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "frame-ancestors 'none'; "
+            "object-src 'none'; "
+            "base-uri 'self'"
         )
 
     def test_x_frame_options_deny(self, client_with_test_settings):
@@ -179,7 +184,13 @@ def _make_prod_settings():
     settings = _FakeSettings()
     settings.app_env = "production"
     settings.csp_header = (
-        "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "frame-ancestors 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self'"
     )
     settings.x_frame_options = "DENY"
     settings.x_content_type_options = "nosniff"

@@ -5,20 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AuthGlow</title>
-    <script>
-      (function() {
-        var theme = 'light'
-        try {
-          var saved = localStorage.getItem('auth-theme')
-          if (saved) {
-            theme = saved
-          }
-        } catch(e) {}
-        if (theme === 'light' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)) {
-          document.documentElement.classList.add('light')
-        }
-      })()
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>
