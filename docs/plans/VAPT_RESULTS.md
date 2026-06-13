@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 13 | 13 | Fix before VAPT |
+| HIGH | 26 | 14 | 12 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **23** | **103** | — |
+| **Total** | **126** | **24** | **102** | — |
 
 ---
 
@@ -147,10 +147,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: `Limiter(key_func=get_remote_address)` keys on `request.client.host`. Behind a reverse proxy all clients share one bucket. With direct internet exposure, an attacker rotating source IPs has no per-user limit. No `ProxyHeadersMiddleware` configured.
   - **Fix**: Added `ProxyHeadersMiddleware` (`backend/authglow/middleware/proxy_headers.py`) that rewrites `scope["client"]` from the `X-Forwarded-For` header when the connecting peer is in the `trusted_proxies` allowlist (reusing the VAPT-024 setting). Supports IP, CIDR, and hostname matching. Wired into `main.py` before `SlowAPIMiddleware` so the rate limiter sees the real client IP. Tests: `tests/unit/test_proxy_headers.py` (14 tests — trusted/untrusted XFF, CIDR, hostname, multiple IPs, invalid IP, passthrough), `tests/integration/test_proxy_headers.py` (6 tests — real IP to limiter, separate buckets, endpoint compatibility).
 
-- [ ] **VAPT-026** — Federation login + callback have no rate limit (auth-code brute force, state replay)
+- [x] **VAPT-026** — Federation login + callback have no rate limit (auth-code brute force, state replay)
   - **Location**: `backend/authglow/api/federation.py:40, 49, 97`
   - **Description**: Public endpoints `/api/federation/{providers,login/{provider_id},callback}` are un-rate-limited. The callback accepts arbitrary `code` and `state`; admin CRUD is rate-limited, the unauthenticated path is not.
-  - **Fix**: Add `@limiter.limit("10/minute")` on `/login/{provider_id}` and `/callback`; consider a separate `attempt`-based lockout in `FederationService`.
+  - **Fix**: Added `@limiter.limit("10/minute")` to `/providers`, `@limiter.limit("5/minute")` to `/login/{provider_id}`, and `@limiter.limit("10/minute")` to `/callback`. Added `request: Request` parameter to providers and login endpoints (required by slowapi decorators). Tests: `tests/integration/test_federation.py::TestVapt026FederationRateLimits` (4 tests — providers 429 after 10, login 429 after 5, callback 429 after 10, login under limit passes).
 
 - [ ] **VAPT-027** — `setup` endpoint is publicly reachable if not completed (admin takeover race)
   - **Location**: `backend/authglow/api/setup.py:44-94`

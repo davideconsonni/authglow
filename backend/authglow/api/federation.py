@@ -43,7 +43,9 @@ def get_audit_service():
 
 
 @router.get("/api/federation/providers")
+@limiter.limit("10/minute")
 async def list_public_providers(
+    request: Request,
     context: Optional[str] = Query(default=None),
     storage: FederationStorage = Depends(lambda: FederationStorage()),
 ):
@@ -58,7 +60,9 @@ async def list_public_providers(
 
 
 @router.get("/api/federation/login/{provider_id}")
+@limiter.limit("5/minute")
 async def federation_login(
+    request: Request,
     provider_id: str,
     redirect_uri: str = Query(default="/auth/callback"),
     acr_values: Optional[str] = Query(default=None),
@@ -135,6 +139,7 @@ async def federation_login(
 
 
 @router.get("/api/federation/callback")
+@limiter.limit("10/minute")
 async def federation_callback(
     request: Request,
     code: str,
@@ -283,8 +288,8 @@ async def federation_callback(
             include_refresh=True,
         )
 
-        from authglow.services.refresh_token import RefreshTokenService
         from authglow.services.jwt import resolve_rbac_permissions
+        from authglow.services.refresh_token import RefreshTokenService
 
         refresh_svc = RefreshTokenService()
         stored_rt = await refresh_svc.create_refresh_token(
@@ -308,8 +313,8 @@ async def federation_callback(
         if oauth2_ctx:
             from authglow.services.oauth2 import OAuth2Service
             from authglow.services.oauth_client import OAuth2ClientStorage
-            from authglow.services.session import SessionService
             from authglow.services.oauth_consent import OAuth2ConsentService
+            from authglow.services.session import SessionService
 
             oauth2_svc = OAuth2Service()
 
@@ -516,7 +521,6 @@ async def federated_consent_check(
         return {"consent_required": False}
 
     from authglow.services.oauth_client import OAuth2ClientStorage
-    from authglow.services.oauth2 import OAuth2Service
 
     client_storage = OAuth2ClientStorage()
     client = await client_storage.get_client(session["client_id"])

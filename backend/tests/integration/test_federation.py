@@ -617,3 +617,140 @@ class TestVisibleContexts:
         oauth_ids = {p["id"] for p in oauth}
         assert "ctx-legacy" in dash_ids
         assert "ctx-legacy" in oauth_ids
+
+
+class TestVapt026FederationRateLimits:
+    """VAPT-026: Federation public endpoints are rate-limited."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_limiter_storage(self):
+        """Reset the module-level limiter's storage so each test starts clean."""
+        from authglow.core.rate_limit import limiter
+
+        limiter._storage.storage.clear()
+
+    def _make_limited_app(self):
+        from slowapi.middleware import SlowAPIMiddleware
+        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+        from authglow.core.config import get_settings
+        from authglow.core.rate_limit import limiter
+
+        original_settings = get_settings()
+        settings = _FakeSettings()
+        settings.app_env = original_settings.app_env
+        settings.enable_docs = False
+        settings.get_trusted_proxies = lambda: []
+        settings.get_cors_origins = lambda: []
+        settings.get_cors_methods = lambda: []
+        settings.get_cors_headers = lambda: []
+
+        app = FastAPI()
+        app.state.limiter = limiter
+        app.include_router(federation_router)
+        app.add_middleware(ProxyHeadersMiddleware, settings=settings)
+        app.add_middleware(SlowAPIMiddleware)
+        return TestClient(app)
+
+    def test_providers_returns_429_after_limit(self):
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=_make_provider())
+            mock_service = MagicMock()
+            mock_service.get_providers_for_ui = AsyncMock(return_value=[])
+            with patch("authglow.api.federation.FederationService", return_value=mock_service):
+                client = self._make_limited_app()
+                for _ in range(10):
+                    resp = client.get("/api/federation/providers")
+                    assert resp.status_code == 200
+                resp = client.get("/api/federation/providers")
+                assert resp.status_code == 429
+
+    def test_login_returns_429_after_limit(self):
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=_make_provider())
+            mock_service = MagicMock()
+            mock_service.get_authorization_url = AsyncMock(
+                return_value=("https://idp.example.com/auth?state=s", "s", "n")
+            )
+            with patch("authglow.api.federation.FederationService", return_value=mock_service):
+                client = self._make_limited_app()
+                for _ in range(5):
+                    resp = client.get("/api/federation/login/google", follow_redirects=False)
+                    assert resp.status_code == 302
+                resp = client.get("/api/federation/login/google", follow_redirects=False)
+                assert resp.status_code == 429
+
+    def test_callback_returns_429_after_limit(self, test_settings):
+        """VAPT-026: callback rate-limited — 429 after 10 requests/minute."""
+        valid_state = _sign_state(test_settings)
+
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=_make_provider())
+            mock_service = MagicMock()
+            mock_service.exchange_code = AsyncMock(return_value={"access_token": "fake-at"})
+            mock_service.fetch_userinfo = AsyncMock(
+                return_value={"sub": "123", "email": "u@example.com"}
+            )
+            mock_service.map_claims_to_user = AsyncMock(
+                return_value={
+                    "external_id": "123",
+                    "email": "u@example.com",
+                    "given_name": "Test",
+                    "family_name": "User",
+                }
+            )
+            with patch("authglow.api.federation.FederationService", return_value=mock_service):
+                with patch("authglow.api.federation.UserStorage") as MockUserStorage:
+                    MockUserStorage.return_value.get_user_by_email = AsyncMock(return_value=None)
+                    MockUserStorage.return_value.create_user = AsyncMock()
+                    MockUserStorage.return_value.update_user = AsyncMock()
+                    MockUserStorage.return_value.update_last_login = AsyncMock()
+                    with patch("authglow.api.federation.LoginHistoryService") as MockLoginSvc:
+                        MockLoginSvc.return_value.record_login = AsyncMock()
+                        with patch("authglow.api.federation.JWTService") as MockJwt:
+                            mock_token = MagicMock()
+                            mock_token.access_token = "fake-access"
+                            mock_token.refresh_token = "fake-refresh"
+                            MockJwt.return_value.create_token_response.return_value = mock_token
+                            with patch(
+                                "authglow.services.refresh_token.RefreshTokenService"
+                            ) as MockRefreshSvc:
+                                mock_rt = MagicMock()
+                                mock_rt.token = "fake-rt"
+                                MockRefreshSvc.return_value.create_refresh_token = AsyncMock(
+                                    return_value=mock_rt
+                                )
+                                with patch(
+                                    "authglow.services.jwt.resolve_rbac_permissions",
+                                    AsyncMock(return_value=([], [])),
+                                ):
+                                    client = self._make_limited_app()
+                                    for _ in range(10):
+                                        resp = client.get(
+                                            "/api/federation/callback",
+                                            params={"code": "c", "state": valid_state},
+                                        )
+                                        assert resp.status_code != 429, (
+                                            f"rate limit hit too early: {resp.status_code}"
+                                        )
+                                    resp = client.get(
+                                        "/api/federation/callback",
+                                        params={"code": "c", "state": valid_state},
+                                    )
+                                    assert resp.status_code == 429
+
+    def test_login_under_limit_works(self):
+        with patch("authglow.api.federation.FederationStorage") as MockStorage:
+            MockStorage.return_value.get_provider = AsyncMock(return_value=_make_provider())
+            mock_service = MagicMock()
+            mock_service.get_authorization_url = AsyncMock(
+                return_value=("https://idp.example.com/auth?state=s", "s", "n")
+            )
+            with patch("authglow.api.federation.FederationService", return_value=mock_service):
+                client = self._make_limited_app()
+                for _ in range(4):
+                    resp = client.get("/api/federation/login/google", follow_redirects=False)
+                    assert resp.status_code == 302
+
+
+class _FakeSettings:
+    pass
