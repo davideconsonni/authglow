@@ -4,30 +4,30 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from slowapi.middleware import SlowAPIMiddleware
 
+from authglow.api.admin import router as admin_router
+from authglow.api.api_key import router as api_key_router
+from authglow.api.auth import router as auth_router
+from authglow.api.email_verification import router as email_verification_router
+from authglow.api.federation import router as federation_router
+from authglow.api.mfa import router as mfa_router
+from authglow.api.oauth2_advanced import router as oauth2_advanced_router
+from authglow.api.oauth_client import router as oauth_client_router
+from authglow.api.oauth_consent_handler import router as consent_router
+from authglow.api.oidc import router as oidc_router
+from authglow.api.passkey import router as passkey_router
+from authglow.api.password_reset import router as password_reset_router
+from authglow.api.rbac import router as rbac_router
+from authglow.api.setup import router as setup_router
+from authglow.api.user_profile import router as user_profile_router
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.core.token_blacklist import token_blacklist
-from authglow.middleware.security_headers import SecurityHeadersMiddleware
-from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
-from authglow.api.auth import router as auth_router
-from authglow.api.user_profile import router as user_profile_router
-from authglow.api.mfa import router as mfa_router
-from authglow.api.passkey import router as passkey_router
-from authglow.api.password_reset import router as password_reset_router
-from authglow.api.email_verification import router as email_verification_router
-from authglow.api.admin import router as admin_router
-from authglow.api.api_key import router as api_key_router
-from authglow.api.oauth_client import router as oauth_client_router
-from authglow.api.rbac import router as rbac_router
-from authglow.api.oidc import router as oidc_router
-from authglow.api.setup import router as setup_router
-from authglow.api.oauth_consent_handler import router as consent_router
-from authglow.api.oauth2_advanced import router as oauth2_advanced_router
-from authglow.api.federation import router as federation_router
+from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+from authglow.middleware.request_body_size import MaxBodySizeMiddleware
+from authglow.middleware.security_headers import SecurityHeadersMiddleware
 
 settings = get_settings()
 
@@ -57,6 +57,8 @@ app.add_middleware(
     allow_methods=settings.get_cors_methods(),
     allow_headers=settings.get_cors_headers(),
 )
+
+app.add_middleware(ProxyHeadersMiddleware)
 
 app.add_middleware(SlowAPIMiddleware)
 

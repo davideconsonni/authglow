@@ -16,11 +16,15 @@ def _make_settings(**overrides) -> object:
         "app_env": "development",
         "enforce_https": True,
         "https_redirect_status": 301,
+        "trusted_proxies": "",
     }
     settings = _FakeSettings()
     for key, value in {**defaults, **overrides}.items():
         setattr(settings, key, value)
     settings.is_production = settings.app_env.lower() == "production"
+    settings.get_trusted_proxies = lambda: [
+        addr.strip() for addr in settings.trusted_proxies.split(",") if addr.strip()
+    ]
     return settings
 
 
@@ -175,7 +179,7 @@ class TestXForwardedProtoHeader:
         )
         from fastapi import FastAPI
 
-        settings = _make_settings(app_env="production")
+        settings = _make_settings(app_env="production", trusted_proxies="testclient")
         app = FastAPI()
         app.add_middleware(HttpsEnforcementMiddleware, settings=settings)
 

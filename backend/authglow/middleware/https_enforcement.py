@@ -4,9 +4,12 @@ Redirects HTTP requests to HTTPS in production. Only active when
 APP_ENV=production and ENFORCE_HTTPS=true.
 
 Handles both direct connections (checking request.url.scheme) and
-reverse-proxy scenarios (checking X-Forwarded-Proto header).
+reverse-proxy scenarios (checking X-Forwarded-Proto header). The
+X-Forwarded-Proto header is only honored when the connecting client
+IP is in the trusted_proxies allowlist (VAPT-024).
 """
 
+import ipaddress
 from typing import Optional
 from urllib.parse import urlunsplit
 
@@ -25,11 +28,34 @@ class HttpsEnforcementMiddleware:
 
         return get_settings()
 
+    def _is_trusted_proxy(self, scope: dict, trusted: list) -> bool:
+        client_ip = (scope.get("client") or (None, None))[0]
+        if client_ip is None:
+            return False
+        try:
+            client_addr = ipaddress.ip_address(client_ip)
+        except ValueError:
+            client_addr = None
+        for entry in trusted:
+            entry = entry.strip()
+            try:
+                network = ipaddress.ip_network(entry, strict=False)
+                if client_addr is not None and client_addr in network:
+                    return True
+            except ValueError:
+                pass
+            if client_addr is None and str(client_ip) == entry:
+                return True
+        return False
+
     def _is_https(self, scope: dict) -> bool:
-        for name, value in scope.get("headers", []):
-            header_name: str = name.decode("latin-1").lower()
-            if header_name == "x-forwarded-proto":
-                return str(value.decode("latin-1")) == "https"
+        settings = self._get_settings()
+        trusted = settings.get_trusted_proxies()
+        if trusted and self._is_trusted_proxy(scope, trusted):
+            for name, value in scope.get("headers", []):
+                header_name: str = name.decode("latin-1").lower()
+                if header_name == "x-forwarded-proto":
+                    return str(value.decode("latin-1")) == "https"
         scheme: str = str(scope.get("scheme", "http"))
         return scheme == "https"
 

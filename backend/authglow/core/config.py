@@ -351,6 +351,7 @@ class Settings(BaseSettings):
     # HTTPS Enforcement
     enforce_https: bool = True
     https_redirect_status: int = 301
+    trusted_proxies: str = ""  # Comma-separated IPs/CIDR ranges of trusted reverse proxies
 
     # Cache Settings
     cache_refresh_token_maxsize: int = 5000
@@ -552,6 +553,12 @@ class Settings(BaseSettings):
         if self.cors_allowed_headers == "*":
             return ["*"]
         return [header.strip() for header in self.cors_allowed_headers.split(",") if header.strip()]
+
+    def get_trusted_proxies(self) -> list:
+        """Get trusted proxy IPs/CIDR ranges as a list."""
+        if not self.trusted_proxies:
+            return []
+        return [addr.strip() for addr in self.trusted_proxies.split(",") if addr.strip()]
 
 
 @lru_cache

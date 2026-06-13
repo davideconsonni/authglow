@@ -14,11 +14,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 | Severity | Count | Fixed | Remaining | Action |
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
-| HIGH | 26 | 11 | 15 | Fix before VAPT |
+| HIGH | 26 | 13 | 13 | Fix before VAPT |
 | MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
 | LOW | 26 | 0 | 26 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **21** | **105** | — |
+| **Total** | **126** | **23** | **103** | — |
 
 ---
 
@@ -137,15 +137,15 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: `uvicorn` runs with `--reload` when `DEBUG=true`; `HTTPException(detail=str(e))` paths echo the underlying exception. If an operator forgets to set `APP_ENV=production` and ships the example file, debug mode is on.
   - **Fix**: Set `.env.example` default to `DEBUG=false`. Added `_validate_debug_not_enabled_in_production` model_validator in `config.py` that raises `ValueError` when `app_env=production` + `debug=true`.
 
-- [ ] **VAPT-024** — `https_enforcement` trusts `X-Forwarded-Proto` from any client (HTTPS redirect bypass)
+- [x] **VAPT-024** — `https_enforcement` trusts `X-Forwarded-Proto` from any client (HTTPS redirect bypass)
   - **Location**: `backend/authglow/middleware/https_enforcement.py:28-34`
   - **Description**: No trusted-proxy allowlist. If the service is exposed directly (or behind an untrusted proxy that doesn't strip the header), any client can bypass the HTTPS redirect by sending `X-Forwarded-Proto: https`.
-  - **Fix**: Add a `trusted_proxies` / `trusted_proxy_count` setting; only honor the header when the immediate peer is in the allowlist, otherwise fall back to `scope["scheme"]`.
+  - **Fix**: Added `trusted_proxies` setting (comma-separated IPs/CIDRs/hostnames) to `Settings` with `get_trusted_proxies()` helper. `_is_https()` now only honors `X-Forwarded-Proto` when the connecting client IP/hostname is in the allowlist via `_is_trusted_proxy()` (supports IP, CIDR, and hostname matching). When no trusted proxies are configured or the peer is not trusted, falls back to `scope["scheme"]`. Tests: `tests/unit/test_https_enforcement.py::TestVapt024TrustedProxyAllowlist` (11 tests), `tests/integration/test_https_enforcement.py` (updated XFP tests with trusted proxy).
 
-- [ ] **VAPT-025** — Rate limiter uses raw peer IP and is bypassable / shareable per-host
+- [x] **VAPT-025** — Rate limiter uses raw peer IP and is bypassable / shareable per-host
   - **Location**: `backend/authglow/core/rate_limit.py:1-10`
   - **Description**: `Limiter(key_func=get_remote_address)` keys on `request.client.host`. Behind a reverse proxy all clients share one bucket. With direct internet exposure, an attacker rotating source IPs has no per-user limit. No `ProxyHeadersMiddleware` configured.
-  - **Fix**: Deploy Starlette `ProxyHeadersMiddleware` with `trusted_hosts` allowlist; combine the per-IP key with the targeted username for login-style endpoints.
+  - **Fix**: Added `ProxyHeadersMiddleware` (`backend/authglow/middleware/proxy_headers.py`) that rewrites `scope["client"]` from the `X-Forwarded-For` header when the connecting peer is in the `trusted_proxies` allowlist (reusing the VAPT-024 setting). Supports IP, CIDR, and hostname matching. Wired into `main.py` before `SlowAPIMiddleware` so the rate limiter sees the real client IP. Tests: `tests/unit/test_proxy_headers.py` (14 tests — trusted/untrusted XFF, CIDR, hostname, multiple IPs, invalid IP, passthrough), `tests/integration/test_proxy_headers.py` (6 tests — real IP to limiter, separate buckets, endpoint compatibility).
 
 - [ ] **VAPT-026** — Federation login + callback have no rate limit (auth-code brute force, state replay)
   - **Location**: `backend/authglow/api/federation.py:40, 49, 97`

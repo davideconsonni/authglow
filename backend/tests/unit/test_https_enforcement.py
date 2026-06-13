@@ -31,7 +31,11 @@ class _FakeApp:
         await send({"type": "http.response.body", "body": b'{"status":"ok"}'})
 
 
-def _http_scope(path: str = "/test", headers: list = None) -> dict:
+def _http_scope(
+    path: str = "/test",
+    headers: list = None,
+    client: tuple = ("192.0.2.1", 54321),
+) -> dict:
     default_host = [(b"host", b"example.com")]
     return {
         "type": "http",
@@ -41,6 +45,7 @@ def _http_scope(path: str = "/test", headers: list = None) -> dict:
         "path": path,
         "query_string": b"",
         "headers": headers if headers is not None else default_host,
+        "client": client,
     }
 
 
@@ -50,8 +55,7 @@ def _ws_scope() -> dict:
 
 def _headers_dict(message: dict) -> dict[str, str]:
     return {
-        h[0].decode("latin-1").lower(): h[1].decode("latin-1")
-        for h in message.get("headers", [])
+        h[0].decode("latin-1").lower(): h[1].decode("latin-1") for h in message.get("headers", [])
     }
 
 
@@ -128,7 +132,7 @@ class TestHttpEnforcementRedirect:
     def test_no_redirect_when_x_forwarded_proto_https(self):
         from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 
-        settings = _make_settings(app_env="production")
+        settings = _make_settings(app_env="production", trusted_proxies="192.0.2.1")
         mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
 
         headers = [
@@ -166,7 +170,7 @@ class TestHttpEnforcementRedirect:
     def test_x_forwarded_proto_wins_over_scheme(self):
         from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 
-        settings = _make_settings(app_env="production")
+        settings = _make_settings(app_env="production", trusted_proxies="192.0.2.1")
         mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
 
         headers = [
@@ -301,16 +305,218 @@ class TestHttpEnforcementRedirect:
         assert hdrs.get("location") == "https://example.com/"
 
 
+class TestVapt024TrustedProxyAllowlist:
+    """VAPT-024: X-Forwarded-Proto only honored from trusted proxy IPs."""
+
+    def test_xfp_https_from_untrusted_ip_redirects(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("192.0.2.99", 54321))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_xfp_https_from_trusted_ip_no_redirect(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("10.0.0.1", 443))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 200
+
+    def test_xfp_http_from_trusted_ip_redirects(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"http"),
+        ]
+        scope = _http_scope(headers=headers, client=("10.0.0.1", 443))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_no_xfp_header_with_trusted_ip_redirects(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        scope = _http_scope(client=("10.0.0.1", 443))
+        scope["scheme"] = "http"
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_empty_trusted_proxies_xfp_https_redirects(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("192.0.2.1", 54321))
+        scope["scheme"] = "http"
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_trusted_cidr_range_blocks_no_redirect(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.0/24")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("10.0.0.42", 443))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 200
+
+    def test_cidr_outside_range_redirects(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.0/24")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("10.0.1.1", 54321))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_multiple_trusted_proxies_comma_separated(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1, 192.168.0.0/16")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("192.168.1.1", 443))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 200
+
+    def test_locahost_loopback_trusted_no_redirect(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="127.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers, client=("127.0.0.1", 443))
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 200
+
+    def test_no_client_scope_falls_back_to_scheme(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-proto", b"https"),
+        ]
+        scope = _http_scope(headers=headers)
+        del scope["client"]
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 301
+
+    def test_scheme_https_no_xfp_header_passes_through(self):
+        from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+
+        settings = _make_settings(app_env="production", trusted_proxies="10.0.0.1")
+        mw = HttpsEnforcementMiddleware(_FakeApp(), settings=settings)
+
+        scope = _http_scope(client=("10.0.0.1", 443))
+        scope["scheme"] = "https"
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert send.messages[0]["status"] == 200
+
+
 def _make_settings(**overrides) -> object:
     defaults = {
         "app_env": "development",
         "enforce_https": True,
         "https_redirect_status": 301,
+        "trusted_proxies": "",
     }
     settings = _FakeSettings()
     for key, value in {**defaults, **overrides}.items():
         setattr(settings, key, value)
     settings.is_production = settings.app_env.lower() == "production"
+    settings.get_trusted_proxies = lambda: [
+        addr.strip() for addr in settings.trusted_proxies.split(",") if addr.strip()
+    ]
     return settings
 
 
