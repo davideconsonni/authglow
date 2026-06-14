@@ -296,6 +296,7 @@ class TestConfigCookieSettings:
         settings = Settings(
             secret_key="a" * 32,
             app_env="production",
+            debug=False,
             oauth2_client_id="prod-client-id",
             oauth2_client_secret="prod-client-secret",
         )

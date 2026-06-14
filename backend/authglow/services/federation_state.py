@@ -30,7 +30,7 @@ Security properties:
 
 import secrets
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import jwt
 
@@ -151,4 +151,4 @@ class FederationStateToken:
             return None
         if not ctx.get("client_id") or not ctx.get("oauth_redirect_uri"):
             return None
-        return ctx
+        return cast(Dict[str, str], ctx)

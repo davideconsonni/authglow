@@ -227,7 +227,7 @@ class UserStorage:
             new_key = hash_index_key(new_email.lower())
 
             if old_key == new_key:
-                user.email = new_email  # type: ignore[assignment]
+                user.email = new_email
                 return await self._write_user(user)
 
             email_index = await self._load_email_index()
@@ -240,7 +240,7 @@ class UserStorage:
             email_index[new_key] = user_id
             await self._save_email_index(email_index)
 
-            user.email = new_email  # type: ignore[assignment]
+            user.email = new_email
             user_cache.pop(user.email.lower(), None)
             user_cache.pop(new_email.lower(), None)
             return await self._write_user(user)

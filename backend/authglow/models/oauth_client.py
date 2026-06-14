@@ -117,6 +117,7 @@ class OAuth2ClientCreate(BaseModel):
     terms_uri: Optional[str] = None
     privacy_uri: Optional[str] = None
     custom_css: Optional[str] = Field(None, max_length=20000)
+    branding: Optional[ClientBranding] = None
 
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
     refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days

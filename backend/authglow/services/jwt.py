@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import uuid4
 
 import jwt
@@ -115,11 +115,15 @@ class JWTService:
             return None
 
         kid = unverified_header.get("kid")
-        decode_opts = {
-            "algorithms": [self.settings.jwt_algorithm],
-            "issuer": self.settings.issuer,
-            "options": {"require": ["exp", "iat", "sub"], "verify_aud": False},
-        }
+        decode_algorithms: List[str] = [self.settings.jwt_algorithm]
+        decode_issuer: str = self.settings.issuer
+        decode_options = cast(
+            "jwt.types.Options",
+            {
+                "require": ["exp", "iat", "sub"],
+                "verify_aud": False,
+            },
+        )
 
         # Check if kid is revoked
         if kid and kid in self._keyring["keys"]:
@@ -132,7 +136,9 @@ class JWTService:
                 result: dict[str, Any] = jwt.decode(
                     token,
                     self._public_keys[kid],
-                    **decode_opts,
+                    algorithms=decode_algorithms,
+                    issuer=decode_issuer,
+                    options=decode_options,
                 )
                 return result
             except jwt.PyJWTError:
@@ -147,7 +153,9 @@ class JWTService:
                 decoded: dict[str, Any] = jwt.decode(
                     token,
                     pub_key,
-                    **decode_opts,
+                    algorithms=decode_algorithms,
+                    issuer=decode_issuer,
+                    options=decode_options,
                 )
                 return decoded
             except jwt.PyJWTError:

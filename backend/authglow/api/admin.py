@@ -180,10 +180,16 @@ async def update_user(
 
     email_changed = update_data.email is not None and update_data.email != user.email
     if email_changed:
+        new_email = update_data.email
+        assert new_email is not None  # narrowed by email_changed
         try:
-            user = await storage.update_email(user_id, update_data.email)
+            updated_user = await storage.update_email(user_id, new_email)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+        if updated_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        user = updated_user
 
         if not update_data.email_verified:
             verification_service = EmailVerificationService()
@@ -1049,7 +1055,7 @@ async def revoke_refresh_token_admin(
     if not rt:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    success = await refresh_token_service.revoke_token(rt.token, reason="Revoked by admin")
+    success = await refresh_token_service.revoke_token_by_id(token_id, reason="Revoked by admin")
 
     if success:
         await audit_service.log_event(

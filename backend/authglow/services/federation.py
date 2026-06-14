@@ -1,7 +1,7 @@
 """OIDC Relying Party service for federated authentication with external IdPs."""
 
 import secrets
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -180,7 +180,7 @@ class FederationService:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             resp.raise_for_status()
-            return resp.json()
+            return cast(Dict[str, Any], resp.json())
 
     async def fetch_userinfo(
         self,
@@ -196,7 +196,7 @@ class FederationService:
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             resp.raise_for_status()
-            return resp.json()
+            return cast(Dict[str, Any], resp.json())
 
     async def map_claims_to_user(
         self,

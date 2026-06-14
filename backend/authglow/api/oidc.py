@@ -404,7 +404,6 @@ async def register_oauth_client(
         is_confidential=is_confidential,
         require_pkce=not is_confidential,
         require_consent=True,
-        client_uri=payload.client_uri,
         logo_uri=payload.logo_uri,
         terms_uri=payload.tos_uri,
         privacy_uri=payload.policy_uri,

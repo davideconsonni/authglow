@@ -118,6 +118,7 @@ class TokenBlacklist:
 
     async def _hydrate(self) -> None:
         """Load all non-expired entries from disk."""
+        assert self._afs is not None  # narrowed after _ensure_initialized
         try:
             data = await self._afs.read_json(self._entries_path)
             entries: Dict[str, float] = data.get("entries", {})
@@ -137,6 +138,7 @@ class TokenBlacklist:
         Uses the tmp+rename pattern (same as jwt._save_keyring) for
         crash-safe writes.
         """
+        assert self._afs is not None  # narrowed after _ensure_initialized
         tmp_path = self._entries_path + ".tmp"
         await self._afs.write_json(tmp_path, {"entries": self._store})
         os.replace(tmp_path, self._entries_path)

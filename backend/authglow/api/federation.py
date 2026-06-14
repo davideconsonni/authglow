@@ -338,7 +338,7 @@ async def federation_callback(
         oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
 
         jwt_service = JWTService()
-        token_response = jwt_service.create_token_response(
+        auth_tokens = jwt_service.create_token_response(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
@@ -356,9 +356,10 @@ async def federation_callback(
             issued_ip=request.client.host if request.client else None,
             expires_in_days=30,
         )
+        assert stored_rt.token is not None  # narrowed: always set on creation
 
         rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
-        token_response = jwt_service.create_token_response(
+        auth_tokens = jwt_service.create_token_response(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
@@ -366,6 +367,7 @@ async def federation_callback(
             permissions=rbac_perms,
             roles=rbac_roles,
         )
+        assert auth_tokens.refresh_token is not None  # narrowed: include_refresh=True
 
         if oauth2_ctx:
             from authglow.services.oauth2 import OAuth2Service
@@ -418,7 +420,7 @@ async def federation_callback(
                 response = RedirectResponse(url=redirect_url, status_code=302)
                 response.set_cookie(
                     key=settings.auth_cookie_access_name,
-                    value=token_response.access_token,
+                    value=auth_tokens.access_token,
                     httponly=True,
                     secure=settings.auth_cookie_secure,
                     samesite="lax",
@@ -427,7 +429,7 @@ async def federation_callback(
                 )
                 response.set_cookie(
                     key=settings.auth_cookie_refresh_name,
-                    value=token_response.refresh_token,
+                    value=auth_tokens.refresh_token,
                     httponly=True,
                     secure=settings.auth_cookie_secure,
                     samesite="lax",
@@ -468,7 +470,7 @@ async def federation_callback(
             )
             response.set_cookie(
                 key=cookie_name,
-                value=token_response.access_token,
+                value=auth_tokens.access_token,
                 httponly=True,
                 secure=settings.auth_cookie_secure,
                 samesite="lax",
@@ -519,7 +521,7 @@ async def federation_callback(
         )
         response.set_cookie(
             key=settings.auth_cookie_access_name,
-            value=token_response.access_token,
+            value=auth_tokens.access_token,
             httponly=True,
             secure=settings.auth_cookie_secure,
             samesite="lax",

@@ -1,7 +1,7 @@
 """Passkey/WebAuthn API endpoints for AuthGlow."""
 
 from datetime import timedelta
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -73,15 +73,14 @@ async def get_current_user(
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
 ) -> User:
     """Get current authenticated user."""
-    if credentials:
-        token = credentials.credentials
-    else:
+    token: Optional[str] = credentials.credentials if credentials else None
+    if not token:
         token = request.cookies.get(settings.auth_cookie_access_name)
-        if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated",
-            )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
     token_data = jwt_service.decode_token(token)
 
     if not token_data or token_data.token_type != "access":

@@ -1,6 +1,5 @@
 """Email verification models."""
 
-import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -16,7 +15,7 @@ class EmailVerificationToken(BaseModel):
     (bcrypt) and ``token_lookup`` (HMAC-SHA256) are stored on disk.
     """
 
-    token: Optional[str] = Field(default_factory=lambda: secrets.token_urlsafe(32), exclude=True)
+    token: str = Field(default="", exclude=True)
     token_hash: str = ""
     token_lookup: str = ""
     user_id: str

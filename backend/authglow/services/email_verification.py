@@ -189,7 +189,7 @@ class EmailVerificationService:
 
         token = await self.create_verification_token(user)
 
-        success = await self.send_verification_email(user, token.token)  # type: ignore[arg-type]
+        success = await self.send_verification_email(user, token.token)
         if not success:
             return False, "Failed to send email"
 
