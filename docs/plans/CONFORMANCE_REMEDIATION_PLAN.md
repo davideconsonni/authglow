@@ -19,22 +19,24 @@
 
 ---
 
-## Workstream A — Security: JWT Audience Validation 🔴
+## Workstream A — Security: JWT Audience Validation 🟢
 
 L'audience non è mai verificato. Su un ID token, questo è un violation diretto di OIDC Core §3.1.3.7 e abilita token confusion attack cross-client.
 
-- [ ] **A.1** Aggiungere campo `aud` (claim singolo) e `azp` agli access token OAuth2 in `services/jwt.py:175-188` quando emessi per un client OAuth2 (non per il flow cookie-first). [services/jwt.py:175-188]
-- [ ] **A.2** Aggiungere parametro `audience: Optional[str] = None` a `create_access_token()` per forzare l'audience quando il token è emesso per un client. [services/jwt.py:158-189]
-- [ ] **A.3** Modificare `create_id_token()` per richiedere `aud=client_id` e impostare `azp=client_id` (auto se aud singolo, mandatory se aud multiplo). [services/jwt.py:267-303]
-- [ ] **A.4** Modificare `_decode_token()` in modo che la verifica di `aud` sia **configurabile**: True obbligatorio quando il chiamante passa `expected_aud`. Cambiare l'opzione fissa `verify_aud: False` a `verify_aud: True` con un parametro dinamico. [services/jwt.py:118-156]
-- [ ] **A.5** Aggiungere parametro `expected_aud: Optional[str] = None` a `decode_token()` e propagarlo. [services/jwt.py:222-265]
-- [ ] **A.6** Aggiungere parametro `expected_aud: str` (required) a `decode_id_token()`. Se non corrisponde, ritornare `None`. [services/jwt.py:305-313]
-- [ ] **A.7** Aggiornare `api/auth.py:token_endpoint` grant `authorization_code` per passare `expected_aud=auth_code.client_id` quando decodifica il refresh. [api/auth.py:444-607]
-- [ ] **A.8** Aggiornare `api/auth.py:token_endpoint` grant `refresh_token` per passare `expected_aud=client_id` quando decodifica per audit. [api/auth.py:638-679]
-- [ ] **A.9** Aggiornare `api/oidc.py:userinfo` per passare `expected_aud=client_id` (se noto dal token) nella decodifica. [api/oidc.py:155-201]
-- [ ] **A.10** Aggiornare `api/oidc.py:logout_get` per passare `expected_aud=client_id` nella decodifica di `id_token_hint`. [api/oidc.py:204-277]
-- [ ] **A.11** Aggiornare `api/oauth2_advanced.py:introspect_token` per verificare che `aud` del token corrisponda al `client_id` che esegue l'introspection. [api/oauth2_advanced.py:121-214]
-- [ ] **A.12** Aggiungere test in `tests/unit/test_jwt_audience.py` che verifichi:
+> **Stato**: completato 2026-06-14. 12/12 task chiusi. 154 test passati, ruff+mypy clean.
+
+- [x] **A.1** Aggiungere campo `aud` (claim singolo) e `azp` agli access token OAuth2 in `services/jwt.py:175-188` quando emessi per un client OAuth2 (non per il flow cookie-first). [services/jwt.py:175-188]
+- [x] **A.2** Aggiungere parametro `audience: Optional[str] = None` a `create_access_token()` per forzare l'audience quando il token è emesso per un client. [services/jwt.py:158-189]
+- [x] **A.3** Modificare `create_id_token()` per richiedere `aud=client_id` e impostare `azp=client_id` (auto se aud singolo, mandatory se aud multiplo). [services/jwt.py:267-303]
+- [x] **A.4** Modificare `_decode_token()` in modo che la verifica di `aud` sia **configurabile**: True obbligatorio quando il chiamante passa `expected_aud`. Cambiare l'opzione fissa `verify_aud: False` a `verify_aud: True` con un parametro dinamico. [services/jwt.py:118-156]
+- [x] **A.5** Aggiungere parametro `expected_aud: Optional[str] = None` a `decode_token()` e propagarlo. [services/jwt.py:222-265]
+- [x] **A.6** Aggiungere parametro `expected_aud: str` (required) a `decode_id_token()`. Se non corrisponde, ritornare `None`. [services/jwt.py:305-313]
+- [x] **A.7** Aggiornare `api/auth.py:token_endpoint` grant `authorization_code` per passare `expected_aud=auth_code.client_id` quando decodifica il refresh. [api/auth.py:444-607]
+- [x] **A.8** Aggiornare `api/auth.py:token_endpoint` grant `refresh_token` per passare `expected_aud=client_id` quando decodifica per audit. [api/auth.py:638-679]
+- [x] **A.9** Aggiornare `api/oidc.py:userinfo` per passare `expected_aud=client_id` (se noto dal token) nella decodifica. [api/oidc.py:155-201]
+- [x] **A.10** Aggiornare `api/oidc.py:logout_get` per passare `expected_aud=client_id` nella decodifica di `id_token_hint`. [api/oidc.py:204-277]
+- [x] **A.11** Aggiornare `api/oauth2_advanced.py:introspect_token` per verificare che `aud` del token corrisponda al `client_id` che esegue l'introspection. [api/oauth2_advanced.py:121-214]
+- [x] **A.12** Aggiungere test in `tests/unit/test_jwt_audience.py` che verifichi:
   - ID token con aud diverso dal client → rifiutato
   - Access token emesso per client A non decodificabile da client B
   - `azp` claim presente e corretto
