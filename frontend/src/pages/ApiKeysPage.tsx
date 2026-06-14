@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface ApiKeyData {
   key_id: string
@@ -29,7 +30,6 @@ export function ApiKeysPage() {
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
 
   const { data: keys, refetch } = useApiQuery<ApiKeyData[]>(['my-keys'], '/api/keys')
@@ -42,7 +42,6 @@ export function ApiKeysPage() {
   })
 
   const handleCreate = async () => {
-    setError('')
     setCreating(true)
     try {
       const data = await api.post<{ key_id: string; api_key: string; key_prefix: string }>('/api/keys', {
@@ -54,7 +53,7 @@ export function ApiKeysPage() {
       setNewName('')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create key')
+      notify.error(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
       setCreating(false)
     }
@@ -72,9 +71,10 @@ export function ApiKeysPage() {
     try {
       await api.post(`/api/keys/${revokeId}/revoke`)
       setRevokeId(null)
+      notify.success('Key deactivated.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to deactivate key')
+      notify.error(err instanceof Error ? err.message : 'Failed to deactivate key')
     }
   }
 
@@ -83,9 +83,10 @@ export function ApiKeysPage() {
     try {
       await api.patch(`/api/keys/${restoreId}`, { is_active: true })
       setRestoreId(null)
+      notify.success('Key restored.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to restore key')
+      notify.error(err instanceof Error ? err.message : 'Failed to restore key')
     }
   }
 
@@ -94,9 +95,10 @@ export function ApiKeysPage() {
     try {
       await api.delete(`/api/keys/${deleteId}`)
       setDeleteId(null)
+      notify.success('Key deleted.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete key')
+      notify.error(err instanceof Error ? err.message : 'Failed to delete key')
     }
   }
 
@@ -106,7 +108,6 @@ export function ApiKeysPage() {
     setNewName('')
     setNewScopes('read')
     setNewExpires('')
-    setError('')
   }
 
   return (
@@ -125,8 +126,6 @@ export function ApiKeysPage() {
           </button>
         }
       />
-
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
       {atRiskKeys.length > 0 && (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-semantic-warning/20 bg-semantic-warning/5 px-4 py-3">

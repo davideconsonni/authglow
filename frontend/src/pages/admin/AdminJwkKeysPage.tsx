@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface JwkKey {
   kid: string
@@ -19,7 +20,6 @@ export function AdminJwkKeysPage() {
   useDocumentTitle('JWK Keys')
   const [revokeKid, setRevokeKid] = useState<string | null>(null)
   const [rotating, setRotating] = useState(false)
-  const [error, setError] = useState('')
 
   const { data, refetch, isLoading } = useApiQuery<JwkKey[] | { items?: JwkKey[]; keys?: JwkKey[] }>(
     ['admin-jwk-keys'],
@@ -31,9 +31,10 @@ export function AdminJwkKeysPage() {
     setRotating(true)
     try {
       await api.post('/api/admin/jwk-keys/rotate')
+      notify.success('Keys rotated.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to rotate keys')
+      notify.error(err instanceof Error ? err.message : 'Failed to rotate keys')
     } finally {
       setRotating(false)
     }
@@ -44,9 +45,10 @@ export function AdminJwkKeysPage() {
     try {
       await api.post(`/api/admin/jwk-keys/${revokeKid}/revoke`)
       setRevokeKid(null)
+      notify.success('Key revoked.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke key')
+      notify.error(err instanceof Error ? err.message : 'Failed to revoke key')
     }
   }
 
@@ -67,8 +69,6 @@ export function AdminJwkKeysPage() {
           </button>
         }
       />
-
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
       {isLoading ? (
         <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>

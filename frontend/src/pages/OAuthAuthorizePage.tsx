@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
+import { Banner } from '@/components/shared/Banner'
 import { LOGIN_EMAIL_KEY } from '@/lib/loginStorage'
 
 interface ClientInfo {
@@ -437,7 +438,9 @@ export function OAuthAuthorizePage() {
           )}
 
           {error && !error.includes('client_id') && (
-            <div className="login-error" role="alert">{error}</div>
+            <div role="alert" className="mb-4">
+              <Banner variant="error">{error}</Banner>
+            </div>
           )}
 
           {error && error.includes('client_id') ? (

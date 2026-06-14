@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface Session {
   id: string
@@ -19,7 +20,6 @@ export function SessionsPage() {
   useDocumentTitle('Sessions')
   const [revokingAll, setRevokingAll] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
-  const [error, setError] = useState('')
 
   const { data: rawData, refetch, isLoading } = useApiQuery<Session[] | { items?: Session[]; sessions?: Session[]; tokens?: Session[] }>(
     ['my-sessions'],
@@ -34,15 +34,13 @@ export function SessionsPage() {
 
   const handleRevokeAll = async () => {
     setRevokingAll(true)
-    setError('')
     try {
       const res = await api.post<{ message?: string; count?: number }>('/api/tokens/refresh/revoke-all')
       const count = res?.count || 0
-      setError('')
-      alert(count > 0 ? `Revoked ${count} session(s).` : 'All sessions revoked.')
+      notify.success(count > 0 ? `Revoked ${count} session${count !== 1 ? 's' : ''}.` : 'All sessions revoked.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke sessions')
+      notify.error(err instanceof Error ? err.message : 'Failed to revoke sessions')
     } finally {
       setRevokingAll(false)
     }
@@ -50,14 +48,14 @@ export function SessionsPage() {
 
   const handleRevokeSession = async () => {
     if (!revokeId) return
-    setError('')
     try {
       await api.delete(`/api/tokens/refresh/${revokeId}`)
       setRevokeId(null)
+      notify.success('Session revoked.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke session')
       setRevokeId(null)
+      notify.error(err instanceof Error ? err.message : 'Failed to revoke session')
     }
   }
 
@@ -77,8 +75,6 @@ export function SessionsPage() {
           </button>
         }
       />
-
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
       {isLoading ? (
         <div className="py-8 text-center text-text-muted">Loading sessions...</div>

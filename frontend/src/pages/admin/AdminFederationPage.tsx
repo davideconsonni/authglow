@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Banner } from '@/components/shared/Banner'
+import { notify } from '@/stores/toastStore'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface FederationProvider {
@@ -59,8 +61,7 @@ export function AdminFederationPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FederationProvider>({ ...emptyForm })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [rawScopes, setRawScopes] = useState('openid profile email')
   const [rawAuthLevels, setRawAuthLevels] = useState('')
@@ -79,7 +80,7 @@ export function AdminFederationPage() {
     setRawClaimsMapping('')
     setClientSecret('')
     setEditId(null)
-    setError(null)
+    setFormError(null)
   }
 
   const openCreate = () => {
@@ -94,12 +95,13 @@ export function AdminFederationPage() {
     setRawClaimsMapping(JSON.stringify(p.claims_mapping, null, 2))
     setClientSecret('')
     setEditId(p.id)
+    setFormError(null)
     setShowForm(true)
   }
 
   const handleSave = async () => {
     setSaving(true)
-    setError(null)
+    setFormError(null)
     const scopes = rawScopes.trim().split(/\s+/).filter(Boolean)
     const authLevels = rawAuthLevels.split(/[, ]+/).map(s => s.trim()).filter(Boolean)
     const visibleContexts = form.visible_contexts ?? ['dashboard', 'oauth2']
@@ -108,7 +110,7 @@ export function AdminFederationPage() {
       try {
         claimsMapping = JSON.parse(rawClaimsMapping)
       } catch {
-        setError('Invalid JSON in Claims Mapping')
+        setFormError('Invalid JSON in Claims Mapping')
         setSaving(false)
         return
       }
@@ -130,7 +132,7 @@ export function AdminFederationPage() {
         }
         if (clientSecret) updatePayload.client_secret = clientSecret
         await api.put(`/api/federation/admin/providers/${editId}`, updatePayload)
-        setSuccess('Provider updated.')
+        notify.success('Provider updated.')
       } else {
         await api.post('/api/federation/providers', {
           label: form.label,
@@ -146,13 +148,13 @@ export function AdminFederationPage() {
           visible_contexts: visibleContexts,
           claims_mapping: claimsMapping,
         })
-        setSuccess('Provider created.')
+        notify.success('Provider created.')
       }
       setShowForm(false)
       resetForm()
       await refetch()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -161,10 +163,10 @@ export function AdminFederationPage() {
   const handleToggle = async (p: FederationProvider) => {
     try {
       await api.patch(`/api/federation/admin/providers/${p.id}/toggle`, {})
-      setSuccess(`Provider ${p.enabled ? 'disabled' : 'enabled'}.`)
+      notify.success(`Provider ${p.enabled ? 'disabled' : 'enabled'}.`)
       await refetch()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle')
+      notify.error(err instanceof Error ? err.message : 'Failed to toggle')
     }
   }
 
@@ -173,10 +175,10 @@ export function AdminFederationPage() {
     try {
       await api.delete(`/api/federation/admin/providers/${deleteId}`)
       setDeleteId(null)
-      setSuccess('Provider deleted.')
+      notify.success('Provider deleted.')
       await refetch()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete')
+      notify.error(err instanceof Error ? err.message : 'Failed to delete')
     }
   }
 
@@ -191,9 +193,6 @@ export function AdminFederationPage() {
           </button>
         }
       />
-
-      {error && <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
-      {success && <div className="rounded-xl border border-semantic-success/30 bg-semantic-success/10 px-4 py-3 text-sm text-semantic-success">{success}</div>}
 
       {/* Provider list */}
       <div className="overflow-hidden rounded-2xl border border-surface-2 bg-surface-1">
@@ -258,6 +257,18 @@ export function AdminFederationPage() {
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
           <div className="relative z-10 w-full max-w-xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
             <h3 className="mb-4 text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
+
+            {formError && (
+              <div className="mb-4">
+                <Banner
+                  variant="error"
+                  onDismiss={() => setFormError(null)}
+                  data-testid="provider-form-error"
+                >
+                  {formError}
+                </Banner>
+              </div>
+            )}
 
             <div className="space-y-3 mb-5">
               <TextInput label="Label *" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="CIE" autoFocus />

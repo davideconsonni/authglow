@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save, Mail, Calendar, Shield, Key, Check, ArrowRight, Monitor } from 'lucide-react'
+import { Loader2, Save, Mail, Calendar, Shield, Key, ArrowRight, Monitor } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
@@ -13,9 +13,11 @@ import { CopyButton } from '@/components/shared/CopyButton'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Section } from '@/components/shared/Section'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Banner } from '@/components/shared/Banner'
 import { ResendVerificationBanner } from '@/components/auth/ResendVerificationBanner'
 import { formatDateTime } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
+import { notify } from '@/stores/toastStore'
 
 function QuickLink({ icon: Icon, label, to }: { icon: typeof Shield; label: string; to: string }) {
   const navigate = useNavigate()
@@ -54,8 +56,7 @@ interface UserProfile {
 export function ProfilePage() {
   useDocumentTitle('Profile')
   const { user, fetchCurrentUser } = useAuth()
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deactivateDialog, setDeactivateDialog] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState(false)
@@ -72,16 +73,14 @@ export function ProfilePage() {
   })
 
   const onSubmit = async (data: { first_name: string; last_name: string }) => {
-    setError('')
-    setSuccess(false)
+    setFormError(null)
     try {
       await api.patch('/api/profile/me', data)
       await fetchCurrentUser()
-      setSuccess(true)
+      notify.success('Profile updated successfully.')
       setShowForm(false)
-      setTimeout(() => setSuccess(false), 3000)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update')
+      setFormError(err instanceof Error ? err.message : 'Failed to update')
     }
   }
 
@@ -91,9 +90,10 @@ export function ProfilePage() {
     try {
       await api.post('/api/profile/me/deactivate')
       setDeactivateDialog(false)
+      notify.success('Account deactivated.')
       await fetchCurrentUser()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed')
+      notify.error(err instanceof Error ? err.message : 'Failed')
     }
   }
 
@@ -101,9 +101,10 @@ export function ProfilePage() {
     setReactivating(true)
     try {
       await api.post('/api/profile/me/reactivate')
+      notify.success('Account reactivated.')
       await fetchCurrentUser()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed')
+      notify.error(err instanceof Error ? err.message : 'Failed')
     } finally { setReactivating(false) }
   }
 
@@ -111,9 +112,10 @@ export function ProfilePage() {
     try {
       await api.delete('/api/profile/me')
       setDeleteDialog(false)
+      notify.success('Account deleted.')
       // Auth store will handle redirect on next API call
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed')
+      notify.error(err instanceof Error ? err.message : 'Failed')
     }
   }
 
@@ -121,11 +123,6 @@ export function ProfilePage() {
     <div className="space-y-8">
       <PageHeader title="Your Profile" description="Manage your personal information and account details." />
 
-      {success && (
-        <div className="flex items-center gap-2 rounded-xl bg-semantic-success/10 px-4 py-3 text-sm text-semantic-success">
-          <Check size={16} /> Profile updated successfully
-        </div>
-      )}
 
       {/* SECTION: Identity */}
       <Section title="Identity" description="Your personal information and account status.">
@@ -174,7 +171,11 @@ export function ProfilePage() {
 
             {showForm && (
               <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4 border-t border-surface-2 pt-6">
-                {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
+                {formError && (
+                  <Banner variant="error" onDismiss={() => setFormError(null)}>
+                    {formError}
+                  </Banner>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-text-muted mb-1.5">First name</label>

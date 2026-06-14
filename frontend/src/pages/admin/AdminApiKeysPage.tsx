@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Search, Loader2, Trash2, Key, Plus, Save, Ban, Copy, Check, RotateCcw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Banner } from '@/components/shared/Banner'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface ApiKeyData {
   key_id: string
@@ -49,8 +51,7 @@ export function AdminApiKeysPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState<CreateForm>(initialForm)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
   const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -61,68 +62,57 @@ export function AdminApiKeysPage() {
   )
   const keys: ApiKeyData[] = Array.isArray(data) ? data : (data?.items || data?.keys || [])
 
-  useEffect(() => {
-    if (success) {
-      const t = setTimeout(() => setSuccess(''), 3000)
-      return () => clearTimeout(t)
-    }
-  }, [success])
-
   const handleRevoke = async () => {
     if (!revokeId) return
-    setError('')
     try {
       await api.post(`/api/keys/${revokeId}/revoke`)
       setRevokeId(null)
-      setSuccess('Key revoked. You can restore it later if needed.')
+      notify.success('Key revoked. You can restore it later if needed.')
       await refetch()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke key'
-      setError(msg)
+      notify.error(msg)
     }
   }
 
   const handleRestore = async () => {
     if (!restoreId) return
-    setError('')
     try {
       await api.patch(`/api/keys/${restoreId}`, { is_active: true })
       setRestoreId(null)
-      setSuccess('Key restored successfully.')
+      notify.success('Key restored successfully.')
       await refetch()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to restore key'
-      setError(msg)
+      notify.error(msg)
     }
   }
 
   const handleDelete = async () => {
     if (!deleteId) return
-    setError('')
     try {
       await api.delete(`/api/keys/${deleteId}`)
       setDeleteId(null)
-      setSuccess('Key deleted successfully.')
+      notify.success('Key deleted successfully.')
       await refetch()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to delete key'
       if (msg.includes('403') || msg.includes('authorized')) {
-        setError('Delete failed: you may need admin scope.')
+        notify.error('Delete failed: you may need admin scope.')
       } else {
-        setError(msg)
+        notify.error(msg)
       }
     }
   }
 
   const handleCleanup = async () => {
     setCleaning(true)
-    setError('')
     try {
       await api.post('/api/admin/keys/cleanup')
-      setSuccess('Expired keys cleaned up.')
+      notify.success('Expired keys cleaned up.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to cleanup keys')
+      notify.error(err instanceof Error ? err.message : 'Failed to cleanup keys')
     } finally {
       setCleaning(false)
     }
@@ -131,7 +121,7 @@ export function AdminApiKeysPage() {
   const handleCreate = async () => {
     if (!form.name || !form.user_email) return
     setSaving(true)
-    setError('')
+    setFormError(null)
     try {
       const scopes = form.scopes
         ? form.scopes.split(',').map((s) => s.trim()).filter(Boolean)
@@ -156,7 +146,7 @@ export function AdminApiKeysPage() {
       setCopied(false)
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create key')
+      setFormError(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
       setSaving(false)
     }
@@ -199,17 +189,6 @@ export function AdminApiKeysPage() {
           </div>
         }
       />
-
-      {error && (
-        <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">
-          {success}
-        </div>
-      )}
 
       <div className="mb-4">
         <div className="relative max-w-sm">
@@ -353,9 +332,20 @@ export function AdminApiKeysPage() {
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowCreate(false); setForm(initialForm) }} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowCreate(false); setForm(initialForm); setFormError(null) }} />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
             <h3 className="text-lg font-semibold text-text-primary">Create API Key</h3>
+
+            {formError && (
+              <Banner
+                variant="error"
+                size="sm"
+                onDismiss={() => setFormError(null)}
+                data-testid="apikey-form-error"
+              >
+                {formError}
+              </Banner>
+            )}
 
             <div>
               <label className="mb-1 block text-xs font-medium text-text-muted">User email</label>
@@ -402,7 +392,7 @@ export function AdminApiKeysPage() {
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => { setShowCreate(false); setForm(initialForm) }}
+                onClick={() => { setShowCreate(false); setForm(initialForm); setFormError(null) }}
                 className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors"
               >
                 Cancel

@@ -4,6 +4,7 @@ import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { getSavedEmail } from '@/lib/loginStorage'
+import { Banner } from '@/components/shared/Banner'
 
 export function PasskeyLoginButton() {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
@@ -49,9 +50,9 @@ export function PasskeyLoginButton() {
   return (
     <div className="space-y-2">
       {error && (
-        <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">
+        <Banner variant="error" size="sm" role="alert">
           {error}
-        </div>
+        </Banner>
       )}
       <button
         onClick={handlePasskeyLogin}

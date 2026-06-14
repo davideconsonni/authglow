@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface ConsentData {
   consent_id: string
@@ -21,8 +22,6 @@ export function AdminConsentsPage() {
   useDocumentTitle('Consents')
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const queryParam = search ? `?email=${encodeURIComponent(search)}` : ''
   const { data, refetch, isLoading } = useApiQuery<ConsentData[] | { items?: ConsentData[]; consents?: ConsentData[] }>(
@@ -33,8 +32,8 @@ export function AdminConsentsPage() {
 
   const handleRevoke = async () => {
     if (!revokeId) return
-    try { setError(''); await api.post(`/api/admin/oauth-consents/${revokeId}/revoke`); setRevokeId(null); setSuccess('Consent revoked.'); await refetch() }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    try { await api.post(`/api/admin/oauth-consents/${revokeId}/revoke`); setRevokeId(null); notify.success('Consent revoked.'); await refetch() }
+    catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   return (
@@ -44,8 +43,6 @@ export function AdminConsentsPage() {
         description="When a user authorizes a third-party application via OAuth2, a consent record is created here. You can revoke consents to force users to re-authorize."
       />
 
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
-      {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-3 text-sm text-semantic-success">{success}</div>}
 
       <div className="mb-4">
         <div className="relative max-w-sm">

@@ -36,3 +36,17 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     set({ toasts: get().toasts.filter((t) => t.id !== id) })
   },
 }))
+
+/**
+ * Static-style helpers for showing transient feedback from outside React
+ * (event handlers, async callbacks, etc.). No hook needed.
+ *
+ *   notify.success('Provider enabled.')
+ *   notify.error('Failed to delete: invalid token')
+ *   notify.info('Copied to clipboard')
+ */
+export const notify = {
+  success: (message: string) => useToastStore.getState().addToast('success', message),
+  error: (message: string) => useToastStore.getState().addToast('error', message),
+  info: (message: string) => useToastStore.getState().addToast('info', message),
+}

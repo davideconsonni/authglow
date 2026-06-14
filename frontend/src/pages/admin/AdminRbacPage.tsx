@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Loader2, Save, Shield, Edit } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface Permission {
   permission_id?: string
@@ -32,30 +33,10 @@ interface UserRoleAssignment {
 export function AdminRbacPage() {
   useDocumentTitle('RBAC')
   const [tab, setTab] = useState<'roles' | 'permissions'>('roles')
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-
-  useEffect(() => {
-    if (success) {
-      const t = setTimeout(() => setSuccess(''), 3000)
-      return () => clearTimeout(t)
-    }
-  }, [success])
 
   return (
     <div>
       <PageHeader title="Role-Based Access Control" description="Manage roles, permissions, and user assignments." />
-
-      {error && (
-        <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">
-          {success}
-        </div>
-      )}
 
       <div className="mb-6 flex gap-2">
         {(['roles', 'permissions'] as const).map((t) => (
@@ -73,26 +54,16 @@ export function AdminRbacPage() {
         ))}
       </div>
 
-      {tab === 'roles' ? (
-        <RolesTab onError={setError} onSuccess={setSuccess} />
-      ) : (
-        <PermissionsTab onError={setError} onSuccess={setSuccess} />
-      )}
+      {tab === 'roles' ? <RolesTab /> : <PermissionsTab />}
 
       <div className="mt-12">
-        <UserRoleAssignments onError={setError} onSuccess={setSuccess} />
+        <UserRoleAssignments />
       </div>
     </div>
   )
 }
 
-function RolesTab({
-  onError,
-  onSuccess,
-}: {
-  onError: (e: string) => void
-  onSuccess: (e: string) => void
-}) {
+function RolesTab() {
   const [showCreate, setShowCreate] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -143,10 +114,10 @@ function RolesTab({
         })
       }
       resetForm()
-      onSuccess(editId ? 'Role updated.' : 'Role created.')
+      notify.success(editId ? 'Role updated.' : 'Role created.')
       await refetchRoles()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to save role')
+      notify.error(err instanceof Error ? err.message : 'Failed to save role')
     } finally {
       setSaving(false)
     }
@@ -157,10 +128,10 @@ function RolesTab({
     try {
       await api.delete(`/api/rbac/roles/${deleteId}`)
       setDeleteId(null)
-      onSuccess('Role deleted.')
+      notify.success('Role deleted.')
       await refetchRoles()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to delete role')
+      notify.error(err instanceof Error ? err.message : 'Failed to delete role')
     }
   }
 
@@ -357,13 +328,7 @@ function RolesTab({
   )
 }
 
-function PermissionsTab({
-  onError,
-  onSuccess,
-}: {
-  onError: (e: string) => void
-  onSuccess: (e: string) => void
-}) {
+function PermissionsTab() {
   const [showCreate, setShowCreate] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -383,10 +348,10 @@ function PermissionsTab({
       setName('')
       setDescription('')
       setShowCreate(false)
-      onSuccess('Permission created.')
+      notify.success('Permission created.')
       await refetch()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to create permission')
+      notify.error(err instanceof Error ? err.message : 'Failed to create permission')
     } finally {
       setSaving(false)
     }
@@ -397,10 +362,10 @@ function PermissionsTab({
     try {
       await api.delete(`/api/rbac/permissions/${deleteId}`)
       setDeleteId(null)
-      onSuccess('Permission deleted.')
+      notify.success('Permission deleted.')
       await refetch()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to delete permission')
+      notify.error(err instanceof Error ? err.message : 'Failed to delete permission')
     }
   }
 
@@ -523,13 +488,7 @@ function PermissionsTab({
   )
 }
 
-function UserRoleAssignments({
-  onError,
-  onSuccess,
-}: {
-  onError: (e: string) => void
-  onSuccess: (e: string) => void
-}) {
+function UserRoleAssignments() {
   const [userEmail, setUserEmail] = useState('')
   const [selectedRole, setSelectedRole] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
@@ -558,10 +517,10 @@ function UserRoleAssignments({
         setSearchUserId(items[0].id)
         setSearched(true)
       } else {
-        onError('User not found')
+        notify.error('User not found')
       }
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to find user')
+      notify.error(err instanceof Error ? err.message : 'Failed to find user')
     }
   }
 
@@ -573,10 +532,10 @@ function UserRoleAssignments({
       if (expiresAt) body.expires_at = expiresAt
       await api.post('/api/rbac/user-roles', body)
       setSelectedRole(''); setExpiresAt('')
-      onSuccess('Role assigned.')
+      notify.success('Role assigned.')
       await refetch()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to assign role')
+      notify.error(err instanceof Error ? err.message : 'Failed to assign role')
     } finally { setAssigning(false) }
   }
 
@@ -585,10 +544,10 @@ function UserRoleAssignments({
     try {
       await api.delete(`/api/rbac/user-roles/${searchUserId}/${revokeId}`)
       setRevokeId(null)
-      onSuccess('Assignment revoked.')
+      notify.success('Assignment revoked.')
       await refetch()
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to revoke')
+      notify.error(err instanceof Error ? err.message : 'Failed to revoke')
     }
   }
 

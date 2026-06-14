@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface ResetToken {
   token_id: string
@@ -31,8 +32,6 @@ export function AdminPasswordResetsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [revokeEmail, setRevokeEmail] = useState('')
   const [cleaning, setCleaning] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const { data, refetch, isLoading } = useApiQuery<ResetToken[] | { items?: ResetToken[]; tokens?: ResetToken[]; password_resets?: ResetToken[] }>(['admin-password-resets'], '/api/admin/password-resets')
   const tokens: ResetToken[] = Array.isArray(data) ? data : (data?.items || data?.tokens || data?.password_resets || [])
@@ -41,27 +40,26 @@ export function AdminPasswordResetsPage() {
 
   const handleRevokeForUser = async () => {
     if (!revokeEmail.trim()) return
-    setError('')
     try {
       const res = await api.post<{ message?: string }>(`/api/admin/users/${revokeEmail}/revoke-resets`)
-      setSuccess(res?.message || `Reset tokens revoked for ${revokeEmail}`)
+      notify.success(res?.message || `Reset tokens revoked for ${revokeEmail}`)
       setRevokeEmail('')
       await refetch()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'User not found or failed to revoke')
+      notify.error(e instanceof Error ? e.message : 'User not found or failed to revoke')
     }
   }
 
   const handleDelete = async () => {
     if (!deleteId) return
-    try { setError(''); await api.delete(`/api/admin/password-resets/${deleteId}`); setDeleteId(null); setSuccess('Token deleted.'); await refetch() }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    try { await api.delete(`/api/admin/password-resets/${deleteId}`); setDeleteId(null); notify.success('Token deleted.'); await refetch() }
+    catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   const handleCleanup = async () => {
-    setCleaning(true); setError('')
-    try { await api.post('/api/admin/password-resets/cleanup'); setSuccess('Expired tokens cleaned up.'); await refetch() }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    setCleaning(true)
+    try { await api.post('/api/admin/password-resets/cleanup'); notify.success('Expired tokens cleaned up.'); await refetch() }
+    catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
     finally { setCleaning(false) }
   }
 
@@ -78,8 +76,6 @@ export function AdminPasswordResetsPage() {
         }
       />
 
-      {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
-      {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-3 text-sm text-semantic-success">{success}</div>}
 
       {/* Stats */}
       {stats && (

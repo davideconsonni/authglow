@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Mail, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
+import { Banner } from '@/components/shared/Banner'
+import { FieldError } from '@/components/shared/FieldError'
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -51,9 +53,7 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {generalError && (
-        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
-          {generalError}
-        </div>
+        <Banner variant="error">{generalError}</Banner>
       )}
 
       <div className="space-y-2">
@@ -68,9 +68,7 @@ export function ForgotPasswordForm() {
           {...register('email')}
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
-        {errors.email && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.email.message}</p>
-        )}
+        {errors.email && <FieldError id="forgot-email-error">{errors.email.message}</FieldError>}
       </div>
 
       <button

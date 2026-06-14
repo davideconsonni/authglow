@@ -6,6 +6,8 @@ import { Link } from 'react-router-dom'
 import { Loader2, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { ROUTES } from '@/lib/constants'
+import { Banner } from '@/components/shared/Banner'
+import { FieldError } from '@/components/shared/FieldError'
 
 const resetPasswordSchema = z
   .object({
@@ -83,9 +85,7 @@ export function ResetPasswordForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {generalError && (
-        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
-          {generalError}
-        </div>
+        <Banner variant="error">{generalError}</Banner>
       )}
 
       <div className="rounded-xl border border-surface-2 bg-surface-1/50 p-3 text-xs text-text-muted">
@@ -117,9 +117,7 @@ export function ResetPasswordForm() {
         <p id="reset-code-help" className="text-xs text-text-muted">
           Found in the password reset email we just sent you.
         </p>
-        {errors.reset_code && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.reset_code.message}</p>
-        )}
+        {errors.reset_code && <FieldError id="reset-code-error">{errors.reset_code.message}</FieldError>}
       </div>
 
       <div className="space-y-2">
@@ -144,9 +142,7 @@ export function ResetPasswordForm() {
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
-        {errors.password && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.password.message}</p>
-        )}
+        {errors.password && <FieldError id="reset-password-error">{errors.password.message}</FieldError>}
       </div>
 
       <div className="space-y-2">
@@ -161,9 +157,7 @@ export function ResetPasswordForm() {
           {...register('confirm_password')}
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
-        {errors.confirm_password && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.confirm_password.message}</p>
-        )}
+        {errors.confirm_password && <FieldError id="reset-confirm-error">{errors.confirm_password.message}</FieldError>}
       </div>
 
       <button

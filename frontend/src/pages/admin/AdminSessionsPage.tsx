@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface SessionData {
   id: string
@@ -20,8 +21,6 @@ export function AdminSessionsPage() {
   useDocumentTitle('Admin Sessions')
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [cleaning, setCleaning] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const { data, refetch, isLoading } = useApiQuery<SessionData[] | { items?: SessionData[]; sessions?: SessionData[]; tokens?: SessionData[] }>(
     ['admin-sessions'],
@@ -34,22 +33,21 @@ export function AdminSessionsPage() {
     try {
       await api.post(`/api/admin/tokens/refresh/${revokeId}/revoke`)
       setRevokeId(null)
+      notify.success('Session revoked.')
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke session')
+      notify.error(err instanceof Error ? err.message : 'Failed to revoke session')
     }
   }
 
   const handleCleanup = async () => {
     setCleaning(true)
-    setError('')
-    setSuccess('')
     try {
       const data = await api.post<{ deleted: number }>('/api/admin/sessions/cleanup')
-      setSuccess(`Cleaned up ${data.deleted} expired session${data.deleted !== 1 ? 's' : ''}.`)
+      notify.success(`Cleaned up ${data.deleted} expired session${data.deleted !== 1 ? 's' : ''}.`)
       await refetch()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to cleanup sessions')
+      notify.error(err instanceof Error ? err.message : 'Failed to cleanup sessions')
     } finally {
       setCleaning(false)
     }
@@ -72,8 +70,6 @@ export function AdminSessionsPage() {
         }
       />
 
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
-      {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
 
       {isLoading ? (
         <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>

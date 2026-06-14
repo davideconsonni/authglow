@@ -7,6 +7,8 @@ import { Loader2, Eye, EyeOff, Check, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { ROUTES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { Banner } from '@/components/shared/Banner'
+import { FieldError } from '@/components/shared/FieldError'
 
 const registerSchema = z
   .object({
@@ -93,9 +95,7 @@ export function RegisterForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {generalError && (
-        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
-          {generalError}
-        </div>
+        <Banner variant="error">{generalError}</Banner>
       )}
 
       <div className="grid grid-cols-2 gap-4">
@@ -111,9 +111,7 @@ export function RegisterForm() {
             {...register('first_name')}
             className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
           />
-          {errors.first_name && (
-            <p className="text-xs text-semantic-error" role="alert">{errors.first_name.message}</p>
-          )}
+          {errors.first_name && <FieldError id="register-firstname-error">{errors.first_name.message}</FieldError>}
         </div>
         <div className="space-y-2">
           <label htmlFor="last_name" className="block text-sm font-medium text-text-secondary">
@@ -127,9 +125,7 @@ export function RegisterForm() {
             {...register('last_name')}
             className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
           />
-          {errors.last_name && (
-            <p className="text-xs text-semantic-error" role="alert">{errors.last_name.message}</p>
-          )}
+          {errors.last_name && <FieldError id="register-lastname-error">{errors.last_name.message}</FieldError>}
         </div>
       </div>
 
@@ -145,9 +141,7 @@ export function RegisterForm() {
           {...register('email')}
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
-        {errors.email && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.email.message}</p>
-        )}
+        {errors.email && <FieldError id="register-email-error">{errors.email.message}</FieldError>}
       </div>
 
       <div className="space-y-2">
@@ -200,9 +194,7 @@ export function RegisterForm() {
           </div>
         )}
 
-        {errors.password && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.password.message}</p>
-        )}
+        {errors.password && <FieldError id="register-password-error">{errors.password.message}</FieldError>}
       </div>
 
       <div className="space-y-2">
@@ -217,9 +209,7 @@ export function RegisterForm() {
           {...register('confirm_password')}
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
-        {errors.confirm_password && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.confirm_password.message}</p>
-        )}
+        {errors.confirm_password && <FieldError id="register-confirm-error">{errors.confirm_password.message}</FieldError>}
       </div>
 
       <button

@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
+import { Banner } from '@/components/shared/Banner'
 
 export function MFAVerifyForm() {
   const [searchParams] = useSearchParams()
@@ -133,9 +134,7 @@ export function MFAVerifyForm() {
       className="space-y-6"
     >
       {generalError && (
-        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
-          {generalError}
-        </div>
+        <Banner variant="error">{generalError}</Banner>
       )}
 
       {isLocked && (

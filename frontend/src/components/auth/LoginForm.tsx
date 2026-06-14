@@ -7,6 +7,8 @@ import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { ROUTES } from '@/lib/constants'
 import { getSavedEmail, saveEmail } from '@/lib/loginStorage'
+import { Banner } from '@/components/shared/Banner'
+import { FieldError } from '@/components/shared/FieldError'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -66,9 +68,9 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       {generalError && (
-        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">
+        <Banner variant="error" role="alert">
           {generalError}
-        </div>
+        </Banner>
       )}
 
       <div className="space-y-2">
@@ -84,9 +86,7 @@ export function LoginForm() {
           {...register('email')}
           className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
         />
-        {errors.email && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.email.message}</p>
-        )}
+        {errors.email && <FieldError id="login-email-error">{errors.email.message}</FieldError>}
       </div>
 
       <div className="space-y-2">
@@ -112,9 +112,7 @@ export function LoginForm() {
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
-        {errors.password && (
-          <p className="text-xs text-semantic-error" role="alert">{errors.password.message}</p>
-        )}
+        {errors.password && <FieldError id="login-password-error">{errors.password.message}</FieldError>}
       </div>
 
       <button

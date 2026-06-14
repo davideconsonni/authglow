@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Banner } from '@/components/shared/Banner'
+import { FieldError } from '@/components/shared/FieldError'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 interface OAuthClient {
   id?: string
@@ -148,9 +151,8 @@ export function AdminOAuthClientsPage() {
 
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
-  const [success, setSuccess] = useState('')
   const [secretModal, setSecretModal] = useState<string | null>(null)
   const [newClientId, setNewClientId] = useState('')
   const [editClientId, setEditClientId] = useState<string | null>(null)
@@ -162,8 +164,6 @@ export function AdminOAuthClientsPage() {
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
   const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as { items?: OAuthClient[] } | undefined)?.items as OAuthClient[]) ?? []
 
-  useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 3000); return () => clearTimeout(t) } }, [success])
-
   const resetForm = () => {
     setName(''); setDescription(''); setGrantTypes([]); setIsConfidential(true)
     setAuthMethod('client_secret_basic'); setRedirectUris([''])
@@ -173,6 +173,7 @@ export function AdminOAuthClientsPage() {
     setAccessTokenLifetime(3600); setRefreshTokenLifetime(2592000)
     setShowAdvanced(false); setFormErrors({}); setSelectedTemplate(null)
     setEditClientId(null); setOriginalGrantTypes([]); setOriginalIsConfidential(true)
+    setFormError(null)
   }
 
   const applyTemplate = (t: Template) => {
@@ -221,20 +222,20 @@ export function AdminOAuthClientsPage() {
 
   const handleDelete = async () => {
     if (!deleteId) return
-    try { setError(''); await api.delete(`/api/oauth-clients/${deleteId}`); setDeleteId(null); setSuccess('Client deleted.'); await refetch() }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    try { await api.delete(`/api/oauth-clients/${deleteId}`); setDeleteId(null); notify.success('Client deleted.'); await refetch() }
+    catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   const handleToggle = async (id: string, active: boolean) => {
     try { await api.post(`/api/oauth-clients/${id}/${active ? 'deactivate' : 'activate'}`); await refetch() }
-    catch { /* ignore */ }
+    catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   const handleRotate = async (id: string) => {
     try {
       const res = await api.post<{ secret: string }>(`/api/oauth-clients/${id}/rotate-secret`)
       setSecretModal(res.secret)
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   const validateForm = (): boolean => {
@@ -276,30 +277,31 @@ export function AdminOAuthClientsPage() {
 
   const handleCreate = async () => {
     if (!validateForm()) return
-    setSaving(true); setError('')
+    setSaving(true); setFormError(null)
     try {
       const { client_id, client_secret } = await api.post<{ client_id: string; client_secret: string }>('/api/oauth-clients', buildPayload())
       setNewClientId(client_id)
       setSecretModal(client_secret)
       setShowForm(false)
       resetForm()
+      notify.success('Client created.')
       await refetch()
     } catch (err: unknown) {
-      setError(friendlyError(err instanceof Error ? err.message : 'Failed to create client'))
+      setFormError(friendlyError(err instanceof Error ? err.message : 'Failed to create client'))
     } finally { setSaving(false) }
   }
 
   const handleUpdate = async () => {
     if (!editClientId || !validateForm()) return
-    setSaving(true); setError('')
+    setSaving(true); setFormError(null)
     try {
       await api.put(`/api/oauth-clients/${editClientId}`, buildPayload())
       setShowForm(false)
       resetForm()
-      setSuccess('Client updated.')
+      notify.success('Client updated.')
       await refetch()
     } catch (err: unknown) {
-      setError(friendlyError(err instanceof Error ? err.message : 'Failed to update client'))
+      setFormError(friendlyError(err instanceof Error ? err.message : 'Failed to update client'))
     } finally { setSaving(false) }
   }
 
@@ -342,9 +344,6 @@ export function AdminOAuthClientsPage() {
           </button>
         }
       />
-
-      {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
-      {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-3 text-sm text-semantic-success">{success}</div>}
 
       {!clients || clients.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-surface-2 bg-surface-1 py-16 text-center">
@@ -475,10 +474,22 @@ export function AdminOAuthClientsPage() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
           <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
+            {formError && (
+              <div className="mb-4">
+                <Banner
+                  variant="error"
+                  onDismiss={() => setFormError(null)}
+                  data-testid="oauth-client-form-error"
+                >
+                  {formError}
+                </Banner>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-text-primary">
                 {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
               </h3>
+              {/* nothing */}
               {!editClientId && (
                 <div className="flex items-center gap-1">
                   {TEMPLATES.map(t => (
@@ -523,7 +534,7 @@ export function AdminOAuthClientsPage() {
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-text-secondary">Application name <span className="text-semantic-error">*</span></label>
                   <TextInput value={name} onChange={v => { setName(v); setFormErrors({...formErrors, name: ''}) }} placeholder="My Application" data-testid="client-name-input" autoFocus />
-                  {formErrors.name && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.name}</p>}
+                  {formErrors.name && <FieldError id="client-name-error">{formErrors.name}</FieldError>}
                 </div>
 
                 <div>
@@ -550,7 +561,7 @@ export function AdminOAuthClientsPage() {
                       </label>
                     ))}
                   </div>
-                  {formErrors.grant_types && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.grant_types}</p>}
+                  {formErrors.grant_types && <FieldError id="client-grants-error">{formErrors.grant_types}</FieldError>}
                 </div>
               </div>
 
@@ -616,7 +627,7 @@ export function AdminOAuthClientsPage() {
                         ))}
                       </div>
                       <button type="button" onClick={addRedirectUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
-                      {formErrors.redirect_uris && <p className="mt-1 text-[11px] text-semantic-error">{formErrors.redirect_uris}</p>}
+                      {formErrors.redirect_uris && <FieldError id="client-redirect-uris-error">{formErrors.redirect_uris}</FieldError>}
                     </div>
                   )}
 

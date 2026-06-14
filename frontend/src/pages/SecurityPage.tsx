@@ -13,6 +13,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useApiQuery } from '@/hooks/useApi'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { notify } from '@/stores/toastStore'
 
 export function SecurityPage() {
   useDocumentTitle('Security')
@@ -20,7 +21,6 @@ export function SecurityPage() {
   const [backupCodes, setBackupCodes] = useState<string[]>([])
   const [showMfaSetup, setShowMfaSetup] = useState(false)
   const [disableMfa, setDisableMfa] = useState(false)
-  const [error, setError] = useState('')
 
   const { data: mfaStatus } = useApiQuery<{ enabled: boolean; backup_codes_remaining?: number }>(['mfa-status'], '/api/mfa/status')
   const isFederated = user?.is_federated ?? false
@@ -35,13 +35,13 @@ export function SecurityPage() {
   }
 
   const handleDisableMfa = async () => {
-    setError('')
     try {
       await api.delete('/api/mfa/disable')
       setDisableMfa(false)
+      notify.success('Two-factor authentication disabled.')
       await fetchCurrentUser()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to disable MFA')
+      notify.error(err instanceof Error ? err.message : 'Failed to disable MFA')
     }
   }
 
@@ -62,8 +62,6 @@ export function SecurityPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Security" description="Two-factor authentication, passkeys, and credentials." />
-
-      {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error" role="alert">{error}</div>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">

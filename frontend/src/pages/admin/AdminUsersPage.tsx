@@ -1,13 +1,15 @@
 import { useState, useEffect, useReducer } from 'react'
-import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock, AlertCircle, Check } from 'lucide-react'
+import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock, Check } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Banner } from '@/components/shared/Banner'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useAuthStore } from '@/stores/authStore'
+import { notify } from '@/stores/toastStore'
 
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
@@ -64,8 +66,6 @@ export function AdminUsersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null)
   const [bulking, setBulking] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [detailUserId, setDetailUserId] = useState<string | null>(null)
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -92,28 +92,25 @@ export function AdminUsersPage() {
   const total = data?.total ?? 0
   const totalPages = Math.ceil(total / limit)
 
-  useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 3000); return () => clearTimeout(t) } }, [success])
-
-  const handleDelete = async () => { if (!deleteId) return; try { await api.delete(`/api/admin/users/${deleteId}`); setDeleteId(null); setSuccess('User deleted.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
-  const handleResetMfa = async () => { if (!resetMfaId) return; try { await api.post(`/api/admin/users/${resetMfaId}/reset-mfa`); setResetMfaId(null); setSuccess('MFA reset.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
-  const handleRevokeSessions = async () => { if (!revokeSessionsId) return; try { await api.post(`/api/admin/users/${revokeSessionsId}/sessions/revoke-all`); setRevokeSessionsId(null); setSuccess('All sessions revoked.'); await refetch() } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } }
+  const handleDelete = async () => { if (!deleteId) return; try { await api.delete(`/api/admin/users/${deleteId}`); setDeleteId(null); notify.success('User deleted.'); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } }
+  const handleResetMfa = async () => { if (!resetMfaId) return; try { await api.post(`/api/admin/users/${resetMfaId}/reset-mfa`); setResetMfaId(null); notify.success('MFA reset.'); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } }
+  const handleRevokeSessions = async () => { if (!revokeSessionsId) return; try { await api.post(`/api/admin/users/${revokeSessionsId}/sessions/revoke-all`); setRevokeSessionsId(null); notify.success('All sessions revoked.'); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    setError('')
     try { await api.put(`/api/admin/users/${id}`, { is_active: !isActive }); await refetch() } catch { /* ignore */ }
   }
 
   const handleInvite = async () => {
-    if (!inviteForm.email) return; setInviting(true); setError('')
+    if (!inviteForm.email) return; setInviting(true)
     try {
       const scopes = inviteForm.scopes ? inviteForm.scopes.split(',').map(s => s.trim()).filter(Boolean) : []
       await api.post('/api/users/invite', { email: inviteForm.email, first_name: inviteForm.first_name, last_name: inviteForm.last_name, scopes })
-      setShowInvite(false); setInviteForm({ email: '', first_name: '', last_name: '', scopes: '' }); setSuccess('User created.'); await refetch()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
+      setShowInvite(false); setInviteForm({ email: '', first_name: '', last_name: '', scopes: '' }); notify.success('User invited.'); await refetch()
+    } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
   }
 
   const handleCreate = async () => {
-    if (!createForm.email || !createForm.password) return; setCreating(true); setError('')
+    if (!createForm.email || !createForm.password) return; setCreating(true)
     try {
       const scopes = createForm.scopes ? createForm.scopes.split(',').map(s => s.trim()).filter(Boolean) : []
       await api.post('/api/admin/users/create', {
@@ -125,23 +122,23 @@ export function AdminUsersPage() {
         avatar_url: createForm.avatar_url || null,
         scopes,
       })
-      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' }); setSuccess('User created.'); await refetch()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
+      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' }); notify.success('User created.'); await refetch()
+    } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
   }
 
   const toggleSelect = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n) }
   const toggleSelectAll = () => setSelected(selected.size === users.length ? new Set() : new Set(users.map(u => u.id)))
 
   const handleBulkAction = async () => {
-    if (selected.size === 0 || !bulkAction) return; setBulking(true); setError('')
+    if (selected.size === 0 || !bulkAction) return; setBulking(true)
     try {
       const ids = Array.from(selected)
       if (bulkAction === 'delete') { for (const id of ids) await api.delete(`/api/admin/users/${id}`) }
       else await api.post('/api/admin/users/bulk', { user_ids: ids, action: bulkAction === 'activate' ? 'activate' : 'deactivate' })
       setSelected(new Set()); setBulkAction(null)
-      setSuccess(`${bulkAction === 'delete' ? 'Deleted' : bulkAction === 'activate' ? 'Activated' : 'Deactivated'} ${ids.length} user${ids.length !== 1 ? 's' : ''}.`)
+      notify.success(`${bulkAction === 'delete' ? 'Deleted' : bulkAction === 'activate' ? 'Activated' : 'Deactivated'} ${ids.length} user${ids.length !== 1 ? 's' : ''}.`)
       await refetch()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Bulk action failed') } finally { setBulking(false) }
+    } catch (e) { notify.error(e instanceof Error ? e.message : 'Bulk action failed') } finally { setBulking(false) }
   }
 
   const handleFilterChange = (setter: (v: string) => void) => (val: string) => { setter(val); setPage(1) }
@@ -151,8 +148,6 @@ export function AdminUsersPage() {
       <PageHeader title="Users" description="Manage registered users."
         actions={<div className="flex gap-2"><button onClick={() => setShowCreate(true)} data-testid="create-user-btn" className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"><UserPlus size={16} />Create User</button><button onClick={() => setShowInvite(true)} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"><Mail size={16} />Invite User</button></div>}
       />
-      {error && <div className="mb-4 rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
-      {success && <div className="mb-4 rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
@@ -295,7 +290,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [deletePasskeyId, setDeletePasskeyId] = useState<string | null>(null)
   const [showSuspend, setShowSuspend] = useState(false)
   const [suspendHours, setSuspendHours] = useState(24)
-  const [suspendError, setSuspendError] = useState('')
+  const [suspendError, setSuspendError] = useState<string | null>(null)
 
   type EditState = { first: string; last: string; email: string; verified: boolean; scopes: string[]; phone: string; avatar_url: string }
   const reducer = (state: EditState, action: { type: string; value?: unknown; user?: AdminUserDetail }): EditState => {
@@ -327,18 +322,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const [edit, dispatch] = useReducer(reducer, { first: '', last: '', email: '', verified: false, scopes: [], phone: '', avatar_url: '' })
   const [newScope, setNewScope] = useState('')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const [showSetPassword, setShowSetPassword] = useState(false)
   const [setPasswordForm, setSetPasswordForm] = useState({ password: '', requireChange: false })
-  const [setPasswordError, setSetPasswordError] = useState('')
+  const [setPasswordError, setSetPasswordError] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
 
   useEffect(() => { if (user) dispatch({ type: 'INIT', user }) }, [user])
-
-  useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 2000); return () => clearTimeout(t) } }, [success])
 
   const addScope = () => {
     const trimmed = newScope.trim()
@@ -353,7 +345,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   }
 
   const handleSave = async () => {
-    setSaving(true); setError('')
+    setSaving(true); setFormError(null)
     try {
       const payload: Record<string, unknown> = {
         first_name: edit.first || null,
@@ -365,25 +357,25 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       if (edit.phone !== (user?.phone ?? '')) payload.phone = edit.phone || null
       if (edit.avatar_url !== (user?.avatar_url ?? '')) payload.avatar_url = edit.avatar_url || null
       await api.put(`/api/admin/users/${userId}`, payload)
-      setSuccess('User updated.')
+      notify.success('User updated.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       onUserUpdated()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save')
+      setFormError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setSaving(false)
     }
   }
 
   const handleSetPassword = async () => {
-    setSaving(true); setSetPasswordError('')
+    setSaving(true); setSetPasswordError(null)
     try {
       await api.post(`/api/admin/users/${userId}/set-password`, setPasswordForm)
       setShowSetPassword(false)
       setSetPasswordForm({ password: '', requireChange: false })
-      setSetPasswordError('')
-      setSuccess('Password set successfully.')
+      setSetPasswordError(null)
+      notify.success('Password set successfully.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
     } catch (e) {
       setSetPasswordError(e instanceof Error ? e.message : 'Failed to set password')
@@ -394,7 +386,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
 
   const handleConfirmAction = async () => {
     if (!confirmAction || confirming) return
-    setError('')
+    setFormError(null)
     setConfirming(true)
     try {
       if (confirmAction === 'revoke-all-sessions') {
@@ -413,13 +405,13 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       } else {
         await api.post(`/api/admin/users/${userId}/${confirmAction}`)
       }
-      setSuccess(getActionSuccessMessage(confirmAction))
+      notify.success(getActionSuccessMessage(confirmAction))
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
       onUserUpdated()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Action failed')
+      setFormError(e instanceof Error ? e.message : 'Action failed')
     } finally {
       setConfirmAction(null)
       setConfirming(false)
@@ -428,25 +420,24 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
 
   const handleRevokeSession = async () => {
     if (!revokeSessionId) return
-    setError('')
     try {
       await api.post(`/api/admin/tokens/refresh/${revokeSessionId}/revoke`)
       setRevokeSessionId(null)
-      setSuccess('Session revoked.')
+      notify.success('Session revoked.')
       refetchSessions()
       queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke session')
+      notify.error(e instanceof Error ? e.message : 'Failed to revoke session')
     }
   }
 
   const handleSuspend = async () => {
-    setSaving(true); setSuspendError('')
+    setSaving(true); setSuspendError(null)
     try {
       await api.post(`/api/admin/users/${userId}/suspend`, { duration_hours: suspendHours })
       setShowSuspend(false)
-      setSuspendError('')
-      setSuccess('User suspended.')
+      setSuspendError(null)
+      notify.success('User suspended.')
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       onUserUpdated()
@@ -467,23 +458,22 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       a.download = `user-${user?.email ?? userId}-export.json`
       a.click()
       URL.revokeObjectURL(url)
-      setSuccess('User data exported.')
+      notify.success('User data exported.')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to export')
+      notify.error(e instanceof Error ? e.message : 'Failed to export')
     }
   }
 
   const handleDeletePasskey = async () => {
     if (!deletePasskeyId) return
-    setError('')
     try {
       await api.delete(`/api/admin/users/${userId}/passkeys/${deletePasskeyId}`)
       setDeletePasskeyId(null)
-      setSuccess('Passkey removed.')
+      notify.success('Passkey removed.')
       queryClient.invalidateQueries({ queryKey: ['user-passkeys', userId] })
       queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete passkey')
+      notify.error(e instanceof Error ? e.message : 'Failed to delete passkey')
     }
   }
 
@@ -740,13 +730,17 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                   <span className="text-text-primary">Require change at next login</span>
                 </label>
                 {setPasswordError && (
-                  <div role="alert" data-testid="set-password-error" className="flex items-start gap-2 rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-3 py-2 text-xs text-semantic-error">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <span>{setPasswordError}</span>
-                  </div>
+                  <Banner
+                    variant="error"
+                    size="sm"
+                    onDismiss={() => setSetPasswordError(null)}
+                    data-testid="set-password-error"
+                  >
+                    {setPasswordError}
+                  </Banner>
                 )}
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }); setSetPasswordError('') }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }); setSetPasswordError(null) }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
                   <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password || !passwordIsValid(setPasswordForm.password)} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Set Password
@@ -808,13 +802,17 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                   </select>
                 </div>
                 {suspendError && (
-                  <div role="alert" data-testid="suspend-error" className="flex items-start gap-2 rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-3 py-2 text-xs text-semantic-error">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <span>{suspendError}</span>
-                  </div>
+                  <Banner
+                    variant="error"
+                    size="sm"
+                    onDismiss={() => setSuspendError(null)}
+                    data-testid="suspend-error"
+                  >
+                    {suspendError}
+                  </Banner>
                 )}
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => { setShowSuspend(false); setSuspendError('') }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
+                  <button onClick={() => { setShowSuspend(false); setSuspendError(null) }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
                   <button onClick={handleSuspend} disabled={saving} data-testid="suspend-confirm-btn" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-semantic-error px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
                     Suspend
@@ -824,8 +822,17 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             </div>
           )}
 
-          {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
-          {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">{success}</div>}
+          {formError && (
+            <Banner
+              variant="error"
+              size="sm"
+              className="mb-3"
+              onDismiss={() => setFormError(null)}
+              data-testid="user-drawer-form-error"
+            >
+              {formError}
+            </Banner>
+          )}
 
           <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 rounded-xl border border-surface-2 px-4 py-2.5 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
             <Download size={16} />Export User Data
