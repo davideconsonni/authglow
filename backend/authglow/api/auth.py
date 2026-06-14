@@ -567,6 +567,8 @@ async def token_endpoint(
             include_refresh=False,
             permissions=rbac_perms,
             roles=rbac_roles,
+            audience=auth_code.client_id,
+            azp=auth_code.client_id,
         )
 
         # Create persistent refresh token with rotation
@@ -667,6 +669,8 @@ async def token_endpoint(
             include_refresh=False,
             permissions=rbac_perms,
             roles=rbac_roles,
+            audience=client_id,
+            azp=client_id,
         )
 
         # Add new refresh token to response

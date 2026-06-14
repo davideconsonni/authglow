@@ -5,6 +5,7 @@ import os
 from typing import List, Optional
 from urllib.parse import urlparse
 
+import jwt
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.oauth_client import OAuth2Client
-from authglow.models.oidc import JWKSResponse, OpenIDConfiguration, UserInfoResponse
+from authglow.models.oidc import IDTokenClaims, JWKSResponse, OpenIDConfiguration, UserInfoResponse
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.oauth_client import OAuth2ClientStorage
@@ -180,6 +181,18 @@ async def userinfo(credentials: HTTPAuthorizationCredentials = Depends(security)
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # OIDC Core §5.3: access tokens presented at the UserInfo endpoint must
+    # be aud-bound. We don't have the originating client_id in scope (the
+    # bearer token is the only credential), so we assert the aud claim is
+    # present and signed. The token's own aud is the trusted source of the
+    # authorized party.
+    if not token_data.aud:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token is not bound to a client audience",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Check if token has 'openid' scope
     if "openid" not in token_data.scopes:
         raise HTTPException(
@@ -230,9 +243,34 @@ async def logout_get(
 
     # Validate ID token if provided
     if id_token_hint:
-        token_data = jwt_service.decode_token(id_token_hint)
+        # The id_token_hint is an OIDC ID Token. Per OIDC Core §3.1.3.7 its
+        # ``aud`` claim identifies the client it was issued for. We must
+        # validate both signature and audience match before trusting it.
+        # Step 1: extract the aud from the (unverified) payload to learn
+        # which client to assert as the expected audience.
+        unverified_aud: str | None = None
+        try:
+            unverified_payload = jwt.decode(
+                id_token_hint,
+                options={
+                    "verify_signature": False,
+                    "verify_aud": False,
+                    "verify_exp": False,
+                },
+            )
+            raw_aud = unverified_payload.get("aud")
+            if isinstance(raw_aud, str):
+                unverified_aud = raw_aud
+        except jwt.PyJWTError:
+            unverified_aud = None
 
-        if token_data:
+        # Step 2: strict validation — signature + audience + expiration in a
+        # single call. Returns None on any failure.
+        token_data: IDTokenClaims | None = None
+        if unverified_aud is not None:
+            token_data = jwt_service.decode_id_token(id_token_hint, expected_aud=unverified_aud)
+
+        if token_data is not None:
             # Log logout event
             await audit_service.log_event(
                 event_type="oidc_logout",

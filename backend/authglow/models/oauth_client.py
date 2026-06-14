@@ -6,7 +6,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from authglow.core.datetime import utcnow
 
@@ -103,7 +103,7 @@ class OAuth2ClientCreate(BaseModel):
     """Schema for creating a new OAuth2 client."""
 
     client_name: str = Field(..., min_length=3, max_length=100)
-    redirect_uris: List[str] = Field(..., min_length=1)
+    redirect_uris: List[str] = Field(default_factory=list)
     allowed_scopes: List[str] = Field(default_factory=lambda: ["read"])
     grant_types: List[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
 
@@ -138,6 +138,19 @@ class OAuth2ClientCreate(BaseModel):
         if v is not None and len(v) > 2048:
             raise ValueError("URI must be at most 2048 characters")
         return v
+
+    @model_validator(mode="after")
+    def _redirect_uris_required_for_authorization_code(self) -> "OAuth2ClientCreate":
+        """``redirect_uris`` is OPTIONAL in general (RFC 7591 §2, RFC 6749 §3.1.2.3)
+        but REQUIRED when ``authorization_code`` is in ``grant_types`` — those
+        clients need somewhere to redirect back to.
+        """
+        if "authorization_code" in self.grant_types and not self.redirect_uris:
+            raise ValueError(
+                "redirect_uris is required and must contain at least one entry "
+                "when 'authorization_code' grant is enabled"
+            )
+        return self
 
 
 class OAuth2ClientUpdate(BaseModel):
@@ -180,6 +193,23 @@ class OAuth2ClientUpdate(BaseModel):
         if v is not None and len(v) > 2048:
             raise ValueError("URI must be at most 2048 characters")
         return v
+
+    @model_validator(mode="after")
+    def _redirect_uris_required_for_authorization_code(self) -> "OAuth2ClientUpdate":
+        """If the resulting client would have ``authorization_code`` enabled,
+        ``redirect_uris`` must not become empty. ``None`` (field not sent)
+        is always allowed — the caller is not changing the URI list.
+        """
+        if (
+            "authorization_code" in (self.grant_types or [])
+            and self.redirect_uris is not None
+            and len(self.redirect_uris) == 0
+        ):
+            raise ValueError(
+                "redirect_uris must contain at least one entry when "
+                "'authorization_code' grant is enabled"
+            )
+        return self
 
 
 class OAuth2ClientResponse(BaseModel):

@@ -186,6 +186,13 @@ async def introspect_token(
     if token_type_hint == "access_token" or not token_type_hint:
         token_data = jwt_service.decode_token(token)
         if token_data:
+            # RFC 7662 §2.2: the introspection response MUST NOT leak why a
+            # token is inactive. We enforce audience binding silently by
+            # returning ``{"active": false}`` when the introspecting client
+            # is not the audience of the token.
+            if token_data.aud and token_data.aud != resolved_client_id:
+                return {"active": False}
+
             active = utcnow() < token_data.exp
 
             # Also check revocation blacklist
@@ -203,6 +210,7 @@ async def introspect_token(
                 "iat": int(token_data.iat.timestamp()),
                 "sub": token_data.sub,
                 "email": token_data.email,
+                "client_id": token_data.aud,
             }
 
             if user and active:

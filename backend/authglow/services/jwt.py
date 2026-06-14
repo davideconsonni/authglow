@@ -97,7 +97,11 @@ class JWTService:
             headers={"kid": self._active_kid},
         )
 
-    def _decode_token(self, token: str) -> Optional[dict[str, Any]]:
+    def _decode_token(
+        self,
+        token: str,
+        audience: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
         """Decode a token using the appropriate public key.
 
         Strategy:
@@ -108,6 +112,14 @@ class JWTService:
 
         All tokens must have a valid issuer matching the configured issuer
         and the required claims ``exp``, ``iat``, ``sub``.
+
+        Args:
+            token: The encoded JWT.
+            audience: When provided, PyJWT enforces ``aud == audience`` and the
+                ``aud`` claim is added to the required claims list. When
+                ``None`` the ``aud`` claim is not validated, preserving
+                back-compat with legacy cookie/MFA tokens that may not carry
+                an audience.
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -117,13 +129,23 @@ class JWTService:
         kid = unverified_header.get("kid")
         decode_algorithms: List[str] = [self.settings.jwt_algorithm]
         decode_issuer: str = self.settings.issuer
+        required_claims: List[str] = ["exp", "iat", "sub"]
+        if audience is not None:
+            required_claims.append("aud")
         decode_options = cast(
             "jwt.types.Options",
             {
-                "require": ["exp", "iat", "sub"],
-                "verify_aud": False,
+                "require": required_claims,
+                "verify_aud": audience is not None,
             },
         )
+        decode_kwargs: Dict[str, Any] = {
+            "algorithms": decode_algorithms,
+            "issuer": decode_issuer,
+            "options": decode_options,
+        }
+        if audience is not None:
+            decode_kwargs["audience"] = audience
 
         # Check if kid is revoked
         if kid and kid in self._keyring["keys"]:
@@ -136,9 +158,7 @@ class JWTService:
                 result: dict[str, Any] = jwt.decode(
                     token,
                     self._public_keys[kid],
-                    algorithms=decode_algorithms,
-                    issuer=decode_issuer,
-                    options=decode_options,
+                    **decode_kwargs,
                 )
                 return result
             except jwt.PyJWTError:
@@ -153,9 +173,7 @@ class JWTService:
                 decoded: dict[str, Any] = jwt.decode(
                     token,
                     pub_key,
-                    algorithms=decode_algorithms,
-                    issuer=decode_issuer,
-                    options=decode_options,
+                    **decode_kwargs,
                 )
                 return decoded
             except jwt.PyJWTError:
@@ -171,8 +189,23 @@ class JWTService:
         expires_delta: Optional[timedelta] = None,
         permissions: Optional[List[str]] = None,
         roles: Optional[List[str]] = None,
+        audience: Optional[str] = None,
+        azp: Optional[str] = None,
     ) -> str:
-        """Create an access token with a unique jti for revocation support."""
+        """Create an access token with a unique jti for revocation support.
+
+        Args:
+            audience: When the token is issued on behalf of an OAuth2 client,
+                pass the client_id. The ``aud`` claim is then bound to that
+                client, enabling OIDC Core §3.1.3.7 audience validation on
+                the resource server. When ``None`` (cookie-first / password
+                grant flows) no ``aud`` claim is set, preserving the legacy
+                back-compat path.
+            azp: Authorized party (OIDC Core §2). When ``audience`` is set,
+                ``azp`` defaults to the same value if not explicitly
+                provided. Following the AuthGlow convention, ``azp`` is
+                always set whenever the token is aud-bound.
+        """
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
@@ -194,6 +227,9 @@ class JWTService:
             token_data["permissions"] = permissions
         if roles:
             token_data["roles"] = roles
+        if audience is not None:
+            token_data["aud"] = audience
+            token_data["azp"] = azp if azp is not None else audience
         return self._encode_token(token_data)
 
     def create_refresh_token(self, user_id: str, email: str, scopes: List[str]) -> str:
@@ -227,12 +263,22 @@ class JWTService:
         }
         return self._encode_token(token_data)
 
-    def decode_token(self, token: str) -> Optional[TokenData]:
+    def decode_token(
+        self,
+        token: str,
+        expected_aud: Optional[str] = None,
+    ) -> Optional[TokenData]:
         """Decode and validate a JWT token.
 
         Returns None if the token is invalid, expired, or revoked (blacklisted).
+
+        Args:
+            token: The encoded JWT.
+            expected_aud: When provided, the token's ``aud`` claim must equal
+                this value (OIDC Core §3.1.3.7). When ``None`` the ``aud`` claim
+                is not enforced, preserving back-compat with cookie/MFA tokens.
         """
-        payload = self._decode_token(token)
+        payload = self._decode_token(token, audience=expected_aud)
         if not payload:
             return None
 
@@ -293,6 +339,7 @@ class JWTService:
             "iss": self.settings.issuer,
             "sub": user_id,
             "aud": client_id,
+            "azp": client_id,
             "exp": int(expire.timestamp()),
             "iat": int(iat.timestamp()),
             "token_version": "3.0-fix-timestamp",
@@ -310,9 +357,20 @@ class JWTService:
 
         return self._encode_token(id_token_data)
 
-    def decode_id_token(self, token: str) -> Optional[IDTokenClaims]:
-        """Decode and validate an ID token."""
-        payload = self._decode_token(token)
+    def decode_id_token(self, token: str, expected_aud: str) -> Optional[IDTokenClaims]:
+        """Decode and validate an ID token.
+
+        Args:
+            token: The encoded ID token (JWT).
+            expected_aud: The client_id the token must be issued for. The
+                token's ``aud`` claim must equal this value (OIDC Core
+                §3.1.3.7). This is a required argument: the caller must
+                always know which client it is speaking on behalf of.
+
+        Returns None on signature failure, expiration, missing ``aud``,
+        audience mismatch, or any other validation error.
+        """
+        payload = self._decode_token(token, audience=expected_aud)
         if not payload:
             return None
         claims = IDTokenClaims(**payload)
@@ -328,10 +386,22 @@ class JWTService:
         include_refresh: bool = True,
         permissions: Optional[List[str]] = None,
         roles: Optional[List[str]] = None,
+        audience: Optional[str] = None,
+        azp: Optional[str] = None,
     ) -> Token:
-        """Create a complete token response."""
+        """Create a complete token response.
+
+        ``audience``/``azp`` are forwarded to the access token so the
+        response is aud-bound when the caller knows the client_id.
+        """
         access_token = self.create_access_token(
-            user_id, email, scopes, permissions=permissions, roles=roles
+            user_id,
+            email,
+            scopes,
+            permissions=permissions,
+            roles=roles,
+            audience=audience,
+            azp=azp,
         )
         token_response = Token(
             access_token=access_token,

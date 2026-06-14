@@ -1,14 +1,15 @@
 """Integration tests for OIDC API endpoints via TestClient."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
+
 from authglow.api.oidc import router
 
 
-def _make_test_token(jwt_service, sub, scopes=None):
-    """Helper to create a valid access token JWT."""
-    from datetime import datetime, timedelta, timezone
+def _make_test_token(jwt_service, sub, scopes=None, audience="test-client"):
+    """Helper to create a valid, aud-bound access token JWT (OIDC Core §3.1.3.7)."""
 
     if scopes is None:
         scopes = ["openid", "profile", "email"]
@@ -16,6 +17,7 @@ def _make_test_token(jwt_service, sub, scopes=None):
         user_id=sub,
         email=f"{sub}@example.com",
         scopes=scopes,
+        audience=audience,
     )
 
 
