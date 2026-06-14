@@ -442,14 +442,14 @@ export function AdminOAuthClientsPage() {
 
       {/* Preview consent screen modal */}
       {previewClient && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => setPreviewClient(null)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-bg-primary p-6 shadow-glow-violet my-auto">
-            <div className="flex items-center justify-between mb-4">
+          <div className="relative z-10 flex w-full max-w-lg flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-violet max-h-[calc(100vh-4rem)]">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-surface-2 p-4">
               <h3 className="text-sm font-semibold text-text-primary">Consent Screen Preview</h3>
               <button onClick={() => setPreviewClient(null)} className="text-text-muted hover:text-text-secondary text-sm">Close</button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               <ConsentScreen
                 clientName={previewClient.client_name || previewClient.name || 'Untitled'}
                 clientDescription={previewClient.description}
@@ -471,62 +471,64 @@ export function AdminOAuthClientsPage() {
 
       {/* Create / Edit Client Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
-          <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
-            {formError && (
-              <div className="mb-4">
-                <Banner
-                  variant="error"
-                  onDismiss={() => setFormError(null)}
-                  data-testid="oauth-client-form-error"
-                >
-                  {formError}
-                </Banner>
-              </div>
-            )}
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-text-primary">
-                {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
-              </h3>
-              {/* nothing */}
-              {!editClientId && (
-                <div className="flex items-center gap-1">
-                  {TEMPLATES.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => applyTemplate(t)}
-                      data-testid={`template-${t.id}`}
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
-                        selectedTemplate === t.id
-                          ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
-                          : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
-                      )}
-                    >
-                      <t.icon size={12} />
-                      {t.label}
-                      {selectedTemplate === t.id && <Check size={10} />}
-                    </button>
-                  ))}
+          <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+            <div className="flex-1 overflow-y-auto p-6">
+              {formError && (
+                <div className="mb-4">
+                  <Banner
+                    variant="error"
+                    sticky
+                    onDismiss={() => setFormError(null)}
+                    data-testid="oauth-client-form-error"
+                  >
+                    {formError}
+                  </Banner>
                 </div>
               )}
-            </div>
-
-            {/* Breaking change warning in edit mode */}
-            {showBreakingChangeWarning && (
-              <div className="flex items-start gap-2 rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 px-4 py-3 text-xs text-semantic-warning mb-5" data-testid="breaking-change-warning">
-                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-semibold">Heads up: changing grant types or client type can break existing integrations.</p>
-                  <p className="mt-1 text-text-muted">Apps currently using this client may stop working. Consider rotating the secret or notifying clients first.</p>
-                </div>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold text-text-primary">
+                  {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
+                </h3>
+                {/* nothing */}
+                {!editClientId && (
+                  <div className="flex items-center gap-1">
+                    {TEMPLATES.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => applyTemplate(t)}
+                        data-testid={`template-${t.id}`}
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
+                          selectedTemplate === t.id
+                            ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                            : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
+                        )}
+                      >
+                        <t.icon size={12} />
+                        {t.label}
+                        {selectedTemplate === t.id && <Check size={10} />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Two-column layout */}
-            <div className="grid grid-cols-2 gap-5 mb-5">
+              {/* Breaking change warning in edit mode */}
+              {showBreakingChangeWarning && (
+                <div className="flex items-start gap-2 rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 px-4 py-3 text-xs text-semantic-warning mb-5" data-testid="breaking-change-warning">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Heads up: changing grant types or client type can break existing integrations.</p>
+                    <p className="mt-1 text-text-muted">Apps currently using this client may stop working. Consider rotating the secret or notifying clients first.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Two-column layout */}
+              <div className="grid grid-cols-2 gap-5 mb-5">
               {/* Left column: Application identity */}
               <div className="space-y-3">
                 <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Identity</p>
@@ -748,7 +750,9 @@ export function AdminOAuthClientsPage() {
               </div>
             )}
 
-            <div className="flex gap-3">
+            </div>
+
+            <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
               <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

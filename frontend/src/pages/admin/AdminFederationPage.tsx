@@ -253,121 +253,124 @@ export function AdminFederationPage() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
-          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet my-auto">
-            <h3 className="mb-4 text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
+          <div className="relative z-10 flex w-full max-w-xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="mb-4 text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
 
-            {formError && (
-              <div className="mb-4">
-                <Banner
-                  variant="error"
-                  onDismiss={() => setFormError(null)}
-                  data-testid="provider-form-error"
-                >
-                  {formError}
-                </Banner>
-              </div>
-            )}
-
-            <div className="space-y-3 mb-5">
-              <TextInput label="Label *" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="CIE" autoFocus />
-              <TextInput label="Description" value={form.description || ''} onChange={(v) => setForm({ ...form, description: v })} placeholder="Carta d'Identità Elettronica" />
-              <TextInput label="Issuer URL *" value={form.issuer} onChange={(v) => setForm({ ...form, issuer: v })} placeholder="https://accounts.google.com" />
-              <TextInput label="Client ID *" value={form.client_id} onChange={(v) => setForm({ ...form, client_id: v })} placeholder="your-client-id" />
-              <TextInput label="Client Secret *" type="password" value={clientSecret} onChange={(v) => setClientSecret(v)} placeholder="●●●●●●●●" />
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-muted">Scopes (space-separated)</label>
-                <input
-                  value={rawScopes}
-                  onChange={(e) => setRawScopes(e.target.value)}
-                  placeholder="openid profile email"
-                  className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <TextInput label="Icon URI" value={form.icon_uri || ''} onChange={(v) => setForm({ ...form, icon_uri: v })} placeholder="https://example.com/icon.png" />
-                <TextInput label="Logo URI" value={form.logo_uri || ''} onChange={(v) => setForm({ ...form, logo_uri: v })} placeholder="https://example.com/logo.png" />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-muted">ACR Values (space-separated URIs)</label>
-                <input
-                  value={rawAuthLevels}
-                  onChange={(e) => setRawAuthLevels(e.target.value)}
-                  placeholder="https://www.spid.gov.it/SpidL1 https://www.spid.gov.it/SpidL2"
-                  className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
-                />
-                <p className="mt-0.5 text-[10px] text-text-muted">Standard OIDC acr_values. CIE: https://www.spid.gov.it/SpidL1, L2, L3. Vuoto = non richiesto.</p>
-              </div>
-              <div>
-                <label className="mb-2 block text-[11px] font-medium text-text-muted">Visible In</label>
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.visible_contexts?.includes('dashboard')}
-                      onChange={(e) => {
-                        const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
-                        setForm({
-                          ...form,
-                          visible_contexts: e.target.checked
-                            ? [...ctxs, 'dashboard']
-                            : ctxs.filter(c => c !== 'dashboard'),
-                        })
-                      }}
-                      className="rounded accent-brand-violet"
-                    />
-                    Dashboard
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.visible_contexts?.includes('oauth2')}
-                      onChange={(e) => {
-                        const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
-                        setForm({
-                          ...form,
-                          visible_contexts: e.target.checked
-                            ? [...ctxs, 'oauth2']
-                            : ctxs.filter(c => c !== 'oauth2'),
-                        })
-                      }}
-                      className="rounded accent-brand-violet"
-                    />
-                    OAuth2
-                  </label>
+              {formError && (
+                <div className="mb-4">
+                  <Banner
+                    variant="error"
+                    sticky
+                    onDismiss={() => setFormError(null)}
+                    data-testid="provider-form-error"
+                  >
+                    {formError}
+                  </Banner>
                 </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-muted">
-                  Claims Mapping (IdP claim → AuthGlow field)
-                </label>
-                <textarea
-                  rows={6}
-                  value={rawClaimsMapping}
-                  onChange={(e) => setRawClaimsMapping(e.target.value)}
-                  placeholder={`{
+              )}
+
+              <div className="space-y-3">
+                <TextInput label="Label *" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="CIE" autoFocus />
+                <TextInput label="Description" value={form.description || ''} onChange={(v) => setForm({ ...form, description: v })} placeholder="Carta d'Identità Elettronica" />
+                <TextInput label="Issuer URL *" value={form.issuer} onChange={(v) => setForm({ ...form, issuer: v })} placeholder="https://accounts.google.com" />
+                <TextInput label="Client ID *" value={form.client_id} onChange={(v) => setForm({ ...form, client_id: v })} placeholder="your-client-id" />
+                <TextInput label="Client Secret *" type="password" value={clientSecret} onChange={(v) => setClientSecret(v)} placeholder="●●●●●●●●" />
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-text-muted">Scopes (space-separated)</label>
+                  <input
+                    value={rawScopes}
+                    onChange={(e) => setRawScopes(e.target.value)}
+                    placeholder="openid profile email"
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TextInput label="Icon URI" value={form.icon_uri || ''} onChange={(v) => setForm({ ...form, icon_uri: v })} placeholder="https://example.com/icon.png" />
+                  <TextInput label="Logo URI" value={form.logo_uri || ''} onChange={(v) => setForm({ ...form, logo_uri: v })} placeholder="https://example.com/logo.png" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-text-muted">ACR Values (space-separated URIs)</label>
+                  <input
+                    value={rawAuthLevels}
+                    onChange={(e) => setRawAuthLevels(e.target.value)}
+                    placeholder="https://www.spid.gov.it/SpidL1 https://www.spid.gov.it/SpidL2"
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[10px] text-text-muted">Standard OIDC acr_values. CIE: https://www.spid.gov.it/SpidL1, L2, L3. Vuoto = non richiesto.</p>
+                </div>
+                <div>
+                  <label className="mb-2 block text-[11px] font-medium text-text-muted">Visible In</label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.visible_contexts?.includes('dashboard')}
+                        onChange={(e) => {
+                          const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
+                          setForm({
+                            ...form,
+                            visible_contexts: e.target.checked
+                              ? [...ctxs, 'dashboard']
+                              : ctxs.filter(c => c !== 'dashboard'),
+                          })
+                        }}
+                        className="rounded accent-brand-violet"
+                      />
+                      Dashboard
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.visible_contexts?.includes('oauth2')}
+                        onChange={(e) => {
+                          const ctxs = form.visible_contexts ?? ['dashboard', 'oauth2']
+                          setForm({
+                            ...form,
+                            visible_contexts: e.target.checked
+                              ? [...ctxs, 'oauth2']
+                              : ctxs.filter(c => c !== 'oauth2'),
+                          })
+                        }}
+                        className="rounded accent-brand-violet"
+                      />
+                      OAuth2
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-text-muted">
+                    Claims Mapping (IdP claim → AuthGlow field)
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={rawClaimsMapping}
+                    onChange={(e) => setRawClaimsMapping(e.target.value)}
+                    placeholder={`{
   "<IdP claim>": "<AuthGlow field>",
   "sub": "external_id",
   "email": "email",
   "name": "name"
 }`}
-                  className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none font-mono"
-                />
-                <p className="mt-1 text-[10px] text-text-muted">
-                  Map each external IdP claim name (left key) to an AuthGlow user field (right value).
-                  Valid AuthGlow fields: <code className="rounded bg-surface-2 px-1">external_id</code>,
-                  <code className="rounded bg-surface-2 px-1">email</code>,
-                  <code className="rounded bg-surface-2 px-1">name</code>,
-                  <code className="rounded bg-surface-2 px-1">given_name</code>,
-                  <code className="rounded bg-surface-2 px-1">family_name</code>,
-                  <code className="rounded bg-surface-2 px-1">picture</code>.
-                  Default is compatible with OIDC standard claims.
-                </p>
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none font-mono"
+                  />
+                  <p className="mt-1 text-[10px] text-text-muted">
+                    Map each external IdP claim name (left key) to an AuthGlow user field (right value).
+                    Valid AuthGlow fields: <code className="rounded bg-surface-2 px-1">external_id</code>,
+                    <code className="rounded bg-surface-2 px-1">email</code>,
+                    <code className="rounded bg-surface-2 px-1">name</code>,
+                    <code className="rounded bg-surface-2 px-1">given_name</code>,
+                    <code className="rounded bg-surface-2 px-1">family_name</code>,
+                    <code className="rounded bg-surface-2 px-1">picture</code>.
+                    Default is compatible with OIDC standard claims.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
