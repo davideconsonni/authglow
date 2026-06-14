@@ -86,13 +86,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated || probed.current) return
     probed.current = true
-    if (isAuthenticated) {
-      setProbing(false)
-      return
-    }
+    // Always verify the session with the server, even when isAuthenticated is
+    // true from the persisted store. The persisted value can be stale (e.g.,
+    // access/refresh cookies expired) and the first protected query would
+    // 401, triggering an immediate kick-out. One roundtrip on mount is
+    // cheaper than the UX of being silently logged out.
+    setProbing(true)
     useAuthStore.getState().fetchCurrentUser()
       .finally(() => setProbing(false))
-  }, [hydrated, isAuthenticated])
+  }, [hydrated])
 
   if (!hydrated || probing) return <LoadingState />
   if (!isAuthenticated) return <Navigate to={ROUTES.AUTH.LOGIN} replace />

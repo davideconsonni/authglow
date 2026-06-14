@@ -256,9 +256,10 @@ export function AdminFederationPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
           <div className="relative z-10 flex w-full max-w-xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+            <div className="flex-shrink-0 border-b border-surface-2 px-6 py-4">
+              <h3 className="text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
+            </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <h3 className="mb-4 text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
-
               {formError && (
                 <div className="mb-4">
                   <Banner

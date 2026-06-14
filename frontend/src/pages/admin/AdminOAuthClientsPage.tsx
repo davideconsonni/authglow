@@ -445,9 +445,9 @@ export function AdminOAuthClientsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => setPreviewClient(null)} />
           <div className="relative z-10 flex w-full max-w-lg flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-violet max-h-[calc(100vh-4rem)]">
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-surface-2 p-4">
-              <h3 className="text-sm font-semibold text-text-primary">Consent Screen Preview</h3>
-              <button onClick={() => setPreviewClient(null)} className="text-text-muted hover:text-text-secondary text-sm">Close</button>
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-surface-2 px-6 py-4">
+              <h3 className="text-lg font-semibold text-text-primary">Consent Screen Preview</h3>
+              <button onClick={() => setPreviewClient(null)} className="rounded-lg px-3 py-1.5 text-sm text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors">Close</button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <ConsentScreen
@@ -474,6 +474,11 @@ export function AdminOAuthClientsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
           <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+            <div className="flex-shrink-0 border-b border-surface-2 px-6 py-4">
+              <h3 className="text-lg font-semibold text-text-primary">
+                {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
+              </h3>
+            </div>
             <div className="flex-1 overflow-y-auto p-6">
               {formError && (
                 <div className="mb-4">
@@ -487,34 +492,28 @@ export function AdminOAuthClientsPage() {
                   </Banner>
                 </div>
               )}
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-semibold text-text-primary">
-                  {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
-                </h3>
-                {/* nothing */}
-                {!editClientId && (
-                  <div className="flex items-center gap-1">
-                    {TEMPLATES.map(t => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => applyTemplate(t)}
-                        data-testid={`template-${t.id}`}
-                        className={cn(
-                          'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
-                          selectedTemplate === t.id
-                            ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
-                            : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
-                        )}
-                      >
-                        <t.icon size={12} />
-                        {t.label}
-                        {selectedTemplate === t.id && <Check size={10} />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {!editClientId && (
+                <div className="mb-5 flex items-center justify-end gap-1">
+                  {TEMPLATES.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => applyTemplate(t)}
+                      data-testid={`template-${t.id}`}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
+                        selectedTemplate === t.id
+                          ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                          : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
+                      )}
+                    >
+                      <t.icon size={12} />
+                      {t.label}
+                      {selectedTemplate === t.id && <Check size={10} />}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Breaking change warning in edit mode */}
               {showBreakingChangeWarning && (
