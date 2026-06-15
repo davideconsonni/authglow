@@ -4,10 +4,12 @@ import { visualizer } from 'rollup-plugin-visualizer'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { fileURLToPath, URL } from 'node:url'
 
+const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+
 export default defineConfig({
   plugins: [
     react(),
-    tsconfigPaths(),
+    tsconfigPaths({ loose: true }),
     visualizer({
       open: false,
       gzipSize: true,
@@ -16,9 +18,9 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    alias: [
+      { find: '@', replacement: r('./src') },
+    ],
   },
   build: {
     rollupOptions: {
