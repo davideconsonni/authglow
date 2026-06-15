@@ -148,3 +148,20 @@ def reset_code_lookup_key(secret_key: str, code: str) -> str:
     """
     normalised = code.strip().upper().replace(" ", "").replace("\t", "")
     return hmac.new(secret_key.encode(), normalised.encode(), hashlib.sha256).hexdigest()
+
+
+def verification_code_lookup_key(secret_key: str, code: str) -> str:
+    """Compute the HMAC-SHA256 lookup key for an email-verification code.
+
+    Mirrors :func:`reset_code_lookup_key` for the email-verification
+    flow. The code is normalised to upper-case and stripped of
+    whitespace so user input variants (``abcd-efgh-jkmn``) match
+    the stored value.
+
+    The verification flow uses the human-friendly ``XXXX-XXXX-XXXX``
+    code (VAPT-022 alignment) rather than a long opaque bearer
+    token — the file repo stores the plaintext in the JSON body
+    and uses this HMAC as the dual-mirror filename.
+    """
+    normalised = code.strip().upper().replace(" ", "").replace("\t", "")
+    return hmac.new(secret_key.encode(), normalised.encode(), hashlib.sha256).hexdigest()

@@ -135,7 +135,7 @@ class TestChangeEmail:
         user_profile_service.user_storage.get_user_by_email = AsyncMock(return_value=None)
         user_profile_service.user_storage._user_repo.update = AsyncMock()
         mock_token = MagicMock()
-        mock_token.token = "verify-token-123"
+        mock_token.verification_code = "ABCD-EFGH-JKMN"
         user_profile_service.email_service.create_verification_token = AsyncMock(
             return_value=mock_token
         )

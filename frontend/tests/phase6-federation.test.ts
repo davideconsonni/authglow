@@ -13,12 +13,16 @@ describe('Fase 6 — OIDC Federation', () => {
   })
 
   describe('6.2 Backend services', () => {
-    it('federation_storage.py esiste', () => {
-      expect(existsSync(resolve(ROOT, '..', 'backend', 'authglow', 'services', 'federation_storage.py'))).toBe(true)
+    it('federation_state.py esiste', () => {
+      expect(existsSync(resolve(ROOT, '..', 'backend', 'authglow', 'services', 'federation_state.py'))).toBe(true)
     })
 
     it('federation.py service esiste', () => {
       expect(existsSync(resolve(ROOT, '..', 'backend', 'authglow', 'services', 'federation.py'))).toBe(true)
+    })
+
+    it('File federation repository esiste', () => {
+      expect(existsSync(resolve(ROOT, '..', 'backend', 'authglow', 'repositories', 'file', 'federation.py'))).toBe(true)
     })
   })
 

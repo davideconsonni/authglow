@@ -193,7 +193,7 @@ class TestRegisterEndpointLogic:
         ):
             mock_ev = AsyncMock()
             mock_ev.create_verification_token.return_value = MagicMock(
-                token="verify-token-123"
+                verification_code="ABCD-EFGH-JKMN"
             )
             mock_ev_cls.return_value = mock_ev
             mock_email_svc = AsyncMock()
@@ -251,7 +251,7 @@ class TestRegisterEndpointLogic:
         ):
             mock_ev = AsyncMock()
             mock_ev.create_verification_token.return_value = MagicMock(
-                token="verify-token-123"
+                verification_code="WXYZ-QRST-2345"
             )
             mock_ev_cls.return_value = mock_ev
             mock_email_svc = AsyncMock()

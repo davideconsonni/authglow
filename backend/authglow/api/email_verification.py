@@ -40,6 +40,7 @@ async def verify_email_api(request: Request, verification_request: EmailVerifica
             metadata={"error": error},
             severity="warning",
             ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
         raise HTTPException(status_code=400, detail=error)
 
@@ -51,6 +52,7 @@ async def verify_email_api(request: Request, verification_request: EmailVerifica
             email=verification_token.email,
             metadata={},
             ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
 
     return {"message": "Email verified successfully"}
@@ -76,6 +78,7 @@ async def resend_verification_email(
             metadata={"error": error},
             severity="warning",
             ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
         raise HTTPException(status_code=400, detail=error)
 
@@ -83,6 +86,7 @@ async def resend_verification_email(
         event_type="email_verification_resent",
         email=email,
         ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )
 
     return {"message": "Verification email sent successfully"}

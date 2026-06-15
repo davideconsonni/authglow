@@ -3,10 +3,10 @@
 Tokens are persisted via the ``EmailVerificationRepository``
 Protocol. The service owns:
 
-* the cryptographic helpers (``_generate_token`` with bcrypt + HMAC,
-  ``_find_lookup``) — pure functions, no I/O;
-* the bcrypt verification of a presented plaintext against the
-  stored hash;
+* the cryptographic helpers (``generate_verification_code``,
+  ``_code_lookup_key``) — pure functions, no I/O;
+* the constant-time ``secrets.compare_digest`` check of a presented
+  code against the stored ``verification_code``;
 * the in-process ``named_lock`` that serialises cross-coroutine
   ``mark_token_used`` calls;
 * the CAS retry loop that catches ``ConcurrentWriteError`` raised
@@ -25,21 +25,19 @@ constructed when no repository is injected — FastAPI's
 Tests can inject a custom repository (e.g. an in-memory mock) by
 passing ``repository=...`` to the service constructor.
 
-Security: the plaintext ``token`` is never persisted. Only
-``token_hash`` (bcrypt) and ``token_lookup`` (HMAC-SHA256) are
-stored on disk; the ``token`` Pydantic field is ``exclude=True`` so
-the on-disk JSON omits it entirely.
+VAPT-022 alignment: the credential emailed to the user is a
+human-friendly ``XXXX-XXXX-XXXX`` code (14 chars, 31-symbol
+alphabet, ``31^12`` entropy). The on-disk file is named after the
+HMAC of the normalised code; the plaintext code is in the JSON
+body for O(1) lookup. No bearer token exists for this flow.
 """
 
-import hashlib
-import hmac
 import secrets
 from typing import Optional, Tuple
 
-import bcrypt
-
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import Settings, get_settings
+from authglow.core.crypto import verification_code_lookup_key
 from authglow.core.datetime import utcnow
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.user import User
@@ -47,12 +45,43 @@ from authglow.repositories.protocols import EmailVerificationRepository
 from authglow.services.email.factory import get_email_service
 from authglow.services.user import UserService as UserStorage
 
+_VERIFICATION_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_VERIFICATION_CODE_SEGMENT_LEN = 4
+_VERIFICATION_CODE_SEGMENTS = 3
+_EXCLUDED_CONFUSABLE = frozenset("01OIL")
+
+
+def generate_verification_code() -> str:
+    """Generate a human-friendly verification code (VAPT-022 aligned).
+
+    Format: ``XXXX-XXXX-XXXX`` (4+4+4 chars) drawn from a 31-symbol
+    alphabet that excludes visually ambiguous characters (``0``,
+    ``O``, ``1``, ``I``, ``L``). Entropy: ``31^12 ~= 7.9e17``
+    possibilities, far exceeding the 24-hour token window. The
+    code is emailed in the message body (never in the URL) and
+    entered by the user into the verify-email form.
+    """
+    parts = []
+    for _ in range(_VERIFICATION_CODE_SEGMENTS):
+        parts.append(
+            "".join(
+                secrets.choice(_VERIFICATION_CODE_ALPHABET)
+                for _ in range(_VERIFICATION_CODE_SEGMENT_LEN)
+            )
+        )
+    code = "-".join(parts)
+    assert not (set(code) - {"-"} & _EXCLUDED_CONFUSABLE), (
+        f"verification_code {code!r} contains excluded confusable characters"
+    )
+    return code
+
 
 class EmailVerificationService:
     """Service for email verification.
 
-    Tokens are stored using HMAC-SHA256 for the filename and bcrypt
-    for verification — the plaintext token is NEVER persisted to disk.
+    The credential is a 14-char human-friendly code; the on-disk
+    file is named after the HMAC of the normalised code. The
+    plaintext code is stored in the JSON body for O(1) lookup.
     """
 
     MAX_CAS_RETRIES = 3
@@ -68,7 +97,6 @@ class EmailVerificationService:
         self._repository: EmailVerificationRepository = (
             repository if repository is not None else _default_repository(self._settings)
         )
-        self._secret_bytes = self._settings.secret_key.encode()
         self._lock = named_lock()
 
         # Peer service — used by verify_email / resend_verification_email.
@@ -81,55 +109,49 @@ class EmailVerificationService:
         """The underlying repository (exposed for tests / admin tools)."""
         return self._repository
 
-    def _generate_token(self) -> Tuple[str, str, str]:
-        """Generate a secure verification token.
+    def _code_lookup_key(self, code: str) -> str:
+        """HMAC-SHA256 lookup key for a verification code (VAPT-022)."""
+        return verification_code_lookup_key(self._settings.secret_key, code)
 
-        Returns:
-            tuple: (plaintext_token, token_hash, token_lookup)
-        """
-        plaintext = secrets.token_urlsafe(32)
-        token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
-        token_lookup = hmac.new(self._secret_bytes, plaintext.encode(), hashlib.sha256).hexdigest()
-        return plaintext, token_hash, token_lookup
-
-    def _find_lookup(self, token: str) -> str:
-        """Compute HMAC lookup key from a plaintext token."""
-        return hmac.new(self._secret_bytes, token.encode(), hashlib.sha256).hexdigest()
+    @staticmethod
+    def _normalise_code(code: str) -> str:
+        """Strip whitespace and uppercase a presented verification code."""
+        return code.strip().upper().replace(" ", "").replace("\t", "")
 
     async def create_verification_token(self, user: User) -> EmailVerificationToken:
         """Create a new email verification token."""
-        plaintext, token_hash, token_lookup = self._generate_token()
+        verification_code = generate_verification_code()
+        code_lookup = self._code_lookup_key(verification_code)
 
         token = EmailVerificationToken(
-            token=plaintext,
-            token_hash=token_hash,
-            token_lookup=token_lookup,
+            verification_code=verification_code,
+            code_lookup=code_lookup,
             user_id=user.id,
             email=user.email,
         )
 
         await self._repository.create(token)
-
         return token
 
-    async def get_token(self, token: str) -> Optional[EmailVerificationToken]:
-        """Get a verification token by plaintext string.
+    async def get_token(self, code: str) -> Optional[EmailVerificationToken]:
+        """Get a verification token by the presented code.
 
-        Uses O(1) HMAC lookup — no directory scanning — then
-        verifies the plaintext against the stored bcrypt hash.
+        Uses O(1) HMAC lookup (no directory scanning), then a
+        constant-time ``secrets.compare_digest`` of the normalised
+        presented code against the stored ``verification_code``.
         """
-        token_lookup = self._find_lookup(token)
-        vt = await self._repository.get_by_lookup(token_lookup)
+        normalised = self._normalise_code(code)
+        code_lookup = self._code_lookup_key(normalised)
+        vt = await self._repository.get_by_lookup(code_lookup)
         if vt is None:
             return None
 
-        if not bcrypt.checkpw(token.encode(), vt.token_hash.encode()):
+        if not secrets.compare_digest((vt.verification_code or "").strip().upper(), normalised):
             return None
 
-        vt.token = token
         return vt
 
-    async def mark_token_used(self, token: str) -> bool:
+    async def mark_token_used(self, code: str) -> bool:
         """Mark a token as used.
 
         Combines an in-process ``named_lock`` (cross-coroutine
@@ -138,11 +160,12 @@ class EmailVerificationService:
         ``ConcurrentWriteError`` raised by ``repository.update()``
         when another process won the race.
         """
-        token_lookup = self._find_lookup(token)
+        normalised = self._normalise_code(code)
+        code_lookup = self._code_lookup_key(normalised)
 
-        async with self._lock(f"email_token:{token_lookup}"):
+        async with self._lock(f"email_verification:{code_lookup}"):
             for _ in range(self.MAX_CAS_RETRIES):
-                verification_token = await self.get_token(token)
+                verification_token = await self.get_token(normalised)
                 if not verification_token:
                     return False
 
@@ -160,17 +183,17 @@ class EmailVerificationService:
 
             return False
 
-    async def verify_email(self, token: str) -> Tuple[bool, Optional[str]]:
-        """Verify an email using a token."""
-        verification_token = await self.get_token(token)
+    async def verify_email(self, code: str) -> Tuple[bool, Optional[str]]:
+        """Verify an email using a verification code."""
+        verification_token = await self.get_token(code)
         if not verification_token:
-            return False, "Invalid verification token"
+            return False, "Invalid verification code"
 
         if verification_token.used:
-            return False, "Token already used"
+            return False, "Verification code already used"
 
         if utcnow() > verification_token.expires_at:
-            return False, "Token expired"
+            return False, "Verification code expired"
 
         user = await self.user_storage.get_user(verification_token.user_id)
         if not user:
@@ -180,22 +203,23 @@ class EmailVerificationService:
         user.email_verified_at = utcnow()
         await self.user_storage.update_user(user)
 
-        await self.mark_token_used(token)
+        await self.mark_token_used(code)
 
         return True, None
 
-    async def send_verification_email(self, user: User, token: str) -> bool:
+    async def send_verification_email(self, user: User, code: str) -> bool:
         """Send verification email to user.
 
-        The verification token is sent as a plain-text code in the email body,
-        NOT embedded in a clickable URL.  This prevents token leakage through
-        browser history, ``Referer`` headers, and proxy/CDN access logs.
+        The verification code is sent as a plain-text code in the
+        email body, NOT embedded in a clickable URL. This prevents
+        token leakage through browser history, ``Referer`` headers,
+        and proxy/CDN access logs (VAPT-022).
         """
         email_service = get_email_service()
 
         context = {
             "user_name": user.first_name or user.email.split("@")[0],
-            "verification_code": token,
+            "verification_code": code,
             "verify_page_url": f"{self._settings.frontend_base_url}/auth/verify-email",
             "company_name": self._settings.company_name,
             "expires_hours": 24,
@@ -224,7 +248,7 @@ class EmailVerificationService:
 
         token = await self.create_verification_token(user)
 
-        success = await self.send_verification_email(user, token.token)
+        success = await self.send_verification_email(user, token.verification_code)
         if not success:
             return False, "Failed to send email"
 

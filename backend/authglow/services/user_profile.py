@@ -195,7 +195,7 @@ class UserProfileService:
 
         # Send verification email to new address
         token = await self.email_service.create_verification_token(user)
-        await self.email_service.send_verification_email(user, token.token)
+        await self.email_service.send_verification_email(user, token.verification_code)
 
         # Send notification to old email
         await self.security_service.send_email_changed_alert(

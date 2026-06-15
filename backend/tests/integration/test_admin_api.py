@@ -824,7 +824,9 @@ class TestCreateUser:
             patch("authglow.api.admin.EmailVerificationService") as mock_ver_svc,
         ):
             mock_ver = AsyncMock()
-            mock_ver.create_verification_token = AsyncMock()
+            mock_ver.create_verification_token = AsyncMock(
+                return_value=MagicMock(verification_code="ABCD-EFGH-JKMN")
+            )
             mock_ver.send_verification_email = AsyncMock(return_value=True)
             mock_ver_svc.return_value = mock_ver
 
@@ -967,7 +969,9 @@ class TestUpdateUserExtended:
             patch("authglow.api.admin.EmailVerificationService") as mock_ver_svc,
         ):
             mock_ver = AsyncMock()
-            mock_ver.create_verification_token = AsyncMock()
+            mock_ver.create_verification_token = AsyncMock(
+                return_value=MagicMock(verification_code="WXYZ-QRST-2345")
+            )
             mock_ver.send_verification_email = AsyncMock(return_value=True)
             mock_ver_svc.return_value = mock_ver
 

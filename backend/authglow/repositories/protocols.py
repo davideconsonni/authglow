@@ -450,20 +450,21 @@ class OAuth2ConsentRepository(Protocol):
 class EmailVerificationRepository(Protocol):
     """Persistence for email-verification tokens.
 
-    Tokens are stored with HMAC filenames + bcrypt hashes; the
-    plaintext is never persisted.
+    VAPT-022 alignment: tokens are stored with HMAC filenames keyed
+    on the human-friendly ``verification_code``; the plaintext code
+    is stored in the JSON body for O(1) lookups.
     """
 
     async def create(self, token: EmailVerificationToken) -> None:
         """Persist a new verification token."""
 
-    async def get_by_lookup(self, token_lookup: str) -> Optional[EmailVerificationToken]:
+    async def get_by_lookup(self, code_lookup: str) -> Optional[EmailVerificationToken]:
         """Return the token with the given HMAC lookup, or ``None``."""
 
     async def update(self, token: EmailVerificationToken) -> None:
         """Persist changes. May raise ``ConcurrentWriteError``."""
 
-    async def delete(self, token_lookup: str) -> None:
+    async def delete(self, code_lookup: str) -> None:
         """Remove the token. No-op if absent."""
 
     async def cleanup_expired(self) -> int:

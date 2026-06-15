@@ -1102,7 +1102,7 @@ async def invite_user(
         )
 
         # Also send verification email
-        await verification_service.send_verification_email(user, token.token)
+        await verification_service.send_verification_email(user, token.verification_code)
 
     except Exception as e:
         print(f"Failed to send welcome email: {e}")
@@ -1257,7 +1257,7 @@ async def register_user(
 
     verification_service = EmailVerificationService()
     token = await verification_service.create_verification_token(user)
-    await verification_service.send_verification_email(user, token.token)
+    await verification_service.send_verification_email(user, token.verification_code)
 
     email_service = get_email_service()
     try:

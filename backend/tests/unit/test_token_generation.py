@@ -92,9 +92,11 @@ class TestTokenGenerationSecurity:
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
             re.IGNORECASE,
         )
-        assert not uuid4_pattern.match(token.token), (
-            "Email verification tokens should use secrets.token_urlsafe() instead of uuid4() "
-            "for cryptographic security."
+        assert not uuid4_pattern.match(token.verification_code), (
+            "Email verification codes should be the human-friendly XXXX-XXXX-XXXX format "
+            "(VAPT-022 alignment), not UUID4. UUID4 is predictable and not suitable as a "
+            "credential. The token_id field IS a UUID4 (intentionally) because it is a "
+            "non-secret correlation identifier used for audit joinability."
         )
 
     def test_secrets_token_urlsafe_produces_non_uuid(self):

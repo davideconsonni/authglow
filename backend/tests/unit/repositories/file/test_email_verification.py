@@ -1,10 +1,9 @@
 """Unit tests for the FileEmailVerificationRepository.
 
-Covers the file layout, Pydantic round-trip (including the
-``exclude=True`` ``token`` field), CRUD semantics, versioned CAS
-behavior, and Protocol conformance. The service-level behaviour
-(``mark_token_used`` lock + retry loop, ``verify_email``
-orchestration, bcrypt verify) is exercised by
+Covers the file layout, Pydantic round-trip, CRUD semantics,
+versioned CAS behavior, and Protocol conformance. The service-level
+behaviour (``mark_token_used`` lock + retry loop, ``verify_email``
+orchestration, ``secrets.compare_digest``) is exercised by
 ``tests/unit/test_email_verification.py``.
 """
 
@@ -29,15 +28,15 @@ def _make_repo(test_settings) -> FileEmailVerificationRepository:
 def _make_token(
     user_id: str = "user-1",
     email: str = "user-1@example.com",
-    token_lookup: str = "lookup-abc",
+    code_lookup: str = "lookup-abc",
+    verification_code: str = "ABCD-EFGH-JKMN",
     *,
     used: bool = False,
     expires_at=None,
 ) -> EmailVerificationToken:
     return EmailVerificationToken(
-        token="plaintext-xyz",
-        token_hash="$2b$12$dummybcrypthash",
-        token_lookup=token_lookup,
+        verification_code=verification_code,
+        code_lookup=code_lookup,
         user_id=user_id,
         email=email,
         used=used,
@@ -83,30 +82,22 @@ class TestFileEmailVerificationRepositoryCreate:
         repo = _make_repo(test_settings)
         token = _make_token()
         await repo.create(token)
-        path = Path(repo._path(f"{token.token_lookup}.json"))
+        path = Path(repo._path(f"{token.code_lookup}.json"))
         assert path.exists()
 
-    async def test_create_does_not_persist_plaintext(self, test_settings):
-        """VAPT-003: plaintext must never appear on disk."""
+    async def test_create_persists_verification_code(self, test_settings):
+        """VAPT-022: the human-friendly code is on disk by design."""
         repo = _make_repo(test_settings)
-        token = _make_token(token_lookup="lookup-plain")
+        token = _make_token(code_lookup="lookup-code", verification_code="WXYZ-QRST-2345")
         await repo.create(token)
-        path = Path(repo._path("lookup-plain.json"))
+        path = Path(repo._path("lookup-code.json"))
         raw = path.read_bytes()
-        assert b"plaintext-xyz" not in raw
-
-    async def test_create_persists_bcrypt_hash(self, test_settings):
-        repo = _make_repo(test_settings)
-        token = _make_token(token_lookup="lookup-hash")
-        await repo.create(token)
-        path = Path(repo._path("lookup-hash.json"))
-        raw = path.read_bytes()
-        assert b"$2b$12$dummybcrypthash" in raw
+        assert b"WXYZ-QRST-2345" in raw
 
     async def test_create_overwrites(self, test_settings):
         repo = _make_repo(test_settings)
-        t1 = _make_token(user_id="u-1", token_lookup="lookup-ow")
-        t2 = _make_token(user_id="u-2", token_lookup="lookup-ow")
+        t1 = _make_token(user_id="u-1", code_lookup="lookup-ow")
+        t2 = _make_token(user_id="u-2", code_lookup="lookup-ow")
         await repo.create(t1)
         await repo.create(t2)
         result = await repo.get_by_lookup("lookup-ow")
@@ -118,14 +109,13 @@ class TestFileEmailVerificationRepositoryGetByLookup:
         repo = _make_repo(test_settings)
         token = _make_token()
         await repo.create(token)
-        result = await repo.get_by_lookup(token.token_lookup)
+        result = await repo.get_by_lookup(token.code_lookup)
         assert result is not None
         assert result.user_id == token.user_id
         assert result.email == token.email
-        assert result.token_lookup == token.token_lookup
-        assert result.token_hash == token.token_hash
-        # The plaintext re-hydration is the service's job — repo returns "".
-        assert result.token == ""
+        assert result.code_lookup == token.code_lookup
+        assert result.verification_code == token.verification_code
+        assert result.token_id == token.token_id
 
     async def test_get_returns_none_for_missing(self, test_settings):
         repo = _make_repo(test_settings)
@@ -157,12 +147,12 @@ class TestFileEmailVerificationRepositoryUpdate:
         await repo.create(token)
         token.used = True
         await repo.update(token)
-        result = await repo.get_by_lookup(token.token_lookup)
+        result = await repo.get_by_lookup(token.code_lookup)
         assert result.used is True
 
     async def test_update_persists_changes(self, test_settings):
         repo = _make_repo(test_settings)
-        token = _make_token(token_lookup="lookup-upd")
+        token = _make_token(code_lookup="lookup-upd")
         await repo.create(token)
         token.used = True
         token.used_at = utcnow()
@@ -176,7 +166,7 @@ class TestFileEmailVerificationRepositoryUpdate:
         the _version between our read and our write. The service
         layer's retry loop is what catches and retries this."""
         repo = _make_repo(test_settings)
-        token = _make_token(token_lookup="lookup-cas")
+        token = _make_token(code_lookup="lookup-cas")
         await repo.create(token)
 
         # First update: brings _version to 1.
@@ -213,9 +203,9 @@ class TestFileEmailVerificationRepositoryDelete:
         repo = _make_repo(test_settings)
         token = _make_token()
         await repo.create(token)
-        path = Path(repo._path(f"{token.token_lookup}.json"))
+        path = Path(repo._path(f"{token.code_lookup}.json"))
         assert path.exists()
-        await repo.delete(token.token_lookup)
+        await repo.delete(token.code_lookup)
         assert not path.exists()
 
     async def test_delete_nonexistent_is_noop(self, test_settings):
@@ -227,8 +217,10 @@ class TestFileEmailVerificationRepositoryDelete:
 class TestFileEmailVerificationRepositoryCleanupExpired:
     async def test_cleanup_deletes_expired(self, test_settings):
         repo = _make_repo(test_settings)
-        expired = _make_token(token_lookup="lookup-exp", expires_at=utcnow() - timedelta(hours=1))
-        valid = _make_token(token_lookup="lookup-ok")
+        expired = _make_token(
+            code_lookup="lookup-exp", expires_at=utcnow() - timedelta(hours=1)
+        )
+        valid = _make_token(code_lookup="lookup-ok")
         await repo.create(expired)
         await repo.create(valid)
         deleted = await repo.cleanup_expired()
@@ -238,7 +230,7 @@ class TestFileEmailVerificationRepositoryCleanupExpired:
 
     async def test_cleanup_returns_zero_when_nothing_to_delete(self, test_settings):
         repo = _make_repo(test_settings)
-        valid = _make_token(token_lookup="lookup-only-valid")
+        valid = _make_token(code_lookup="lookup-only-valid")
         await repo.create(valid)
         deleted = await repo.cleanup_expired()
         assert deleted == 0

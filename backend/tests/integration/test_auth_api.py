@@ -502,7 +502,7 @@ class TestInviteUserSetPasswordLink:
 
         mock_verification = MagicMock()
         mock_verification.create_verification_token = AsyncMock(
-            return_value=MagicMock(token="verify-token-abc")
+            return_value=MagicMock(verification_code="ABCD-EFGH-JKMN")
         )
 
         captured_context = {}
@@ -626,7 +626,7 @@ class TestInviteUserSetPasswordLink:
 
         mock_verification = MagicMock()
         mock_verification.create_verification_token = AsyncMock(
-            return_value=MagicMock(token="verify-token-flow")
+            return_value=MagicMock(verification_code="WXYZ-QRST-2345")
         )
 
         captured_set_password_url = {}

@@ -235,3 +235,58 @@ class TestFilterClaimsByScopes:
         assert "email_verified" in result
         assert "phone_number" in result
         assert "name" not in result
+
+
+class TestEmailVerifiedClaimFlip:
+    """G1: end-to-end pipeline that the email_verified claim
+    transitions from ``false`` to ``true`` after a successful
+    ``EmailVerificationService.verify_email`` call. Closes the
+    gap identified in the OIDC compliance audit (no test today
+    covered the full verify-email -> ID-token chain).
+    """
+
+    def test_claim_flips_after_verify_email(
+        self, oidc_service, email_verification_service
+    ):
+        from authglow.services.email_verification import (
+            EmailVerificationService,
+            generate_verification_code,
+        )
+
+        user = User(
+            id="user-flip-1",
+            email="flip1@example.com",
+            hashed_password=hash_password("TestP@ss1!"),
+            is_active=True,
+            email_verified=False,
+            scopes=["read"],
+        )
+
+        # Pre-verify ID token: email_verified must be False.
+        pre_claims = oidc_service.build_user_claims(user, ["openid", "email"])
+        assert pre_claims["email_verified"] is False
+
+        # Real verification: create a token, mark used, flip the user
+        # (simulating what verify_email does internally — the service
+        # under test is the File-backed one, fully wired with the
+        # test_settings fixture).
+        async def _run() -> None:
+            token = await email_verification_service.create_verification_token(user)
+            email_verification_service.user_storage.get_user = AsyncMock(return_value=user)
+            email_verification_service.user_storage.update_user = AsyncMock()
+            success, error = await email_verification_service.verify_email(
+                token.verification_code
+            )
+            assert success is True
+            assert error is None
+
+        asyncio_run(_run())
+
+        # Post-verify: the same user model now has email_verified=True
+        # (the service mutates the in-memory user object before calling
+        # update_user, so the local reference is updated too).
+        assert user.email_verified is True
+
+        # Post-verify ID token claim: must be True.
+        post_claims = oidc_service.build_user_claims(user, ["openid", "email"])
+        assert post_claims["email_verified"] is True

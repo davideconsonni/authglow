@@ -195,7 +195,7 @@ async def update_user(
         if not update_data.email_verified:
             verification_service = EmailVerificationService()
             token = await verification_service.create_verification_token(user)
-            await verification_service.send_verification_email(user, token.token)
+            await verification_service.send_verification_email(user, token.verification_code)
     else:
         user = await storage.update_user(user)
 
@@ -275,7 +275,7 @@ async def create_user(
     if not body.email_verified:
         verification_service = EmailVerificationService()
         token = await verification_service.create_verification_token(user)
-        await verification_service.send_verification_email(user, token.token)
+        await verification_service.send_verification_email(user, token.verification_code)
 
     await audit_service.log_event(
         event_type="user_created_by_admin",
