@@ -153,10 +153,10 @@ class TestVerifyEmail:
             email_verified=False,
         )
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        path = f"{email_verification_service.storage_path}/{token.token_lookup}.json"
+        path = f"{email_verification_service.repository._storage_path}/{token.token_lookup}.json"
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(hours=1)).isoformat()
-        with email_verification_service.fs.open(path, "w") as f:
+        with email_verification_service.repository._filesystem.open(path, "w") as f:
             json.dump(data, f)
 
         success, error = asyncio_run(email_verification_service.verify_email(token.token))
@@ -193,11 +193,11 @@ class TestHashedTokenStorage:
         token = asyncio_run(email_verification_service.create_verification_token(user))
 
         assert token.token is not None
-        pat = f"{email_verification_service.storage_path}/*.json"
-        files = email_verification_service.fs.glob(pat)
+        pat = f"{email_verification_service.repository._storage_path}/*.json"
+        files = email_verification_service.repository._filesystem.glob(pat)
         raw = b""
         for fp in files:
-            raw += email_verification_service.fs.cat(fp)
+            raw += email_verification_service.repository._filesystem.cat(fp)
 
         assert token.token.encode() not in raw
         assert token.token_hash.encode() in raw
@@ -216,10 +216,10 @@ class TestCleanupExpiredTokens:
             email_verified=False,
         )
         token = asyncio_run(email_verification_service.create_verification_token(user))
-        path = f"{email_verification_service.storage_path}/{token.token_lookup}.json"
+        path = f"{email_verification_service.repository._storage_path}/{token.token_lookup}.json"
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(hours=25)).isoformat()
-        with email_verification_service.fs.open(path, "w") as f:
+        with email_verification_service.repository._filesystem.open(path, "w") as f:
             json.dump(data, f)
 
         deleted = asyncio_run(email_verification_service.cleanup_expired_tokens())

@@ -1,232 +1,161 @@
-"""RBAC service for managing roles and permissions."""
+"""RBAC service for managing roles and permissions.
 
-import os
+Persistence is delegated to three repositories:
+
+* ``self._perm_repo`` — :class:`PermissionRepository`
+* ``self._role_repo`` — :class:`RoleRepository`
+* ``self._user_role_repo`` — :class:`UserRoleRepository`
+
+The pre-refactor service built its own fsspec/AsyncFileSystem
+plumbing in ``__init__`` and would have crashed on any non-``file``
+backend (``s3`` / ``gcs`` / ``abfs``) with a confusing
+``ValueError`` from fsspec. The refactored service routes through
+the standard ``BaseFileRepository._init_filesystem`` via the
+factories, which honour ``Settings.storage_backend``.
+
+Business logic that aggregates across repositories
+(``initialize_defaults``, ``user_has_permission``,
+``user_has_role``, ``get_user_permissions``, the
+``is_system`` delete guard, the in-process ``named_lock`` around
+``update_role``) stays in the service.
+"""
+
 from typing import List, Optional, Set
 
-import fsspec
-
-from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.rbac import Permission, Role, UserRole
+from authglow.repositories.protocols import (
+    PermissionRepository,
+    RoleRepository,
+    UserRoleRepository,
+)
 
 
 class RBACService:
     """Service for Role-Based Access Control."""
 
-    def __init__(self):
-        """Initialize RBAC service."""
+    def __init__(
+        self,
+        permission_repository: Optional[PermissionRepository] = None,
+        role_repository: Optional[RoleRepository] = None,
+        user_role_repository: Optional[UserRoleRepository] = None,
+    ):
+        """Initialize RBAC service with settings and repositories.
+
+        All three repository arguments default to ``None`` and are
+        resolved lazily via the corresponding ``get_*`` factories.
+        Tests can pass a stub or an in-memory implementation
+        directly.
+        """
+        from authglow.repositories.dependencies import (
+            get_permission_repository,
+            get_role_repository,
+            get_user_role_repository,
+        )
+
         self.settings = get_settings()
-        self.roles_path = f"{self.settings.storage_path}/rbac/roles"
-        self.permissions_path = f"{self.settings.storage_path}/rbac/permissions"
-        self.user_roles_path = f"{self.settings.storage_path}/rbac/user_roles"
-        self.storage_options = self.settings.get_storage_options()
-
-        # Initialize filesystem
-        if self.settings.storage_backend == "file":
-            os.makedirs(self.roles_path, exist_ok=True)
-            os.makedirs(self.permissions_path, exist_ok=True)
-            os.makedirs(self.user_roles_path, exist_ok=True)
-            self.fs = fsspec.filesystem("file")
-        else:
-            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
-
-        self._afs = AsyncFileSystem(self.fs)
+        self._perm_repo = permission_repository or get_permission_repository()
+        self._role_repo = role_repository or get_role_repository()
+        self._user_role_repo = user_role_repository or get_user_role_repository()
         self._lock = named_lock()
 
+    # ------------------------------------------------------------------
     # Permission Management
+    # ------------------------------------------------------------------
 
     async def create_permission(self, permission: Permission) -> Permission:
         """Create a new permission."""
-        file_path = f"{self.permissions_path}/{permission.permission_id}.json"
-        await self._afs.write_json(file_path, permission.model_dump())
+        await self._perm_repo.create(permission)
         return permission
 
     async def get_permission(self, permission_id: str) -> Optional[Permission]:
         """Get permission by ID."""
-        try:
-            file_path = f"{self.permissions_path}/{permission_id}.json"
-            data = await self._afs.read_json(file_path)
-            return Permission(**data)
-        except Exception:
-            return None
+        return await self._perm_repo.get_by_id(permission_id)
 
     async def get_permission_by_name(self, name: str) -> Optional[Permission]:
         """Get permission by name."""
-        try:
-            pattern = f"{self.permissions_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    perm = Permission(**data)
-                    if perm.name == name:
-                        return perm
-                except Exception:
-                    continue
-            return None
-        except Exception:
-            return None
+        return await self._perm_repo.get_by_name(name)
 
     async def list_permissions(self) -> List[Permission]:
         """List all permissions."""
-        permissions = []
-        try:
-            pattern = f"{self.permissions_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    permissions.append(Permission(**data))
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return sorted(permissions, key=lambda p: p.name)
+        return await self._perm_repo.list()
 
     async def delete_permission(self, permission_id: str) -> bool:
         """Delete a permission."""
-        try:
-            file_path = f"{self.permissions_path}/{permission_id}.json"
-            await self._afs.rm(file_path)
-            return True
-        except Exception:
-            return False
+        return await self._perm_repo.delete(permission_id)
 
+    # ------------------------------------------------------------------
     # Role Management
+    # ------------------------------------------------------------------
 
     async def create_role(self, role: Role) -> Role:
         """Create a new role."""
-        file_path = f"{self.roles_path}/{role.role_id}.json"
-        await self._afs.write_json(file_path, role.model_dump())
+        await self._role_repo.create(role)
         return role
 
     async def get_role(self, role_id: str) -> Optional[Role]:
         """Get role by ID."""
-        try:
-            file_path = f"{self.roles_path}/{role_id}.json"
-            data = await self._afs.read_json(file_path)
-            return Role(**data)
-        except Exception:
-            return None
+        return await self._role_repo.get_by_id(role_id)
 
     async def get_role_by_name(self, name: str) -> Optional[Role]:
         """Get role by name."""
-        try:
-            pattern = f"{self.roles_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    role = Role(**data)
-                    if role.name == name:
-                        return role
-                except Exception:
-                    continue
-            return None
-        except Exception:
-            return None
+        return await self._role_repo.get_by_name(name)
 
     async def list_roles(self) -> List[Role]:
         """List all roles."""
-        roles = []
-        try:
-            pattern = f"{self.roles_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    roles.append(Role(**data))
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return sorted(roles, key=lambda r: r.name)
+        return await self._role_repo.list()
 
     async def update_role(self, role: Role) -> Role:
-        """Update a role."""
+        """Update a role.
+
+        Protected by a named lock on ``role.role_id`` to prevent
+        concurrent updates from clobbering each other. The
+        ``updated_at`` timestamp is refreshed here (business rule,
+        not a storage concern).
+        """
         async with self._lock(f"role:{role.role_id}"):
             role.updated_at = utcnow()
-            file_path = f"{self.roles_path}/{role.role_id}.json"
-            await self._afs.write_json(file_path, role.model_dump())
+            await self._role_repo.update(role)
         return role
 
     async def delete_role(self, role_id: str) -> bool:
         """Delete a role (cannot delete system roles)."""
-        role = await self.get_role(role_id)
+        role = await self._role_repo.get_by_id(role_id)
         if not role or role.is_system:
             return False
+        return await self._role_repo.delete(role_id)
 
-        try:
-            file_path = f"{self.roles_path}/{role_id}.json"
-            await self._afs.rm(file_path)
-            return True
-        except Exception:
-            return False
-
+    # ------------------------------------------------------------------
     # User-Role Assignment
+    # ------------------------------------------------------------------
 
     async def assign_role_to_user(self, user_role: UserRole) -> UserRole:
         """Assign a role to a user."""
-        file_path = f"{self.user_roles_path}/{user_role.assignment_id}.json"
-        await self._afs.write_json(file_path, user_role.model_dump())
+        await self._user_role_repo.assign(user_role)
         return user_role
 
     async def remove_role_from_user(self, user_id: str, role_id: str) -> bool:
         """Remove a role from a user."""
-        try:
-            pattern = f"{self.user_roles_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    ur = UserRole(**data)
-                    if ur.user_id == user_id and ur.role_id == role_id:
-                        await self._afs.rm(file_path)
-                        return True
-                except Exception:
-                    continue
+        assignment = await self._user_role_repo.find_assignment(user_id, role_id)
+        if assignment is None:
             return False
-        except Exception:
-            return False
+        return await self._user_role_repo.remove(assignment.assignment_id)
 
     async def get_user_roles(self, user_id: str) -> List[UserRole]:
-        """Get all roles assigned to a user."""
-        user_roles = []
-        try:
-            pattern = f"{self.user_roles_path}/*.json"
-            files = await self._afs.glob(pattern)
+        """Get all roles assigned to a user.
 
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    ur = UserRole(**data)
-                    if ur.user_id == user_id:
-                        # Check if expired
-                        if ur.expires_at and utcnow() > ur.expires_at:
-                            await self._afs.rm(file_path)
-                            continue
-                        user_roles.append(ur)
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return user_roles
+        ``expires_at`` filtering is enforced by the repository
+        (expired assignments are auto-deleted on read). The
+        service-layer wrapper simply returns the active set.
+        """
+        return await self._user_role_repo.list_for_user(user_id)
 
     async def get_user_permissions(self, user_id: str) -> Set[str]:
         """Get all permissions for a user (aggregated from roles)."""
         permissions: Set[str] = set()
 
-        # Get user's roles
         user_roles = await self.get_user_roles(user_id)
 
         for user_role in user_roles:
@@ -250,11 +179,12 @@ class RBACService:
                 return True
         return False
 
+    # ------------------------------------------------------------------
     # Initialize default roles and permissions
+    # ------------------------------------------------------------------
 
     async def initialize_defaults(self):
         """Initialize default roles and permissions."""
-        # Default permissions
         default_permissions = [
             Permission(
                 name="users.read",
@@ -329,7 +259,6 @@ class RBACService:
             if not existing:
                 await self.create_permission(perm)
 
-        # Default roles
         admin_role = await self.get_role_by_name("admin")
         if not admin_role:
             admin_role = Role(

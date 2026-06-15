@@ -23,11 +23,11 @@ from authglow.api.setup import router as setup_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
-from authglow.core.token_blacklist import token_blacklist
 from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
+from authglow.services.auth.token_blacklist import token_blacklist
 
 settings = get_settings()
 

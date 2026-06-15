@@ -23,12 +23,18 @@ from authglow.models.federation import (
 from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.federation import FederationService
+from authglow.services.federation_provider import (
+    FederationProviderService as _FederationProviderService,
+)
 from authglow.services.federation_state import FederationStateError, FederationStateToken
-from authglow.services.federation_storage import FederationStorage
 from authglow.services.jwt import JWTService
 from authglow.services.login_history import LoginHistoryService
 from authglow.services.session import SessionService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService as UserStorage
+
+# Back-compat aliases for Fase 21 transition window
+FederationProviderService = _FederationProviderService
+FederationStorage = _FederationProviderService
 
 router = APIRouter()
 

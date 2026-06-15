@@ -24,13 +24,15 @@ from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import MFAService
-from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.passkey import PasskeyService
 from authglow.services.password import PasswordValidator, hash_password
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 
@@ -54,7 +56,6 @@ def get_passkey_service():
     """Get passkey service instance."""
     settings = get_settings()
     return PasskeyService(
-        storage_path=settings.storage_path,
         rp_id=settings.passkey_rp_id,
         rp_name=settings.passkey_rp_name,
         origin=settings.passkey_origin,
@@ -1160,75 +1161,9 @@ async def get_oauth_consents_admin(
     current_user: User = Depends(require_admin),
 ):
     """Get all OAuth2 consents with pagination."""
-    client_storage = OAuth2ClientStorage()
-    user_storage = UserStorage()
-
-    consents_list = []
-
-    try:
-        import fsspec as _fsspec
-
-        from authglow.core.async_io import AsyncFileSystem
-        from authglow.core.config import get_settings as _get_settings
-
-        _settings = _get_settings()
-        _storage_path = f"{_settings.storage_path}/oauth_consents"
-
-        if _settings.storage_backend == "file":
-            _fs = _fsspec.filesystem("file")
-        else:
-            _fs = _fsspec.filesystem(_settings.storage_backend, **_settings.get_storage_options())
-        _afs = AsyncFileSystem(_fs)
-
-        pattern = f"{_storage_path}/**/*.json"
-        files = await _afs.glob(pattern)
-
-        for file_path in files:
-            try:
-                data = await _afs.read_json(file_path)
-                from authglow.models.oauth_consent import OAuth2Consent
-
-                consent = OAuth2Consent(**data)
-
-                user = await user_storage.get_user(consent.user_id)
-                if not user:
-                    continue
-
-                if email and email.lower() not in user.email.lower():
-                    continue
-
-                client = await client_storage.get_client(consent.client_id)
-                client_name = client.client_name if client else consent.client_id
-
-                consents_list.append(
-                    {
-                        "consent_id": consent.consent_id,
-                        "user_email": user.email,
-                        "client_id": consent.client_id,
-                        "client_name": client_name,
-                        "scopes": consent.scopes,
-                        "granted_at": consent.granted_at.isoformat(),
-                        "expires_at": consent.expires_at.isoformat()
-                        if consent.expires_at
-                        else None,
-                        "revoked": consent.revoked,
-                        "revoked_at": consent.revoked_at.isoformat()
-                        if consent.revoked_at
-                        else None,
-                    }
-                )
-
-            except Exception:
-                continue
-
-    except Exception:
-        pass
-
-    consents_list.sort(key=lambda x: str(x.get("granted_at", "")), reverse=True)
-    total = len(consents_list)
-    paginated = consents_list[offset : offset + limit]
-
-    return PaginatedResponse(items=paginated, total=total, limit=limit, offset=offset)
+    consent_service = OAuth2ConsentService()
+    items, total = await consent_service.list_all_for_admin(limit=limit, offset=offset, email=email)
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.post("/api/admin/oauth-consents/{consent_id}/revoke")
@@ -1318,6 +1253,7 @@ async def get_user_oauth_consents(
     consents = await consent_svc.list_user_consents(user_id)
 
     result = []
+
     from authglow.services.oauth_client import OAuth2ClientStorage
 
     client_storage = OAuth2ClientStorage()
@@ -1374,7 +1310,6 @@ async def export_user_data(
 
     settings = _get_settings()
     passkey_svc = PasskeyService(
-        storage_path=settings.storage_path,
         rp_id=settings.passkey_rp_id,
         rp_name=settings.passkey_rp_name,
         origin=settings.passkey_origin,

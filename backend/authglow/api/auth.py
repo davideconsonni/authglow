@@ -29,7 +29,10 @@ from authglow.services.password import PasswordValidator, hash_password, verify_
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.session import SessionService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
@@ -979,7 +982,7 @@ async def cookie_logout(
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
 ):
     """Logout — clears auth cookies, blacklists access/refresh JWT jti, revokes refresh tokens."""
-    from authglow.core.token_blacklist import token_blacklist as get_blacklist
+    from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
 
     settings = get_settings()
 

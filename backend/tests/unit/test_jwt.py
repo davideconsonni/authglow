@@ -277,7 +277,10 @@ class TestJWTJtiRevocation:
         assert decoded.jti is not None, "access token must have a jti"
 
     async def test_refresh_token_jti_revoked_rejected(self, jwt_service, test_settings):
-        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+        from authglow.services.auth.token_blacklist import (
+            _reset_token_blacklist,
+            token_blacklist,
+        )
 
         _reset_token_blacklist()
 
@@ -294,7 +297,10 @@ class TestJWTJtiRevocation:
         assert jwt_service.decode_token(token) is None
 
     async def test_mfa_session_token_jti_revoked_rejected(self, jwt_service, test_settings):
-        from authglow.core.token_blacklist import token_blacklist, _reset_token_blacklist
+        from authglow.services.auth.token_blacklist import (
+            _reset_token_blacklist,
+            token_blacklist,
+        )
 
         _reset_token_blacklist()
 

@@ -8,9 +8,9 @@ import jwt
 
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_private_key, encrypt_private_key
-from authglow.core.token_blacklist import token_blacklist
 from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
+from authglow.services.auth.token_blacklist import token_blacklist
 
 
 async def resolve_rbac_permissions(user_id: str) -> tuple:

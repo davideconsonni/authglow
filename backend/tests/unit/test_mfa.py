@@ -194,7 +194,6 @@ class TestDeviceFingerprint:
 
     def test_trusted_device_expires(self, mfa_service):
         import asyncio
-        import json
         from authglow.models.mfa import TrustedDevice
 
         fp = mfa_service.generate_device_fingerprint("Mozilla/5.0", "10.0.0.1")
@@ -202,9 +201,7 @@ class TestDeviceFingerprint:
         device = asyncio.run(mfa_service.add_trusted_device(user_id, fp, "Expired Browser"))
         expired_device = TrustedDevice(**device.model_dump())
         expired_device.expires_at = utcnow() - timedelta(days=1)
-        device_path = f"{mfa_service.storage_path}/trusted_devices/{device.id}.json"
-        with mfa_service.fs.open(device_path, "w") as f:
-            json.dump(expired_device.model_dump(mode="json"), f, indent=2, default=str)
+        asyncio.run(mfa_service._td_repo.update(expired_device))
 
         is_trusted = asyncio.run(mfa_service.is_device_trusted(user_id, fp))
         assert not is_trusted, "Expired trusted devices should not be trusted."
@@ -249,13 +246,13 @@ class TestBackupCodeLockout:
 
         result1 = asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG1"))
         assert not result1
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts is not None
         assert attempts.failed_attempts == 1
 
         result2 = asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG2"))
         assert not result2
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts.failed_attempts == 2
 
     def test_locked_after_max_failures(self, mfa_service):
@@ -268,7 +265,7 @@ class TestBackupCodeLockout:
         for i in range(mfa_service.settings.backup_code_max_failed_attempts):
             asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
 
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts.failed_attempts == mfa_service.settings.backup_code_max_failed_attempts
         assert attempts.locked_until is not None
 
@@ -317,12 +314,12 @@ class TestBackupCodeLockout:
         asyncio.run(mfa_service.save_backup_codes(user_id, codes))
 
         asyncio.run(mfa_service.verify_user_backup_code(user_id, "WRONG1"))
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts.failed_attempts == 1
 
         result = asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
         assert result
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts is None
 
     def test_lockout_resets_after_success_then_retry(self, mfa_service):
@@ -338,11 +335,11 @@ class TestBackupCodeLockout:
         result = asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[0]))
         assert result
 
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts is None
 
         asyncio.run(mfa_service.verify_user_backup_code(user_id, codes[1]))
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts is None
 
     def test_locked_until_stored(self, mfa_service):
@@ -355,7 +352,7 @@ class TestBackupCodeLockout:
         for i in range(mfa_service.settings.backup_code_max_failed_attempts):
             asyncio.run(mfa_service.verify_user_backup_code(user_id, f"WRONG{i}"))
 
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts.locked_until is not None
         from datetime import datetime, timezone, timedelta
 
@@ -370,7 +367,7 @@ class TestBackupCodeLockout:
         result = asyncio.run(mfa_service.verify_user_backup_code(user_id, "ANYCODE"))
         assert not result
 
-        attempts = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        attempts = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert attempts is None
 
     def test_backup_code_attempts_file_crud(self, mfa_service):
@@ -380,15 +377,15 @@ class TestBackupCodeLockout:
 
         user_id = "attempt-crud"
         a1 = BackupCodeAttempt(user_id=user_id, failed_attempts=2)
-        asyncio.run(mfa_service._save_backup_code_attempts(a1))
+        asyncio.run(mfa_service._attempts_repo.save(a1))
 
-        loaded = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        loaded = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert loaded is not None
         assert loaded.failed_attempts == 2
         assert loaded.user_id == user_id
 
-        asyncio.run(mfa_service._reset_backup_code_attempts(user_id))
-        loaded2 = asyncio.run(mfa_service._get_backup_code_attempts(user_id))
+        asyncio.run(mfa_service._attempts_repo.delete(user_id))
+        loaded2 = asyncio.run(mfa_service._attempts_repo.get(user_id))
         assert loaded2 is None
 
 

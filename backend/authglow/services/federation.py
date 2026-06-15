@@ -8,7 +8,9 @@ import httpx
 import jwt as pyjwt
 
 from authglow.models.federation import ExternalIdpConfig
-from authglow.services.federation_storage import FederationStorage
+from authglow.services.federation_provider import (
+    FederationProviderService as FederationStorage,
+)
 
 _ALLOWED_FEDERATION_ALGORITHMS = frozenset({"RS256"})
 

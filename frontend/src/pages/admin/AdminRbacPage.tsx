@@ -8,6 +8,8 @@ import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { notify } from '@/stores/toastStore'
 
+const RBAC_ROLES_QUERY_KEY: string[] = ['admin-roles']
+
 interface Permission {
   permission_id?: string
   name: string
@@ -73,7 +75,7 @@ function RolesTab() {
   const [saving, setSaving] = useState(false)
 
   const { data: roles, refetch: refetchRoles, isLoading } = useApiQuery<Role[]>(
-    ['admin-roles'],
+    RBAC_ROLES_QUERY_KEY,
     '/api/rbac/roles',
   )
   const roleList = Array.isArray(roles) ? roles : []
@@ -497,7 +499,7 @@ function UserRoleAssignments() {
   const [searchUserId, setSearchUserId] = useState('')
   const [searched, setSearched] = useState(false)
 
-  const { data: allRoles } = useApiQuery<Role[]>(['admin-roles-for-assign'], '/api/rbac/roles')
+  const { data: allRoles } = useApiQuery<Role[]>(RBAC_ROLES_QUERY_KEY, '/api/rbac/roles')
   const roleOptions = Array.isArray(allRoles) ? allRoles : []
 
   // Fetch user roles only when searching for a specific user

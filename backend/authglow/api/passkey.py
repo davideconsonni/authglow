@@ -21,7 +21,10 @@ from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService, resolve_rbac_permissions
 from authglow.services.passkey import PasskeyService
 from authglow.services.refresh_token import RefreshTokenService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter(prefix="/api/passkey")
 security = HTTPBearer(auto_error=False)
@@ -49,7 +52,6 @@ def get_passkey_service(request: Request) -> PasskeyService:
         rp_id = host.split(":")[0]
 
     return PasskeyService(
-        storage_path=settings.storage_path,
         rp_id=rp_id,
         rp_name=settings.passkey_rp_name,
         origin=origin,

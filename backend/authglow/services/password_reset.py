@@ -1,19 +1,54 @@
-"""Password reset service for managing reset tokens."""
+"""Password reset service for managing reset tokens.
+
+Tokens are persisted via the ``PasswordResetRepository`` Protocol.
+The service owns:
+
+* the cryptographic helpers (``_generate_token`` with bcrypt + HMAC,
+  ``_reset_code_lookup_key`` for the human-friendly code) — pure
+  functions, no I/O;
+* the ``generate_reset_code`` helper (alphabet + format + the
+  confusable-character invariant assert);
+* the bcrypt verification of a presented plaintext against the
+  stored hash;
+* the in-process ``named_lock`` that serialises cross-coroutine
+  ``mark_token_used`` calls;
+* the CAS retry loop that catches ``ConcurrentWriteError`` raised
+  by the repository on cross-process races (no-op today — the
+  repository's raw-text write does not preserve ``_version``, so
+  the loop never fires; preserved as defensive future-proofing);
+* the public ``create_reset_token`` / ``verify_token`` /
+  ``verify_by_code`` / ``mark_token_used`` / ``get_token`` /
+  ``list_user_tokens`` / ``list_all_tokens`` /
+  ``revoke_user_tokens`` / ``delete_token`` /
+  ``cleanup_expired_tokens`` / ``get_stats`` API.
+
+The repository is responsible for the file layout (primary +
+mirror), JSON serialisation, the dual-mirror write logic, and
+bulk operations (``cleanup_expired``, ``stats``). A default
+``FilePasswordResetRepository`` is constructed when no repository
+is injected — FastAPI's ``Depends(get_reset_service)`` factory
+uses the default.
+
+Security: the plaintext bearer token and reset code are never
+persisted. The ``token_hash`` (bcrypt) is the only on-disk
+credential, and ``reset_code`` is a single-use secret with a
+30-minute window.
+"""
 
 import hashlib
 import hmac
 import secrets
-from datetime import timedelta
-from typing import List, Optional
+from datetime import timedelta as _timedelta
+from typing import List, Optional, Tuple
 
 import bcrypt
-import fsspec
 
-from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
-from authglow.core.config import get_settings
+from authglow.core.config import Settings, get_settings
+from authglow.core.crypto import reset_code_lookup_key
 from authglow.core.datetime import utcnow
 from authglow.models.password_reset import PasswordResetToken
+from authglow.repositories.protocols import PasswordResetRepository
 
 _RESET_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _RESET_CODE_SEGMENT_LEN = 4
@@ -52,16 +87,12 @@ def generate_reset_code() -> str:
 def _reset_code_lookup_key(code: str) -> str:
     """Compute the HMAC-SHA256 lookup key for a reset code (VAPT-022 fix).
 
-    Normalises the code to upper-case and strips whitespace so user input
-    variants (``abcd-efgh-jklm``) match the stored value. The key mirrors
-    the existing ``token_lookup`` pattern for O(1) file access.
+    Thin wrapper over ``authglow.core.crypto.reset_code_lookup_key``
+    that resolves the secret key from ``get_settings()``. Kept as a
+    module-level function for backward compatibility with the
+    pre-refactor import path.
     """
-    normalised = code.strip().upper().replace(" ", "").replace("\t", "")
-    return hmac.new(
-        get_settings().secret_key.encode(),
-        normalised.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    return reset_code_lookup_key(get_settings().secret_key, code)
 
 
 class PasswordResetService:
@@ -73,50 +104,42 @@ class PasswordResetService:
 
     MAX_CAS_RETRIES = 3
 
-    def __init__(self, storage_path: str | None = None):
-        """Initialize the password reset service.
-
-        Args:
-            storage_path: Path to storage directory (supports s3://, gcs://, etc.)
-        """
-        self.settings = get_settings()
-        self.storage_path = storage_path or self.settings.storage_path
-        self.reset_path = f"{self.storage_path}/password_resets"
-        self.fs = fsspec.filesystem("file")  # Will auto-detect protocol from path
-        self._afs = AsyncFileSystem(self.fs)
+    def __init__(
+        self,
+        repository: Optional[PasswordResetRepository] = None,
+        *,
+        settings: Optional[Settings] = None,
+    ) -> None:
+        """Initialize the password reset service."""
+        self.settings: Settings = settings or get_settings()
+        self._repository: PasswordResetRepository = (
+            repository if repository is not None else _default_repository(self.settings)
+        )
         self._lock = named_lock()
 
-    def _get_token_path(self, token_lookup: str) -> str:
-        """Get file path for a token by its HMAC lookup key."""
-        return f"{self.reset_path}/{token_lookup}.json"
+    @property
+    def repository(self) -> PasswordResetRepository:
+        """The underlying repository (exposed for tests / admin tools)."""
+        return self._repository
 
-    def _get_code_path(self, code_lookup: str) -> str:
-        """Get file path for a token by its reset-code HMAC lookup key.
-
-        VAPT-022: the same token record is indexed by both
-        ``token_lookup`` (HMAC of bearer token) and ``code_lookup``
-        (HMAC of human-friendly reset code), so the email-based flow
-        can resolve a token without the bearer secret.
-        """
-        return f"{self.reset_path}/code_{code_lookup}.json"
-
-    def _generate_token(self) -> tuple[str, str, str]:
+    def _generate_token(self) -> Tuple[str, str, str]:
         """Generate a secure random token.
 
         Returns:
             tuple: (plaintext_token, hashed_token, token_lookup)
         """
         plaintext = secrets.token_urlsafe(32)
-
         token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
-
         token_lookup = hmac.new(
             self.settings.secret_key.encode(),
             plaintext.encode(),
             hashlib.sha256,
         ).hexdigest()
-
         return plaintext, token_hash, token_lookup
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def create_reset_token(
         self,
@@ -125,15 +148,8 @@ class PasswordResetService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         expires_in_minutes: int = 30,
-    ) -> tuple[PasswordResetToken, str, str]:
+    ) -> Tuple[PasswordResetToken, str, str]:
         """Create a new password reset token.
-
-        Args:
-            user_id: User ID requesting reset
-            email: User email
-            ip_address: IP address of requester
-            user_agent: User agent string
-            expires_in_minutes: Token expiration time in minutes
 
         Returns:
             tuple: (PasswordResetToken, plaintext_token, reset_code)
@@ -151,39 +167,20 @@ class PasswordResetService:
             email=email,
             token_hash=token_hash,
             reset_code=reset_code,
-            expires_at=utcnow() + timedelta(minutes=expires_in_minutes),
+            expires_at=utcnow() + _timedelta(minutes=expires_in_minutes),
             ip_address=ip_address,
             user_agent=user_agent,
         )
 
-        # Save token (primary file indexed by bearer token HMAC)
-        token_path = self._get_token_path(reset_token.token_lookup)
-        await self._afs.makedirs(self.reset_path, exist_ok=True)
-
-        payload = reset_token.model_dump_json(indent=2)
-        await self._afs.write_text(token_path, payload)
-
-        # VAPT-022: also write a mirror file indexed by the reset_code
-        # HMAC, so the email-based flow can resolve the same record
-        # without the bearer token. The two files contain the same
-        # payload; ``mark_token_used`` and ``cleanup`` operate on both.
-        code_lookup = _reset_code_lookup_key(reset_code)
-        code_path = self._get_code_path(code_lookup)
-        await self._afs.write_text(code_path, payload)
+        await self._repository.create(reset_token)
 
         return reset_token, plaintext_token, reset_code
 
     async def verify_token(self, plaintext_token: str) -> Optional[PasswordResetToken]:
         """Verify a reset token and return the token object if valid.
 
-        Uses HMAC-SHA256 lookup key for O(1) direct file access instead of
-        listing all active tokens.
-
-        Args:
-            plaintext_token: The plaintext token to verify
-
-        Returns:
-            PasswordResetToken if valid, None otherwise
+        Uses HMAC-SHA256 lookup key for O(1) direct file access instead
+        of listing all active tokens.
         """
         token_lookup = hmac.new(
             self.settings.secret_key.encode(),
@@ -191,15 +188,8 @@ class PasswordResetService:
             hashlib.sha256,
         ).hexdigest()
 
-        token_path = self._get_token_path(token_lookup)
-
-        if not await self._afs.exists(token_path):
-            return None
-
-        try:
-            content = await self._afs.read_text(token_path)
-            token = PasswordResetToken.model_validate_json(content)
-        except Exception:
+        token = await self._repository.get_by_token_lookup(token_lookup)
+        if token is None:
             return None
 
         if not bcrypt.checkpw(plaintext_token.encode(), token.token_hash.encode()):
@@ -219,29 +209,13 @@ class PasswordResetService:
         The code is normalised to upper-case, stripped of whitespace, then
         hashed with HMAC-SHA256 to derive the same lookup key the
         plaintext token uses. Returns the token on success, None otherwise.
-        On success, the underlying ``plaintext_token`` is exposed via
-        ``PasswordResetConfirm`` flow when the caller re-renders the form
-        with the verified ``token_lookup``.
-
-        Args:
-            reset_code: The human-friendly code as entered by the user.
-
-        Returns:
-            PasswordResetToken if valid, None otherwise
         """
         if not reset_code:
             return None
 
         code_lookup = _reset_code_lookup_key(reset_code)
-        code_path = self._get_code_path(code_lookup)
-
-        if not await self._afs.exists(code_path):
-            return None
-
-        try:
-            content = await self._afs.read_text(code_path)
-            token = PasswordResetToken.model_validate_json(content)
-        except Exception:
+        token = await self._repository.get_by_code_lookup(code_lookup)
+        if token is None:
             return None
 
         stored_code = (token.reset_code or "").strip().upper()
@@ -261,161 +235,56 @@ class PasswordResetService:
         """Mark a token as used.
 
         Protected by a named lock and optimistic-concurrency versioning
-        to prevent the same token from being used twice. When a
-        ``reset_code`` mirror file exists, it is updated too so the
-        email-based lookup path returns the same ``is_used`` state
-        (VAPT-022 fix).
+        to prevent the same token from being used twice. The repository
+        updates both primary and mirror files so the email-based lookup
+        path returns the same ``is_used`` state (VAPT-022 fix).
 
         Args:
             token_lookup: HMAC lookup key of the token to mark as used
-
-        Returns:
-            bool: Success status
         """
         async with self._lock(f"reset_token:{token_lookup}"):
             for attempt in range(self.MAX_CAS_RETRIES):
-                token_path = self._get_token_path(token_lookup)
-
-                if not await self._afs.exists(token_path):
+                token = await self._repository.get_by_token_lookup(token_lookup)
+                if token is None:
                     return False
-
-                content = await self._afs.read_text(token_path)
-                token = PasswordResetToken.model_validate_json(content)
 
                 if token.is_used:
                     return False
 
                 token.is_used = True
                 token.used_at = utcnow()
-                payload = token.model_dump_json(indent=2)
 
                 try:
-                    _, version = await self._afs.read_json_versioned(token_path)
-                    await self._afs.write_text(token_path, payload)
+                    await self._repository.update(token)
+                    return True
                 except ConcurrentWriteError:
                     continue
-
-                # Update the reset_code mirror so the email-based
-                # lookup path also sees the token as used.
-                if token.reset_code:
-                    code_lookup = _reset_code_lookup_key(token.reset_code)
-                    code_path = self._get_code_path(code_lookup)
-                    if await self._afs.exists(code_path):
-                        await self._afs.write_text(code_path, payload)
-                return True
 
             return False
 
     async def get_token(self, token_lookup: str) -> Optional[PasswordResetToken]:
-        """Get a token by its HMAC lookup key.
-
-        Args:
-            token_lookup: HMAC lookup key
-
-        Returns:
-            PasswordResetToken if found, None otherwise
-        """
-        token_path = self._get_token_path(token_lookup)
-
-        if not await self._afs.exists(token_path):
-            return None
-
-        content = await self._afs.read_text(token_path)
-        return PasswordResetToken.model_validate_json(content)
+        """Get a token by its HMAC lookup key."""
+        return await self._repository.get_by_token_lookup(token_lookup)
 
     async def list_user_tokens(
         self, user_id: str, active_only: bool = True
     ) -> List[PasswordResetToken]:
-        """List all reset tokens for a user.
-
-        Args:
-            user_id: User ID
-            active_only: Only return active (unused, unexpired) tokens
-
-        Returns:
-            List of PasswordResetToken objects
-        """
-        if not await self._afs.exists(self.reset_path):
-            return []
-
-        tokens = []
-        file_list = await self._afs.ls(self.reset_path)
-        for file_path in file_list:
-            if not file_path.endswith(".json"):
-                continue
-            # VAPT-022: skip reset_code mirror files; primary file wins.
-            if "/code_" in file_path or file_path.endswith("/code_.json"):
-                continue
-
-            content = await self._afs.read_text(file_path)
-            token = PasswordResetToken.model_validate_json(content)
-
-            if token.user_id != user_id:
-                continue
-
-            if active_only:
-                if token.is_used or utcnow() > token.expires_at:
-                    continue
-
-            tokens.append(token)
-
-        return sorted(tokens, key=lambda t: t.created_at, reverse=True)
+        """List all reset tokens for a user."""
+        return await self._repository.list_for_user(user_id, active_only=active_only)
 
     async def list_all_tokens(
         self, active_only: bool = False, limit: int = 100, offset: int = 0
     ) -> List[PasswordResetToken]:
-        """List all reset tokens (admin).
-
-        Args:
-            active_only: Only return active tokens
-            limit: Maximum number of tokens to return
-            offset: Number of tokens to skip
-
-        Returns:
-            List of PasswordResetToken objects
-        """
-        if not await self._afs.exists(self.reset_path):
-            return []
-
-        tokens = []
-        file_list = await self._afs.ls(self.reset_path)
-        for file_path in file_list:
-            if not file_path.endswith(".json"):
-                continue
-            if "/code_" in file_path or file_path.endswith("/code_.json"):
-                continue
-
-            content = await self._afs.read_text(file_path)
-            token = PasswordResetToken.model_validate_json(content)
-
-            if active_only:
-                if token.is_used or utcnow() > token.expires_at:
-                    continue
-
-            tokens.append(token)
-
-        # Sort by created_at descending
-        tokens.sort(key=lambda t: t.created_at, reverse=True)
-
-        # Apply pagination
-        return tokens[offset : offset + limit]
+        """List all reset tokens (admin)."""
+        return await self._repository.list_all(active_only=active_only, limit=limit, offset=offset)
 
     async def revoke_user_tokens(self, user_id: str) -> int:
-        """Revoke all active tokens for a user.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            Number of tokens revoked
-        """
+        """Revoke all active tokens for a user."""
         tokens = await self.list_user_tokens(user_id, active_only=True)
         count = 0
-
         for token in tokens:
             if await self.mark_token_used(token.token_lookup):
                 count += 1
-
         return count
 
     async def delete_token(self, token_lookup: str) -> bool:
@@ -423,73 +292,17 @@ class PasswordResetService:
         return await self.mark_token_used(token_lookup)
 
     async def cleanup_expired_tokens(self) -> int:
-        """Delete all expired and used tokens.
-
-        Returns:
-            Number of tokens deleted
-        """
-        if not await self._afs.exists(self.reset_path):
-            return 0
-
-        count = 0
-        file_list = await self._afs.ls(self.reset_path)
-        for file_path in file_list:
-            if not file_path.endswith(".json"):
-                continue
-            if "/code_" in file_path or file_path.endswith("/code_.json"):
-                continue
-
-            content = await self._afs.read_text(file_path)
-            token = PasswordResetToken.model_validate_json(content)
-
-            # Delete if used or expired (older than 24 hours after expiration)
-            should_delete = token.is_used or utcnow() > token.expires_at + timedelta(hours=24)
-
-            if should_delete:
-                await self._afs.rm(file_path)
-                # Also delete the reset_code mirror (VAPT-022).
-                if token.reset_code:
-                    code_lookup = _reset_code_lookup_key(token.reset_code)
-                    code_path = self._get_code_path(code_lookup)
-                    if await self._afs.exists(code_path):
-                        await self._afs.rm(code_path)
-                count += 1
-
-        return count
+        """Delete all expired and used tokens. Returns the deletion count."""
+        return await self._repository.cleanup_expired()
 
     async def get_stats(self) -> dict:
-        """Get statistics about password reset tokens.
+        """Get statistics about password reset tokens."""
+        return await self._repository.stats()
 
-        Returns:
-            Dictionary with stats
-        """
-        if not await self._afs.exists(self.reset_path):
-            return {"total": 0, "active": 0, "expired": 0, "used": 0}
 
-        total = 0
-        active = 0
-        expired = 0
-        used = 0
+def _default_repository(settings: Settings) -> PasswordResetRepository:
+    from authglow.repositories.file.password_reset import (
+        FilePasswordResetRepository,
+    )
 
-        now = utcnow()
-
-        file_list = await self._afs.ls(self.reset_path)
-        for file_path in file_list:
-            if not file_path.endswith(".json"):
-                continue
-            if "/code_" in file_path or file_path.endswith("/code_.json"):
-                continue
-
-            content = await self._afs.read_text(file_path)
-            token = PasswordResetToken.model_validate_json(content)
-
-            total += 1
-
-            if token.is_used:
-                used += 1
-            elif now > token.expires_at:
-                expired += 1
-            else:
-                active += 1
-
-        return {"total": total, "active": active, "expired": expired, "used": used}
+    return FilePasswordResetRepository(settings)

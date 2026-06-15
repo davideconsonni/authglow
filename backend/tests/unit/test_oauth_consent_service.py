@@ -188,16 +188,13 @@ class TestCleanupExpiredConsents:
                 scopes=["read"],
             )
         )
+        repo = oauth_consent_service.repository
         path = (
-            f"{oauth_consent_service.storage_path}"
-            f"/{consent.user_id}/{consent.client_id}.json"
+            f"{repo._storage_path}/{consent.user_id}/{consent.client_id}.json"
         )
         data = consent.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(days=1)).isoformat()
-        oauth_consent_service.fs.makedirs(
-            f"{oauth_consent_service.storage_path}/{consent.user_id}", exist_ok=True
-        )
-        with oauth_consent_service.fs.open(path, "w") as f:
+        with repo._filesystem.open(path, "w") as f:
             json.dump(data, f)
 
         deleted = asyncio_run(oauth_consent_service.cleanup_expired_consents())
@@ -214,17 +211,16 @@ class TestP5DeterministicConsentLookup:
                 user_id="user-p5", client_id="client-p5", scopes=["read"]
             )
         )
-        expected_path = f"{oauth_consent_service.storage_path}/user-p5/client-p5.json"
+        repo = oauth_consent_service.repository
+        expected_path = repo._path_for("user-p5", "client-p5")
         result = asyncio_run(
             oauth_consent_service.get_user_consent("user-p5", "client-p5")
         )
         assert result is not None
         assert result.user_id == "user-p5"
         assert result.client_id == "client-p5"
-        assert expected_path == oauth_consent_service._get_consent_path(
-            "user-p5", "client-p5"
-        )
-        assert oauth_consent_service.fs.exists(expected_path)
+        assert expected_path == repo._path_for("user-p5", "client-p5")
+        assert repo._filesystem.exists(expected_path)
 
     def test_get_user_consent_no_glob_on_hit(self, oauth_consent_service):
         """On a match, get_user_consent does NOT call glob."""
@@ -233,20 +229,20 @@ class TestP5DeterministicConsentLookup:
                 user_id="p5-hit", client_id="c1", scopes=["read"]
             )
         )
-        import authglow.services.oauth_consent as mod
+        import authglow.repositories.file.base as mod
         from unittest.mock import patch
 
-        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+        with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
             result = asyncio_run(oauth_consent_service.get_user_consent("p5-hit", "c1"))
             assert result is not None
             mock_glob.assert_not_called()
 
     def test_get_user_consent_no_glob_on_miss(self, oauth_consent_service):
         """On a miss, get_user_consent does NOT call glob either."""
-        import authglow.services.oauth_consent as mod
+        import authglow.repositories.file.base as mod
         from unittest.mock import patch
 
-        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+        with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
             result = asyncio_run(
                 oauth_consent_service.get_user_consent("nouser", "noclient")
             )
@@ -260,9 +256,10 @@ class TestP5DeterministicConsentLookup:
                 user_id="p5-create", client_id="c2", scopes=["read", "write"]
             )
         )
-        path = oauth_consent_service._get_consent_path("p5-create", "c2")
-        assert oauth_consent_service.fs.exists(path)
-        data = oauth_consent_service.fs.cat(path)
+        repo = oauth_consent_service.repository
+        path = repo._path_for("p5-create", "c2")
+        assert repo._filesystem.exists(path)
+        data = repo._filesystem.cat(path)
         loaded = __import__("json").loads(data)
         assert loaded["user_id"] == "p5-create"
         assert loaded["client_id"] == "c2"
@@ -291,10 +288,10 @@ class TestP5DeterministicConsentLookup:
                 user_id="p5-rev", client_id="c-rev", scopes=["read"]
             )
         )
-        import authglow.services.oauth_consent as mod
+        import authglow.repositories.file.base as mod
         from unittest.mock import patch
 
-        with patch.object(mod.AsyncFileSystem, "glob", wraps=None) as mock_glob:
+        with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
             success = asyncio_run(
                 oauth_consent_service.revoke_user_client_consent("p5-rev", "c-rev")
             )
@@ -343,15 +340,13 @@ class TestP5DeterministicConsentLookup:
                 user_id="p5-exp", client_id="c-exp", scopes=["read"]
             )
         )
-        path = oauth_consent_service._get_consent_path("p5-exp", "c-exp")
+        repo = oauth_consent_service.repository
+        path = repo._path_for("p5-exp", "c-exp")
         data = consent.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(days=1)).isoformat()
-        oauth_consent_service.fs.makedirs(
-            f"{oauth_consent_service.storage_path}/p5-exp", exist_ok=True
-        )
-        with oauth_consent_service.fs.open(path, "w") as f:
+        with repo._filesystem.open(path, "w") as f:
             json.dump(data, f)
 
         result = asyncio_run(oauth_consent_service.get_user_consent("p5-exp", "c-exp"))
         assert result is None
-        assert not oauth_consent_service.fs.exists(path)
+        assert not repo._filesystem.exists(path)

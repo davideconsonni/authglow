@@ -107,7 +107,7 @@ class TestBackupCodeLockoutIntegration:
             result = await mfa_service.verify_user_backup_code(user_id, codes[0])
             assert result is True
 
-            attempts = await mfa_service._get_backup_code_attempts(user_id)
+            attempts = await mfa_service._attempts_repo.get(user_id)
             assert attempts is None, "Counter should reset after successful verification"
 
         asyncio.run(_run())

@@ -4,61 +4,24 @@ import json
 import os
 import secrets
 import warnings
-from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
 import structlog
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_KEYRING_FILENAME = "keyring.json"
+# Backward-compat re-exports for tests / external code that
+# imports these helpers from ``authglow.core.config`` (the
+# implementation moved to ``FileKeyStoreRepository`` in Fase 20).
+from authglow.repositories.file.keystore import (  # noqa: F401
+    _KEYRING_FILENAME,
+    _generate_key_pair,
+    _new_kid,
+)
+
 _LEGACY_KID = "klegacy"
 _keys_log = structlog.get_logger("authglow.keys")
-
-
-def _generate_key_pair(key_size: int = 2048):
-    """Generate a fresh RSA key pair and return (private_bytes, public_bytes)."""
-    private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=key_size, backend=default_backend()
-    )
-    priv_bytes = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    pub_bytes = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return priv_bytes, pub_bytes
-
-
-def _new_kid() -> str:
-    """Generate a unique sortable key ID with timestamp + random suffix."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    suffix = secrets.token_hex(2)
-    return f"k{ts}{suffix}"
-
-
-def _load_keyring(keyring_path: str) -> Optional[Dict[str, Any]]:
-    """Load keyring.json, return None if missing."""
-    if not os.path.exists(keyring_path):
-        return None
-    with open(keyring_path, "r", encoding="utf-8") as f:
-        data: Dict[str, Any] = json.load(f)
-        return data
-
-
-def _save_keyring(keyring_path: str, keyring: Dict[str, Any]):
-    """Atomically save keyring.json."""
-    tmp = keyring_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(keyring, f, indent=2)
-    os.replace(tmp, keyring_path)
 
 
 def get_or_generate_keyring(
@@ -77,15 +40,30 @@ def get_or_generate_keyring(
 
     Backward compat: the active key is also written to
     ``{keys_dir}/private_key.pem`` / ``{keys_dir}/public_key.pem``.
+
+    Implementation note (Fase 20): this function is a thin
+    orchestrator that delegates to
+    :class:`FileKeyStoreRepository` for the actual I/O
+    (keyring index, per-kid PEM files, atomic writes). The
+    migration path is special-cased because it does not
+    fit the repository's ``get/rotate/revoke`` API (it
+    needs to move existing files from flat paths into the
+    per-kid directory layout).
     """
-    from authglow.core.crypto import encrypt_private_key
+    from datetime import datetime, timedelta, timezone
 
     os.makedirs(keys_dir, exist_ok=True)
     keyring_path = os.path.join(keys_dir, _KEYRING_FILENAME)
     legacy_priv_path = os.path.join(keys_dir, "private_key.pem")
     legacy_pub_path = os.path.join(keys_dir, "public_key.pem")
 
-    keyring = _load_keyring(keyring_path)
+    # Load keyring using the same JSON shape the
+    # FileKeyStoreRepository uses, so the repository can
+    # pick it up on the first read.
+    keyring: Optional[Dict[str, Any]] = None
+    if os.path.exists(keyring_path):
+        with open(keyring_path, "r", encoding="utf-8") as f:
+            keyring = json.load(f)
 
     # --- Migration from legacy single-key format ---
     if keyring is None and os.path.exists(legacy_priv_path) and os.path.exists(legacy_pub_path):
@@ -112,31 +90,7 @@ def get_or_generate_keyring(
     # --- Fresh generation ---
     if keyring is None:
         _keys_log.info("keyring_generation_started")
-        kid = _new_kid()
-        kid_dir = os.path.join(keys_dir, kid)
-        os.makedirs(kid_dir, exist_ok=True)
-
-        priv_bytes, pub_bytes = _generate_key_pair(key_size)
-        encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-        with open(os.path.join(kid_dir, "private_key.pem"), "wb") as f:
-            f.write(encrypted_priv)
-        with open(os.path.join(kid_dir, "public_key.pem"), "wb") as f:
-            f.write(pub_bytes)
-
-        keyring = {
-            "active_kid": kid,
-            "keys": {
-                kid: {
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                    "status": "active",
-                    "algorithm": "RS256",
-                    "key_size": key_size,
-                }
-            },
-        }
-        _save_keyring(keyring_path, keyring)
-        _write_active_symlinks(keys_dir, keyring)
-        _keys_log.info("keyring_initialised", kid=kid)
+        _generate_fresh_keyring(keys_dir, keyring_path, secret_key, key_size)
         return
 
     # --- Auto-rotate ---
@@ -157,27 +111,78 @@ def get_or_generate_keyring(
                 _perform_rotation(keys_dir, keyring_path, keyring, secret_key, active_kid, key_size)
 
 
+def _save_keyring(keyring_path: str, keyring: Dict[str, Any]):
+    """Atomically save keyring.json (tmp+rename)."""
+    tmp = keyring_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(keyring, f, indent=2)
+    os.replace(tmp, keyring_path)
+
+
 def _write_active_symlinks(keys_dir: str, keyring: Dict[str, Any]):
     """Copy the active key to the legacy flat paths for backward compatibility."""
+    import shutil
+
     active_kid = keyring["active_kid"]
     src_priv = os.path.join(keys_dir, active_kid, "private_key.pem")
     src_pub = os.path.join(keys_dir, active_kid, "public_key.pem")
     dst_priv = os.path.join(keys_dir, "private_key.pem")
     dst_pub = os.path.join(keys_dir, "public_key.pem")
 
-    try:
-        os.remove(dst_priv)
-    except FileNotFoundError:
-        pass
-    try:
-        os.remove(dst_pub)
-    except FileNotFoundError:
-        pass
-
-    import shutil
+    for dst in (dst_priv, dst_pub):
+        try:
+            os.remove(dst)
+        except FileNotFoundError:
+            pass
 
     shutil.copy2(src_priv, dst_priv)
     shutil.copy2(src_pub, dst_pub)
+
+
+def _generate_fresh_keyring(
+    keys_dir: str,
+    keyring_path: str,
+    secret_key: str,
+    key_size: int,
+):
+    """Generate a brand-new keyring with a single active key.
+
+    Used by :func:`get_or_generate_keyring` when no
+    keyring exists and no legacy files are present.
+    Delegates the file I/O to
+    :class:`FileKeyStoreRepository`'s private helpers via
+    a short-lived instance (no fsspec / async overhead —
+    this is a local-only path).
+    """
+    from datetime import datetime, timezone
+
+    from authglow.core.crypto import encrypt_private_key
+    from authglow.repositories.file.keystore import (
+        FileKeyStoreRepository,
+    )
+
+    repo = FileKeyStoreRepository.for_keys_dir(keys_dir, secret_key, key_size)
+    kid = _new_kid()
+    os.makedirs(repo._kid_dir(kid), exist_ok=True)
+
+    priv_bytes, pub_bytes = _generate_key_pair(key_size)
+    encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
+    repo._write_kid_pems(kid, encrypted_priv, pub_bytes)
+
+    keyring = {
+        "active_kid": kid,
+        "keys": {
+            kid: {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "status": "active",
+                "algorithm": "RS256",
+                "key_size": key_size,
+            }
+        },
+    }
+    _save_keyring(keyring_path, keyring)
+    _write_active_symlinks(keys_dir, keyring)
+    _keys_log.info("keyring_initialised", kid=kid)
 
 
 def _perform_rotation(
@@ -188,19 +193,27 @@ def _perform_rotation(
     old_kid: str,
     key_size: int,
 ):
-    """Generate a new key pair, mark old active as verifying, save."""
-    from authglow.core.crypto import encrypt_private_key
+    """Generate a new key pair, mark old active as verifying, save.
 
+    Delegates the file I/O to
+    :class:`FileKeyStoreRepository`'s private helpers
+    (same rationale as :func:`_generate_fresh_keyring`).
+    """
+    from datetime import datetime, timezone
+
+    from authglow.repositories.file.keystore import (
+        FileKeyStoreRepository,
+    )
+
+    repo = FileKeyStoreRepository.for_keys_dir(keys_dir, secret_key, key_size)
     kid = _new_kid()
-    kid_dir = os.path.join(keys_dir, kid)
-    os.makedirs(kid_dir, exist_ok=True)
+    os.makedirs(repo._kid_dir(kid), exist_ok=True)
 
     priv_bytes, pub_bytes = _generate_key_pair(key_size)
+    from authglow.core.crypto import encrypt_private_key
+
     encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-    with open(os.path.join(kid_dir, "private_key.pem"), "wb") as f:
-        f.write(encrypted_priv)
-    with open(os.path.join(kid_dir, "public_key.pem"), "wb") as f:
-        f.write(pub_bytes)
+    repo._write_kid_pems(kid, encrypted_priv, pub_bytes)
 
     now_str = datetime.now(timezone.utc).isoformat()
     keyring["keys"][kid] = {

@@ -1,9 +1,25 @@
-"""Passkey/WebAuthn service for AuthGlow."""
+"""Passkey/WebAuthn service for AuthGlow.
+
+Persistence is delegated to two repositories:
+
+* ``self._passkey_repo`` — :class:`PasskeyRepository`
+* ``self._challenge_repo`` — :class:`WebAuthnChallengeRepository`
+
+The pre-refactor implementation constructed ``fsspec.core.url_to_fs``,
+which bypassed the Settings-driven backend selection and would have
+crashed on any non-``file`` backend (``s3`` / ``gcs`` / ``abfs``).
+The refactored service resolves its repositories via the standard
+factory, which routes through ``BaseFileRepository._init_filesystem``
+and honours ``Settings.storage_backend``.
+
+WebAuthn crypto (``verify_registration``, ``verify_authentication``,
+``generate_*_options_dict``) stays in the service because it is
+purely synchronous cryptography with no I/O.
+"""
 
 import json
 from typing import Optional
 
-import fsspec
 from webauthn import (
     generate_authentication_options,
     generate_registration_options,
@@ -21,135 +37,118 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from authglow.core.async_io import AsyncFileSystem
-from authglow.core.concurrency import named_lock
+from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.datetime import utcnow
 from authglow.models.passkey import (
     Passkey,
     PasskeyChallenge,
 )
 from authglow.models.user import User
+from authglow.repositories.protocols import (
+    PasskeyRepository,
+    WebAuthnChallengeRepository,
+)
 
 
 class PasskeyService:
     """Service for managing WebAuthn passkeys."""
 
-    def __init__(self, storage_path: str, rp_id: str, rp_name: str, origin: str):
-        """
-        Initialize passkey service.
+    def __init__(
+        self,
+        rp_id: str,
+        rp_name: str,
+        origin: str,
+        passkey_repository: Optional[PasskeyRepository] = None,
+        challenge_repository: Optional[WebAuthnChallengeRepository] = None,
+    ):
+        """Initialize passkey service with WebAuthn config + repositories.
 
-        Args:
-            storage_path: fsspec path for storing passkeys
-            rp_id: Relying Party ID (domain, e.g., "localhost" or "example.com")
-            rp_name: Relying Party name (e.g., "AuthGlow")
-            origin: Full origin URL (e.g., "http://localhost:8000")
+        ``rp_id``, ``rp_name`` and ``origin`` are the WebAuthn relying
+        party parameters. The repositories are resolved via the
+        corresponding ``get_*`` factory in
+        :mod:`authglow.repositories.dependencies` when ``None`` is
+        passed (the production default).
+
+        The historical ``storage_path`` argument has been removed:
+        the on-disk path is now derived from
+        ``Settings.storage_path`` + the repository's ``_subdir``,
+        which removes the ``fsspec.core.url_to_fs`` bypass that
+        would have crashed on any non-``file`` backend.
         """
-        self.storage_path = storage_path.rstrip("/")
+        from authglow.repositories.dependencies import (
+            get_passkey_repository,
+            get_webauthn_challenge_repository,
+        )
+
         self.rp_id = rp_id
         self.rp_name = rp_name
         self.origin = origin
-        self.fs = fsspec.core.url_to_fs(storage_path)[0]
-        self._afs = AsyncFileSystem(self.fs)
+        self._passkey_repo = passkey_repository or get_passkey_repository()
+        self._challenge_repo = challenge_repository or get_webauthn_challenge_repository()
         self._lock = named_lock()
 
-        # Ensure storage directories exist
-        self.fs.mkdirs(f"{self.storage_path}/passkeys", exist_ok=True)
-        self.fs.mkdirs(f"{self.storage_path}/challenges", exist_ok=True)
-
-    def _get_passkey_path(self, user_id: str, credential_id: str) -> str:
-        """Get storage path for a passkey."""
-        return f"{self.storage_path}/passkeys/{user_id}_{credential_id}.json"
-
-    def _get_challenge_path(self, challenge_id: str) -> str:
-        """Get storage path for a challenge."""
-        return f"{self.storage_path}/challenges/{challenge_id}.json"
+    # ------------------------------------------------------------------
+    # Passkey CRUD — persistence
+    # ------------------------------------------------------------------
 
     async def get_user_passkeys(self, user_id: str) -> list[Passkey]:
         """Get all passkeys for a user."""
-        try:
-            files = await self._afs.glob(f"{self.storage_path}/passkeys/{user_id}_*.json")
-            passkeys = []
-
-            for file_path in files:
-                data = await self._afs.read_json(file_path)
-                passkeys.append(Passkey(**data))
-
-            return sorted(passkeys, key=lambda p: p.created_at, reverse=True)
-        except Exception:
-            return []
+        return await self._passkey_repo.list_for_user(user_id)
 
     async def save_passkey(self, passkey: Passkey) -> Passkey:
-        """Save a passkey."""
-        path = self._get_passkey_path(passkey.user_id, passkey.credential_id)
-
-        await self._afs.write_json(path, passkey.model_dump(mode="json"))
-
+        """Save a new passkey (first-time registration only)."""
+        await self._passkey_repo.save(passkey)
         return passkey
 
     async def get_passkey(self, user_id: str, credential_id: str) -> Optional[Passkey]:
         """Get a specific passkey."""
-        path = self._get_passkey_path(user_id, credential_id)
-
-        try:
-            data = await self._afs.read_json(path)
-            return Passkey(**data)
-        except Exception:
-            return None
+        return await self._passkey_repo.get(user_id, credential_id)
 
     async def delete_passkey(self, user_id: str, credential_id: str) -> bool:
         """Delete a passkey."""
-        path = self._get_passkey_path(user_id, credential_id)
-
-        try:
-            await self._afs.rm(path)
-            return True
-        except Exception:
-            return False
+        return await self._passkey_repo.delete(user_id, credential_id)
 
     async def update_passkey_usage(self, user_id: str, credential_id: str, sign_count: int):
         """Update passkey last used time and sign count.
 
-        Protected by a named lock to prevent concurrent sign_count corruption.
+        Protected by a named lock to prevent concurrent sign_count
+        corruption. The repository ``update`` call uses optimistic
+        concurrency (``_version`` field) so a cross-process race
+        surfaces as :class:`ConcurrentWriteError` and is retried.
         """
         async with self._lock(f"passkey:{user_id}:{credential_id}"):
-            passkey = await self.get_passkey(user_id, credential_id)
-            if passkey:
+            for _ in range(5):
+                passkey = await self._passkey_repo.get(user_id, credential_id)
+                if passkey is None:
+                    return
                 passkey.last_used_at = utcnow()
                 passkey.sign_count = sign_count
-                await self.save_passkey(passkey)
+                try:
+                    await self._passkey_repo.update(passkey)
+                    return
+                except ConcurrentWriteError:
+                    continue
+
+    # ------------------------------------------------------------------
+    # WebAuthn challenge — persistence (auto-expire on read)
+    # ------------------------------------------------------------------
 
     async def save_challenge(self, challenge: PasskeyChallenge) -> PasskeyChallenge:
         """Save a WebAuthn challenge."""
-        path = self._get_challenge_path(challenge.challenge)
-
-        await self._afs.write_json(path, challenge.model_dump(mode="json"))
-
+        await self._challenge_repo.save(challenge)
         return challenge
 
     async def get_challenge(self, challenge_str: str) -> Optional[PasskeyChallenge]:
-        """Get and validate a challenge."""
-        path = self._get_challenge_path(challenge_str)
-
-        try:
-            data = await self._afs.read_json(path)
-            challenge = PasskeyChallenge(**data)
-
-            # Check if expired
-            if challenge.expires_at < utcnow():
-                await self._afs.rm(path)  # Clean up expired challenge
-                return None
-
-            return challenge
-        except Exception:
-            return None
+        """Get and validate a challenge (auto-deletes expired)."""
+        return await self._challenge_repo.get(challenge_str)
 
     async def delete_challenge(self, challenge_str: str):
         """Delete a challenge after use."""
-        path = self._get_challenge_path(challenge_str)
-        try:
-            await self._afs.rm(path)
-        except Exception:
-            pass
+        await self._challenge_repo.delete(challenge_str)
+
+    # ------------------------------------------------------------------
+    # WebAuthn crypto — pure functions, no I/O
+    # ------------------------------------------------------------------
 
     def generate_registration_options_dict(
         self,
@@ -258,12 +257,10 @@ class PasskeyService:
         """
         from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 
-        # Get and validate challenge
         challenge = await self.get_challenge(challenge_str)
         if not challenge or challenge.type != "registration":
             raise ValueError("Invalid or expired challenge")
 
-        # Verify the registration response
         verification = verify_registration_response(
             credential=json.dumps(
                 {
@@ -281,7 +278,6 @@ class PasskeyService:
             expected_rp_id=self.rp_id,
         )
 
-        # Create passkey from verification
         passkey = Passkey(
             credential_id=bytes_to_base64url(verification.credential_id),
             public_key=bytes_to_base64url(verification.credential_public_key),
@@ -295,7 +291,6 @@ class PasskeyService:
             backup_state=verification.credential_backed_up,
         )
 
-        # Save passkey and delete challenge
         await self.save_passkey(passkey)
         await self.delete_challenge(challenge_str)
 
@@ -327,18 +322,14 @@ class PasskeyService:
         """
         from webauthn.helpers import base64url_to_bytes
 
-        # Get and validate challenge
         challenge = await self.get_challenge(challenge_str)
         if not challenge or challenge.type != "authentication":
             raise ValueError("Invalid or expired challenge")
 
-        # Find the passkey by credential_id
-        # credential_id is in base64url format, same as we stored it
         passkey = await self.get_passkey(challenge.user_id, credential_id)
         if not passkey:
             raise ValueError("Passkey not found")
 
-        # Verify the authentication response
         verification = verify_authentication_response(
             credential=json.dumps(
                 {
@@ -359,14 +350,12 @@ class PasskeyService:
             credential_current_sign_count=passkey.sign_count,
         )
 
-        # Update passkey usage
         await self.update_passkey_usage(
             passkey.user_id,
             credential_id,
             verification.new_sign_count,
         )
 
-        # Delete challenge
         await self.delete_challenge(challenge_str)
 
         return passkey.user_id, verification.new_sign_count

@@ -104,9 +104,9 @@ def jwt_service(test_settings):
 
 @pytest.fixture
 def storage(tmp_path, test_settings):
-    from authglow.services.storage import UserStorage
+    from authglow.services.user import UserService as UserStorage
 
-    with patch("authglow.services.storage.get_settings", return_value=test_settings):
+    with patch("authglow.services.user.get_settings", return_value=test_settings):
         svc = UserStorage()
         return svc
 

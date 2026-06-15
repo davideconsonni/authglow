@@ -8,7 +8,10 @@ from authglow.services.oauth2 import OAuth2Service
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.session import SessionService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 

@@ -102,7 +102,7 @@ class TestAPIKeyPrefixIndex:
             )
         )
         prefix = api_key.key_prefix
-        index_ids = _run(api_key_service._load_prefix_index(prefix))
+        index_ids = _run(api_key_service._repo.load_prefix_index(prefix))
         assert api_key.key_id in index_ids
 
     def test_validate_uses_prefix_index_only(self, api_key_service):
@@ -116,7 +116,7 @@ class TestAPIKeyPrefixIndex:
         assert validated is not None
         assert validated.key_id == api_key.key_id
         prefix = plaintext[:12]
-        index_ids = _run(api_key_service._load_prefix_index(prefix))
+        index_ids = _run(api_key_service._repo.load_prefix_index(prefix))
         assert api_key.key_id in index_ids
 
     def test_validate_invalid_prefix_returns_none_quickly(self, api_key_service):
@@ -127,7 +127,7 @@ class TestAPIKeyPrefixIndex:
             )
         )
         fake_key = "ak_nonexistent_prefix_that_is_12c"
-        index_ids = _run(api_key_service._load_prefix_index(fake_key[:12]))
+        index_ids = _run(api_key_service._repo.load_prefix_index(fake_key[:12]))
         assert index_ids == []
         validated = _run(api_key_service.validate_key(fake_key))
         assert validated is None
@@ -140,11 +140,11 @@ class TestAPIKeyPrefixIndex:
             )
         )
         prefix = api_key.key_prefix
-        assert api_key.key_id in _run(api_key_service._load_prefix_index(prefix))
+        assert api_key.key_id in _run(api_key_service._repo.load_prefix_index(prefix))
 
         deleted = _run(api_key_service.delete_key(api_key.key_id))
         assert deleted is True
-        assert _run(api_key_service._load_prefix_index(prefix)) == []
+        assert _run(api_key_service._repo.load_prefix_index(prefix)) == []
 
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is None
@@ -160,13 +160,7 @@ class TestAPIKeyPrefixIndex:
         )
         api_key.expires_at = utcnow() - timedelta(days=2)
 
-        _run(
-            api_key_service._afs.write_json(
-                f"{api_key_service.storage_path}/{api_key.key_id}.json",
-                api_key.model_dump(),
-                default=str,
-            )
-        )
+        _run(api_key_service._repo.update(api_key))
 
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is None
@@ -187,7 +181,7 @@ class TestAPIKeyPrefixIndex:
         assert api_a.key_prefix != api_b.key_prefix, (
             "Collision extremely unlikely with 12-char prefix from token_urlsafe"
         )
-        prefix_a_ids = _run(api_key_service._load_prefix_index(api_a.key_prefix))
+        prefix_a_ids = _run(api_key_service._repo.load_prefix_index(api_a.key_prefix))
         assert api_a.key_id in prefix_a_ids
         assert api_b.key_id not in prefix_a_ids
 
@@ -273,13 +267,7 @@ class TestAPIKeyBruteForceLockout:
         )
         api_key.failed_validation_attempts = 5
         api_key.locked_until = utcnow() - timedelta(minutes=1)
-        _run(
-            api_key_service._afs.write_json(
-                f"{api_key_service.storage_path}/{api_key.key_id}.json",
-                api_key.model_dump(),
-                default=str,
-            )
-        )
+        _run(api_key_service._repo.update(api_key))
         assert _run(api_key_service.is_key_locked(api_key.key_id)) is False
         key = _run(api_key_service.get_key(api_key.key_id))
         assert key.locked_until is None
@@ -371,7 +359,6 @@ class TestAPIKeyBruteForceLockout:
         assert key.failed_validation_attempts == 1
 
     def test_locked_key_auto_unlock_allows_retry(self, api_key_service):
-
         key_data = APIKeyCreate(name="Auto Retry", scopes=["read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
@@ -380,13 +367,7 @@ class TestAPIKeyBruteForceLockout:
         )
         api_key.failed_validation_attempts = 5
         api_key.locked_until = utcnow() - timedelta(minutes=1)
-        _run(
-            api_key_service._afs.write_json(
-                f"{api_key_service.storage_path}/{api_key.key_id}.json",
-                api_key.model_dump(),
-                default=str,
-            )
-        )
+        _run(api_key_service._repo.update(api_key))
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is not None
         assert validated.key_id == api_key.key_id
@@ -464,7 +445,7 @@ class TestAdminCreatesKeyForOtherUser:
 
         app.dependency_overrides[get_audit_service] = override_get_audit_service
 
-        with patch("authglow.services.storage.UserStorage.get_user_by_email") as mock_lookup:
+        with patch("authglow.services.user.UserService.get_user_by_email") as mock_lookup:
             mock_lookup.return_value = target_user
 
             client = TestClient(app)
@@ -571,7 +552,7 @@ class TestAdminCreatesKeyForOtherUser:
 
         app.dependency_overrides[get_audit_service] = override_get_audit_service
 
-        with patch("authglow.services.storage.UserStorage.get_user_by_email") as mock_lookup:
+        with patch("authglow.services.user.UserService.get_user_by_email") as mock_lookup:
             mock_lookup.return_value = None
 
             client = TestClient(app)

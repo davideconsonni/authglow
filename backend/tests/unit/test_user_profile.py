@@ -1,9 +1,9 @@
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
 from authglow.models.user import User
-from authglow.models.user_profile import UserProfileUpdate, UserPreferencesUpdate
-from authglow.services.password import hash_password, verify_password
+from authglow.models.user_profile import UserPreferencesUpdate, UserProfileUpdate
+from authglow.services.password import hash_password
 
 
 def asyncio_run(coro):
@@ -47,7 +47,7 @@ class TestUpdateUserProfile:
     def test_update_user_profile(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         update = UserProfileUpdate(first_name="Updated")
@@ -59,7 +59,7 @@ class TestChangePassword:
     def test_change_password_success(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock(
             return_value=True
         )
@@ -102,7 +102,7 @@ class TestChangePassword:
 
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
@@ -117,7 +117,7 @@ class TestChangePassword:
         """S7 regression: ip_address defaults to None when not provided."""
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
@@ -133,7 +133,7 @@ class TestChangeEmail:
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
         user_profile_service.user_storage.get_user_by_email = AsyncMock(return_value=None)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
         mock_token = MagicMock()
         mock_token.token = "verify-token-123"
         user_profile_service.email_service.create_verification_token = AsyncMock(
@@ -211,7 +211,7 @@ class TestAccountStatus:
     def test_deactivate_account(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
 
         success, msg = asyncio_run(user_profile_service.deactivate_account("profile-user-1"))
         assert success is True
@@ -227,7 +227,7 @@ class TestAccountStatus:
         user = _make_user()
         user.is_active = False
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._write_user = AsyncMock()
+        user_profile_service.user_storage._user_repo.update = AsyncMock()
 
         success, msg = asyncio_run(user_profile_service.reactivate_account("profile-user-1"))
         assert success is True

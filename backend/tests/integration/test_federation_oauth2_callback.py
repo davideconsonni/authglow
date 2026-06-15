@@ -109,7 +109,7 @@ class TestFederatedConsentSessionEndpoint:
         )
 
         with patch(
-            "authglow.api.federation.FederationStorage.get_provider",
+            "authglow.api.federation.FederationProviderService.get_provider",
             return_value=provider,
         ):
             response = _fed_app.get(

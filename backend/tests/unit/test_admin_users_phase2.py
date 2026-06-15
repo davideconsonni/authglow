@@ -1,7 +1,8 @@
 """Tests for Phase 2 admin endpoints: password management, lockout, etc."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi import Request
 
 
@@ -41,6 +42,7 @@ def _make_request():
 class TestSetPassword:
     def test_set_password_success(self):
         import asyncio
+
         from authglow.api.admin import set_user_password
         from authglow.models.admin import SetPasswordRequest
 
@@ -68,6 +70,7 @@ class TestSetPassword:
 
     def test_set_password_with_require_change(self):
         import asyncio
+
         from authglow.api.admin import set_user_password
         from authglow.models.admin import SetPasswordRequest
 
@@ -96,7 +99,9 @@ class TestSetPassword:
 
     def test_set_password_weak_password_rejected(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import set_user_password
         from authglow.models.admin import SetPasswordRequest
 
@@ -124,7 +129,9 @@ class TestSetPassword:
 
     def test_set_password_nonexistent_user(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import set_user_password
         from authglow.models.admin import SetPasswordRequest
 
@@ -150,6 +157,7 @@ class TestSetPassword:
 
     def test_set_password_logs_audit_event(self):
         import asyncio
+
         from authglow.api.admin import set_user_password
         from authglow.models.admin import SetPasswordRequest
 
@@ -182,6 +190,7 @@ class TestSendPasswordReset:
     @patch("authglow.services.email.factory.get_email_service")
     def test_send_password_reset_success(self, mock_get_email):
         import asyncio
+
         from authglow.api.admin import send_password_reset
 
         existing = _make_test_user()
@@ -207,7 +216,9 @@ class TestSendPasswordReset:
 
     def test_send_password_reset_nonexistent_user(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import send_password_reset
 
         mock_storage = AsyncMock()
@@ -230,6 +241,7 @@ class TestSendPasswordReset:
     @patch("authglow.services.email.factory.get_email_service")
     def test_send_password_reset_logs_audit(self, mock_get_email):
         import asyncio
+
         from authglow.api.admin import send_password_reset
 
         existing = _make_test_user()
@@ -258,6 +270,7 @@ class TestSendPasswordReset:
 class TestExpirePassword:
     def test_expire_password_success(self):
         import asyncio
+
         from authglow.api.admin import expire_user_password
 
         existing = _make_test_user()
@@ -282,7 +295,9 @@ class TestExpirePassword:
 
     def test_expire_password_nonexistent_user(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import expire_user_password
 
         mock_storage = AsyncMock()
@@ -304,6 +319,7 @@ class TestExpirePassword:
 
     def test_expire_password_logs_audit(self):
         import asyncio
+
         from authglow.api.admin import expire_user_password
 
         existing = _make_test_user()
@@ -330,12 +346,14 @@ class TestExpirePassword:
 class TestUnlockAccount:
     def test_unlock_success(self):
         import asyncio
+
         from authglow.api.admin import unlock_user_account
 
         existing = _make_test_user()
         existing.failed_login_attempts = 5
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
 
         existing.locked_until = utcnow() + timedelta(hours=1)
 
@@ -359,7 +377,9 @@ class TestUnlockAccount:
 
     def test_unlock_nonexistent_user(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import unlock_user_account
 
         mock_storage = AsyncMock()
@@ -381,6 +401,7 @@ class TestUnlockAccount:
 
     def test_unlock_logs_audit(self):
         import asyncio
+
         from authglow.api.admin import unlock_user_account
 
         existing = _make_test_user()
@@ -407,6 +428,7 @@ class TestUnlockAccount:
 class TestResetFailedAttempts:
     def test_reset_attempts_success(self):
         import asyncio
+
         from authglow.api.admin import reset_failed_attempts
 
         existing = _make_test_user()
@@ -431,7 +453,9 @@ class TestResetFailedAttempts:
 
     def test_reset_attempts_nonexistent_user(self):
         import asyncio
+
         from fastapi import HTTPException
+
         from authglow.api.admin import reset_failed_attempts
 
         mock_storage = AsyncMock()
@@ -453,6 +477,7 @@ class TestResetFailedAttempts:
 
     def test_reset_attempts_logs_audit(self):
         import asyncio
+
         from authglow.api.admin import reset_failed_attempts
 
         existing = _make_test_user()
@@ -480,20 +505,24 @@ class TestResetFailedAttempts:
 class TestStorageSetPassword:
     def test_set_password_updates_fields(self):
         import asyncio
-        from authglow.services.storage import UserStorage
+
+        from authglow.core.datetime import utcnow
         from authglow.services.password import hash_password
+        from authglow.services.user import UserService as UserStorage
 
         existing = _make_test_user()
         existing.hashed_password = "oldhash"
         existing.password_expired = False
         existing.password_changed_at = None
 
-        async def fake_write(user):
-            return user
+        async def fake_set_password(user_id, hashed_password, require_change):
+            existing.hashed_password = hashed_password
+            existing.password_expired = require_change
+            existing.password_changed_at = utcnow()
+            return existing
 
         storage = UserStorage()
-        storage._write_user = fake_write
-        storage.get_user = AsyncMock(return_value=existing)
+        storage._user_repo.set_password = AsyncMock(side_effect=fake_set_password)
         storage._lock = lambda x: AsyncMock().__aenter__
 
         new_hash = hash_password("NewStrongP@ss1")
@@ -508,7 +537,8 @@ class TestStorageSetPassword:
 
     def test_set_password_nonexistent_user_returns_none(self):
         import asyncio
-        from authglow.services.storage import UserStorage
+
+        from authglow.services.user import UserService as UserStorage
 
         storage = UserStorage()
         storage.get_user = AsyncMock(return_value=None)
@@ -524,20 +554,21 @@ class TestStorageSetPassword:
 class TestStorageClearFailedAttempts:
     def test_clear_failed_attempts_zeros_only_attempts(self):
         import asyncio
-        from authglow.services.storage import UserStorage
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.services.user import UserService as UserStorage
 
         existing = _make_test_user()
         existing.failed_login_attempts = 3
         existing.locked_until = utcnow() + timedelta(hours=1)
 
-        async def fake_write(user):
-            return user
+        async def fake_clear(user_id):
+            existing.failed_login_attempts = 0
+            # Do NOT clear locked_until — only attempts are zeroed
 
         storage = UserStorage()
-        storage._write_user = fake_write
-        storage.get_user = AsyncMock(return_value=existing)
+        storage._user_repo.clear_failed_login_attempts = AsyncMock(side_effect=fake_clear)
         storage._lock = lambda x: AsyncMock().__aenter__
 
         asyncio.get_event_loop().run_until_complete(
@@ -549,7 +580,8 @@ class TestStorageClearFailedAttempts:
 
     def test_clear_failed_attempts_nonexistent(self):
         import asyncio
-        from authglow.services.storage import UserStorage
+
+        from authglow.services.user import UserService as UserStorage
 
         storage = UserStorage()
         storage.get_user = AsyncMock(return_value=None)

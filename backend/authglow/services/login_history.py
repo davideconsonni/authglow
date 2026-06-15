@@ -1,19 +1,42 @@
-"""Login history service — file-based store of login attempts per user."""
+"""Login history service — file-based store of login attempts per user.
 
-import os
+Persistence is delegated to a single :class:`LoginHistoryRepository`.
+The pre-refactor service had two backend-bypass bugs:
+
+1. ``__init__`` constructed ``fsspec.filesystem("file")`` directly,
+   ignoring ``Settings.storage_backend`` (line 73 of the original).
+2. ``_cleanup_old_entries`` used ``os.remove(file_path)`` instead
+   of the fsspec filesystem's ``rm`` (line 141 of the original),
+   so cleanup would crash on any non-``file`` backend with a
+   confusing ``FileNotFoundError`` / ``OSError`` from the OS
+   unlink.
+
+Both are fixed: the service no longer touches fsspec or
+``AsyncFileSystem`` directly; cleanup is delegated to
+:meth:`LoginHistoryRepository.cleanup_old` which uses the
+backend-agnostic async fsspec ``rm``.
+"""
+
 from datetime import timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import uuid4
 
-import fsspec
-
-from authglow.core.async_io import AsyncFileSystem
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.repositories.protocols import LoginHistoryRepository
 
 
 class LoginHistoryEntry:
-    """A single login attempt record."""
+    """A single login attempt record.
+
+    Kept as a lightweight dataclass (not a Pydantic model) for
+    backward compatibility with the pre-refactor public API
+    (the admin routes in ``api/admin.py`` consume
+    ``LoginHistoryService.get_login_history`` which returns
+    ``List[dict]``). The repository stores records as plain
+    dicts (``model_dump``-equivalent), so the service is free to
+    use whatever shape it wants internally.
+    """
 
     def __init__(
         self,
@@ -67,17 +90,27 @@ class LoginHistoryService:
 
     RETENTION_DAYS = 90
 
-    def __init__(self):
+    def __init__(self, repository: Optional[LoginHistoryRepository] = None):
+        """Initialize the service with settings + repository.
+
+        ``repository`` defaults to ``None`` and is resolved lazily
+        via :func:`get_login_history_repository` (which returns a
+        :class:`FileLoginHistoryRepository`). Tests can pass a stub
+        or an in-memory implementation directly.
+
+        The factory receives the already-resolved ``self.settings``
+        so the repository's filesystem binds to the same
+        ``Settings.storage_path`` the service uses — otherwise
+        :class:`BaseFileRepository` would hit the ``lru_cache``'d
+        global ``get_settings`` singleton and bypass the per-test
+        settings patch.
+        """
+        from authglow.repositories.dependencies import (
+            get_login_history_repository,
+        )
+
         self.settings = get_settings()
-        self.storage_path = f"{self.settings.storage_path}/login_history"
-        self.fs = fsspec.filesystem("file")
-        self._afs = AsyncFileSystem(self.fs)
-
-    def _get_user_dir(self, user_id: str) -> str:
-        return f"{self.storage_path}/{user_id}"
-
-    def _get_entry_path(self, user_id: str, entry_id: str) -> str:
-        return f"{self._get_user_dir(user_id)}/{entry_id}.json"
+        self._repo = repository or get_login_history_repository(settings=self.settings)
 
     async def record_login(
         self,
@@ -88,6 +121,9 @@ class LoginHistoryService:
         user_agent: Optional[str] = None,
         failure_reason: Optional[str] = None,
     ) -> LoginHistoryEntry:
+        """Record a new login attempt and trigger the per-user
+        retention sweep (90 days, configurable via
+        :attr:`RETENTION_DAYS`)."""
         entry = LoginHistoryEntry(
             user_id=user_id,
             email=email,
@@ -96,10 +132,17 @@ class LoginHistoryService:
             user_agent=user_agent,
             failure_reason=failure_reason,
         )
-        entry_path = self._get_entry_path(user_id, entry.id)
-        os.makedirs(os.path.dirname(entry_path), exist_ok=True)
-        await self._afs.write_json(entry_path, entry.to_dict())
-        await self._cleanup_old_entries(user_id)
+        await self._repo.record(
+            user_id=entry.user_id,
+            email=entry.email,
+            success=entry.success,
+            ip_address=entry.ip_address,
+            user_agent=entry.user_agent,
+            failure_reason=entry.failure_reason,
+            entry_id=entry.id,
+            timestamp=entry.timestamp.isoformat(),
+        )
+        await self._cleanup_old_entries(entry.user_id)
         return entry
 
     async def get_login_history(
@@ -107,39 +150,15 @@ class LoginHistoryService:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[List[dict], int]:
-        entries = []
-        try:
-            pattern = f"{self._get_user_dir(user_id)}/*.json"
-            files = await self._afs.glob(pattern)
-            for file_path in sorted(files, reverse=True):
-                try:
-                    data = await self._afs.read_json(file_path)
-                    entry = LoginHistoryEntry.from_dict(data)
-                    entries.append(entry.to_dict())
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        total = len(entries)
-        page = entries[offset : offset + limit]
-        return page, total
+    ) -> Tuple[List[dict], int]:
+        """Return a paginated slice of the user's login history
+        (newest first) plus the total count."""
+        return await self._repo.list_for_user(user_id, limit=limit, offset=offset)
 
     async def _cleanup_old_entries(self, user_id: str) -> None:
-        cutoff = utcnow() - timedelta(days=self.RETENTION_DAYS)
-        try:
-            pattern = f"{self._get_user_dir(user_id)}/*.json"
-            files = await self._afs.glob(pattern)
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    from datetime import datetime as dt
-
-                    ts = dt.fromisoformat(data["timestamp"])
-                    if ts < cutoff:
-                        os.remove(file_path)
-                except Exception:
-                    continue
-        except Exception:
-            pass
+        """Sweep records older than :attr:`RETENTION_DAYS` for one
+        user. Delegates to the repository (which uses the
+        async-fsspec ``rm`` — backend-agnostic).
+        """
+        cutoff = (utcnow() - timedelta(days=self.RETENTION_DAYS)).isoformat()
+        await self._repo.cleanup_old(user_id, cutoff)

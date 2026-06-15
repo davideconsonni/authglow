@@ -220,7 +220,7 @@ class TestStorageRaceConditions:
     @pytest.mark.asyncio
     async def test_concurrent_create_users_no_email_loss(self, tmp_path, test_settings):
         """Two users created concurrently should both appear in the email index."""
-        from authglow.services.storage import UserStorage
+        from authglow.services.user import UserService as UserStorage
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -228,7 +228,7 @@ class TestStorageRaceConditions:
         os.makedirs(storage_path, exist_ok=True)
 
         settings = test_settings.model_copy(update={"storage_path": storage_path})
-        with patch("authglow.services.storage.get_settings", return_value=settings):
+        with patch("authglow.services.user.get_settings", return_value=settings):
             storage = UserStorage()
 
         users = [
@@ -253,7 +253,7 @@ class TestStorageRaceConditions:
         self, tmp_path, test_settings
     ):
         """Concurrent failed login increments should all be counted."""
-        from authglow.services.storage import UserStorage
+        from authglow.services.user import UserService as UserStorage
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -261,7 +261,7 @@ class TestStorageRaceConditions:
         os.makedirs(storage_path, exist_ok=True)
 
         settings = test_settings.model_copy(update={"storage_path": storage_path})
-        with patch("authglow.services.storage.get_settings", return_value=settings):
+        with patch("authglow.services.user.get_settings", return_value=settings):
             storage = UserStorage()
 
         user = User(

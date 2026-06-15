@@ -104,10 +104,10 @@ class TestVerifyToken:
         )
         import json
 
-        path = password_reset_service._get_token_path(token.token_lookup)
+        path = password_reset_service.repository._token_path(token.token_lookup)
         data = token.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
-        with password_reset_service.fs.open(path, "w") as f:
+        with password_reset_service.repository._filesystem.open(path, "w") as f:
             json.dump(data, f)
         found = asyncio_run(password_reset_service.verify_token(plaintext))
         assert found is None
@@ -333,8 +333,8 @@ class TestP3HmacLookup:
         token, plaintext, _ = asyncio_run(
             password_reset_service.create_reset_token(user_id="user-fn", email="fn@example.com")
         )
-        uuid_path = f"{password_reset_service.reset_path}/{token.token_id}.json"
-        lookup_path = f"{password_reset_service.reset_path}/{token.token_lookup}.json"
+        uuid_path = f"{password_reset_service.repository._storage_path}/{token.token_id}.json"
+        lookup_path = f"{password_reset_service.repository._storage_path}/{token.token_lookup}.json"
         import os
 
         assert not os.path.exists(uuid_path)
@@ -362,12 +362,12 @@ class TestP3HmacLookup:
         token, plaintext, _ = asyncio_run(
             password_reset_service.create_reset_token(user_id="user-did", email="did@example.com")
         )
-        path = password_reset_service._get_token_path(token.token_lookup)
-        with password_reset_service.fs.open(path, "r") as f:
+        path = password_reset_service.repository._token_path(token.token_lookup)
+        with password_reset_service.repository._filesystem.open(path, "r") as f:
             data = json.load(f)
         wrong_hash = _bcrypt.hashpw(b"wrong-plaintext", _bcrypt.gensalt()).decode()
         data["token_hash"] = wrong_hash
-        with password_reset_service.fs.open(path, "w") as f:
+        with password_reset_service.repository._filesystem.open(path, "w") as f:
             json.dump(data, f)
         found = asyncio_run(password_reset_service.verify_token(plaintext))
         assert found is None
@@ -518,8 +518,8 @@ class TestVapt022ResetCodeFlow:
         expired_data["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
         expired_json = json.dumps(expired_data)
         for path in (
-            password_reset_service._get_token_path(token.token_lookup),
-            password_reset_service._get_code_path(
+            password_reset_service.repository._token_path(token.token_lookup),
+            password_reset_service.repository._code_path(
                 # We re-derive the lookup key the same way the service does
                 # so the test does not depend on private internals leaking.
                 __import__("hmac")
@@ -531,7 +531,7 @@ class TestVapt022ResetCodeFlow:
                 .hexdigest()
             ),
         ):
-            with password_reset_service.fs.open(path, "w") as f:
+            with password_reset_service.repository._filesystem.open(path, "w") as f:
                 f.write(expired_json)
         found = asyncio_run(password_reset_service.verify_by_code(code))
         assert found is None
@@ -544,8 +544,8 @@ class TestVapt022ResetCodeFlow:
         )
         import json
 
-        path = password_reset_service._get_token_path(token.token_lookup)
-        with password_reset_service.fs.open(path, "r") as f:
+        path = password_reset_service.repository._token_path(token.token_lookup)
+        with password_reset_service.repository._filesystem.open(path, "r") as f:
             data = json.load(f)
         assert data["reset_code"] == code
 

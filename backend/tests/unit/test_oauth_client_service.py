@@ -243,10 +243,10 @@ class TestSecretRotation:
 
 
 class TestAsyncFileSystemMigration:
-    """P7: Verify OAuth2ClientStorage uses AsyncFileSystem instead of pathlib."""
+    """P7: Verify OAuth2ClientStorage delegates file I/O to its repository."""
 
     def test_uses_async_file_system(self, oauth_client_storage):
-        assert isinstance(oauth_client_storage._afs, AsyncFileSystem)
+        assert isinstance(oauth_client_storage.repository._afs, AsyncFileSystem)
 
     def test_no_pathlib_in_service_module(self):
         import inspect
@@ -258,14 +258,16 @@ class TestAsyncFileSystemMigration:
         assert "Path(" not in source
 
     def test_storage_path_is_fstring_not_pathlib(self, oauth_client_storage):
-        assert isinstance(oauth_client_storage.storage_path, str)
-        assert not hasattr(oauth_client_storage.storage_path, "glob")
+        assert isinstance(oauth_client_storage.repository._storage_path, str)
+        assert not hasattr(oauth_client_storage.repository._storage_path, "glob")
 
     def test_has_fsspec_filesystem(self, oauth_client_storage):
         import fsspec
 
-        assert oauth_client_storage.fs is not None
-        assert isinstance(oauth_client_storage.fs, fsspec.spec.AbstractFileSystem)
+        assert oauth_client_storage.repository._filesystem is not None
+        assert isinstance(
+            oauth_client_storage.repository._filesystem, fsspec.spec.AbstractFileSystem
+        )
 
 
 class TestCASConcurrencyProtection:
@@ -275,21 +277,19 @@ class TestCASConcurrencyProtection:
         client = _make_client()
         asyncio_run(oauth_client_storage.create_client(client, "old-secret"))
 
-        real_write = oauth_client_storage._afs.write_json_versioned
+        real_write = oauth_client_storage.repository._write_json_versioned
         call_count = [0]
 
-        async def mock_write_versioned(
-            path, data, expected_version, indent=2, default=None
-        ):
+        async def mock_write_versioned(path, data, expected_version, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise ConcurrentWriteError("version mismatch")
-            return await real_write(
-                path, data, expected_version, indent=indent, default=default
-            )
+            return await real_write(path, data, expected_version, **kwargs)
 
         with patch.object(
-            oauth_client_storage._afs, "write_json_versioned", mock_write_versioned
+            oauth_client_storage.repository,
+            "_write_json_versioned",
+            mock_write_versioned,
         ):
             new_secret = asyncio_run(
                 oauth_client_storage.rotate_secret("test-client-1")
@@ -302,11 +302,13 @@ class TestCASConcurrencyProtection:
         client = _make_client()
         asyncio_run(oauth_client_storage.create_client(client, "old-secret"))
 
-        def mock_always_fail(path, data, expected_version, indent=2, default=None):
+        async def mock_always_fail(path, data, expected_version, **kwargs):
             raise ConcurrentWriteError("version mismatch")
 
         with patch.object(
-            oauth_client_storage._afs, "write_json_versioned", mock_always_fail
+            oauth_client_storage.repository,
+            "_write_json_versioned",
+            mock_always_fail,
         ):
             with pytest.raises(ConcurrentWriteError):
                 asyncio_run(oauth_client_storage.rotate_secret("test-client-1"))
@@ -315,21 +317,17 @@ class TestCASConcurrencyProtection:
         client = _make_client()
         asyncio_run(oauth_client_storage.create_client(client, "secret"))
 
-        real_write = oauth_client_storage._afs.write_json_versioned
+        real_write = oauth_client_storage.repository._write_json_versioned
         call_count = [0]
 
-        async def mock_write_versioned(
-            path, data, expected_version, indent=2, default=None
-        ):
+        async def mock_write_versioned(path, data, expected_version, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise ConcurrentWriteError("version mismatch")
-            return await real_write(
-                path, data, expected_version, indent=indent, default=default
-            )
+            return await real_write(path, data, expected_version, **kwargs)
 
         with patch.object(
-            oauth_client_storage._afs, "write_json_versioned", mock_write_versioned
+            oauth_client_storage.repository, "_write_json_versioned", mock_write_versioned
         ):
             asyncio_run(oauth_client_storage.update_last_used("test-client-1"))
 
@@ -355,7 +353,7 @@ class TestCloudBackendCompatibility:
         with patch(
             "authglow.services.oauth_client.get_settings", return_value=s3_settings
         ):
-            with patch("authglow.services.oauth_client.fsspec.filesystem") as mock_fs:
+            with patch("authglow.repositories.file.base.fsspec.filesystem") as mock_fs:
                 with patch(
                     "authglow.services.password.get_settings", return_value=s3_settings
                 ):
@@ -379,7 +377,7 @@ class TestCloudBackendCompatibility:
         with patch(
             "authglow.services.oauth_client.get_settings", return_value=gcs_settings
         ):
-            with patch("authglow.services.oauth_client.fsspec.filesystem") as mock_fs:
+            with patch("authglow.repositories.file.base.fsspec.filesystem") as mock_fs:
                 with patch(
                     "authglow.services.password.get_settings", return_value=gcs_settings
                 ):

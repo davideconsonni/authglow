@@ -21,7 +21,10 @@ from authglow.models.user import User, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 
@@ -330,7 +333,7 @@ async def verify_mfa_login(
 
     # Blacklist the MFA session token so it cannot be replayed (VAPT-013)
     if token_data.jti:
-        from authglow.core.token_blacklist import token_blacklist as get_blacklist
+        from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
 
         await get_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
 

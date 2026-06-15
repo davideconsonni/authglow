@@ -12,7 +12,10 @@ from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.services.password import PasswordValidator, hash_password
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter(tags=["Setup"])
 setup_security = HTTPBearer(auto_error=False)

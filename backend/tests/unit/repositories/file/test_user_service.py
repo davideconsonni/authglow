@@ -1,4 +1,5 @@
 import pytest
+
 from authglow.models.user import User
 from authglow.services.password import hash_password
 
@@ -201,6 +202,7 @@ class TestAccountLockout:
 class TestTimingLeakProtection:
     def _create_user(self, storage, email):
         import asyncio
+
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -282,6 +284,7 @@ class TestUserCache:
 
     def _create_user(self, storage, email):
         import asyncio
+
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -301,12 +304,12 @@ class TestUserCache:
         )
         assert fetched_1 is not None
 
-        original_load = storage._load_email_index
+        original_lookup = storage._email_index_repo.lookup
 
-        def _load_must_not_be_called(*args, **kwargs):
-            raise AssertionError("_load_email_index() called — cache was NOT hit!")
+        def _lookup_must_not_be_called(*args, **kwargs):
+            raise AssertionError("_email_index_repo.lookup() called — cache was NOT hit!")
 
-        storage._load_email_index = _load_must_not_be_called
+        storage._email_index_repo.lookup = _lookup_must_not_be_called
         try:
             fetched_2 = asyncio.get_event_loop().run_until_complete(
                 storage.get_user_by_email("cache-hit@example.com")
@@ -314,7 +317,7 @@ class TestUserCache:
             assert fetched_2 is not None
             assert fetched_2.email == "cache-hit@example.com"
         finally:
-            storage._load_email_index = original_load
+            storage._email_index_repo.lookup = original_lookup
 
     def test_cache_invalidation_on_update(self, storage):
         import asyncio
@@ -365,9 +368,9 @@ class TestListUsersFilters:
         email_verified=True,
     ):
         import asyncio
+
         from authglow.models.user import User
         from authglow.services.password import hash_password
-        from authglow.core.datetime import utcnow
 
         user = User(
             email=email,
@@ -455,8 +458,9 @@ class TestListUsersFilters:
 
     def test_filter_by_created_after(self, storage):
         import asyncio
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
 
         old = utcnow() - timedelta(days=10)
         recent = utcnow() - timedelta(days=1)
@@ -486,8 +490,9 @@ class TestListUsersFilters:
 
     def test_filter_all_params_comprehensive(self, storage):
         import asyncio
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
 
         recent = utcnow() - timedelta(hours=1)
         self._create_user(
@@ -611,7 +616,8 @@ class TestEncryptedPIIStorage:
         user = self._make_user("index-no-pii@test.com")
         asyncio.get_event_loop().run_until_complete(storage.create_user(user))
 
-        index_data = storage.fs.cat(storage._get_email_index_path()).decode()
+        index_path = storage._email_index_repo._index_path()
+        index_data = storage.fs.cat(index_path).decode()
         assert "index-no-pii" not in index_data
 
     def test_update_user_preserves_encryption(self, storage):
@@ -649,6 +655,7 @@ class TestEncryptedPIIStorage:
 
     def test_update_email_moves_hmac_key(self, storage):
         import asyncio
+
         from authglow.core.crypto import hash_index_key
 
         user = self._make_user("old-email@test.com")
@@ -659,7 +666,7 @@ class TestEncryptedPIIStorage:
             storage.update_email(created.id, "new-email@test.com")
         )
 
-        index = asyncio.get_event_loop().run_until_complete(storage._load_email_index())
+        index = asyncio.get_event_loop().run_until_complete(storage._email_index_repo.all())
         assert old_key not in index
 
         new_key = hash_index_key("new-email@test.com")

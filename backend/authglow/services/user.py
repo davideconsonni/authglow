@@ -1,0 +1,325 @@
+"""User service — thin facade over the User domain repositories.
+
+Persistence is delegated to three dedicated repositories (Fase 17):
+
+* :class:`FileUserRepository` (Fase 17c) — user CRUD + lockout
+  + last-login + password setters + list/stats. Handles PII
+  encryption at rest.
+* :class:`FileEmailIndexRepository` (Fase 17a) — secondary
+  index mapping ``hash(email)`` to ``user_id``.
+* :class:`FileFederatedIdentityRepository` (Fase 17b) — secondary
+  index mapping ``(provider_id, external_id)`` to ``user_id``.
+
+The service is a thin facade for cross-entity operations
+(``create_user``, ``update_email``, ``delete_user``,
+``link_federated_identity``) that need a single ``named_lock``
+across multiple repositories. Single-file mutations delegate
+to the repository which is itself lock-free at the
+``BaseFileRepository`` level.
+
+The ``UserService`` class is the canonical name (Fase 18). The
+legacy ``UserStorage`` alias lives in ``services/storage.py``
+as a deprecation shim for the 100+ call sites in ``api/`` that
+still import the old name. Fase 21 will remove the alias and
+update the call sites to inject the repositories directly.
+
+All PII fields (email, name, phone, avatar_url) are encrypted
+at rest with AES-256-GCM (handled by the FileUserRepository).
+The email index uses HMAC-SHA256 keys — plaintext email is
+never stored on disk.
+"""
+
+import asyncio
+import os
+import secrets
+from datetime import datetime
+from typing import TYPE_CHECKING, List, Optional
+
+import fsspec
+
+from authglow.core.async_io import AsyncFileSystem
+from authglow.core.cache import user_cache
+from authglow.core.concurrency import named_lock
+from authglow.core.config import get_settings
+from authglow.models.user import User
+
+if TYPE_CHECKING:
+    from authglow.repositories.protocols import (
+        EmailIndexRepository,
+        FederatedIdentityRepository,
+        UserRepository,
+    )
+
+
+class UserService:
+    """Thin facade for user persistence + cross-entity coordination.
+
+    The service is a ``UserRepository`` thin wrapper for
+    in-process-safety locks (``named_lock``), the user cache,
+    and the email-index / federated-identity coordination that
+    requires a multi-step transaction.
+    """
+
+    def __init__(
+        self,
+        user_repository: Optional["UserRepository"] = None,
+        email_index_repository: Optional["EmailIndexRepository"] = None,
+        federated_identity_repository: Optional["FederatedIdentityRepository"] = None,
+    ):
+        """Initialise the service.
+
+        All three repositories are optional; when ``None`` a
+        fresh instance is created via the FastAPI factory.
+        Tests can pass a stub or an in-memory implementation
+        directly.
+        """
+        self.settings = get_settings()
+        self.storage_path = self.settings.storage_path
+        self.storage_options = self.settings.get_storage_options()
+
+        if self.settings.storage_backend == "file":
+            os.makedirs(self.storage_path, exist_ok=True)
+            self.fs = fsspec.filesystem("file")
+        else:
+            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
+
+        self._afs = AsyncFileSystem(self.fs)
+        self._lock = named_lock()
+
+        if user_repository is None:
+            from authglow.repositories.dependencies import get_user_repository
+
+            self._user_repo: "UserRepository" = get_user_repository(settings=self.settings)
+        else:
+            self._user_repo = user_repository
+
+        if email_index_repository is None:
+            from authglow.repositories.dependencies import (
+                get_email_index_repository,
+            )
+
+            self._email_index_repo: "EmailIndexRepository" = get_email_index_repository(
+                settings=self.settings
+            )
+        else:
+            self._email_index_repo = email_index_repository
+
+        if federated_identity_repository is None:
+            from authglow.repositories.dependencies import (
+                get_federated_identity_repository,
+            )
+
+            self._federated_identity_repo: "FederatedIdentityRepository" = (
+                get_federated_identity_repository(settings=self.settings)
+            )
+        else:
+            self._federated_identity_repo = federated_identity_repository
+
+    # ------------------------------------------------------------------
+    # Cross-entity / lock-coordinated public API
+    # ------------------------------------------------------------------
+
+    async def create_user(self, user: User) -> User:
+        """Create a new user (email index + user file, atomic)."""
+        async with self._lock(f"user:{user.id}"), self._lock("email_index"):
+            if await self._email_index_repo.lookup(user.email.lower()) is not None:
+                raise ValueError(f"User with email {user.email} already exists")
+            await self._user_repo.create(user)
+            await self._email_index_repo.insert(user.email.lower(), user.id)
+        return user
+
+    async def update_email(self, user_id: str, new_email: str) -> Optional[User]:
+        """Update a user's email (user file + email index, atomic)."""
+        async with self._lock(f"user:{user_id}"), self._lock("email_index"):
+            user = await self._user_repo.get_by_id(user_id)
+            if user is None:
+                return None
+
+            old_email = user.email.lower()
+            new_email_lc = new_email.lower()
+
+            if old_email == new_email_lc:
+                user.email = new_email
+                await self._user_repo.update(user)
+                return user
+
+            existing = await self._email_index_repo.lookup(new_email_lc)
+            if existing is not None and existing != user_id:
+                raise ValueError(f"User with email {new_email} already exists")
+
+            await self._email_index_repo.remove(old_email)
+            await self._email_index_repo.insert(new_email_lc, user_id)
+
+            user.email = new_email
+            user_cache.pop(old_email, None)
+            user_cache.pop(new_email_lc, None)
+            await self._user_repo.update(user)
+            return user
+
+    async def delete_user(self, user_id: str) -> bool:
+        """Delete a user (email index + user file, atomic)."""
+        async with self._lock(f"user:{user_id}"), self._lock("email_index"):
+            user = await self._user_repo.get_by_id(user_id)
+            if user is None:
+                return False
+            await self._email_index_repo.remove(user.email.lower())
+            deleted = await self._user_repo.delete(user_id)
+            if deleted:
+                user_cache.pop(user.email.lower(), None)
+            return deleted
+
+    async def get_by_external_id(self, provider_id: str, external_id: str) -> Optional[User]:
+        """Find a user by their federated identity
+        (provider_id, external_id)."""
+        user_id = await self._federated_identity_repo.lookup(provider_id, external_id)
+        if not user_id:
+            return None
+        return await self._user_repo.get_by_id(user_id)
+
+    async def link_federated_identity(
+        self, user_id: str, provider_id: str, external_id: str
+    ) -> None:
+        """Link a federated (provider_id, external_id) pair to a
+        local user."""
+        async with self._lock("federated_identities"):
+            await self._federated_identity_repo.link(user_id, provider_id, external_id)
+
+    # ------------------------------------------------------------------
+    # Public API delegating to UserRepository (lock-free or single-key lock)
+    # ------------------------------------------------------------------
+
+    async def get_user(self, user_id: str) -> Optional[User]:
+        """Get user by ID. Delegates to ``UserRepository.get_by_id``."""
+        return await self._user_repo.get_by_id(user_id)
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email (O(1) via the email index).
+
+        Includes the pre-refactor ``timing_leak_protection`` and
+        ``user_cache`` semantics — these are service-layer
+        concerns (caching + side-channel protection), not
+        storage concerns.
+        """
+        key = email.lower()
+        cached: User | None = user_cache.get(key)
+        if cached is not None:
+            return cached
+
+        user_id = await self._email_index_repo.lookup(key)
+
+        result = None
+        if user_id:
+            result = await self._user_repo.get_by_id(user_id)
+
+        if self.settings.timing_leak_protection:
+            if result is None:
+                try:
+                    # Read a non-existent padding file to match the
+                    # I/O cost of a real read.
+                    await self._afs.read_json(f"{self.storage_path}/__timing_padding.json")
+                except Exception:
+                    pass
+            jitter_ms = secrets.randbelow(50)
+            await asyncio.sleep(jitter_ms / 1000.0)
+
+        if result is not None:
+            user_cache[key] = result
+
+        return result
+
+    async def update_user(self, user: User) -> User:
+        """Update an existing user (acquires per-user lock)."""
+        async with self._lock(f"user:{user.id}"):
+            await self._user_repo.update(user)
+        user_cache.pop(user.email.lower(), None)
+        return user
+
+    async def list_users(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        mfa_enabled: Optional[bool] = None,
+        email_verified: Optional[bool] = None,
+        scopes: Optional[list[str]] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
+        last_login_after: Optional[datetime] = None,
+        last_login_before: Optional[datetime] = None,
+    ) -> tuple[List[User], int]:
+        """List users with optional server-side filtering and
+        pagination. Delegates to ``UserRepository.list``."""
+        return await self._user_repo.list(
+            limit=limit,
+            offset=offset,
+            search=search,
+            is_active=is_active,
+            mfa_enabled=mfa_enabled,
+            email_verified=email_verified,
+            scopes=scopes,
+            created_after=created_after,
+            created_before=created_before,
+            last_login_after=last_login_after,
+            last_login_before=last_login_before,
+        )
+
+    async def count_users(self) -> int:
+        """Count total number of users (uses the email index for
+        O(1) count, matching the pre-refactor behaviour)."""
+        return len(await self._email_index_repo.all())
+
+    def _get_user_path(self, user_id: str) -> str:
+        """Get the on-disk path for a user file. Retained as a
+        back-compat shim for tests that introspect storage paths
+        directly — the canonical path lives on
+        :class:`FileUserRepository` (``self._user_repo._user_path``)."""
+        return f"{self.storage_path}/{user_id}.json"
+
+    async def get_user_stats(self) -> dict:
+        """Compute aggregate user statistics (delegates to
+        ``UserRepository.get_stats``)."""
+        return await self._user_repo.get_stats()
+
+    async def update_last_login(self, user_id: str) -> None:
+        """Update user's last login timestamp and increment login counter."""
+        async with self._lock(f"user:{user_id}"):
+            await self._user_repo.update_last_login(user_id)
+
+    async def record_failed_login(
+        self,
+        user_id: str,
+        max_attempts: int = 5,
+        lockout_duration_minutes: int = 15,
+    ) -> Optional[datetime]:
+        """Record a failed login attempt and lock account if
+        threshold exceeded."""
+        async with self._lock(f"user:{user_id}"):
+            return await self._user_repo.record_failed_login(
+                user_id, max_attempts, lockout_duration_minutes
+            )
+
+    async def reset_failed_login_attempts(self, user_id: str) -> None:
+        """Reset failed login attempts and clear lockout."""
+        async with self._lock(f"user:{user_id}"):
+            await self._user_repo.reset_failed_login_attempts(user_id)
+
+    async def clear_failed_login_attempts(self, user_id: str) -> None:
+        """Zero out failed_login_attempts without clearing lockout."""
+        async with self._lock(f"user:{user_id}"):
+            await self._user_repo.clear_failed_login_attempts(user_id)
+
+    async def is_account_locked(self, user_id: str) -> bool:
+        """Check if account is currently locked."""
+        async with self._lock(f"user:{user_id}"):
+            return await self._user_repo.is_account_locked(user_id)
+
+    async def set_password(
+        self,
+        user_id: str,
+        hashed_password: str,
+        require_change: bool = False,
+    ) -> Optional[User]:
+        """Set a new password for a user."""
+        async with self._lock(f"user:{user_id}"):
+            return await self._user_repo.set_password(user_id, hashed_password, require_change)

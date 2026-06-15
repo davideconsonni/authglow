@@ -1,20 +1,37 @@
-"""Refresh token service with automatic rotation."""
+"""Refresh token service with automatic rotation.
+
+Persistence is delegated to a single :class:`RefreshTokenRepository`.
+The pre-refactor service built its own fsspec/AsyncFileSystem
+plumbing in ``__init__`` and would have crashed on any non-``file``
+backend (``s3`` / ``gcs`` / ``abfs``) with a confusing ``ValueError``
+from fsspec. The refactored service routes through the standard
+``BaseFileRepository._init_filesystem`` via the factory, which
+honours ``Settings.storage_backend``.
+
+Pure-crypto helpers (``_generate_token`` for ``secrets + bcrypt + HMAC``
+generation, ``_find_token_lookup`` for HMAC of the plaintext) stay
+in the service because they have no I/O and because the HMAC secret
+key is read from ``Settings``. The in-process ``named_lock`` wraps
+read-modify-write critical sections (rotation, revoke, family
+revocation) so concurrent updates from the same process are
+serialised; cross-process safety is delegated to the repository's
+optimistic-concurrency ``_version`` checks, which surface as
+:class:`ConcurrentWriteError` and are retried inside the lock.
+"""
 
 import hashlib
 import hmac
-import os
 import secrets
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import bcrypt
-import fsspec
 
-from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
+from authglow.repositories.protocols import RefreshTokenRepository
 
 
 class RefreshTokenService:
@@ -32,33 +49,33 @@ class RefreshTokenService:
 
     MAX_CAS_RETRIES = 3
 
-    def __init__(self):
-        """Initialize refresh token service."""
+    def __init__(self, repository: Optional[RefreshTokenRepository] = None):
+        """Initialize refresh token service with settings + repository.
+
+        ``repository`` defaults to ``None`` and is resolved lazily via
+        :func:`get_refresh_token_repository` (which returns a
+        :class:`FileRefreshTokenRepository`). Tests can pass a stub or
+        an in-memory implementation directly.
+
+        The factory receives the already-resolved ``self.settings`` so
+        the repository's filesystem binds to the same
+        ``Settings.storage_path`` the service uses — otherwise
+        :class:`BaseFileRepository` would hit the ``lru_cache``'d
+        global ``get_settings`` singleton and bypass the per-test
+        settings patch.
+        """
+        from authglow.repositories.dependencies import (
+            get_refresh_token_repository,
+        )
+
         self.settings = get_settings()
-        self.storage_path = f"{self.settings.storage_path}/refresh_tokens"
-        self.storage_options = self.settings.get_storage_options()
         self._secret_bytes = self.settings.secret_key.encode()
-
-        if self.settings.storage_backend == "file":
-            os.makedirs(self.storage_path, exist_ok=True)
-            self.fs = fsspec.filesystem("file")
-        else:
-            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
-
-        self._afs = AsyncFileSystem(self.fs)
+        self._repo = repository or get_refresh_token_repository(settings=self.settings)
         self._lock = named_lock()
 
-    def _get_token_path(self, token_lookup: str) -> str:
-        """Get path for refresh token file by its HMAC lookup key."""
-        return f"{self.storage_path}/{token_lookup}.json"
-
-    @property
-    def _active_index_path(self) -> str:
-        return f"{self.storage_path}/active_index.json"
-
-    @property
-    def _id_index_path(self) -> str:
-        return f"{self.storage_path}/id_index.json"
+    # ------------------------------------------------------------------
+    # Pure crypto helpers — no I/O
+    # ------------------------------------------------------------------
 
     def _generate_token(self) -> Tuple[str, str, str]:
         """Generate a secure refresh token.
@@ -71,68 +88,13 @@ class RefreshTokenService:
         token_lookup = hmac.new(self._secret_bytes, plaintext.encode(), hashlib.sha256).hexdigest()
         return plaintext, token_hash, token_lookup
 
-    async def _load_id_index(self) -> Dict[str, str]:
-        """Load token_id → token_lookup mapping."""
-        try:
-            data = await self._afs.read_json(self._id_index_path)
-            return dict(data)
-        except Exception:
-            return {}
-
-    async def _save_id_index(self, token_id: str, token_lookup: str) -> None:
-        """Add a token_id → token_lookup entry to the index."""
-        async with self._lock("id_index"):
-            idx = await self._load_id_index()
-            idx[token_id] = token_lookup
-            await self._afs.write_json(self._id_index_path, idx)
-
-    async def _remove_from_id_index(self, token_id: str) -> None:
-        """Remove a token_id from the id_index."""
-        async with self._lock("id_index"):
-            idx = await self._load_id_index()
-            idx.pop(token_id, None)
-            if idx:
-                await self._afs.write_json(self._id_index_path, idx)
-            else:
-                try:
-                    await self._afs.rm(self._id_index_path)
-                except Exception:
-                    pass
-
-    async def _find_token_lookup(self, plaintext_token: str) -> str:
+    def _find_token_lookup(self, plaintext_token: str) -> str:
         """Compute the HMAC lookup key for a plaintext token."""
         return hmac.new(self._secret_bytes, plaintext_token.encode(), hashlib.sha256).hexdigest()
 
-    async def _load_active_index(self) -> List[str]:
-        try:
-            data: Dict[str, Any] = await self._afs.read_json(self._active_index_path)
-            result: List[str] = data.get("token_ids", [])
-            return result
-        except Exception:
-            return []
-
-    async def _save_active_index(self, token_ids: List[str]) -> None:
-        if not token_ids:
-            try:
-                await self._afs.rm(self._active_index_path)
-            except Exception:
-                pass
-        else:
-            await self._afs.write_json(self._active_index_path, {"token_ids": token_ids})
-
-    async def _add_to_active_index(self, token_id: str) -> None:
-        async with self._lock("active_index"):
-            existing = await self._load_active_index()
-            if token_id not in existing:
-                existing.append(token_id)
-            await self._save_active_index(existing)
-
-    async def _remove_from_active_index(self, token_id: str) -> None:
-        async with self._lock("active_index"):
-            existing = await self._load_active_index()
-            if token_id in existing:
-                existing.remove(token_id)
-            await self._save_active_index(existing)
+    # ------------------------------------------------------------------
+    # CRUD + listing — persistence
+    # ------------------------------------------------------------------
 
     async def create_refresh_token(
         self,
@@ -162,66 +124,38 @@ class RefreshTokenService:
             parent_token_id=parent_token_id,
         )
 
-        token_path = self._get_token_path(refresh_token.token_lookup)
-        await self._afs.write_json(token_path, refresh_token.model_dump())
-
-        await self._save_id_index(refresh_token.token_id, refresh_token.token_lookup)
-        await self._add_to_active_index(refresh_token.token_id)
+        await self._repo.create(refresh_token)
+        await self._repo.add_to_id_index(refresh_token.token_id, refresh_token.token_lookup)
+        await self._repo.add_to_active_index(refresh_token.token_id)
 
         return refresh_token
 
     async def get_refresh_token(self, token: str) -> Optional[RefreshToken]:
-        """Get refresh token by plaintext token string using O(1) HMAC lookup.
-
-        Args:
-            token: Plaintext refresh token string
-
-        Returns:
-            RefreshToken if found and valid, None otherwise
-        """
-        token_lookup = await self._find_token_lookup(token)
-        token_path = self._get_token_path(token_lookup)
-
-        try:
-            data = await self._afs.read_json(token_path)
-            rt = RefreshToken(**data)
-        except Exception:
+        """Get refresh token by plaintext token string using O(1) HMAC lookup."""
+        token_lookup = self._find_token_lookup(token)
+        rt = await self._repo.get_by_lookup(token_lookup)
+        if rt is None:
             return None
-
         if not bcrypt.checkpw(token.encode(), rt.token_hash.encode()):
             return None
-
         rt.token = token  # restore the plaintext for callers
         return rt
 
     async def get_refresh_token_by_id(self, token_id: str) -> Optional[RefreshToken]:
-        """Get refresh token by token_id using the id_index for O(1) lookup.
+        """Get refresh token by token_id using the id_index for O(1) lookup."""
+        return await self._repo.get_by_id(token_id)
 
-        Args:
-            token_id: Token ID
-
-        Returns:
-            RefreshToken if found, None otherwise
-        """
-        idx = await self._load_id_index()
-        token_lookup = idx.get(token_id)
-        if not token_lookup:
-            return None
-
-        try:
-            token_path = self._get_token_path(token_lookup)
-            data = await self._afs.read_json(token_path)
-            return RefreshToken(**data)
-        except Exception:
-            return None
+    # ------------------------------------------------------------------
+    # Rotation — guarded by named_lock + CAS retry
+    # ------------------------------------------------------------------
 
     async def validate_and_rotate(
         self, token: str, client_id: str, ip_address: Optional[str] = None
     ) -> Tuple[Optional[RefreshToken], Optional[str]]:
         """Validate a refresh token and automatically rotate it.
 
-        Protected by a named lock on the token_lookup to prevent concurrent
-        rotations, and by optimistic-concurrency versioning.
+        Protected by a named lock on the token_lookup to prevent
+        concurrent rotations, and by optimistic-concurrency versioning.
 
         Returns:
             Tuple of (new_refresh_token, error_message)
@@ -245,7 +179,7 @@ class RefreshTokenService:
             return None, "Token reuse detected - all tokens in family revoked"
 
         async with self._lock(f"refresh_token:{rt.token_lookup}"):
-            for attempt in range(self.MAX_CAS_RETRIES):
+            for _ in range(self.MAX_CAS_RETRIES):
                 rt = await self.get_refresh_token_by_id(rt.token_id)
                 if rt is None:
                     return None, "Invalid refresh token"
@@ -270,19 +204,19 @@ class RefreshTokenService:
 
                 rt.replaced_by = new_token.token_id
 
-                token_path = self._get_token_path(rt.token_lookup)
                 try:
-                    token_data = rt.model_dump()
-                    data, version = await self._afs.read_json_versioned(token_path)
-                    await self._afs.write_json_versioned(token_path, token_data, version)
+                    await self._repo.update(rt)
                 except ConcurrentWriteError:
                     continue
 
-                await self._remove_from_active_index(rt.token_id)
-
+                await self._repo.remove_from_active_index(rt.token_id)
                 return new_token, None
 
             return None, "Concurrent modification - please retry"
+
+    # ------------------------------------------------------------------
+    # Revocation — guarded by named_lock
+    # ------------------------------------------------------------------
 
     async def revoke_token(self, token: str, reason: Optional[str] = None) -> bool:
         """Revoke a specific refresh token."""
@@ -295,10 +229,9 @@ class RefreshTokenService:
             rt.revoked_at = utcnow()
             rt.revoked_reason = reason
 
-            token_path = self._get_token_path(rt.token_lookup)
             try:
-                await self._afs.write_json(token_path, rt.model_dump())
-                await self._remove_from_active_index(rt.token_id)
+                await self._repo.update(rt)
+                await self._repo.remove_from_active_index(rt.token_id)
                 return True
             except Exception:
                 return False
@@ -319,16 +252,19 @@ class RefreshTokenService:
             rt.revoked_at = utcnow()
             rt.revoked_reason = reason
 
-            token_path = self._get_token_path(rt.token_lookup)
             try:
-                await self._afs.write_json(token_path, rt.model_dump())
-                await self._remove_from_active_index(rt.token_id)
+                await self._repo.update(rt)
+                await self._repo.remove_from_active_index(rt.token_id)
                 return True
             except Exception:
                 return False
 
     async def _revoke_token_family(self, token: RefreshToken) -> int:
-        """Revoke all tokens in a family (security measure)."""
+        """Revoke all tokens in a family (security measure).
+
+        Walks the parent chain to the root, then recursively
+        revokes every descendant via ``_revoke_descendants``.
+        """
         current = token
         while current.parent_token_id:
             parent = await self.get_refresh_token_by_id(current.parent_token_id)
@@ -353,9 +289,8 @@ class RefreshTokenService:
                 rt_recheck.revoked_at = utcnow()
                 rt_recheck.revoked_reason = "Token family revoked due to security violation"
 
-                token_path = self._get_token_path(rt_recheck.token_lookup)
-                await self._afs.write_json(token_path, rt_recheck.model_dump())
-                await self._remove_from_active_index(token_id)
+                await self._repo.update(rt_recheck)
+                await self._repo.remove_from_active_index(token_id)
                 revoked_count += 1
 
                 if rt_recheck.replaced_by:
@@ -365,41 +300,11 @@ class RefreshTokenService:
 
     async def revoke_user_tokens(self, user_id: str, client_id: Optional[str] = None) -> int:
         """Revoke all refresh tokens for a user."""
-        revoked_count = 0
-        try:
-            pattern = f"{self.storage_path}/*.json"
-            files = await self._afs.glob(pattern)
+        return await self._repo.revoke_user_tokens(user_id=user_id, client_id=client_id)
 
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    rt = RefreshToken(**data)
-
-                    if rt.user_id != user_id:
-                        continue
-                    if client_id and rt.client_id != client_id:
-                        continue
-                    if rt.revoked:
-                        continue
-
-                    async with self._lock(f"refresh_token:{rt.token_lookup}"):
-                        rt_locked = await self.get_refresh_token_by_id(rt.token_id)
-                        if rt_locked and not rt_locked.revoked:
-                            rt_locked.revoked = True
-                            rt_locked.revoked_at = utcnow()
-                            rt_locked.revoked_reason = "Revoked by user or admin"
-
-                            await self._afs.write_json(file_path, rt_locked.model_dump())
-                            await self._remove_from_active_index(rt_locked.token_id)
-                            revoked_count += 1
-
-                except Exception:
-                    continue
-
-        except Exception:
-            pass
-
-        return revoked_count
+    # ------------------------------------------------------------------
+    # Listing + cleanup
+    # ------------------------------------------------------------------
 
     async def list_all_tokens(
         self,
@@ -409,74 +314,10 @@ class RefreshTokenService:
         user_id: Optional[str] = None,
     ) -> Tuple[List[RefreshToken], int]:
         """List tokens with optional active-only filter and pagination."""
-        tokens: List[RefreshToken] = []
-        try:
-            if active_only:
-                active_ids = await self._load_active_index()
-                idx = await self._load_id_index()
-
-                for tid in active_ids:
-                    try:
-                        lookup = idx.get(tid)
-                        if not lookup:
-                            continue
-                        data = await self._afs.read_json(self._get_token_path(lookup))
-                        rt = RefreshToken(**data)
-
-                        if rt.revoked or utcnow() > rt.expires_at:
-                            continue
-                        if user_id and rt.user_id != user_id:
-                            continue
-
-                        tokens.append(rt)
-                    except Exception:
-                        continue
-            else:
-                pattern = f"{self.storage_path}/*.json"
-                files = await self._afs.glob(pattern)
-
-                for file_path in files:
-                    try:
-                        data = await self._afs.read_json(file_path)
-                        rt = RefreshToken(**data)
-
-                        if user_id and rt.user_id != user_id:
-                            continue
-
-                        tokens.append(rt)
-                    except Exception:
-                        continue
-
-            tokens.sort(key=lambda t: t.created_at, reverse=True)
-            total = len(tokens)
-            page = tokens[offset : offset + limit]
-            return page, total
-
-        except Exception:
-            return [], 0
+        return await self._repo.list_all(
+            limit=limit, offset=offset, user_id=user_id, active_only=active_only
+        )
 
     async def cleanup_expired_tokens(self) -> int:
         """Delete all expired refresh tokens."""
-        deleted = 0
-        try:
-            pattern = f"{self.storage_path}/*.json"
-            files = await self._afs.glob(pattern)
-
-            for file_path in files:
-                try:
-                    data = await self._afs.read_json(file_path)
-                    rt = RefreshToken(**data)
-
-                    if utcnow() > rt.expires_at:
-                        await self._afs.rm(file_path)
-                        await self._remove_from_id_index(rt.token_id)
-                        await self._remove_from_active_index(rt.token_id)
-                        deleted += 1
-
-                except Exception:
-                    continue
-
-        except Exception:
-            pass
-
-        return deleted
+        return await self._repo.cleanup_expired()

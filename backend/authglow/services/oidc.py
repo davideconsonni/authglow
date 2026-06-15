@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from authglow.models.oidc import SCOPE_TO_CLAIMS, UserInfoResponse
 from authglow.models.user import User
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService as UserStorage
 
 
 class OIDCService:

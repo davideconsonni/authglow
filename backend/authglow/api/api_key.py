@@ -15,7 +15,10 @@ from authglow.models.api_key import (
 from authglow.models.user import User
 from authglow.services.api_key import APIKeyService
 from authglow.services.audit import AuditService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 

@@ -20,7 +20,10 @@ from authglow.services.email import EmailService
 from authglow.services.email.factory import get_email_service
 from authglow.services.password import PasswordValidator, hash_password, verify_password
 from authglow.services.password_reset import PasswordResetService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 
@@ -224,7 +227,7 @@ async def change_password(
     sessions (access token JTI blacklist + all refresh tokens) so an
     attacker with a stolen token cannot retain access.
     """
-    from authglow.core.token_blacklist import token_blacklist as get_blacklist
+    from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
     from authglow.services.jwt import JWTService
 
     settings = get_settings()

@@ -8,13 +8,16 @@ from fastapi.responses import JSONResponse
 from authglow.api.auth import _extract_basic_auth, get_current_user
 from authglow.core.datetime import utcnow
 from authglow.core.rate_limit import limiter
-from authglow.core.token_blacklist import token_blacklist
 from authglow.models.user import User
 from authglow.services.audit import AuditService
+from authglow.services.auth.token_blacklist import token_blacklist
 from authglow.services.jwt import JWTService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.refresh_token import RefreshTokenService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter()
 

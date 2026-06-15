@@ -17,7 +17,10 @@ from authglow.models.rbac import (
     UserRoleResponse,
 )
 from authglow.services.rbac import RBACService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService
+
+# Back-compat alias for Fase 21 transition window
+UserStorage = UserService
 
 router = APIRouter(prefix="/api/rbac", tags=["RBAC"])
 

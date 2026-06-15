@@ -117,10 +117,10 @@ class TestMFAExpiry:
                 scope="read",
             )
         )
-        path = f"{session_service.storage_path}/{session.token_lookup}.json"
+        path = f"{session_service.repository._storage_path}/{session.token_lookup}.json"
         data = session.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
-        with session_service.fs.open(path, "w") as f:
+        with session_service.repository._filesystem.open(path, "w") as f:
             json.dump(data, f)
 
         result = asyncio_run(session_service.get_mfa_session(session.session_token))
@@ -228,9 +228,11 @@ class TestConsentSessionExpiry:
             )
         )
         token = result["session_token"]
-        path = f"{session_service.storage_path}/consent_{result['token_lookup']}.json"
+        path = (
+            f"{session_service.repository._storage_path}/consent_{result['token_lookup']}.json"
+        )
         result["expires_at"] = (utcnow() - timedelta(minutes=1)).isoformat()
-        with session_service.fs.open(path, "w") as f:
+        with session_service.repository._filesystem.open(path, "w") as f:
             json.dump(result, f)
 
         retrieved = asyncio_run(session_service.get_consent_session(token))

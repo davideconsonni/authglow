@@ -278,11 +278,25 @@ backend/
     core/         # Config, crypto, cache, rate_limit, datetime, password
     middleware/   # Security headers, request size, HTTPS enforcement
     models/       # Pydantic data models
-    services/     # Business logic (jwt, mfa, oauth2, api_key, audit)
+    services/     # Business logic (thin facade over repositories)
+    repositories/ # ⭐ NEW: Repository pattern abstraction
+      protocols.py        # 22 Protocol contracts (runtime_checkable)
+      exceptions.py       # EntityNotFoundError, EntityAlreadyExistsError
+      dependencies.py     # FastAPI factory functions (one per entity)
+      file/              # File-based impls (current backend)
+        base.py           # BaseFileRepository (fsspec + AsyncFileSystem)
+        <entity>.py       # 1 per entity (token_blacklist, csrf, user, ...)
+    api/          # FastAPI routers
   tests/
-    unit/         # Isolated per-module tests
+    unit/
+      repositories/
+        test_protocols.py   # ⭐ 39 conformance tests (parametrized)
+        test_in_memory.py    # ⭐ 7 in-memory smoke tests
+        file/                # Per-impl File tests
+          test_<entity>.py   # 1 per entity (15 entities)
+      test_<service>.py
     integration/  # Cross-module tests
-    conftest.py   # Shared fixtures
+    conftest.py   # Shared fixtures (incl. _override_settings autouse)
 
 frontend/src/
   lib/            # api.ts, utils.ts, constants.ts
@@ -295,6 +309,102 @@ frontend/src/
   pages/          # Route components
   styles/         # globals.css with Tailwind + design tokens
 ```
+
+### Repository Pattern (post-Fase 21)
+
+The `authglow/repositories/` layer was introduced in **Fase 0**
+and completed in **Fase 21** (see `docs/REFACTOR_REPOSITORY_PLAN.md`
+for the full 21-phase migration history).
+
+**Key principles**:
+
+- **Services depend on Protocols, not impls.** Every service
+  constructor takes optional `repository` arguments and falls
+  back to a FastAPI factory via
+  `repositories.dependencies.get_<entity>_repository()`.
+- **Cross-entity atomicity lives in services**, not repos.
+  The `UserService` facade holds the `named_lock` for
+  `create_user` / `update_email` / `delete_user` (which
+  span User + EmailIndex + FederatedIdentity).
+- **Add a new backend (e.g. Postgres) in 3 steps**: (1)
+  `pip install <dep>`, (2)
+  `repositories/<backend>/<entity>.py` with
+  `<Backend><Entity>Repository(<Protocol>)`, (3) update the
+  factory in `repositories/dependencies.py`. **Zero
+  changes** to `services/` or `api/`.
+- **The conformance test
+  `tests/unit/repositories/test_protocols.py`** parametrizes
+  every Protocol × every impl, so adding a new backend
+  means adding 1 line to `_IMPL_TABLE` — the conformance
+  test then validates the new impl automatically.
+- **The in-memory smoke test
+  `tests/unit/repositories/test_in_memory.py`** proves the
+  service↔repo protocol boundary works with any impl that
+  satisfies the Protocol contracts (the `UserService`
+  facade is exercised end-to-end with `InMemoryUserRepository`
+  + `InMemoryEmailIndexRepository` +
+  `InMemoryFederatedIdentityRepository`).
+
+**Repository impl hierarchy**:
+
+```
+BaseFileRepository  (authglow/repositories/file/base.py)
+  ├── shared fsspec + AsyncFileSystem handling
+  ├── atomic write helpers (_write_json_atomic, _read_json, _glob, _delete)
+  ├── path helpers (_path, _ensure_parent)
+  └── lru_cache bypass via settings= kwarg on ctor
+
+File<Entity>Repository(BaseFileRepository, <Entity>Repository)
+  ├── Pydantic round-trip (model_dump / model_validate)
+  ├── backend-specific concerns (PII encryption, HMAC keys, CAS)
+  └── public surface = Protocol methods
+
+KeyStoreRepository  (authglow/repositories/file/keystore.py) — special
+  ├── NOT a BaseFileRepository subclass (multi-file layout)
+  ├── tmp+rename atomic write inline
+  └── for_keys_dir() classmethod for lru_cache bypass at startup
+```
+
+**Service implementation hierarchy**:
+
+```
+Service.__init__(repository=None, ...)
+  ├── if repository is None: factory = get_<entity>_repository(settings=self.settings)
+  ├── else: use the injected repository directly
+  └── the factory is the single point that picks the File impl today
+       (tomorrow, a SQL impl could be selected by Settings.backend)
+
+Service.create_user(user) [UserService cross-entity example]
+  ├── async with self._lock(f"user:{user.id}"), self._lock("email_index")
+  ├── await self._email_index_repo.lookup(...)  # duplicate check
+  ├── await self._user_repo.create(user)        # single-entity mutation
+  └── await self._email_index_repo.insert(...)  # secondary index
+```
+
+**Lru_cache bypass pattern** (CRITICAL for test isolation):
+
+`BaseFileRepository.__init__` calls
+`authglow.repositories.file.base.get_settings()` (NOT
+`authglow.core.config.get_settings`). The autouse
+`_override_settings` fixture patches
+`authglow.core.config.get_settings` only, so the File
+repos would hit the singleton `lru_cache` and always read
+the FIRST test's `Settings` instance.
+
+**Fix**: every factory in `repositories/dependencies.py`
+accepts `settings: Settings | None = None`, and the
+service passes `self.settings` (the patched, per-function
+value) explicitly. Without this fix, `_storage_path` is
+shared across tests → `TestAccountLockout` etc. fail with
+"User with email <x> already exists" on the 2nd test
+of the class.
+
+For the keyring (Fase 20), the
+`FileKeyStoreRepository.__init__` takes `settings=` for the
+same reason. The `for_keys_dir()` classmethod additionally
+takes a `keys_dir` + `secret_key` for the startup path in
+`core/config.py: get_or_generate_keyring` (which runs BEFORE
+the lru_cache is bypassed).
 
 ## Secret Management
 

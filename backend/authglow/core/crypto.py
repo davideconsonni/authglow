@@ -130,3 +130,21 @@ def hash_index_key(email_lower: str) -> str:
     """
     secret = _resolve_secret_key().encode()
     return hmac.new(secret, email_lower.encode(), hashlib.sha256).hexdigest()
+
+
+def reset_code_lookup_key(secret_key: str, code: str) -> str:
+    """Compute the HMAC-SHA256 lookup key for a password-reset code.
+
+    VAPT-022: the same ``PasswordResetToken`` record is indexed by
+    both ``token_lookup`` (HMAC of the bearer token) and the
+    ``code_lookup`` (HMAC of the human-friendly reset code). The
+    code is normalised to upper-case and stripped of whitespace so
+    user input variants (``abcd-efgh-jklm``) match the stored
+    value.
+
+    Exposed as a free function (taking ``secret_key`` explicitly)
+    so the ``FilePasswordResetRepository`` can call it from its
+    dual-mirror write without importing from the service layer.
+    """
+    normalised = code.strip().upper().replace(" ", "").replace("\t", "")
+    return hmac.new(secret_key.encode(), normalised.encode(), hashlib.sha256).hexdigest()

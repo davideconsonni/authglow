@@ -151,7 +151,7 @@ class TestRefreshTokenHashedStorage:
                 scopes=["read"],
             )
         )
-        path = refresh_token_service._get_token_path(rt.token_lookup)
+        path = refresh_token_service._repo._path_for_lookup(rt.token_lookup)
         raw = open(path, "r").read()
 
         assert rt.token not in raw
@@ -188,12 +188,12 @@ class TestRefreshTokenHashedStorage:
                 scopes=["read"],
             )
         )
-        original_glob = refresh_token_service._afs.glob
+        original_glob = refresh_token_service._repo._glob
 
         def _glob_must_not_be_called(*args, **kwargs):
             raise AssertionError("glob() was called — should use O(1) HMAC lookup!")
 
-        refresh_token_service._afs.glob = _glob_must_not_be_called
+        refresh_token_service._repo._glob = _glob_must_not_be_called
         try:
             fetched = asyncio.get_event_loop().run_until_complete(
                 refresh_token_service.get_refresh_token(rt.token)  # type: ignore[arg-type]
@@ -201,7 +201,7 @@ class TestRefreshTokenHashedStorage:
             assert fetched is not None
             assert fetched.token_id == rt.token_id
         finally:
-            refresh_token_service._afs.glob = original_glob
+            refresh_token_service._repo._glob = original_glob
 
     def test_unknown_token_returns_none(self, refresh_token_service):
         fake_token = secrets.token_urlsafe(32)
@@ -265,8 +265,8 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-        assert os.path.exists(refresh_token_service._active_index_path)
-        with open(refresh_token_service._active_index_path, "r") as f:
+        assert os.path.exists(refresh_token_service._repo._active_index_path)
+        with open(refresh_token_service._repo._active_index_path, "r") as f:
             idx = json.load(f)
         assert rt.token_id in idx["token_ids"]
 
@@ -283,7 +283,7 @@ class TestRefreshTokenActiveIndex:
             refresh_token_service.revoke_token(rt.token, reason="test revoke")  # type: ignore[arg-type]
         )
         active_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_active_index()
+            refresh_token_service._repo.load_active_index()
         )
         assert rt.token_id not in active_ids
 
@@ -306,7 +306,7 @@ class TestRefreshTokenActiveIndex:
         assert error is None
 
         active_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_active_index()
+            refresh_token_service._repo.load_active_index()
         )
         assert rt.token_id not in active_ids
         assert new_rt.token_id in active_ids
@@ -322,7 +322,7 @@ class TestRefreshTokenActiveIndex:
         )
         asyncio.get_event_loop().run_until_complete(refresh_token_service.cleanup_expired_tokens())
         active_ids = asyncio.get_event_loop().run_until_complete(
-            refresh_token_service._load_active_index()
+            refresh_token_service._repo.load_active_index()
         )
         assert rt.token_id not in active_ids
 
@@ -335,12 +335,12 @@ class TestRefreshTokenActiveIndex:
                 expires_in_days=30,
             )
         )
-        original_glob = refresh_token_service._afs.glob
+        original_glob = refresh_token_service._repo._glob
 
         def _glob_must_not_be_called(*args, **kwargs):
             raise AssertionError("glob() was called — active index NOT used!")
 
-        refresh_token_service._afs.glob = _glob_must_not_be_called
+        refresh_token_service._repo._glob = _glob_must_not_be_called
         try:
             tokens, total = asyncio.get_event_loop().run_until_complete(
                 refresh_token_service.list_all_tokens(active_only=True)
@@ -348,7 +348,7 @@ class TestRefreshTokenActiveIndex:
             assert total == 1
             assert tokens[0].token_id == rt.token_id
         finally:
-            refresh_token_service._afs.glob = original_glob
+            refresh_token_service._repo._glob = original_glob
 
     def test_list_all_tokens_active_only_excludes_revoked(self, refresh_token_service):
         rt_active = asyncio.get_event_loop().run_until_complete(

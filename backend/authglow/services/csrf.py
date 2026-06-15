@@ -1,21 +1,30 @@
 """CSRF protection service.
 
-File-based CSRF token store with 30-minute expiry.
-Tokens are stored with HMAC-SHA256 filenames and SHA-256 token hashes
-— the plaintext token is never persisted.
+CSRF tokens are persisted via the ``CSRFTokenRepository`` Protocol.
+The service owns:
+
+* the cryptographic helpers (``_new_session_id``, ``_new_token``,
+  ``_compute_lookup``, ``_hash_token``) — pure functions, no I/O;
+* the in-process throttling of the periodic expired-token sweep;
+* the public ``generate_token`` / ``validate_token`` API that route
+  handlers depend on.
+
+The repository is responsible for the file layout, JSON serialisation,
+and bulk-cleanup glob logic. A default ``FileCSRFTokenRepository`` is
+constructed when no repository is injected — FastAPI's
+``Depends(get_csrf_service)`` factory uses the default. Tests can
+inject a custom repository (e.g. an in-memory mock) by passing
+``repository=...`` to the service constructor.
 """
 
 import hashlib
 import hmac
-import os
 import secrets
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-import fsspec
-
-from authglow.core.async_io import AsyncFileSystem
-from authglow.core.config import get_settings
+from authglow.core.config import Settings, get_settings
+from authglow.repositories.protocols import CSRFTokenRepository
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -27,27 +36,24 @@ _LAST_CLEANUP = 0.0
 
 
 class CSRFTokenService:
-    """File-based CSRF token service.
+    """CSRF token service backed by an injected repository."""
 
-    Each browser session (identified by a ``csrf_session_id`` cookie)
-    has at most one active CSRF token. The file is stored at
-    ``HMAC(secret_key, session_id).json`` — directory listing cannot
-    enumerate session IDs. The token is stored as a SHA-256 hash.
-    """
+    def __init__(
+        self,
+        repository: Optional[CSRFTokenRepository] = None,
+        *,
+        settings: Optional[Settings] = None,
+    ) -> None:
+        self._settings: Settings = settings or get_settings()
+        self._repository: CSRFTokenRepository = (
+            repository if repository is not None else _default_repository(self._settings)
+        )
+        self._secret_bytes = self._settings.secret_key.encode()
 
-    def __init__(self):
-        self.settings = get_settings()
-        self.storage_path = f"{self.settings.storage_path}/csrf_tokens"
-        self.storage_options = self.settings.get_storage_options()
-        self._secret_bytes = self.settings.secret_key.encode()
-
-        if self.settings.storage_backend == "file":
-            os.makedirs(self.storage_path, exist_ok=True)
-            self.fs = fsspec.filesystem("file")
-        else:
-            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
-
-        self._afs = AsyncFileSystem(self.fs)
+    @property
+    def repository(self) -> CSRFTokenRepository:
+        """The underlying repository (exposed for tests / admin tools)."""
+        return self._repository
 
     @staticmethod
     def _new_session_id() -> str:
@@ -67,22 +73,19 @@ class CSRFTokenService:
         return hashlib.sha256(token.encode()).hexdigest()
 
     async def _cleanup_expired(self) -> None:
-        """Delete expired token files. Throttled to every CLEANUP_INTERVAL seconds."""
+        """Throttled wrapper around ``repository.cleanup_expired()``.
+
+        The throttling is in-process state (a module-level timestamp)
+        so the service keeps ownership of the policy; the repository
+        does the actual I/O.
+        """
         global _LAST_CLEANUP
         now = time.time()
         if now - _LAST_CLEANUP < CLEANUP_INTERVAL:
             return
         _LAST_CLEANUP = now
-
         try:
-            paths = await self._afs.glob(f"{self.storage_path}/*.json")
-            for path in paths:
-                try:
-                    data = await self._afs.read_json(path)
-                    if now > data.get("expires_at", 0):
-                        await self._afs.rm(path)
-                except Exception:
-                    pass
+            await self._repository.cleanup_expired()
         except Exception:
             pass
 
@@ -95,17 +98,15 @@ class CSRFTokenService:
 
         token = self._new_token()
         token_hash = self._hash_token(token)
-        expires_at = time.time() + TOKEN_EXPIRY_SECONDS
+        now = time.time()
+        expires_at = now + TOKEN_EXPIRY_SECONDS
         lookup = self._compute_lookup(session_id)
 
-        path = f"{self.storage_path}/{lookup}.json"
-        await self._afs.write_json(
-            path,
-            {
-                "token_hash": token_hash,
-                "expires_at": expires_at,
-                "created_at": time.time(),
-            },
+        await self._repository.save(
+            session_lookup=lookup,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            created_at=now,
         )
 
         return token
@@ -114,21 +115,19 @@ class CSRFTokenService:
         """Validate a submitted CSRF token against the stored hash.
 
         Returns True if valid, False otherwise.
-        On successful validation the stored file is deleted to prevent reuse.
+        On successful validation the stored entry is deleted to prevent
+        reuse.
         """
         await self._cleanup_expired()
 
         lookup = self._compute_lookup(session_id)
-        path = f"{self.storage_path}/{lookup}.json"
-
-        try:
-            data = await self._afs.read_json(path)
-        except Exception:
+        data = await self._repository.get(lookup)
+        if data is None:
             return False
 
-        if time.time() > data.get("expires_at", 0):
+        if time.time() > float(data.get("expires_at", 0)):
             try:
-                await self._afs.rm(path)
+                await self._repository.delete(lookup)
             except Exception:
                 pass
             return False
@@ -142,8 +141,14 @@ class CSRFTokenService:
         return True
 
 
+def _default_repository(settings: Settings) -> CSRFTokenRepository:
+    from authglow.repositories.file.csrf import FileCSRFTokenRepository
+
+    return FileCSRFTokenRepository(settings)
+
+
 def get_csrf_service() -> CSRFTokenService:
-    """Dependency factory for CSRFTokenService."""
+    """FastAPI dependency factory for CSRFTokenService."""
     return CSRFTokenService()
 
 

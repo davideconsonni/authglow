@@ -1,11 +1,21 @@
-"""User profile and account management service."""
+"""User profile and account management service.
 
-import os
-from typing import Optional
+The ``UserProfileService`` coordinates the user profile
+aggregate (User + Preferences) and account-lifecycle operations
+(change password, change email, deactivate, reactivate,
+delete). The User CRUD is delegated to ``UserStorage``
+(deprecated alias for ``UserService``, see
+``services/user.py``); the per-user ``UserPreferences`` I/O is
+delegated to :class:`FileUserPreferencesRepository` (Fase 19).
 
-import fsspec
+The service keeps the in-process ``named_lock`` for
+cross-entity atomicity (e.g. ``change_email`` coordinates
+``user_storage.update_user`` + email index update; ``delete_account``
+coordinates preferences + user deletion).
+"""
 
-from authglow.core.async_io import AsyncFileSystem
+from typing import TYPE_CHECKING, Optional
+
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
@@ -18,30 +28,43 @@ from authglow.models.user_profile import (
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.password import hash_password, verify_password
 from authglow.services.security_notifications import SecurityNotificationService
-from authglow.services.storage import UserStorage
+from authglow.services.user import UserService as UserStorage
+
+if TYPE_CHECKING:
+    from authglow.repositories.protocols import UserPreferencesRepository
 
 
 class UserProfileService:
     """Service for managing user profiles and accounts."""
 
-    def __init__(self):
-        """Initialize user profile service."""
+    def __init__(
+        self,
+        user_preferences_repository: Optional["UserPreferencesRepository"] = None,
+    ):
+        """Initialise the service.
+
+        ``user_preferences_repository`` is optional; when
+        ``None`` a fresh
+        :class:`FileUserPreferencesRepository` is created via
+        the FastAPI factory. Tests can pass a stub or an
+        in-memory implementation directly.
+        """
         self.settings = get_settings()
-        self.preferences_path = f"{self.settings.storage_path}/user_preferences"
-        self.storage_options = self.settings.get_storage_options()
         self.user_storage = UserStorage()
         self.email_service = EmailVerificationService()
         self.security_service = SecurityNotificationService()
-
-        # Initialize filesystem
-        if self.settings.storage_backend == "file":
-            os.makedirs(self.preferences_path, exist_ok=True)
-            self.fs = fsspec.filesystem("file")
-        else:
-            self.fs = fsspec.filesystem(self.settings.storage_backend, **self.storage_options)
-
-        self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
+
+        if user_preferences_repository is None:
+            from authglow.repositories.dependencies import (
+                get_user_preferences_repository,
+            )
+
+            self._preferences_repo: "UserPreferencesRepository" = get_user_preferences_repository(
+                settings=self.settings
+            )
+        else:
+            self._preferences_repo = user_preferences_repository
 
     # Profile Management
 
@@ -91,8 +114,11 @@ class UserProfileService:
 
             user.updated_at = utcnow()
 
-            # Use _write_user to avoid nested lock (we already hold the lock)
-            await self.user_storage._write_user(user)
+            # Persist via the underlying UserRepository (the
+            # ``_write_user`` shortcut on the service is no longer
+            # the canonical path; the repository is responsible
+            # for PII encryption + atomic write).
+            await self.user_storage._user_repo.update(user)
 
         return await self.get_user_profile(user_id)
 
@@ -123,7 +149,7 @@ class UserProfileService:
             user.hashed_password = hash_password(new_password)
             user.updated_at = utcnow()
 
-            await self.user_storage._write_user(user)
+            await self.user_storage._user_repo.update(user)
 
         # Send security notification
         await self.security_service.send_password_changed_alert(user, ip_address)
@@ -165,7 +191,7 @@ class UserProfileService:
             user.email_verified = False
             user.updated_at = utcnow()
 
-            await self.user_storage._write_user(user)
+            await self.user_storage._user_repo.update(user)
 
         # Send verification email to new address
         token = await self.email_service.create_verification_token(user)
@@ -205,13 +231,9 @@ class UserProfileService:
         if not verify_password(password, user.hashed_password):
             return False, "Password is incorrect"
 
-        # Delete user preferences
-        try:
-            prefs_path = f"{self.preferences_path}/{user_id}.json"
-            if await self._afs.exists(prefs_path):
-                await self._afs.rm(prefs_path)
-        except Exception:
-            pass
+        # Delete user preferences (delegated to the
+        # UserPreferencesRepository — backend-agnostic)
+        await self._preferences_repo.delete(user_id)
 
         # Delete user
         await self.user_storage.delete_user(user_id)
@@ -221,18 +243,18 @@ class UserProfileService:
     # User Preferences
 
     async def get_user_preferences(self, user_id: str) -> Optional[UserPreferences]:
-        """Get user preferences."""
-        try:
-            file_path = f"{self.preferences_path}/{user_id}.json"
-            if not await self._afs.exists(file_path):
-                # Return default preferences
-                return UserPreferences(user_id=user_id)
+        """Get user preferences.
 
-            data = await self._afs.read_json(file_path)
-            return UserPreferences(**data)
-        except Exception:
-            # Return default preferences on error
+        Returns the persisted ``UserPreferences`` if available,
+        else a default ``UserPreferences(user_id=user_id)`` with
+        all Pydantic defaults. Corrupt-JSON tolerance is the
+        repository's responsibility (``_read_json`` returns
+        ``None`` on missing / corrupt file).
+        """
+        preferences = await self._preferences_repo.get(user_id)
+        if preferences is None:
             return UserPreferences(user_id=user_id)
+        return preferences
 
     async def update_user_preferences(
         self, user_id: str, preferences_update: UserPreferencesUpdate
@@ -252,8 +274,7 @@ class UserProfileService:
             preferences.updated_at = utcnow()
 
             # Save preferences
-            file_path = f"{self.preferences_path}/{user_id}.json"
-            await self._afs.write_json(file_path, preferences.model_dump())
+            await self._preferences_repo.save(preferences)
 
         return preferences
 
@@ -275,7 +296,7 @@ class UserProfileService:
             user.is_active = False
             user.updated_at = utcnow()
 
-            await self.user_storage._write_user(user)
+            await self.user_storage._user_repo.update(user)
 
         return True, "Account deactivated successfully"
 
@@ -289,6 +310,6 @@ class UserProfileService:
             user.is_active = True
             user.updated_at = utcnow()
 
-            await self.user_storage._write_user(user)
+            await self.user_storage._user_repo.update(user)
 
         return True, "Account reactivated successfully"

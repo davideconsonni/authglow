@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from authglow.api.federation import router as federation_router
 from authglow.core.crypto import derive_federation_state_key
-from authglow.core.token_blacklist import _reset_token_blacklist
+from authglow.services.auth.token_blacklist import _reset_token_blacklist
 
 
 @pytest.fixture
@@ -299,7 +299,7 @@ class TestFederationAdminAuth:
                     "enabled": True,
                 },
             )
-        assert resp.status_code == 200
+        assert resp.status_code == 200, resp.text
 
     def test_list_all_providers_with_admin_auth(self, admin_app):
         with patch("authglow.api.federation.FederationStorage") as MockStorage:
@@ -401,7 +401,9 @@ class TestVisibleContexts:
         import asyncio
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
-        from authglow.services.federation_storage import FederationStorage
+        from authglow.services.federation_provider import (
+            FederationProviderService as FederationStorage,
+        )
 
         async def _run():
             storage = FederationStorage()
@@ -459,7 +461,9 @@ class TestVisibleContexts:
         import asyncio
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
-        from authglow.services.federation_storage import FederationStorage
+        from authglow.services.federation_provider import (
+            FederationProviderService as FederationStorage,
+        )
 
         async def _run():
             storage = FederationStorage()
@@ -483,7 +487,9 @@ class TestVisibleContexts:
         import asyncio
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
-        from authglow.services.federation_storage import FederationStorage
+        from authglow.services.federation_provider import (
+            FederationProviderService as FederationStorage,
+        )
 
         async def _run():
             storage = FederationStorage()
