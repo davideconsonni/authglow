@@ -28,6 +28,8 @@ Conventions:
 
 from pathlib import Path
 
+import secrets
+
 import pytest
 
 from authglow.core.datetime import utcnow
@@ -136,12 +138,18 @@ class TestFileUserRepository:
     async def test_pii_encrypted_on_disk(self, test_settings):
         """The on-disk file MUST contain encrypted PII (never
         plaintext). This is a security requirement."""
+        # 16-char hex markers: negligible collision chance with
+        # base64-encoded ciphertext / HMAC blobs (see test_pii_*
+        # flakes when short ASCII names like "Bob" / "Jones" landed
+        # inside a 64-char alphabet blob by chance).
+        first_name_marker = secrets.token_hex(8)
+        last_name_marker = secrets.token_hex(8)
         repo = self._make_repo(test_settings)
         user = _make_user(
             user_id="pii",
             email="pii@example.com",
-            first_name="Bob",
-            last_name="Jones",
+            first_name=first_name_marker,
+            last_name=last_name_marker,
             phone="+1-555-9999",
             avatar_url="https://example.com/bob.png",
         )
@@ -150,8 +158,8 @@ class TestFileUserRepository:
         raw = path.read_text()
         # None of the plaintext PII should appear in the file
         assert "pii@example.com" not in raw
-        assert "Bob" not in raw
-        assert "Jones" not in raw
+        assert first_name_marker not in raw
+        assert last_name_marker not in raw
         assert "+1-555-9999" not in raw
         assert "https://example.com/bob.png" not in raw
 
