@@ -13,6 +13,22 @@ from authglow.core.datetime import utcnow
 _COLOR_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _BORDER_RADIUS_RE = re.compile(r"^[0-9.]+(px|em|rem|%)$")
 
+_GRANT_TYPES_REJECTED_MESSAGE = (
+    "The 'implicit' grant_type is not supported (OAuth 2.0 Security BCP). "
+    "Use 'authorization_code' with PKCE instead."
+)
+
+
+def _reject_implicit_grant(v: List[str]) -> List[str]:
+    """Reject the ``implicit`` grant type per OAuth 2.0 Security BCP.
+
+    Shared validator body for ``OAuth2Client`` / ``OAuth2ClientCreate`` /
+    ``OAuth2ClientUpdate`` so the error message stays consistent.
+    """
+    if "implicit" in v:
+        raise ValueError(_GRANT_TYPES_REJECTED_MESSAGE)
+    return v
+
 
 class ClientBranding(BaseModel):
     """Structured branding for the OAuth2 consent page.
@@ -58,6 +74,7 @@ class OAuth2Client(BaseModel):
 
     # OAuth2 settings
     redirect_uris: List[str] = Field(default_factory=list)
+    allowed_post_logout_redirect_uris: List[str] = Field(default_factory=list)
     allowed_scopes: List[str] = Field(default_factory=lambda: ["read"])
     grant_types: List[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
 
@@ -79,13 +96,22 @@ class OAuth2Client(BaseModel):
     created_by: Optional[str] = None  # User ID who created the client
 
     # Security
-    require_pkce: bool = False
+    require_pkce: bool = True
     require_consent: bool = True  # Show consent screen
+
+    # OIDC Session Management / Logout
+    backchannel_logout_uri: Optional[str] = None
+    frontchannel_logout_uri: Optional[str] = None
 
     # Usage tracking
     last_used_at: Optional[datetime] = None
     access_token_lifetime: int = 3600  # seconds (1 hour)
     refresh_token_lifetime: int = 2592000  # seconds (30 days)
+
+    @field_validator("grant_types")
+    @classmethod
+    def _reject_implicit_grant_on_client(cls, v: List[str]) -> List[str]:
+        return _reject_implicit_grant(v)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -104,12 +130,16 @@ class OAuth2ClientCreate(BaseModel):
 
     client_name: str = Field(..., min_length=3, max_length=100)
     redirect_uris: List[str] = Field(default_factory=list)
+    allowed_post_logout_redirect_uris: List[str] = Field(default_factory=list)
     allowed_scopes: List[str] = Field(default_factory=lambda: ["read"])
     grant_types: List[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
 
     is_confidential: bool = True
-    require_pkce: bool = False
+    require_pkce: bool = True
     require_consent: bool = True
+
+    backchannel_logout_uri: Optional[str] = None
+    frontchannel_logout_uri: Optional[str] = None
 
     description: Optional[str] = Field(None, max_length=500)
     logo_uri: Optional[str] = None
@@ -121,6 +151,11 @@ class OAuth2ClientCreate(BaseModel):
 
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
     refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days
+
+    @field_validator("grant_types")
+    @classmethod
+    def _reject_implicit_grant_on_create(cls, v: List[str]) -> List[str]:
+        return _reject_implicit_grant(v)
 
     @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
     @classmethod
@@ -158,12 +193,16 @@ class OAuth2ClientUpdate(BaseModel):
 
     client_name: Optional[str] = Field(None, min_length=3, max_length=100)
     redirect_uris: Optional[List[str]] = None
+    allowed_post_logout_redirect_uris: Optional[List[str]] = None
     allowed_scopes: Optional[List[str]] = None
     grant_types: Optional[List[str]] = None
     is_confidential: Optional[bool] = None
 
     require_pkce: Optional[bool] = None
     require_consent: Optional[bool] = None
+
+    backchannel_logout_uri: Optional[str] = None
+    frontchannel_logout_uri: Optional[str] = None
 
     description: Optional[str] = Field(None, max_length=500)
     logo_uri: Optional[str] = None
@@ -176,6 +215,13 @@ class OAuth2ClientUpdate(BaseModel):
 
     access_token_lifetime: Optional[int] = Field(None, ge=300, le=86400)
     refresh_token_lifetime: Optional[int] = Field(None, ge=3600, le=7776000)
+
+    @field_validator("grant_types")
+    @classmethod
+    def _reject_implicit_grant_on_update(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        return _reject_implicit_grant(v)
 
     @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
     @classmethod
@@ -218,12 +264,16 @@ class OAuth2ClientResponse(BaseModel):
     client_id: str
     client_name: str
     redirect_uris: List[str]
+    allowed_post_logout_redirect_uris: List[str]
     allowed_scopes: List[str]
     grant_types: List[str]
 
     is_confidential: bool
     require_pkce: bool
     require_consent: bool
+
+    backchannel_logout_uri: Optional[str] = None
+    frontchannel_logout_uri: Optional[str] = None
 
     description: Optional[str] = None
     logo_uri: Optional[str] = None

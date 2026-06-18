@@ -1,5 +1,8 @@
+import base64
+import hashlib
 import json
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
 from uuid import uuid4
@@ -327,8 +330,20 @@ class JWTService:
         nonce: Optional[str] = None,
         auth_time: Optional[datetime] = None,
         expires_delta: Optional[timedelta] = None,
+        acr: Optional[str] = None,
+        amr: Optional[List[str]] = None,
+        access_token: Optional[str] = None,
+        authorization_code: Optional[str] = None,
     ) -> str:
-        """Create an OpenID Connect ID Token."""
+        """Create an OpenID Connect ID Token.
+
+        If *access_token* is provided, the ``at_hash`` claim is computed
+        (OIDC Core §3.1.3.6). If *authorization_code* is provided, the
+        ``c_hash`` claim is computed similarly.
+
+        The hash algorithm is left-half SHA-256, base64url-encoded with
+        no padding.
+        """
         iat = datetime.now(timezone.utc)
         if expires_delta:
             expire = iat + expires_delta
@@ -342,12 +357,23 @@ class JWTService:
             "azp": client_id,
             "exp": int(expire.timestamp()),
             "iat": int(iat.timestamp()),
+            "sid": secrets.token_hex(16),
             "token_version": "3.0-fix-timestamp",
         }
         if nonce:
             id_token_data["nonce"] = nonce
         if auth_time:
             id_token_data["auth_time"] = int(auth_time.replace(tzinfo=timezone.utc).timestamp())
+        if acr:
+            id_token_data["acr"] = acr
+        if amr:
+            id_token_data["amr"] = amr
+        if access_token:
+            digest = hashlib.sha256(access_token.encode()).digest()
+            id_token_data["at_hash"] = base64.urlsafe_b64encode(digest[:16]).rstrip(b"=").decode()
+        if authorization_code:
+            digest = hashlib.sha256(authorization_code.encode()).digest()
+            id_token_data["c_hash"] = base64.urlsafe_b64encode(digest[:16]).rstrip(b"=").decode()
 
         for scope in scopes:
             if scope in SCOPE_TO_CLAIMS:

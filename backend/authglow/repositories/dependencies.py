@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         BackupCodeAttemptRepository,
         BackupCodeRepository,
         CSRFTokenRepository,
+        DeviceAuthorizationRepository,
         EmailIndexRepository,
         EmailVerificationRepository,
         FederatedIdentityRepository,
@@ -547,3 +548,21 @@ def get_keystore_repository() -> "KeyStoreRepository":
     )
 
     return FileKeyStoreRepository()
+
+
+def get_device_authorization_repository(
+    settings: "Settings | None" = None,
+) -> "DeviceAuthorizationRepository":
+    """FastAPI factory for the device-authorization repository.
+
+    Returns a fresh ``FileDeviceAuthorizationRepository`` per
+    request. The ``DeviceAuthorizationService`` creates its own
+    default repository by default; this factory is exposed for
+    FastAPI route handlers or tests that want to inject the
+    repository directly.
+    """
+    from authglow.repositories.file.device_authorization import (
+        FileDeviceAuthorizationRepository,
+    )
+
+    return FileDeviceAuthorizationRepository(settings=settings)

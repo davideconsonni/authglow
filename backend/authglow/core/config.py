@@ -314,6 +314,12 @@ class Settings(BaseSettings):
         description="OAuth2 client secret. Must be overridden in production.",
     )
     oauth2_reject_unknown_scopes: bool = False
+    enforce_pkce: bool = True
+    blacklist_backend: str = "persistent"
+
+    # Device Authorization Grant (RFC 8628)
+    device_code_expire_seconds: int = 600  # 10 minutes
+    device_poll_interval_seconds: int = 5
 
     # CORS Security Settings
     cors_allowed_origins: str = (

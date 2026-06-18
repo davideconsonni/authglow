@@ -40,10 +40,10 @@ This is the most important concept to understand. **All redirects happen in the 
 
 ## Environments
 
-| Environment | Access | Registration |
-|---|---|---|
+| Environment       | Access                                          | Registration                       |
+|-------------------|-------------------------------------------------|------------------------------------|
 | **Test/Collaudo** | Private network (federated infrastructure only) | Request credentials from AgID/IPZS |
-| **Production** | **Public internet** — accessible by any citizen | Request credentials from AgID/IPZS |
+| **Production**    | **Public internet** — accessible by any citizen | Request credentials from AgID/IPZS |
 
 > The production CIE IdP URL is provided by IPZS (Istituto Poligrafico e Zecca dello Stato) during accreditation. It is a publicly accessible HTTPS endpoint that serves millions of Italian citizens.
 
@@ -71,15 +71,15 @@ To use CIE, you must register your application with the CIE IdP:
 2. Click **"Add Provider"**
 3. Fill in the fields:
 
-| Field | Value |
-|---|---|
-| Label | `CIE` |
-| Description | `Italian Electronic Identity Card` |
-| Issuer URL | *(Production URL provided by IPZS)* |
-| Client ID | Your `client_id` from IPZS |
-| Client Secret | Your `client_secret` from IPZS |
-| Scopes | `openid profile email` |
-| Auth Levels | `L1, L2, L3` |
+| Field         | Value                               |
+|---------------|-------------------------------------|
+| Label         | `CIE`                               |
+| Description   | `Italian Electronic Identity Card`  |
+| Issuer URL    | *(Production URL provided by IPZS)* |
+| Client ID     | Your `client_id` from IPZS          |
+| Client Secret | Your `client_secret` from IPZS      |
+| Scopes        | `openid profile email`              |
+| Auth Levels   | `L1, L2, L3`                        |
 
 ### Via API
 

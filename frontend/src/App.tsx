@@ -16,6 +16,7 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
 import { OAuthAuthorizePage } from '@/pages/OAuthAuthorizePage'
+import { DeviceVerificationPage } from '@/pages/DeviceVerificationPage'
 import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -158,6 +159,7 @@ function App() {
           <Route path={ROUTES.AUTH.MFA_VERIFY} element={<MFAVerifyPage />} />
           <Route path={ROUTES.AUTH.VERIFY_EMAIL} element={<EmailVerifiedPage />} />
           <Route path={ROUTES.OAUTH_AUTHORIZE} element={<OAuthAuthorizePage />} />
+          <Route path={ROUTES.OAUTH_DEVICE_VERIFY} element={<DeviceVerificationPage />} />
           <Route path={ROUTES.SETUP} element={<SetupPage />} />
 
           <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>

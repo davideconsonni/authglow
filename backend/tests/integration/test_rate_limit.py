@@ -1,6 +1,5 @@
 """Test that SlowAPI rate limiter is properly wired to the app."""
 
-import pytest
 from unittest.mock import patch
 
 
@@ -52,6 +51,7 @@ class TestRateLimiterWiring:
         mock_settings_cls.return_value = test_settings
 
         import importlib
+
         import main as main_module
 
         importlib.reload(main_module)
@@ -76,6 +76,7 @@ class TestRateLimiterWiring:
         mock_settings_cls.return_value = test_settings
 
         import importlib
+
         import main as main_module
 
         importlib.reload(main_module)
@@ -133,3 +134,47 @@ class TestSetupRateLimit:
 
         limits = self._get_rate_limits_for(create_admin_user, limiter)
         assert len(limits) > 0, "H4 Bug: create_admin_user has no rate-limit decorator."
+
+
+class TestOidcEndpointRateLimits:
+    """O.5: OIDC discovery / core endpoints must have rate limits."""
+
+    def _get_rate_limits_for(self, func, limiter):
+        key = f"{func.__module__}.{func.__name__}"
+        limits_obj = limiter._route_limits.get(key, [])
+        return [str(lo.limit) for lo in limits_obj]
+
+    def test_discovery_has_rate_limit(self):
+        from authglow.api.oidc import openid_configuration
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(openid_configuration, limiter)
+        assert len(limits) > 0, "openid_configuration has no rate-limit decorator"
+
+    def test_jwks_has_rate_limit(self):
+        from authglow.api.oidc import jwks
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(jwks, limiter)
+        assert len(limits) > 0, "jwks has no rate-limit decorator"
+
+    def test_userinfo_has_rate_limit(self):
+        from authglow.api.oidc import userinfo
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(userinfo, limiter)
+        assert len(limits) > 0, "userinfo has no rate-limit decorator"
+
+    def test_logout_get_has_rate_limit(self):
+        from authglow.api.oidc import logout_get
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(logout_get, limiter)
+        assert len(limits) > 0, "logout_get has no rate-limit decorator"
+
+    def test_logout_post_has_rate_limit(self):
+        from authglow.api.oidc import logout_post
+        from authglow.core.rate_limit import limiter
+
+        limits = self._get_rate_limits_for(logout_post, limiter)
+        assert len(limits) > 0, "logout_post has no rate-limit decorator"

@@ -24,6 +24,7 @@ class IDTokenClaims(BaseModel):
     acr: Optional[str] = None  # Authentication Context Class Reference
     amr: Optional[List[str]] = None  # Authentication Methods References
     azp: Optional[str] = None  # Authorized party (client_id if multiple audiences)
+    sid: Optional[str] = None  # Session ID (Back/Front-Channel Logout)
 
 
 class UserInfoResponse(BaseModel):
@@ -88,9 +89,14 @@ class OpenIDConfiguration(BaseModel):
     code_challenge_methods_supported: List[str] = ["S256"]
 
     # Additional endpoints
+    device_authorization_endpoint: Optional[str] = None
     revocation_endpoint: Optional[str] = None
     introspection_endpoint: Optional[str] = None
     end_session_endpoint: Optional[str] = None
+
+    # Session management / logout
+    frontchannel_logout_supported: bool = True
+    backchannel_logout_supported: bool = False
 
 
 class JWKSResponse(BaseModel):

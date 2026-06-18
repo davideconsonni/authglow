@@ -1,13 +1,13 @@
 """Tests for VAPT-010: OIDC logout open redirect prevention."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 
 class TestTokenDataAudField:
     def test_token_data_has_aud_field(self):
-        from authglow.models.token import TokenData
         from datetime import datetime, timezone
+
+        from authglow.models.token import TokenData
 
         td = TokenData(
             sub="user-1",
@@ -20,8 +20,9 @@ class TestTokenDataAudField:
         assert hasattr(td, "aud")
 
     def test_token_data_aud_defaults_none(self):
-        from authglow.models.token import TokenData
         from datetime import datetime, timezone
+
+        from authglow.models.token import TokenData
 
         td = TokenData(
             sub="user-1",
@@ -70,30 +71,30 @@ class TestDecodeTokenReadsAud:
 
 
 class TestLogoutOpenRedirectPrevention:
-    """VAPT-010: post_logout_redirect_uri must be validated."""
+    """Workstream D: post_logout_redirect_uri validation."""
 
     def test_logout_get_uses_token_data_aud_not_hasattr(self):
-        """VAPT-010: The validation check must reference token_data.aud directly."""
+        """The validation check must reference token_data.aud directly."""
         import inspect
+
         from authglow.api.oidc import logout_get
 
         source = inspect.getsource(logout_get)
-        # The critical check: post_logout_redirect_uri validation
         assert "token_data.aud" in source
-        # hasattr guard is no longer needed — TokenData always has aud
 
-    def test_localhost_bypass_not_in_production(self):
-        """localhost bypass must be gated behind not is_production."""
+    def test_logout_get_enforces_allowed_post_logout_redirect_uris(self):
+        """Strict validation: checks against allowed_post_logout_redirect_uris."""
         import inspect
+
         from authglow.api.oidc import logout_get
 
         source = inspect.getsource(logout_get)
-        assert "is_production" in source
-        assert "localhost" in source
+        assert "allowed_post_logout_redirect_uris" in source
 
     def test_state_is_url_encoded(self):
         """state parameter appended to redirect must be URL-encoded."""
         import inspect
+
         from authglow.api.oidc import logout_get
 
         source = inspect.getsource(logout_get)

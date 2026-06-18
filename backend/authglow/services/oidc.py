@@ -87,13 +87,9 @@ class OIDCService:
                 )
 
         if "address" in scopes:
-            # Address scope claims (not implemented in User model yet)
-            # user_info_data["address"] = {...}
-            pass
-
-        # --- Add permissions claim if requested ---
-        if "permissions" in scopes:
-            user_info_data["permissions"] = user.scopes
+            address = getattr(user, "address", None)
+            if address:
+                user_info_data["address"] = address
 
         return UserInfoResponse(**user_info_data)
 
@@ -161,12 +157,9 @@ class OIDCService:
 
         # Address scope
         if "address" in scopes:
-            # Not implemented yet
-            pass
-
-        # --- Add permissions claim if requested ---
-        if "permissions" in scopes:
-            claims["permissions"] = user.scopes
+            address = getattr(user, "address", None)
+            if address:
+                claims["address"] = address
 
         return claims
 

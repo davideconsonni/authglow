@@ -1,14 +1,13 @@
 """File-backed persistence for the JWT revocation blacklist.
 
-The repository is intentionally minimal: it knows nothing about the
-in-memory cache, the singleton lifecycle, or the lock used by the
-service. It only persists and retrieves the ``{jti: expires_at}`` map.
-
-The crash-safe ``tmp + rename`` write is provided by
-``BaseFileRepository._write_json_atomic`` (shared with the future
-keyring repository, see Fase 20).
+One JSON file per revoked JTI so that multiple instances sharing a
+single filesystem can detect each other's revocations without restart.
+The service layer handles the in-memory cache and sync ``os.path``
+checks on the hot path; the repository is responsible for async
+hydration, writes, and periodic cleanup.
 """
 
+import os
 from typing import Dict, Optional
 
 from authglow.core.config import Settings
@@ -17,39 +16,66 @@ from authglow.repositories.protocols import TokenBlacklistRepository
 
 
 class FileTokenBlacklistRepository(BaseFileRepository, TokenBlacklistRepository):
-    """Persists the revoked-JTI map as a single JSON file.
+    """Persists each revoked JTI as a separate JSON file.
 
     File layout::
 
-        <storage_path>/token_blacklist/entries.json
+        <storage_path>/token_blacklist/<jti>.json
 
     Payload shape::
 
-        {"entries": {"<jti>": <expires_at_epoch>, ...}}
+        {"expires_at": <epoch_float>}
 
-    Expired entries are not removed on save — the service layer
-    prunes them lazily on read and on every ``revoke`` call that
-    triggers the MAX_ENTRIES sweep.
+    Expired files are NOT auto-deleted on read — the service or a
+    periodic cleanup job is responsible for pruning them.
     """
 
     _subdir = "token_blacklist"
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         super().__init__(settings)
-        self._entries_path = self._path("entries.json")
+
+    @staticmethod
+    def _filename(jti: str) -> str:
+        return f"{jti}.json"
+
+    # ------------------------------------------------------------------
+    # Protocol: TokenBlacklistRepository
+    # ------------------------------------------------------------------
+
+    async def save(self, jti: str, expires_at: float) -> None:
+        """Persist or overwrite the entry for *jti*."""
+        path = self._path(self._filename(jti))
+        await self._write_json(path, {"expires_at": expires_at})
 
     async def load_all(self) -> Dict[str, float]:
-        """Return every persisted jti -> expires_at mapping.
+        """Scan the directory and return every jti -> expires_at."""
+        entries: Dict[str, float] = {}
+        paths = await self._glob(f"{self._storage_path}/*.json")
+        for path in paths:
+            data = await self._read_json(path)
+            if data is None:
+                continue
+            expires = data.get("expires_at")
+            if not isinstance(expires, (int, float)):
+                continue
+            jti = os.path.splitext(os.path.basename(path))[0]
+            entries[jti] = float(expires)
+        return entries
 
-        Returns an empty dict when the entries file is missing
-        (first boot) or corrupt. Expired entries are not filtered
-        here — the service layer is responsible for that.
-        """
-        data = await self._read_json(self._entries_path)
-        if data is None:
-            return {}
-        return dict(data.get("entries", {}))
+    async def cleanup_expired(self) -> int:
+        """Delete every entry whose ``expires_at`` is in the past."""
+        import time
 
-    async def save_all(self, entries: Dict[str, float]) -> None:
-        """Atomically replace the persisted mapping with *entries*."""
-        await self._write_json_atomic(self._entries_path, {"entries": entries})
+        now = time.time()
+        removed = 0
+        paths = await self._glob(f"{self._storage_path}/*.json")
+        for path in paths:
+            data = await self._read_json(path)
+            if data is None:
+                continue
+            expires = data.get("expires_at")
+            if isinstance(expires, (int, float)) and float(expires) <= now:
+                await self._delete(path)
+                removed += 1
+        return removed

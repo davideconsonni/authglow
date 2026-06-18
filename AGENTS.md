@@ -102,17 +102,17 @@ Lazy imports inside functions for circular-dependency avoidance.
 
 ### Naming
 
-| Element | Convention | Example |
-|---|---|---|
-| Functions/methods | `snake_case` | `get_current_user` |
-| Private functions | `_leading_underscore` | `_derive_key` |
-| Classes | `PascalCase` | `JWTService`, `UserStorage` |
-| Pydantic models | `PascalCase` + suffix | `UserCreate`, `TokenData` |
-| Constants | `UPPER_SNAKE_CASE` | `PREFIX_LENGTH` |
-| Private constants | `_UPPER_SNAKE_CASE` | `_KEY_PREFIX` |
-| Dependency injectors | `get_<name>` | `get_user_storage` |
-| Test classes | `Test<Subject>` | `TestJWTTokenCreation` |
-| Test methods | `test_<scenario>` | `test_expired_token_rejected` |
+| Element              | Convention            | Example                       |
+|----------------------|-----------------------|-------------------------------|
+| Functions/methods    | `snake_case`          | `get_current_user`            |
+| Private functions    | `_leading_underscore` | `_derive_key`                 |
+| Classes              | `PascalCase`          | `JWTService`, `UserStorage`   |
+| Pydantic models      | `PascalCase` + suffix | `UserCreate`, `TokenData`     |
+| Constants            | `UPPER_SNAKE_CASE`    | `PREFIX_LENGTH`               |
+| Private constants    | `_UPPER_SNAKE_CASE`   | `_KEY_PREFIX`                 |
+| Dependency injectors | `get_<name>`          | `get_user_storage`            |
+| Test classes         | `Test<Subject>`       | `TestJWTTokenCreation`        |
+| Test methods         | `test_<scenario>`     | `test_expired_token_rejected` |
 
 ### Error Handling
 
@@ -202,19 +202,19 @@ Lazy imports inside functions for circular-dependency avoidance.
 
 ### Naming
 
-| Element | Convention | Example |
-|---|---|---|
-| Component files | `PascalCase.tsx` | `LoginForm.tsx` |
-| Non-component files | `camelCase.ts` | `authStore.ts` |
-| UI primitives (shadcn) | `kebab-case.tsx` | `button.tsx` |
-| Test files | `kebab-case.test.ts` | `phase2-auth.test.ts` |
-| E2E specs | `kebab-case.spec.ts` | `login-dashboard.spec.ts` |
-| Components | `PascalCase` | `StatusBadge` |
-| Functions/hooks | `camelCase` | `useAuth`, `formatDate` |
-| Event handlers | `handle` prefix | `handleDelete` |
-| Custom hooks | `use` prefix | `useAuth`, `useTheme` |
-| Constants | `UPPER_SNAKE_CASE` | `API_URL`, `ROUTES` |
-| Store hooks | `use<Name>Store` | `useAuthStore` |
+| Element                | Convention           | Example                   |
+|------------------------|----------------------|---------------------------|
+| Component files        | `PascalCase.tsx`     | `LoginForm.tsx`           |
+| Non-component files    | `camelCase.ts`       | `authStore.ts`            |
+| UI primitives (shadcn) | `kebab-case.tsx`     | `button.tsx`              |
+| Test files             | `kebab-case.test.ts` | `phase2-auth.test.ts`     |
+| E2E specs              | `kebab-case.spec.ts` | `login-dashboard.spec.ts` |
+| Components             | `PascalCase`         | `StatusBadge`             |
+| Functions/hooks        | `camelCase`          | `useAuth`, `formatDate`   |
+| Event handlers         | `handle` prefix      | `handleDelete`            |
+| Custom hooks           | `use` prefix         | `useAuth`, `useTheme`     |
+| Constants              | `UPPER_SNAKE_CASE`   | `API_URL`, `ROUTES`       |
+| Store hooks            | `use<Name>Store`     | `useAuthStore`            |
 
 ### Component Patterns
 
@@ -406,6 +406,11 @@ takes a `keys_dir` + `secret_key` for the startup path in
 `core/config.py: get_or_generate_keyring` (which runs BEFORE
 the lru_cache is bypassed).
 
+### Keeping ARCHITECTURE.md current
+
+After structural changes (new router, service, repository, store, page),
+update `ARCHITECTURE.md` to keep the directory maps and reference table accurate.
+
 ## Secret Management
 
 AuthGlow is regularly scanned by GitGuardian. The repo's policy is: **no real secret ever touches git history**. This section covers how that's enforced, how to handle test fixtures, and what to do if a real secret is leaked.
@@ -434,12 +439,12 @@ Copy the printed line into `backend/.env` (which is gitignored).
 
 ### Rotation policy
 
-| Secret | When to rotate |
-|---|---|
-| `SECRET_KEY` | On every major release, or **immediately** on any suspected leak. Invalidates all sessions and encrypted blobs. |
-| `OAUTH2_CLIENT_SECRET` | On request from a client, or on suspected leak. Requires re-consent flow. |
-| JWT signing key | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. |
-| SMTP / SendGrid / Mailgun credentials | Every 180 days, or on personnel change. |
+| Secret                                | When to rotate                                                                                                                    |
+|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `SECRET_KEY`                          | On every major release, or **immediately** on any suspected leak. Invalidates all sessions and encrypted blobs.                   |
+| `OAUTH2_CLIENT_SECRET`                | On request from a client, or on suspected leak. Requires re-consent flow.                                                         |
+| JWT signing key                       | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. |
+| SMTP / SendGrid / Mailgun credentials | Every 180 days, or on personnel change.                                                                                           |
 
 ### What to do if GitGuardian fires a real alert
 

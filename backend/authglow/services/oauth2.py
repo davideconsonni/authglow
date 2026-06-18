@@ -82,6 +82,9 @@ class OAuth2Service:
         code_challenge: Optional[str] = None,
         code_challenge_method: Optional[str] = None,
         nonce: Optional[str] = None,
+        acr: Optional[str] = None,
+        amr: Optional[List[str]] = None,
+        state: Optional[str] = None,
     ) -> AuthorizationCode:
         """Create a new authorization code."""
         expires_at = utcnow() + timedelta(
@@ -97,6 +100,9 @@ class OAuth2Service:
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             nonce=nonce,
+            acr=acr,
+            amr=amr,
+            state=state,
         )
 
         await self._repository.create(auth_code)

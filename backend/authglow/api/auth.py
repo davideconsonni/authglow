@@ -2,7 +2,8 @@
 
 import base64
 import hashlib
-from typing import Dict, NoReturn, Optional, Tuple
+from datetime import timedelta
+from typing import Dict, List, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -233,6 +234,35 @@ async def get_current_user(
 # OAuth2 Authorization Code Flow Endpoints
 
 
+@router.get("/api/oauth2/csrf-token")
+async def csrf_token_endpoint(request: Request):
+    """Issue a CSRF token bound to a ``csrf_session_id`` cookie."""
+    from authglow.core.config import get_settings
+    from authglow.services.csrf import (
+        SESSION_ID_COOKIE,
+        CSRFTokenService,
+        get_or_create_session_id,
+    )
+
+    settings = get_settings()
+    session_id = get_or_create_session_id(request)
+    csrf_service = CSRFTokenService(settings=settings)
+    token = await csrf_service.generate_token(session_id)
+
+    from fastapi.responses import JSONResponse
+
+    response = JSONResponse(content={"csrf_token": token})
+    response.set_cookie(
+        key=SESSION_ID_COOKIE,
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=settings.is_production,
+        max_age=1800,
+    )
+    return response
+
+
 @router.post("/api/oauth2/authorize")
 @limiter.limit("10/minute")
 async def authorize_post(
@@ -246,6 +276,10 @@ async def authorize_post(
     code_challenge: Optional[str] = Form(None),
     code_challenge_method: Optional[str] = Form(None),
     nonce: Optional[str] = Form(None),
+    csrf_token: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
+    max_age: Optional[int] = Form(None),
+    id_token_hint: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -260,6 +294,12 @@ async def authorize_post(
     if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
+    settings = get_settings()
+    if settings.enforce_pkce and not code_challenge:
+        raise HTTPException(
+            status_code=400,
+            detail="PKCE is required for all OAuth 2.0 clients (RFC 7636, Security BCP).",
+        )
     if client.require_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
@@ -276,12 +316,57 @@ async def authorize_post(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid scope")
 
+    # --- id_token_hint pre-identification (OIDC Core §3.1.2.1) ---
+    hint_user: Optional[User] = None
+    if id_token_hint:
+        try:
+            jwt_svc = JWTService()
+            hint_token = jwt_svc.decode_id_token(id_token_hint, expected_aud=client_id)
+            if hint_token and not email:
+                hint_user = await storage.get_user(hint_token.sub)
+                if hint_user:
+                    email = hint_user.email
+        except Exception:
+            pass
+
+    # --- OIDC prompt parameter (OIDC Core §3.1.2) ---
+    _VALID_PROMPT_VALUES = {"none", "login", "consent", "select_account"}
+    parsed_prompts: set[str] = set()
+
+    if prompt:
+        parsed_prompts = set(prompt.split())
+        invalid = parsed_prompts - _VALID_PROMPT_VALUES
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid prompt value(s): {', '.join(sorted(invalid))}. "
+                "Allowed: none, login, consent, select_account.",
+            )
+        if "none" in parsed_prompts and len(parsed_prompts) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="'none' cannot be combined with other prompt values.",
+            )
+
+    # --- Security: state parameter absent warning (Q.1) ---
+    if not state:
+        from structlog import get_logger
+
+        _logger = get_logger("authglow.audit")
+        _logger.warning(
+            "oauth2_authorize_no_state",
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            note="State parameter is absent — vulnerable to CSRF (RFC 6819 §4.4.1.8).",
+        )
+
     # --- Authentication (cookie-first, then email/password) ---
     user = None
+    auth_acr: Optional[str] = None
+    auth_amr: Optional[List[str]] = None
 
-    settings = get_settings()
     access_token = request.cookies.get(settings.auth_cookie_access_name)
-    if access_token:
+    if access_token and "login" not in parsed_prompts:
         try:
             jwt_svc = JWTService()
             token_data = jwt_svc.decode_token(access_token)
@@ -290,7 +375,82 @@ async def authorize_post(
         except Exception:
             pass
 
+    # --- Prompt parameter handling (OIDC Core §3.1.2) ---
+    if "none" in parsed_prompts and not user:
+        error_redirect = f"{redirect_uri}?error=login_required"
+        error_redirect += "&error_description=User+is+not+authenticated"
+        if state:
+            error_redirect += f"&state={state}"
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url=error_redirect, status_code=302)
+
+    if "none" in parsed_prompts and user:
+        if not user.is_active:
+            raise HTTPException(status_code=400, detail="Inactive user")
+        if user.suspended_until and utcnow() < user.suspended_until:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            )
+        auth_code = await oauth2_service.create_authorization_code(
+            client_id=client_id,
+            user_id=user.id,
+            redirect_uri=redirect_uri,
+            scope=validated_scope,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            nonce=nonce,
+            state=state,
+        )
+        redirect_url = f"{redirect_uri}?code={auth_code.code}"
+        if state:
+            redirect_url += f"&state={state}"
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    # --- max_age enforcement (OIDC Core §3.1.2.1) ---
+    if user and max_age is not None:
+        if max_age == 0 or (
+            user.last_login is not None and utcnow() > user.last_login + timedelta(seconds=max_age)
+        ):
+            user = None
+
     if user:
+        from authglow.services.csrf import CSRFTokenService, get_or_create_session_id
+
+        session_id = get_or_create_session_id(request)
+        csrf_service = CSRFTokenService()
+        if csrf_token is None:
+            await AuditService().log_event(
+                event_type="csrf_token_mismatch",
+                user_id=user.id,
+                email=user.email,
+                ip_address=request.client.host if request.client else None,
+                metadata={"reason": "csrf_token_missing"},
+                severity="high",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF token required when authenticated via session cookie.",
+            )
+
+        csrf_valid = await csrf_service.validate_token(session_id, csrf_token)
+        if not csrf_valid:
+            await AuditService().log_event(
+                event_type="csrf_token_mismatch",
+                user_id=user.id,
+                email=user.email,
+                ip_address=request.client.host if request.client else None,
+                metadata={"reason": "csrf_token_invalid"},
+                severity="high",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or expired CSRF token.",
+            )
+
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
         if user.suspended_until and utcnow() < user.suspended_until:
@@ -365,46 +525,56 @@ async def authorize_post(
                 }
 
         await storage.update_last_login(user.id)
+        auth_acr = "1"
+        auth_amr = ["pwd"]
 
-    if not client.require_consent:
-        auth_code = await oauth2_service.create_authorization_code(
-            client_id=client_id,
+    if "consent" not in parsed_prompts:
+        if not client.require_consent:
+            auth_code = await oauth2_service.create_authorization_code(
+                client_id=client_id,
+                user_id=user.id,
+                redirect_uri=redirect_uri,
+                scope=validated_scope,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+                nonce=nonce,
+                acr=auth_acr,
+                amr=auth_amr,
+                state=state,
+            )
+            redirect_url = f"{redirect_uri}?code={auth_code.code}"
+            if state:
+                redirect_url += f"&state={state}"
+            return {"redirect_url": redirect_url}
+
+        from authglow.services.oauth_consent import OAuth2ConsentService
+
+        consent_svc = OAuth2ConsentService()
+        has_consent, _ = await consent_svc.check_consent(
             user_id=user.id,
-            redirect_uri=redirect_uri,
-            scope=validated_scope,
-            code_challenge=code_challenge,
-            code_challenge_method=code_challenge_method,
-            nonce=nonce,
-        )
-        redirect_url = f"{redirect_uri}?code={auth_code.code}"
-        if state:
-            redirect_url += f"&state={state}"
-        return {"redirect_url": redirect_url}
-
-    from authglow.services.oauth_consent import OAuth2ConsentService
-
-    consent_svc = OAuth2ConsentService()
-    has_consent, _ = await consent_svc.check_consent(
-        user_id=user.id,
-        client_id=client_id,
-        required_scopes=validated_scope.split() if validated_scope else ["read"],
-    )
-
-    if has_consent:
-        auth_code = await oauth2_service.create_authorization_code(
             client_id=client_id,
-            user_id=user.id,
-            redirect_uri=redirect_uri,
-            scope=validated_scope,
-            code_challenge=code_challenge,
-            code_challenge_method=code_challenge_method,
-            nonce=nonce,
+            required_scopes=validated_scope.split() if validated_scope else ["read"],
         )
-        redirect_url = f"{redirect_uri}?code={auth_code.code}"
-        if state:
-            redirect_url += f"&state={state}"
-        return {"redirect_url": redirect_url}
 
+        if has_consent:
+            auth_code = await oauth2_service.create_authorization_code(
+                client_id=client_id,
+                user_id=user.id,
+                redirect_uri=redirect_uri,
+                scope=validated_scope,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+                nonce=nonce,
+                acr=auth_acr,
+                amr=auth_amr,
+                state=state,
+            )
+            redirect_url = f"{redirect_uri}?code={auth_code.code}"
+            if state:
+                redirect_url += f"&state={state}"
+            return {"redirect_url": redirect_url}
+
+    # Show consent screen (forced by prompt=consent, or no prior consent)
     consent_session = await session_service.create_consent_session(
         user_id=user.id,
         client_id=client_id,
@@ -530,11 +700,10 @@ async def token_endpoint(
 
             if recreated_challenge != auth_code.code_challenge:
                 raise HTTPException(status_code=401, detail="Invalid code_verifier")
-        elif not is_confidential:
-            # Public clients without PKCE are insecure; reject the token exchange
+        else:
             raise HTTPException(
                 status_code=400,
-                detail="Public clients must use PKCE (code_challenge required)",
+                detail="PKCE is required for all clients (RFC 7636, Security BCP).",
             )
         # --- End PKCE Validation ---
 
@@ -601,8 +770,11 @@ async def token_endpoint(
                 client_id=auth_code.client_id,
                 scopes=scopes,
                 user_claims=user_claims,
-                nonce=getattr(auth_code, "nonce", None),  # If nonce was stored
+                nonce=getattr(auth_code, "nonce", None),
                 auth_time=user.last_login,
+                acr=auth_code.acr,
+                amr=auth_code.amr,
+                access_token=access_token_response.access_token,
             )
 
             # Add to response
@@ -683,6 +855,64 @@ async def token_endpoint(
         _set_auth_cookies(response, access_token_response.access_token, new_rt.token, settings)
 
         return access_token_response
+
+    elif grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+        # Device Authorization Grant (RFC 8628 §3.4)
+        if not code or not client_id:
+            raise HTTPException(status_code=400, detail="Missing device_code or client_id")
+        device_code = code  # reuse the `code` param for device_code
+
+        from authglow.services.device_auth import DeviceAuthorizationService
+
+        device_service = DeviceAuthorizationService()
+        auth = await device_service.poll(device_code)
+
+        if auth is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "expired_token", "error_description": "The device code has expired."},
+            )
+
+        if auth.status == "pending":
+            now_time = utcnow()
+            if auth.last_poll_at and (now_time - auth.last_poll_at).total_seconds() < auth.interval:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"error": "slow_down", "error_description": "Polling too fast."},
+                )
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "authorization_pending", "error_description": "User has not yet authorized."},
+            )
+
+        if auth.status == "denied":
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "access_denied", "error_description": "The user denied the request."},
+            )
+
+        if auth.status == "authorized" and auth.user_id:
+            user = await storage.get_user(auth.user_id)
+            if not user or not user.is_active:
+                raise HTTPException(status_code=401, detail="Invalid user")
+
+            scopes_list = auth.scope.split()
+            rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+            access_token_response = jwt_service.create_token_response(
+                user.id,
+                user.email,
+                scopes_list,
+                include_refresh=True,
+                permissions=rbac_perms,
+                roles=rbac_roles,
+                audience=client_id,
+                azp=client_id,
+            )
+
+            await device_service.cleanup_expired()
+            return access_token_response
+
+        raise HTTPException(status_code=400, detail="Unexpected device authorization state")
 
     else:
         raise HTTPException(status_code=400, detail="Unsupported grant_type")
@@ -1184,6 +1414,9 @@ async def oauth2_mfa_verify(
         code_challenge=mfa_session.code_challenge,
         code_challenge_method=mfa_session.code_challenge_method,
         nonce=mfa_session.nonce,
+        acr="2",
+        amr=["pwd", "mfa"],
+        state=mfa_session.state,
     )
 
     redirect_url = f"{mfa_session.redirect_uri}?code={auth_code.code}"

@@ -46,7 +46,7 @@ from authglow.models.password_reset import PasswordResetToken
 from authglow.models.rbac import Permission, Role, UserRole
 from authglow.models.refresh_token import RefreshToken
 from authglow.models.session import MFASession
-from authglow.models.token import AuthorizationCode
+from authglow.models.token import AuthorizationCode, DeviceAuthorization
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferences
 
@@ -322,6 +322,30 @@ class AuthorizationCodeRepository(Protocol):
 
 
 @runtime_checkable
+class DeviceAuthorizationRepository(Protocol):
+    """Persistence for OAuth 2.0 Device Authorization Grants (RFC 8628).
+
+    Lookups by ``device_code`` (high-entropy, for polling) and
+    ``user_code`` (8-char human-friendly, for browser approval).
+    """
+
+    async def create(self, auth: "DeviceAuthorization") -> None:
+        """Persist a new device authorization."""
+
+    async def get_by_device_code(self, device_code: str) -> Optional["DeviceAuthorization"]:
+        """Return the authorization by its device code, or ``None``."""
+
+    async def get_by_user_code(self, user_code: str) -> Optional["DeviceAuthorization"]:
+        """Return the authorization by its user code, or ``None``."""
+
+    async def update(self, auth: "DeviceAuthorization") -> None:
+        """Update an existing device authorization (status change)."""
+
+    async def delete_expired(self) -> int:
+        """Delete all expired entries. Returns count of deleted entries."""
+
+
+@runtime_checkable
 class CSRFTokenRepository(Protocol):
     """Persistence for CSRF tokens keyed by HMAC(session_id).
 
@@ -357,19 +381,21 @@ class CSRFTokenRepository(Protocol):
 class TokenBlacklistRepository(Protocol):
     """Persistence for revoked JWT JTI -> expiry_epoch mappings.
 
-    The on-disk form is a single ``entries.json`` blob (or a table on
-    SQL backends). Hot-path reads (``is_revoked``) are expected to be
-    served from an in-memory cache in the service layer; this
-    repository only handles hydration + persistence.
+    One file per revoked JTI so multi-instance deployments sharing a
+    single filesystem see each other's revocations without restart.
+    Hot-path reads (``is_revoked``) are sync via ``os.path``; the
+    repository handles async hydration, writes, and cleanup.
     """
+
+    async def save(self, jti: str, expires_at: float) -> None:
+        """Persist a single revoked JTI as ``{jti}.json``."""
 
     async def load_all(self) -> Dict[str, float]:
         """Return every persisted jti -> expires_at mapping. Expired
-        entries may be included; the service layer is responsible for
-        filtering on read."""
+        entries may be included; the service layer filters on read."""
 
-    async def save_all(self, entries: Dict[str, float]) -> None:
-        """Atomically replace the persisted mapping with *entries*."""
+    async def cleanup_expired(self) -> int:
+        """Delete expired entries. Returns the count of removed files."""
 
 
 # ---------------------------------------------------------------------------

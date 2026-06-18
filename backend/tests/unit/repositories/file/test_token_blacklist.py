@@ -1,11 +1,9 @@
-"""Tests for ``FileTokenBlacklistRepository`` and the
+"""Tests for ``FileTokenBlacklistRepository`` (one-file-per-JTI) and
 ``services.auth.token_blacklist.TokenBlacklist`` service.
 
-The repository tests cover the I/O primitives (load + atomic save,
-missing/corrupt files, persistence across instances). The service
-tests cover the in-memory behaviour (revoke / is_revoked, sweep,
-singleton lifecycle, hot-path sync ``is_revoked`` returning the
-in-memory state without I/O).
+Repository tests cover individual ``save`` / ``load_all`` /
+``cleanup_expired``. Service tests cover revoke / is_revoked,
+cross-instance visibility via filesystem, and singleton lifecycle.
 """
 
 import os
@@ -20,14 +18,9 @@ from authglow.services.auth.token_blacklist import (
     token_blacklist,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def repo(test_settings):
-    """Fresh ``FileTokenBlacklistRepository`` pointing at the test temp dir."""
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
             "authglow.repositories.file.base.get_settings",
@@ -38,9 +31,6 @@ def repo(test_settings):
 
 @pytest.fixture
 def repo_p(tmp_path, test_settings):
-    """Variant that points the repository at a *different* storage
-    path than the autouse ``test_settings``, exercising the
-    constructor's ``settings=`` argument."""
     storage_path = str(tmp_path / "blacklist_repo_test")
     os.makedirs(storage_path, exist_ok=True)
     custom = test_settings.model_copy(update={"storage_path": storage_path})
@@ -49,14 +39,13 @@ def repo_p(tmp_path, test_settings):
 
 @pytest.fixture(autouse=True)
 def _reset_singleton():
-    """Ensure each test starts with a clean ``TokenBlacklist`` singleton."""
     _reset_token_blacklist()
     yield
     _reset_token_blacklist()
 
 
 # ---------------------------------------------------------------------------
-# Repository — load / save
+# Repository — save / load / cleanup
 # ---------------------------------------------------------------------------
 
 
@@ -66,51 +55,38 @@ class TestRepositoryLoadSave:
         assert await repo.load_all() == {}
 
     @pytest.mark.asyncio
-    async def test_load_corrupt_returns_empty_dict(self, repo):
-        with open(repo._entries_path, "w") as f:
-            f.write("{not valid json")
-        assert await repo.load_all() == {}
-
-    @pytest.mark.asyncio
     async def test_save_then_load_roundtrip(self, repo):
-        entries = {"jti-a": 1000.0, "jti-b": 2000.0, "jti-c": 3000.0}
-        await repo.save_all(entries)
+        await repo.save("jti-a", 1000.0)
+        await repo.save("jti-b", 2000.0)
         loaded = await repo.load_all()
-        assert loaded == entries
-
-    @pytest.mark.asyncio
-    async def test_save_does_not_leave_tmp_file(self, repo):
-        await repo.save_all({"x": 1.0})
-        assert not os.path.exists(repo._entries_path + ".tmp")
-        assert os.path.exists(repo._entries_path)
+        assert loaded == {"jti-a": 1000.0, "jti-b": 2000.0}
 
     @pytest.mark.asyncio
     async def test_save_overwrites_existing(self, repo):
-        await repo.save_all({"old": 1.0})
-        await repo.save_all({"new": 2.0})
-        assert await repo.load_all() == {"new": 2.0}
+        await repo.save("jti-x", 1.0)
+        await repo.save("jti-x", 2.0)
+        loaded = await repo.load_all()
+        assert loaded == {"jti-x": 2.0}
 
     @pytest.mark.asyncio
     async def test_persistence_survives_new_instance(self, repo_p):
-        """A second repository instance on the same path must see
-        what the first instance wrote."""
-        await repo_p.save_all({"persisted": 42.0})
+        await repo_p.save("persisted", 42.0)
         repo2 = FileTokenBlacklistRepository(settings=repo_p._settings)
         assert await repo2.load_all() == {"persisted": 42.0}
 
     @pytest.mark.asyncio
     async def test_storage_path_respects_settings(self, repo_p):
-        assert repo_p._storage_path == f"{repo_p._settings.storage_path}/token_blacklist"
-        assert repo_p._entries_path == f"{repo_p._storage_path}/entries.json"
+        assert repo_p._storage_path.endswith("/token_blacklist")
 
     @pytest.mark.asyncio
-    async def test_empty_entries_is_persisted(self, repo):
-        await repo.save_all({})
-        with open(repo._entries_path) as f:
-            import json
-
-            assert json.load(f) == {"entries": {}}
-        assert await repo.load_all() == {}
+    async def test_cleanup_expired_removes_stale(self, repo):
+        await repo.save("keep", time.time() + 60)
+        await repo.save("gone", 1.0)
+        removed = await repo.cleanup_expired()
+        assert removed >= 1
+        loaded = await repo.load_all()
+        assert "keep" in loaded
+        assert "gone" not in loaded
 
 
 # ---------------------------------------------------------------------------
@@ -129,20 +105,19 @@ class TestRepositoryConforms:
 
         assert inspect.iscoroutinefunction(repo.load_all)
 
-    def test_save_all_is_coroutine(self, repo):
+    def test_save_is_coroutine(self, repo):
         import inspect
 
-        assert inspect.iscoroutinefunction(repo.save_all)
+        assert inspect.iscoroutinefunction(repo.save)
 
 
 # ---------------------------------------------------------------------------
-# Service — constructor / dependency injection
+# Service — constructor
 # ---------------------------------------------------------------------------
 
 
 class TestServiceConstruction:
     def test_default_repository_is_file(self, test_settings):
-        """Constructing without arguments should use the file impl."""
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
                 "authglow.repositories.dependencies.get_token_blacklist_repository",
@@ -152,21 +127,15 @@ class TestServiceConstruction:
         assert isinstance(svc._repository, FileTokenBlacklistRepository)
 
     def test_explicit_repository_is_used(self):
-        """The constructor must accept an alternative repository."""
-
         class StubRepo:
-            def __init__(self):
-                self.load_calls = 0
-                self.save_calls = 0
-                self.saved: dict = {}
+            async def save(self, jti, expires_at):
+                pass
 
             async def load_all(self):
-                self.load_calls += 1
                 return {}
 
-            async def save_all(self, entries):
-                self.save_calls += 1
-                self.saved = dict(entries)
+            async def cleanup_expired(self):
+                return 0
 
         stub = StubRepo()
         svc = TokenBlacklist(repository=stub)  # type: ignore[arg-type]
@@ -188,20 +157,12 @@ class TestServiceHydrate:
 
     @pytest.mark.asyncio
     async def test_hydrate_loads_persisted_entries(self, repo_p):
-        await repo_p.save_all({"jti-keep": time.time() + 60, "jti-gone": 1.0})
+        await repo_p.save("jti-keep", time.time() + 60)
+        await repo_p.save("jti-gone", 1.0)
         svc = TokenBlacklist(repository=FileTokenBlacklistRepository(settings=repo_p._settings))
         await svc.startup_hydrate()
         assert "jti-keep" in svc._store
         assert "jti-gone" not in svc._store
-
-    @pytest.mark.asyncio
-    async def test_hydrate_persists_pruned_entries(self, repo):
-        await repo.save_all({"alive": time.time() + 60, "dead": 1.0})
-        svc = TokenBlacklist(repository=repo)
-        await svc.startup_hydrate()
-        reloaded = await repo.load_all()
-        assert "alive" in reloaded
-        assert "dead" not in reloaded
 
 
 # ---------------------------------------------------------------------------
@@ -225,21 +186,21 @@ class TestServiceRevokeAndCheck:
 
     @pytest.mark.asyncio
     async def test_is_revoked_false_before_hydrate(self):
-        """Pre-hydrate, is_revoked must return False (no I/O)."""
-
         class NeverLoad:
+            async def save(self, jti, expires_at):
+                raise AssertionError("must not be called from is_revoked")
+
             async def load_all(self):
                 raise AssertionError("must not be called from is_revoked")
 
-            async def save_all(self, entries):
-                raise AssertionError("must not be called from is_revoked")
+            async def cleanup_expired(self):
+                return 0
 
         svc = TokenBlacklist(repository=NeverLoad())  # type: ignore[arg-type]
         assert svc.is_revoked("anything") is False
 
     @pytest.mark.asyncio
-    async def test_revoking_past_expiry_is_silently_ignored(self, repo):
-        """Pre-refactor: revoke() short-circuits when expires_at <= now."""
+    async def test_revoking_past_expiry_is_ignored(self, repo):
         svc = TokenBlacklist(repository=repo)
         await svc.startup_hydrate()
         await svc.revoke("expired-jti", 1.0)
@@ -255,7 +216,7 @@ class TestServiceRevokeAndCheck:
         repo2 = FileTokenBlacklistRepository(settings=repo_p._settings)
         loaded = await repo2.load_all()
         assert "persisted-jti" in loaded
-        assert loaded["persisted-jti"] == future
+        assert loaded["persisted-jti"] == pytest.approx(future, abs=1)
 
     @pytest.mark.asyncio
     async def test_revoke_is_idempotent(self, repo):
@@ -266,6 +227,25 @@ class TestServiceRevokeAndCheck:
         await svc.revoke("dup", future + 100)
         assert svc.is_revoked("dup") is True
 
+    def test_cross_instance_visibility(self, repo_p):
+        """Instance B's is_revoked sees what A wrote to disk, without
+        startup_hydrate (the disk fallback in _check_disk)."""
+        import asyncio
+
+        async def _run():
+            svc_a = TokenBlacklist(
+                repository=FileTokenBlacklistRepository(settings=repo_p._settings)
+            )
+            await svc_a.startup_hydrate()
+            await svc_a.revoke("multi-jti", time.time() + 60)
+
+            svc_b = TokenBlacklist(
+                repository=FileTokenBlacklistRepository(settings=repo_p._settings)
+            )
+            assert svc_b.is_revoked("multi-jti") is True
+
+        asyncio.run(_run())
+
 
 # ---------------------------------------------------------------------------
 # Service — sweep on MAX_ENTRIES
@@ -274,7 +254,7 @@ class TestServiceRevokeAndCheck:
 
 class TestServiceSweep:
     @pytest.mark.asyncio
-    async def test_sweep_drops_expired_entries_on_max(self, repo, monkeypatch):
+    async def test_sweep_drops_expired_on_max(self, repo, monkeypatch):
         svc = TokenBlacklist(repository=repo)
         await svc.startup_hydrate()
         monkeypatch.setattr(TokenBlacklist, "MAX_ENTRIES", 3)
@@ -283,15 +263,12 @@ class TestServiceSweep:
         await svc.revoke("alive-1", now + 60)
         await svc.revoke("alive-2", now + 60)
         await svc.revoke("expired-1", 1.0)
-        # _store currently has 2 entries (revoke() rejects expired)
         assert len(svc._store) == 2
 
-        # Bypass the early-return by inserting directly, then trigger sweep
         svc._store["expired-2"] = 1.0
         assert len(svc._store) == 3
 
         await svc.revoke("alive-3", now + 60)
-        # sweep should have removed expired-2
         assert "expired-2" not in svc._store
         assert "alive-1" in svc._store
 

@@ -28,6 +28,7 @@ class User(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
+    address: Optional[dict] = None
 
     # OAuth2 related
     scopes: List[str] = Field(default_factory=list)

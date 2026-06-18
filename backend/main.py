@@ -9,6 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from authglow.api.admin import router as admin_router
 from authglow.api.api_key import router as api_key_router
 from authglow.api.auth import router as auth_router
+from authglow.api.device_auth import router as device_auth_router
 from authglow.api.email_verification import router as email_verification_router
 from authglow.api.federation import router as federation_router
 from authglow.api.mfa import router as mfa_router
@@ -81,6 +82,7 @@ app.include_router(user_profile_router, tags=["User Profile"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
 app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 app.include_router(federation_router, tags=["Federation"])
+app.include_router(device_auth_router, tags=["Device Authorization"])
 
 
 @app.get("/")

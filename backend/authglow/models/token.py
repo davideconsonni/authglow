@@ -54,6 +54,32 @@ class AuthorizationCode(BaseModel):
 
     # OIDC support
     nonce: Optional[str] = None
+    state: Optional[str] = None
+
+    # acr/amr — OIDC authentication context
+    acr: Optional[str] = None
+    amr: Optional[List[str]] = None
+
+
+class DeviceAuthorization(BaseModel):
+    """OAuth 2.0 Device Authorization Grant (RFC 8628).
+
+    Stored temporarily while the user completes the
+    browser-based approval flow on a secondary device.
+    """
+
+    device_code: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    user_code: str  # 8-char human-friendly code, set by the service
+    client_id: str
+    scope: str
+    verification_uri: str
+    expires_at: datetime
+    interval: int = 5  # minimum polling interval in seconds
+    status: str = "pending"  # pending | authorized | denied | expired
+    user_id: Optional[str] = None
+    authorized_at: Optional[datetime] = None
+    last_poll_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class OAuth2AuthorizationRequest(BaseModel):
