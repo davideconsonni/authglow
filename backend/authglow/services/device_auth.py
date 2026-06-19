@@ -15,7 +15,7 @@ authorizations. The device-initiated flow:
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 import structlog
 
@@ -130,3 +130,33 @@ class DeviceAuthorizationService:
         """Delete all expired device authorizations."""
         count: int = await self._repo.delete_expired()
         return count
+
+    async def list_all(
+        self, status_filter: Optional[str] = None
+    ) -> List[DeviceAuthorization]:
+        """Return all device authorizations, optionally filtered by status."""
+        result: List[DeviceAuthorization] = await self._repo.list_all(status_filter)
+        return result
+
+    async def list_by_user(self, user_id: str) -> List[DeviceAuthorization]:
+        """Return all device authorizations for a specific user."""
+        all_auths: List[DeviceAuthorization] = await self._repo.list_all()
+        return [a for a in all_auths if a.user_id == user_id]
+
+    async def revoke(self, device_code: str) -> bool:
+        """Revoke a device authorization by setting it to denied."""
+        auth: Optional[DeviceAuthorization] = await self._repo.get_by_device_code(
+            device_code
+        )
+        if auth is None:
+            return False
+        if auth.status not in ("pending", "authorized"):
+            return False
+        auth.status = "denied"
+        await self._repo.update(auth)
+        logger.info(
+            "device_authorization_revoked",
+            device_code=auth.device_code[:8] + "...",
+            client_id=auth.client_id,
+        )
+        return True

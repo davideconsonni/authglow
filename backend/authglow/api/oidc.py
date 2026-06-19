@@ -38,6 +38,38 @@ async def openid_configuration(request: Request):
     settings = get_settings()
     base_url = settings.issuer
 
+    scopes_supported = (
+        [s.strip() for s in settings.oidc_scopes_supported.split(",") if s.strip()]
+        if settings.oidc_scopes_supported
+        else ["openid", "profile", "email", "phone", "address", "offline_access"]
+    )
+    response_types_supported = (
+        [s.strip() for s in settings.oidc_response_types_supported.split(",") if s.strip()]
+        if settings.oidc_response_types_supported
+        else ["code"]
+    )
+    grant_types_supported = (
+        [s.strip() for s in settings.oidc_grant_types_supported.split(",") if s.strip()]
+        if settings.oidc_grant_types_supported
+        else [
+            "authorization_code",
+            "refresh_token",
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:device_code",
+        ]
+    )
+    claims_supported = (
+        [s.strip() for s in settings.oidc_claims_supported.split(",") if s.strip()]
+        if settings.oidc_claims_supported
+        else [
+            "sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "acr", "amr", "sid",
+            "name", "given_name", "family_name", "middle_name", "nickname",
+            "preferred_username", "profile", "picture", "website",
+            "email", "email_verified", "gender", "birthdate", "zoneinfo",
+            "locale", "phone_number", "phone_number_verified", "address", "updated_at",
+        ]
+    )
+
     return OpenIDConfiguration(
         issuer=settings.issuer,
         authorization_endpoint=f"{base_url}/oauth2/authorize",
@@ -45,54 +77,22 @@ async def openid_configuration(request: Request):
         userinfo_endpoint=f"{base_url}/oauth2/userinfo",
         jwks_uri=f"{base_url}/.well-known/jwks.json",
         registration_endpoint=f"{base_url}/oauth2/register",
-        scopes_supported=["openid", "profile", "email", "phone", "address", "offline_access"],
-        response_types_supported=["code"],
+        scopes_supported=scopes_supported,
+        response_types_supported=response_types_supported,
         response_modes_supported=["query", "fragment", "form_post"],
-        grant_types_supported=[
-            "authorization_code",
-            "refresh_token",
-            "client_credentials",
-            "urn:ietf:params:oauth:grant-type:device_code",
-        ],
+        grant_types_supported=grant_types_supported,
         subject_types_supported=["public"],
         id_token_signing_alg_values_supported=[settings.jwt_algorithm],
         token_endpoint_auth_methods_supported=["client_secret_basic", "client_secret_post", "none"],
-        claims_supported=[
-            "sub",
-            "iss",
-            "aud",
-            "exp",
-            "iat",
-            "auth_time",
-            "nonce",
-            "acr",
-            "amr",
-            "sid",
-            "name",
-            "given_name",
-            "family_name",
-            "middle_name",
-            "nickname",
-            "preferred_username",
-            "profile",
-            "picture",
-            "website",
-            "email",
-            "email_verified",
-            "gender",
-            "birthdate",
-            "zoneinfo",
-            "locale",
-            "phone_number",
-            "phone_number_verified",
-            "address",
-            "updated_at",
-        ],
+        claims_supported=claims_supported,
         code_challenge_methods_supported=["S256"],
         device_authorization_endpoint=f"{base_url}/oauth2/device/authorize",
         revocation_endpoint=f"{base_url}/oauth2/revoke",
         introspection_endpoint=f"{base_url}/oauth2/introspect",
         end_session_endpoint=f"{base_url}/oauth2/logout",
+        service_documentation=settings.oidc_service_documentation or None,
+        op_policy_uri=settings.oidc_op_policy_uri or None,
+        op_tos_uri=settings.oidc_op_tos_uri or None,
     )
 
 

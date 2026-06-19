@@ -1576,3 +1576,63 @@ async def revoke_jwk_key(
     )
 
     return {"message": f"JWK key {kid} revoked successfully"}
+
+
+# --- Device Authorization Management ---
+
+
+@router.get("/api/admin/device-authorizations")
+async def list_device_authorizations(
+    status: Optional[str] = Query(None),
+    current_user: User = Depends(require_admin),
+):
+    """List all device authorizations, optionally filtered by status."""
+    from authglow.services.device_auth import DeviceAuthorizationService
+
+    service = DeviceAuthorizationService()
+    auths = await service.list_all(status_filter=status)
+
+    return {
+        "device_authorizations": [
+            {
+                "device_code": a.device_code,
+                "user_code": a.user_code,
+                "client_id": a.client_id,
+                "scope": a.scope,
+                "status": a.status,
+                "user_id": a.user_id,
+                "created_at": a.created_at.isoformat(),
+                "expires_at": a.expires_at.isoformat(),
+                "authorized_at": a.authorized_at.isoformat() if a.authorized_at else None,
+            }
+            for a in auths
+        ],
+        "total": len(auths),
+    }
+
+
+@router.post("/api/admin/device-authorizations/{device_code}/revoke")
+async def revoke_device_authorization(
+    device_code: str,
+    request: Request,
+    current_user: User = Depends(require_admin),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Revoke a device authorization (admin)."""
+    from authglow.services.device_auth import DeviceAuthorizationService
+
+    service = DeviceAuthorizationService()
+    success = await service.revoke(device_code)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Device authorization not found or already finalized")
+
+    await audit_service.log_event(
+        event_type="device_authorization_revoked",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"device_code": device_code},
+        severity="warning",
+    )
+
+    return {"message": "Device authorization revoked"}

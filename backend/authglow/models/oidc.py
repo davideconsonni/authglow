@@ -94,6 +94,11 @@ class OpenIDConfiguration(BaseModel):
     introspection_endpoint: Optional[str] = None
     end_session_endpoint: Optional[str] = None
 
+    # Optional provider metadata URIs
+    service_documentation: Optional[str] = None
+    op_policy_uri: Optional[str] = None
+    op_tos_uri: Optional[str] = None
+
     # Session management / logout
     frontchannel_logout_supported: bool = True
     backchannel_logout_supported: bool = False

@@ -313,3 +313,73 @@ class TestNoTokenInAuditLog:
         source = inspect.getsource(verify_email_api)
         assert '"token":' not in source
         assert '"verification_code":' not in source
+
+
+class TestResendVerification:
+    def test_resend_verification_email(self, email_verification_service):
+        user = User(
+            id="user-ev-resend",
+            email="ev-resend@example.com",
+            hashed_password=hash_password("TestP@ss1!"),
+            is_active=True,
+            email_verified=False,
+        )
+        email_verification_service.user_storage.get_user_by_email = AsyncMock(return_value=user)
+        email_verification_service.send_verification_email = AsyncMock(return_value=True)
+
+        success, error = asyncio_run(
+            email_verification_service.resend_verification_email("ev-resend@example.com")
+        )
+        assert success is True
+        assert error is None
+
+    def test_resend_unknown_email(self, email_verification_service):
+        email_verification_service.user_storage.get_user_by_email = AsyncMock(return_value=None)
+
+        success, error = asyncio_run(
+            email_verification_service.resend_verification_email("unknown@example.com")
+        )
+        assert success is False
+        assert "not found" in error.lower()
+
+    def test_resend_already_verified(self, email_verification_service):
+        user = User(
+            id="user-ev-verified",
+            email="ev-verified@example.com",
+            hashed_password=hash_password("TestP@ss1!"),
+            is_active=True,
+            email_verified=True,
+        )
+        email_verification_service.user_storage.get_user_by_email = AsyncMock(return_value=user)
+
+        success, error = asyncio_run(
+            email_verification_service.resend_verification_email("ev-verified@example.com")
+        )
+        assert success is False
+        assert "already verified" in error.lower()
+
+    def test_resend_send_failure(self, email_verification_service):
+        user = User(
+            id="user-ev-sendfail",
+            email="ev-sendfail@example.com",
+            hashed_password=hash_password("TestP@ss1!"),
+            is_active=True,
+            email_verified=False,
+        )
+        email_verification_service.user_storage.get_user_by_email = AsyncMock(return_value=user)
+        email_verification_service.send_verification_email = AsyncMock(return_value=False)
+
+        success, error = asyncio_run(
+            email_verification_service.resend_verification_email("ev-sendfail@example.com")
+        )
+        assert success is False
+        assert "Failed" in error
+
+    def test_resend_endpoint_accepts_optional_auth(self):
+        import inspect
+        from authglow.api.email_verification import resend_verification_email
+
+        source = inspect.getsource(resend_verification_email)
+        assert "get_optional_user" in source, "endpoint must use get_optional_user for optional auth"
+        assert "current_user is not None" in source, "must check current_user is not None"
+        assert "body.email" in source, "must read email from body when not authenticated"

@@ -1,11 +1,14 @@
 """Email verification API endpoints."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from authglow.api.auth import get_current_user
+from authglow.api.auth import get_optional_user
 from authglow.core.rate_limit import limiter
 from authglow.models.email_verification import (
     EmailVerificationRequest,
+    ResendVerificationRequest,
 )
 from authglow.models.user import User
 from authglow.services.audit import AuditService
@@ -59,15 +62,32 @@ async def verify_email_api(request: Request, verification_request: EmailVerifica
 
 
 @router.post("/api/email/resend-verification")
-@limiter.limit("5/hour")
+@limiter.limit("3/hour")
 async def resend_verification_email(
-    request: Request, current_user: User = Depends(get_current_user)
+    request: Request,
+    body: Optional[ResendVerificationRequest] = None,
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Resend verification email for authenticated user."""
+    """Resend verification email.
+
+    Authenticated users: uses ``current_user.email`` automatically.
+    Unauthenticated users: requires ``email`` in the request body.
+    """
     verification_service = get_verification_service()
     audit_service = get_audit_service()
 
-    email = current_user.email
+    email: Optional[str] = None
+
+    if current_user is not None:
+        email = current_user.email
+    elif body is not None and body.email:
+        email = body.email
+
+    if email is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Email is required in the request body when not authenticated",
+        )
 
     success, error = await verification_service.resend_verification_email(email)
 

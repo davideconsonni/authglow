@@ -27,6 +27,7 @@ type Status = 'loading' | 'form' | 'success' | 'error'
 export function EmailVerifiedPage() {
   const [searchParams] = useSearchParams()
   const urlToken = searchParams.get('token')
+  const userEmail = searchParams.get('email')
   const [status, setStatus] = useState<Status>(urlToken ? 'loading' : 'form')
   const [resending, setResending] = useState(false)
   const [resendSent, setResendSent] = useState(false)
@@ -74,7 +75,7 @@ export function EmailVerifiedPage() {
   const handleResend = async () => {
     setResending(true)
     try {
-      await api.post('/api/email/resend-verification')
+      await api.post('/api/email/resend-verification', userEmail ? { email: userEmail } : undefined)
       setResendSent(true)
     } catch {
       // silently fail, user can retry

@@ -16,6 +16,9 @@ import {
   Menu,
   X,
   Globe,
+  Smartphone,
+  SlidersHorizontal,
+  Gauge,
   type LucideIcon,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
@@ -49,6 +52,7 @@ export function Sidebar() {
         { label: 'Security', icon: Shield, to: ROUTES.SECURITY },
         { label: 'Sessions', icon: Monitor, to: ROUTES.SESSIONS },
         { label: 'API Keys', icon: Key, to: ROUTES.API_KEYS },
+        { label: 'Device Auths', icon: Smartphone, to: ROUTES.DEVICE_AUTHORIZATIONS },
       ],
     },
   ]
@@ -68,6 +72,9 @@ export function Sidebar() {
         { label: 'Password Resets', icon: Lock, to: ROUTES.ADMIN.PASSWORD_RESETS },
         { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
         { label: 'Federation', icon: Globe, to: ROUTES.ADMIN.FEDERATION },
+        { label: 'Device Auths', icon: Smartphone, to: ROUTES.ADMIN.DEVICE_AUTHORIZATIONS },
+        { label: 'Settings', icon: SlidersHorizontal, to: ROUTES.ADMIN.SETTINGS },
+        { label: 'Rate Limits', icon: Gauge, to: ROUTES.ADMIN.RATE_LIMITS },
       ],
     })
   }

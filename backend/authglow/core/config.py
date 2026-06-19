@@ -332,6 +332,15 @@ class Settings(BaseSettings):
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
 
+    # OIDC Discovery customization (None = use built-in defaults)
+    oidc_claims_supported: Optional[str] = None  # Comma-separated, e.g. "sub,email,name"
+    oidc_scopes_supported: Optional[str] = None  # Comma-separated, e.g. "openid,profile,email"
+    oidc_grant_types_supported: Optional[str] = None  # Comma-separated
+    oidc_response_types_supported: Optional[str] = None  # Comma-separated
+    oidc_service_documentation: Optional[str] = None
+    oidc_op_policy_uri: Optional[str] = None
+    oidc_op_tos_uri: Optional[str] = None
+
     # Request Body Size Limit
     max_request_body_size_mb: int = 10
 

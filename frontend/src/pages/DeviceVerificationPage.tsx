@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Loader2, CheckCircle, XCircle, Smartphone } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
+import { ROUTES } from '@/lib/constants'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 interface DeviceInfo {
@@ -15,6 +17,7 @@ type Step = 'input' | 'review' | 'result'
 export function DeviceVerificationPage() {
   useDocumentTitle('Device Verification')
   const { isAuthenticated, isLoading } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [userCode, setUserCode] = useState('')
   const [step, setStep] = useState<Step>('input')
@@ -23,7 +26,7 @@ export function DeviceVerificationPage() {
   const [result, setResult] = useState<'approved' | 'denied' | ''>('')
   const [submitting, setSubmitting] = useState(false)
 
-  const prefilledCode = new URLSearchParams(window.location.search).get('user_code') ?? ''
+  const prefilledCode = searchParams.get('user_code') ?? ''
 
   useEffect(() => {
     if (prefilledCode) {
@@ -41,22 +44,41 @@ export function DeviceVerificationPage() {
   }
 
   if (!isAuthenticated) {
-    const loginUrl = `/auth/login?redirect=${encodeURIComponent('/oauth2/device/verify' + (prefilledCode ? `?user_code=${prefilledCode}` : ''))}`
-    window.location.href = loginUrl
-    return null
+    const loginPath = `${ROUTES.AUTH.LOGIN}?redirect=${encodeURIComponent(ROUTES.OAUTH_DEVICE_VERIFY)}`
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
+        <div className="w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-violet/10">
+            <Smartphone className="h-7 w-7 text-brand-violet" />
+          </div>
+          <h2 className="text-xl font-semibold text-text-primary">Device Verification</h2>
+          <p className="text-sm text-text-muted">Sign in to verify a device code.</p>
+          <a
+            href={loginPath}
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Sign In
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  function cleanCode(raw: string) {
+    return raw.trim().toUpperCase().replace(/\s/g, '')
   }
 
   async function handleLookup(code?: string) {
-    const lookupCode = code || userCode
-    if (!lookupCode.trim()) {
-      setError('Enter a user code')
+    const lookupCode = cleanCode(code || userCode)
+    if (!lookupCode) {
+      setError('Enter a code')
       return
     }
     setError('')
     setSubmitting(true)
     try {
       const data = await api.post<DeviceInfo>('/api/oauth2/device/verify', {
-        user_code: lookupCode.trim().toUpperCase().replace(/\s/g, ''),
+        user_code: lookupCode,
       })
       setDeviceInfo(data)
       setStep('review')
@@ -71,7 +93,7 @@ export function DeviceVerificationPage() {
     setSubmitting(true)
     try {
       await api.post('/api/oauth2/device/approve', {
-        user_code: userCode.trim().toUpperCase().replace(/\s/g, ''),
+        user_code: cleanCode(userCode),
       })
       setResult('approved')
       setStep('result')
@@ -86,7 +108,7 @@ export function DeviceVerificationPage() {
     setSubmitting(true)
     try {
       await api.post('/api/oauth2/device/deny', {
-        user_code: userCode.trim().toUpperCase().replace(/\s/g, ''),
+        user_code: cleanCode(userCode),
       })
       setResult('denied')
       setStep('result')
@@ -186,7 +208,7 @@ export function DeviceVerificationPage() {
             </div>
             <div>
               <h3 className="text-sm font-medium text-text-muted">Code</h3>
-              <p className="text-text-primary font-mono text-lg tracking-widest">{userCode}</p>
+              <p className="text-text-primary font-mono text-lg tracking-widest">{cleanCode(userCode)}</p>
             </div>
             {error && <p className="text-sm text-semantic-error" role="alert">{error}</p>}
             <div className="flex gap-3">

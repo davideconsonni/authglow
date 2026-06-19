@@ -84,7 +84,7 @@ export function RegisterForm() {
         password: data.password,
       })
       navigate(ROUTES.AUTH.LOGIN, {
-        state: { registered: true },
+        state: { registered: true, email: data.email },
       })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : ''

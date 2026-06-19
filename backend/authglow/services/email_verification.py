@@ -217,10 +217,15 @@ class EmailVerificationService:
         """
         email_service = get_email_service()
 
+        from urllib.parse import quote
+
         context = {
             "user_name": user.first_name or user.email.split("@")[0],
             "verification_code": code,
-            "verify_page_url": f"{self._settings.frontend_base_url}/auth/verify-email",
+            "verify_page_url": (
+                f"{self._settings.frontend_base_url}/auth/verify-email"
+                f"?email={quote(user.email)}"
+            ),
             "company_name": self._settings.company_name,
             "expires_hours": 24,
         }

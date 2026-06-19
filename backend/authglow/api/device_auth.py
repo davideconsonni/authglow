@@ -55,7 +55,7 @@ async def device_authorize(
     for the user to enter on a secondary device.
     """
     settings = get_settings()
-    base_url = str(request.base_url).rstrip("/")
+    base_url = settings.frontend_base_url or str(request.base_url).rstrip("/")
     verification_uri = f"{base_url}/oauth2/device/verify"
 
     service = DeviceAuthorizationService()
@@ -131,3 +131,51 @@ async def device_deny(
         raise HTTPException(status_code=400, detail="Invalid or expired user code")
 
     return {"status": "denied"}
+
+
+@router.get("/api/oauth2/device/authorizations")
+@limiter.limit("30/minute")
+async def my_device_authorizations(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """User-facing endpoint: list own device authorizations."""
+    service = DeviceAuthorizationService()
+    auths = await service.list_by_user(current_user.id)
+
+    return {
+        "device_authorizations": [
+            {
+                "device_code": a.device_code[:12] + "...",
+                "user_code": a.user_code,
+                "client_id": a.client_id,
+                "scope": a.scope,
+                "status": a.status,
+                "created_at": a.created_at.isoformat(),
+                "expires_at": a.expires_at.isoformat(),
+            }
+            for a in auths
+        ],
+        "total": len(auths),
+    }
+
+
+@router.post("/api/oauth2/device/authorizations/{user_code}/revoke")
+@limiter.limit("10/minute")
+async def revoke_my_device_authorization(
+    user_code: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """User-facing endpoint: revoke own device authorization by user_code."""
+    service = DeviceAuthorizationService()
+    auth = await service.verify_user_code(user_code)
+
+    if auth is None or auth.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Device authorization not found")
+
+    success = await service.revoke(auth.device_code)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot revoke this device authorization")
+
+    return {"status": "revoked"}

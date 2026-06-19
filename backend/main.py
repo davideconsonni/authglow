@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 
 from authglow.api.admin import router as admin_router
+from authglow.api.admin_settings import router as admin_settings_router
 from authglow.api.api_key import router as api_key_router
 from authglow.api.auth import router as auth_router
 from authglow.api.device_auth import router as device_auth_router
@@ -71,6 +72,7 @@ app.include_router(setup_router, tags=["Setup"])
 app.include_router(auth_router, tags=["Authentication"])
 app.include_router(mfa_router, tags=["MFA"])
 app.include_router(admin_router, tags=["Admin"])
+app.include_router(admin_settings_router, tags=["Admin Settings"])
 app.include_router(passkey_router, tags=["Passkeys"])
 app.include_router(oauth_client_router, tags=["OAuth2 Clients"])
 app.include_router(api_key_router, tags=["API Keys"])

@@ -10,6 +10,7 @@ export type PlaygroundFlow =
   | 'api-key-exchange'
   | 'oidc-discovery'
   | 'userinfo'
+  | 'device-code'
   | 'generic'
 
 export interface PlaygroundState {

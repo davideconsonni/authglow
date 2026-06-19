@@ -21,6 +21,7 @@ interface FederationProvider {
   auth_levels?: string[] | null
   visible_contexts: string[]
   claims_mapping: Record<string, string>
+  rate_limit_per_minute?: number | null
   created_at: string
   updated_at: string
 }
@@ -129,6 +130,7 @@ export function AdminFederationPage() {
           auth_levels: authLevels,
           visible_contexts: visibleContexts,
           claims_mapping: claimsMapping,
+          rate_limit_per_minute: form.rate_limit_per_minute ?? null,
         }
         if (clientSecret) updatePayload.client_secret = clientSecret
         await api.put(`/api/federation/admin/providers/${editId}`, updatePayload)
@@ -147,6 +149,7 @@ export function AdminFederationPage() {
           auth_levels: authLevels.length > 0 ? authLevels : null,
           visible_contexts: visibleContexts,
           claims_mapping: claimsMapping,
+          rate_limit_per_minute: form.rate_limit_per_minute ?? null,
         })
         notify.success('Provider created.')
       }
@@ -340,6 +343,28 @@ export function AdminFederationPage() {
                       OAuth2
                     </label>
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-text-muted">
+                    Rate Limit (requests/minute, optional)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={form.rate_limit_per_minute ?? ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        rate_limit_per_minute: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                    placeholder="Default"
+                    className="w-40 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[10px] text-text-muted">
+                    Leave empty for system default limits.
+                  </p>
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-text-muted">

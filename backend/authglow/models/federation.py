@@ -45,6 +45,14 @@ class ExternalIdpConfig(BaseModel):
         }
     )
 
+    rate_limit_per_minute: Optional[int] = Field(
+        None,
+        ge=1,
+        le=1000,
+        description="Custom rate limit (requests/minute) for this provider's "
+        "public endpoints. When None the system default applies.",
+    )
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     created_by: Optional[str] = None
@@ -77,6 +85,7 @@ class ExternalIdpConfigCreate(BaseModel):
     auth_levels: Optional[List[str]] = None
     visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
+    rate_limit_per_minute: Optional[int] = Field(None, ge=1, le=1000)
 
     @field_validator("icon_uri", "logo_uri")
     @classmethod
@@ -111,6 +120,7 @@ class ExternalIdpConfigUpdate(BaseModel):
     auth_levels: Optional[List[str]] = None
     visible_contexts: Optional[List[str]] = None
     claims_mapping: Optional[Dict[str, str]] = None
+    rate_limit_per_minute: Optional[int] = Field(None, ge=1, le=1000)
 
     @field_validator("icon_uri", "logo_uri")
     @classmethod
@@ -145,5 +155,6 @@ class ExternalIdpConfigResponse(BaseModel):
     auth_levels: Optional[List[str]] = None
     visible_contexts: List[str]
     claims_mapping: Dict[str, str]
+    rate_limit_per_minute: Optional[int] = None
     created_at: datetime
     updated_at: datetime

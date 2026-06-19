@@ -231,6 +231,28 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    storage: UserStorage = Depends(get_user_storage),
+    jwt_service: JWTService = Depends(get_jwt_service),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    audit_service: AuditService = Depends(get_audit_service),
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+) -> Optional[User]:
+    """Get current user if authenticated, otherwise return None.
+
+    Used by endpoints that behave differently for authenticated vs
+    anonymous users (e.g. resend verification email).
+    """
+    try:
+        return await get_current_user(
+            request, token, storage, jwt_service, api_key_service, audit_service, oauth2_service
+        )
+    except HTTPException:
+        return None
+
+
 # OAuth2 Authorization Code Flow Endpoints
 
 

@@ -9,6 +9,7 @@ import {
   Trash2,
   User,
   Braces,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react'
 import type { PlaygroundFlow } from '@/stores/playgroundStore'
@@ -74,6 +75,12 @@ export const FLOWS: FlowDef[] = [
     label: 'UserInfo',
     icon: User,
     description: 'Fetch OIDC user claims via access token',
+  },
+  {
+    id: 'device-code',
+    label: 'Device Code',
+    icon: Smartphone,
+    description: 'RFC 8628 — TV/CLI device authorization flow',
   },
   {
     id: 'generic',

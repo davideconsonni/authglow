@@ -22,6 +22,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { SessionsPage } from '@/pages/SessionsPage'
 import { ApiKeysPage } from '@/pages/ApiKeysPage'
+import { DeviceAuthorizationsPage } from '@/pages/DeviceAuthorizationsPage'
 import { SetupPage } from '@/pages/SetupPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ToastContainer } from '@/components/shared/Toast'
@@ -62,6 +63,18 @@ const AdminPlaygroundPage = lazy(() =>
 )
 const AdminFederationPage = lazy(() =>
   import('@/pages/admin/AdminFederationPage').then((m) => ({ default: m.AdminFederationPage })),
+)
+const AdminDeviceAuthsPage = lazy(() =>
+  import('@/pages/admin/AdminDeviceAuthsPage').then((m) => ({ default: m.AdminDeviceAuthsPage })),
+)
+const DeviceAuthNewTool = lazy(() =>
+  import('@/pages/admin/DeviceAuthNewTool').then((m) => ({ default: m.DeviceAuthNewTool })),
+)
+const AdminSettingsPage = lazy(() =>
+  import('@/pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
+)
+const AdminRateLimitsPage = lazy(() =>
+  import('@/pages/admin/AdminRateLimitsPage').then((m) => ({ default: m.AdminRateLimitsPage })),
 )
 
 const queryClient = new QueryClient({
@@ -168,6 +181,7 @@ function App() {
             <Route path={ROUTES.SECURITY} element={<Suspense fallback={<LazyFallback />}><SecurityPage /></Suspense>} />
             <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
             <Route path={ROUTES.API_KEYS} element={<ApiKeysPage />} />
+            <Route path={ROUTES.DEVICE_AUTHORIZATIONS} element={<DeviceAuthorizationsPage />} />
             <Route path={ROUTES.ADMIN.DASHBOARD} element={<Suspense fallback={<LazyFallback />}><AdminDashboardPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.USERS} element={<Suspense fallback={<LazyFallback />}><AdminUsersPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<Suspense fallback={<LazyFallback />}><AdminOAuthClientsPage /></Suspense>} />
@@ -179,6 +193,10 @@ function App() {
             <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.PLAYGROUND} element={<Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense>} />
             <Route path={ROUTES.ADMIN.FEDERATION} element={<Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.SETTINGS} element={<Suspense fallback={<LazyFallback />}><AdminSettingsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.RATE_LIMITS} element={<Suspense fallback={<LazyFallback />}><AdminRateLimitsPage /></Suspense>} />
+            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS_NEW} element={<Suspense fallback={<LazyFallback />}><DeviceAuthNewTool /></Suspense>} />
+            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS} element={<Suspense fallback={<LazyFallback />}><AdminDeviceAuthsPage /></Suspense>} />
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
