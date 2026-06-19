@@ -55,12 +55,6 @@ charset-normalizer==3.4.7
     # via requests
 click==8.4.1
     # via uvicorn
-colorama==0.4.6
-    # via
-    #   click
-    #   pytest
-    #   qrcode
-    #   uvicorn
 cryptography==49.0.0
     # via
     #   -r requirements.in
@@ -223,7 +217,7 @@ pydantic==2.13.4
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
     # via -r requirements.in
 pygments==2.20.0
     # via pytest
@@ -308,6 +302,8 @@ urllib3==2.7.0
     #   requests
 uvicorn==0.49.0
     # via -r requirements.in
+uvloop==0.22.1
+    # via uvicorn
 watchfiles==1.2.0
     # via uvicorn
 webauthn==2.8.0
