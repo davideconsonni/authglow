@@ -99,11 +99,14 @@ class TestIdTokenHintPrePopulation:
             user_claims={"email": "hintuser@example.com", "email_verified": True},
         )
 
-        # Patch both the class symbol and ``new()`` so direct
-        # ``await JWTService.new()`` calls in the route handler
-        # resolve to the pre-built ``jwt_svc`` instance.
-        with patch("authglow.api.auth.JWTService") as mock_cls:
-            mock_cls.new = AsyncMock(return_value=jwt_svc)
+        # Patch the singleton ``get_jwt_service`` so the route handler
+        # resolves to the pre-built ``jwt_svc`` instead of constructing
+        # a real ``JWTService.new()`` against the keyring.
+        with patch(
+            "authglow.api.auth.get_jwt_service",
+            new_callable=AsyncMock,
+            return_value=jwt_svc,
+        ):
             http_client = TestClient(app)
             response = http_client.post(
                 "/api/oauth2/authorize",
@@ -142,7 +145,11 @@ class TestIdTokenHintPrePopulation:
 
         jwt_svc = asyncio.run(JWTService.new())
 
-        with patch("authglow.api.auth.JWTService", return_value=jwt_svc):
+        with patch(
+            "authglow.api.auth.get_jwt_service",
+            new_callable=AsyncMock,
+            return_value=jwt_svc,
+        ):
             http_client = TestClient(app)
             response = http_client.post(
                 "/api/oauth2/authorize",

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.passkey import (
     PasskeyAuthenticationVerification,
@@ -61,11 +62,6 @@ def get_passkey_service(request: Request) -> PasskeyService:
 def get_user_storage() -> UserStorage:
     """Get user storage instance."""
     return UserStorage()
-
-
-async def get_jwt_service() -> JWTService:
-    """Get JWT service instance (async — keyring is loaded from fsspec)."""
-    return await JWTService.new()
 
 
 async def get_current_user(

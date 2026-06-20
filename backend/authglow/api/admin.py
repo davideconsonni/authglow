@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.admin import (
     AdminUserDetail,
@@ -22,7 +23,6 @@ from authglow.models.admin import (
 from authglow.models.user import User, UserCreate, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
-from authglow.services.jwt import JWTService
 from authglow.services.mfa import MFAService
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.passkey import PasskeyService
@@ -1488,7 +1488,7 @@ async def get_jwk_keys(
     current_user: User = Depends(require_admin),
 ):
     """Get all JWK keys in the keyring."""
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     info = jwt_service.get_keyring_info()
 
     keys_list = []
@@ -1531,7 +1531,7 @@ async def rotate_jwk_keys(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Rotate the active JWK signing key."""
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     result = await jwt_service.rotate_keys()
 
     await audit_service.log_event(
@@ -1558,7 +1558,7 @@ async def revoke_jwk_key(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a JWK key. Active key cannot be revoked."""
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     success = jwt_service.revoke_key(kid)
 
     if not success:

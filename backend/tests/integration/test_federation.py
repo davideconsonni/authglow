@@ -1,17 +1,16 @@
 """Integration tests for the federation login/callback CSRF protection
 and admin CRUD authentication."""
 
+import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
-import secrets
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.api.federation import router as federation_router
 from authglow.core.crypto import derive_federation_state_key
-from authglow.services.auth.token_blacklist import _reset_token_blacklist
 
 
 @pytest.fixture
@@ -24,10 +23,9 @@ def federation_app():
 @pytest.fixture
 def admin_app():
     """FastAPI app with mocked admin auth for testing admin CRUD endpoints."""
+    from authglow.api.admin import require_admin
     from authglow.models.user import User
     from authglow.services.password import hash_password
-
-    from authglow.api.admin import require_admin
 
     app = FastAPI()
     app.include_router(federation_router)
@@ -204,6 +202,7 @@ class TestFederationCallbackRejectsBadState:
 class TestFederationCallbackIdTokenNonce:
     def test_callback_rejects_mismatched_nonce(self, test_settings, federation_app):
         from unittest.mock import AsyncMock
+
         from authglow.services.federation import JWKSVerificationError
 
         token = _sign_state(test_settings, provider_id="google")  # nonce="fixed-nonce-for-tests"
@@ -399,6 +398,7 @@ class TestVisibleContexts:
 
     def test_list_providers_filters_by_dashboard(self, test_settings):
         import asyncio
+
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
         from authglow.services.federation_provider import (
@@ -459,6 +459,7 @@ class TestVisibleContexts:
 
     def test_list_providers_without_context_returns_all(self, test_settings):
         import asyncio
+
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
         from authglow.services.federation_provider import (
@@ -485,6 +486,7 @@ class TestVisibleContexts:
 
     def test_provider_without_visible_contexts_uses_default(self, test_settings):
         import asyncio
+
         from authglow.models.federation import ExternalIdpConfig
         from authglow.services.federation import FederationService
         from authglow.services.federation_provider import (
@@ -525,9 +527,10 @@ class TestVapt026FederationRateLimits:
 
     def _make_limited_app(self):
         from slowapi.middleware import SlowAPIMiddleware
-        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+
         from authglow.core.config import get_settings
         from authglow.core.rate_limit import limiter
+        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 
         original_settings = get_settings()
         settings = _FakeSettings()
@@ -600,11 +603,16 @@ class TestVapt026FederationRateLimits:
                     MockUserStorage.return_value.update_last_login = AsyncMock()
                     with patch("authglow.api.federation.LoginHistoryService") as MockLoginSvc:
                         MockLoginSvc.return_value.record_login = AsyncMock()
-                        with patch("authglow.api.federation.JWTService") as MockJwt:
+                        with patch(
+                            "authglow.api.federation.get_jwt_service",
+                            new_callable=AsyncMock,
+                        ) as mock_get_jwt:
+                            mock_svc = MagicMock()
                             mock_token = MagicMock()
                             mock_token.access_token = "fake-access"
                             mock_token.refresh_token = "fake-refresh"
-                            MockJwt.return_value.create_token_response.return_value = mock_token
+                            mock_svc.create_token_response.return_value = mock_token
+                            mock_get_jwt.return_value = mock_svc
                             with patch(
                                 "authglow.services.refresh_token.RefreshTokenService"
                             ) as MockRefreshSvc:

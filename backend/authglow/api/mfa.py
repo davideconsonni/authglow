@@ -9,6 +9,7 @@ from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.mfa import (
     MFAEnrollResponse,
@@ -42,11 +43,6 @@ def get_user_storage():
 def get_audit_service():
     """Get audit service instance."""
     return AuditService()
-
-
-async def get_jwt_service() -> JWTService:
-    """Get JWT service instance (async — keyring is loaded from fsspec)."""
-    return await JWTService.new()
 
 
 @router.post("/api/mfa/enroll", response_model=MFAEnrollResponse)

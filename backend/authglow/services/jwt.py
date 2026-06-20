@@ -546,6 +546,9 @@ class JWTService:
         old_kid = self._active_kid
         new_keypair = await self._repository.rotate(secret_key=self.settings.secret_key)
         await self._load_keyring_snapshot()
+        from authglow.core.jwt_singleton import reset_jwt_singleton
+
+        await reset_jwt_singleton()
         return {"old_kid": old_kid, "new_kid": new_keypair.kid}
 
     async def revoke_key(self, kid: str) -> bool:
@@ -563,6 +566,9 @@ class JWTService:
             return False
         await self._repository.revoke(kid)
         await self._load_keyring_snapshot()
+        from authglow.core.jwt_singleton import reset_jwt_singleton
+
+        await reset_jwt_singleton()
         return True
 
     def get_keyring_info(self) -> Dict[str, Any]:

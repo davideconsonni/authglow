@@ -59,33 +59,50 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ### 1.1 — bcrypt sync → `asyncio.to_thread`
 
-- [ ] **`services/password.py:90-108`** — wrappare `bcrypt.hashpw` e `bcrypt.checkpw` in
+- [x] **`services/password.py:90-108`** — wrappare `bcrypt.hashpw` e `bcrypt.checkpw` in
   `async def hash_password_async()` / `async def verify_password_async()` con
   `asyncio.to_thread`. Mantenere le versioni sync come wrapper che chiamano `asyncio.run`
   per retro-compat (per gli script CLI e i job fuori dal request loop).
-- [ ] **Aggiornare call site in `services/refresh_token.py:87, 139`** per usare
+- [x] **Aggiornare call site in `services/refresh_token.py:87, 139`** per usare
   `_async`.
-- [ ] **Aggiornare call site in `services/mfa.py:125-132`** (backup code verify).
-- [ ] **Aggiornare call site in `services/api_key.py:76, 83`** (hash + verify).
-- [ ] **Aggiornare call site in `services/oauth_client.py:103`** (`verify_password`).
-- [ ] **Aggiornare call site in `api/auth.py:1007`** (login password verify).
-- [ ] **Aggiornare call site in `api/auth.py:491`** (OAuth2 authorize password).
-- [ ] **Aggiornare call site in `api/oidc.py:694`** (DCR client_secret verify).
-- [ ] **Aggiornare call site in `api/user_profile.py:179`** (change password).
-- [ ] **Aggiornare call site in `api/password_reset.py:236, 259`** (reset/change).
-- [ ] **Test**: `pytest tests/unit/test_password.py tests/unit/test_api_key.py
+- [x] **Aggiornare call site in `services/mfa.py:125-132`** (backup code verify).
+- [x] **Aggiornare call site in `services/api_key.py:76, 83`** (hash + verify).
+- [x] **Aggiornare call site in `services/oauth_client.py:103`** (`verify_password`).
+- [x] **Aggiornare call site in `api/auth.py:1007`** (login password verify).
+- [x] **Aggiornare call site in `api/auth.py:491`** (OAuth2 authorize password).
+- [x] **Aggiornare call site in `api/oidc.py:694`** (DCR client_secret verify).
+- [x] **Aggiornare call site in `api/user_profile.py:179`** (change password).
+- [x] **Aggiornare call site in `api/password_reset.py:236, 259`** (reset/change).
+- [x] **Test**: `pytest tests/unit/test_password.py tests/unit/test_api_key.py
   tests/unit/test_refresh_token.py tests/unit/test_admin_users_phase2.py` deve passare.
+- [x] **Estensione scope** (uniformità): convertiti anche `api/admin.py:260,650`,
+  `api/federation.py:316`, `api/setup.py:114`, `api/auth.py:1319,1511` e
+  i call site `hash` in `api/password_reset.py:183,266` e `services/user_profile.py:145,149,231`
+  + `services/oauth_client.py:72,162`. Refactor di `services/{refresh_token,mfa,api_key}.py`
+  per delega a `services/password.py` (rimozione `import bcrypt` diretto).
+- [x] **Nuova suite** `tests/performance/test_bcrypt_async.py` (12 test: correttezza
+  + concorrenza + micro-benchmark) con marker `performance` in `pyproject.toml`.
 
 ### 1.2 — Singleton `JWTService` in `api/*`
 
-- [ ] **`api/auth.py:107-114`** — `get_jwt_service` con lazy-async singleton come
+- [x] **`api/auth.py:107-114`** — `get_jwt_service` con lazy-async singleton come
   `core/permissions.py:14-21`. Cache invalida su `rotate_keys` (admin-only).
-- [ ] **`api/mfa.py:47-49`** — stesso pattern.
-- [ ] **`api/passkey.py:66-68`** — stesso pattern.
-- [ ] **`api/oauth2_advanced.py:30-32`** — stesso pattern.
-- [ ] **Test**: `pytest tests/unit/test_jwt.py tests/unit/test_admin.py
+- [x] **`api/mfa.py:47-49`** — stesso pattern.
+- [x] **`api/passkey.py:66-68`** — stesso pattern.
+- [x] **`api/oauth2_advanced.py:30-32`** — stesso pattern.
+- [x] **Estensione scope** (uniformità): consolidato tutto in un unico modulo
+  `core/jwt_singleton.py` con `get_jwt_service()` + `reset_jwt_singleton()`,
+  `asyncio.Lock` + double-checked locking. Hook su `JWTService.rotate_keys` e
+  `revoke_key`. Convertiti anche i call site diretti in `api/admin.py:1491,1534,1561`,
+  `api/oidc.py:133,190,225,299,451`, `api/password_reset.py:284`, `api/federation.py:346`,
+  `api/auth.py:349,397` (16 call site totali → 1 singleton).
+- [x] **Test isolation**: fixture autouse `_reset_jwt_singleton` in `tests/conftest.py`.
+- [x] **Test**: `pytest tests/unit/test_jwt.py tests/unit/test_admin.py
   tests/unit/test_id_token_*.py` deve passare; test_oidc_logout, test_logout_redirect,
-  test_permissions.
+  test_permissions. Aggiornati i mock in `test_logout_redirect.py`,
+  `test_id_token_hint.py`, `test_federation.py` per il nuovo pattern.
+  Nuova suite `tests/performance/test_jwt_singleton.py` (3 test: reuse, concorrenza,
+  invalidation su rotate).
 
 ### 1.3 — `httpx.AsyncClient` singleton in `federation.py`
 
@@ -137,9 +154,9 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ### Validazione Tier 1
 
-- [ ] `pytest -q --tb=line -n auto` deve passare (zero regressions).
-- [ ] `ruff check authglow/ && ruff format --check authglow/ && mypy authglow/`.
-- [ ] Misurare throughput: prima/dopo con load test (vedi §Validazione).
+- [x] `pytest -q --tb=line -n auto` deve passare (zero regressions). — **1735 passed, 8 pre-existing failures (JWT su Py 3.13, vedi AGENTS.md), 0 regressioni**.
+- [x] `ruff check authglow/ && ruff format --check authglow/ && mypy authglow/`. — ruff/format puliti; mypy: 2 errori pre-esistenti (`oidc.py:553`, `federation.py:636`).
+- [ ] Misurare throughput: prima/dopo con load test (vedi §Validazione). — da fare in Tier 2 / fine-piano.
 
 ### Rollback Tier 1
 
@@ -542,3 +559,11 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 **Stato**: pronto per esecuzione
 **Owner**: TBD
 **Reviewer**: TBD
+
+---
+
+## Changelog
+
+- **2026-06-20** — §1.1 e §1.2 completate. Tier 1 al 2/8 punti. Suite `tests/performance/`
+  istituita (15 test totali: 12 bcrypt + 3 jwt singleton). Fixture autouse
+  `_reset_jwt_singleton` aggiunta a `tests/conftest.py`.

@@ -1,15 +1,13 @@
 import os
-import sys
-import pytest
-import tempfile
 import shutil
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch, MagicMock
+import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+import pytest
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 def _generate_rsa_keys(
@@ -91,6 +89,20 @@ def _override_settings(test_settings):
     with patch("authglow.core.config.get_settings", return_value=test_settings):
         with patch("authglow.core.config.Settings", return_value=test_settings):
             yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_jwt_singleton():
+    """Drop the process-wide :func:`authglow.core.jwt_singleton.get_jwt_service`
+    cache between tests so each case reloads the keyring against the
+    ``test_settings`` patched by :func:`_override_settings`.
+    """
+    import asyncio
+
+    from authglow.core.jwt_singleton import reset_jwt_singleton
+
+    yield
+    asyncio.run(reset_jwt_singleton())
 
 
 @pytest.fixture

@@ -13,6 +13,7 @@ from fastapi.responses import RedirectResponse
 from authglow.api.admin import require_admin
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.federation import (
     ExternalIdpConfig,
@@ -27,7 +28,6 @@ from authglow.services.federation_provider import (
     FederationProviderService as _FederationProviderService,
 )
 from authglow.services.federation_state import FederationStateError, FederationStateToken
-from authglow.services.jwt import JWTService
 from authglow.services.login_history import LoginHistoryService
 from authglow.services.session import SessionService
 from authglow.services.user import UserService as UserStorage
@@ -343,7 +343,7 @@ async def federation_callback(
 
         oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
 
-        jwt_service = await JWTService.new()
+        jwt_service = await get_jwt_service()
         auth_tokens = jwt_service.create_token_response(
             user_id=user.id,
             email=user.email,

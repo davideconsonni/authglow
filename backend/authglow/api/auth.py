@@ -11,6 +11,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from authglow.core.config import Settings, get_settings
 from authglow.core.crypto import decrypt_totp_secret
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.token import Token
 from authglow.models.user import (
@@ -111,11 +112,6 @@ def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]
 def get_user_storage():
     """Get user storage instance."""
     return UserStorage()
-
-
-async def get_jwt_service() -> JWTService:
-    """Get JWT service instance (async — keyring is loaded from fsspec)."""
-    return await JWTService.new()
 
 
 def get_oauth2_service():
@@ -346,7 +342,7 @@ async def authorize_post(
     hint_user: Optional[User] = None
     if id_token_hint:
         try:
-            jwt_svc = await JWTService.new()
+            jwt_svc = await get_jwt_service()
             hint_token = jwt_svc.decode_id_token(id_token_hint, expected_aud=client_id)
             if hint_token and not email:
                 hint_user = await storage.get_user(hint_token.sub)
@@ -394,7 +390,7 @@ async def authorize_post(
     access_token = request.cookies.get(settings.auth_cookie_access_name)
     if access_token and "login" not in parsed_prompts:
         try:
-            jwt_svc = await JWTService.new()
+            jwt_svc = await get_jwt_service()
             token_data = jwt_svc.decode_token(access_token)
             if token_data:
                 user = await storage.get_user(token_data.sub)

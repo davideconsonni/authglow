@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from authglow.api.auth import _extract_basic_auth, get_current_user
 from authglow.core.datetime import utcnow
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.services.audit import AuditService
@@ -25,11 +26,6 @@ router = APIRouter()
 def get_refresh_token_service():
     """Get refresh token service instance."""
     return RefreshTokenService()
-
-
-async def get_jwt_service() -> JWTService:
-    """Get JWT service instance (async — keyring is loaded from fsspec)."""
-    return await JWTService.new()
 
 
 def get_oauth2_service():

@@ -14,12 +14,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from authglow.core.config import get_settings
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.keystore import KeyPairMeta, KeyringInfo
 from authglow.models.oauth_client import OAuth2Client, OAuth2ClientResponse, OAuth2ClientUpdate
 from authglow.models.oidc import IDTokenClaims, JWKSResponse, OpenIDConfiguration, UserInfoResponse
 from authglow.services.audit import AuditService
-from authglow.services.jwt import JWTService
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oidc import OIDCService
 
@@ -130,7 +130,7 @@ async def jwks(request: Request):
     Spec: https://tools.ietf.org/html/rfc7517
     """
     settings = get_settings()
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     keyring_info = jwt_service.get_keyring_info()
 
     def int_to_base64(n):
@@ -187,7 +187,7 @@ async def jwks_status(request: Request):
     this endpoint exposes status metadata for all keys so that
     clients can detect when a cached ``kid`` has been revoked.
     """
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     keyring_info = jwt_service.get_keyring_info()
 
     keys_meta = []
@@ -222,7 +222,7 @@ async def userinfo(request: Request, credentials: HTTPAuthorizationCredentials =
     Returns:
         User information based on the scopes in the access token
     """
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     oidc_service = OIDCService()
 
     # Decode and validate access token
@@ -296,7 +296,7 @@ async def logout_get(
     from authglow.services.audit import AuditService
     from authglow.services.oauth2 import OAuth2Service
 
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     oauth2_service = OAuth2Service()
     audit_service = AuditService()
 
@@ -448,7 +448,7 @@ async def logout_post(
     """
     from authglow.services.audit import AuditService
 
-    jwt_service = await JWTService.new()
+    jwt_service = await get_jwt_service()
     audit_service = AuditService()
 
     # Decode token for audit logging

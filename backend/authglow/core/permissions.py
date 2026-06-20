@@ -6,19 +6,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from authglow.core.config import get_settings
-from authglow.services.jwt import JWTService
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.services.rbac import RBACService
 
 security = HTTPBearer(auto_error=False)
-
-_jwt_service: Optional[JWTService] = None
-
-
-async def _get_jwt_service() -> JWTService:
-    global _jwt_service
-    if _jwt_service is None:
-        _jwt_service = await JWTService.new()
-    return _jwt_service
 
 
 def _extract_token(request: Request, credentials: Optional[HTTPAuthorizationCredentials]) -> str:
@@ -74,7 +65,7 @@ class PermissionChecker:
         token = _extract_token(request, credentials)
 
         # Decode token to get user_id
-        token_data = (await _get_jwt_service()).decode_token(token)
+        token_data = (await get_jwt_service()).decode_token(token)
         if not token_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -194,7 +185,7 @@ async def get_current_user(
         HTTPException: If unauthorized
     """
     token = _extract_token(request, credentials)
-    token_data = (await _get_jwt_service()).decode_token(token)
+    token_data = (await get_jwt_service()).decode_token(token)
 
     if not token_data:
         raise HTTPException(

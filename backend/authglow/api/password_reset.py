@@ -231,8 +231,8 @@ async def change_password(
     sessions (access token JTI blacklist + all refresh tokens) so an
     attacker with a stolen token cannot retain access.
     """
+    from authglow.core.jwt_singleton import get_jwt_service
     from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
-    from authglow.services.jwt import JWTService
 
     settings = get_settings()
 
@@ -281,7 +281,7 @@ async def change_password(
     if not access_token:
         access_token = request.cookies.get(settings.auth_cookie_access_name)
     if access_token:
-        jwt_svc = await JWTService.new()
+        jwt_svc = await get_jwt_service()
         at_data = jwt_svc.decode_token(access_token)
         if at_data and at_data.jti:
             await get_blacklist().revoke(at_data.jti, at_data.exp.timestamp())
