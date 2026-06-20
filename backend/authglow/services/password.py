@@ -1,5 +1,6 @@
 """Password validation and hashing service."""
 
+import asyncio
 import re
 from typing import List, Optional
 
@@ -106,3 +107,25 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     password_bytes = _prepare_password_bytes(plain_password)
     return bcrypt.checkpw(password_bytes, hashed_password.encode("utf-8"))
+
+
+async def hash_password_async(password: str) -> str:
+    """Async wrapper around :func:`hash_password` that offloads the bcrypt work
+    to the default thread pool via :func:`asyncio.to_thread`.
+
+    Use this in async request handlers to keep the event loop responsive
+    during the ~50-300ms bcrypt computation. The sync function is kept
+    untouched for CLI scripts and offline jobs.
+    """
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
+    """Async wrapper around :func:`verify_password` that offloads the bcrypt
+    work to the default thread pool via :func:`asyncio.to_thread`.
+
+    Use this in async request handlers to keep the event loop responsive
+    during the ~50-300ms bcrypt computation. The sync function is kept
+    untouched for CLI scripts and offline jobs.
+    """
+    return await asyncio.to_thread(verify_password, plain_password, hashed_password)

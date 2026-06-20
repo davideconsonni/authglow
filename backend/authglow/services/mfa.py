@@ -1,5 +1,6 @@
 """MFA (TOTP) service for two-factor authentication."""
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -8,7 +9,6 @@ import secrets
 from datetime import timedelta
 from typing import List, Optional
 
-import bcrypt
 import pyotp
 import qrcode
 
@@ -21,6 +21,7 @@ from authglow.repositories.protocols import (
     BackupCodeRepository,
     TrustedDeviceRepository,
 )
+from authglow.services.password import hash_password
 
 
 class BackupCodeLockedException(Exception):
@@ -121,15 +122,14 @@ class MFAService:
     def hash_backup_code(self, code: str) -> str:
         """Hash a backup code for storage."""
         clean_code = code.replace("-", "")
-        code_bytes = clean_code.encode("utf-8")[:72]
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(code_bytes, salt).decode("utf-8")
+        return hash_password(clean_code)
 
     def verify_backup_code(self, code: str, hashed_code: str) -> bool:
         """Verify a backup code against its hash."""
         clean_code = code.replace("-", "").upper()
-        code_bytes = clean_code.encode("utf-8")[:72]
-        return bcrypt.checkpw(code_bytes, hashed_code.encode("utf-8"))
+        from authglow.services.password import verify_password
+
+        return verify_password(clean_code, hashed_code)
 
     def generate_device_fingerprint(self, user_agent: str, ip: str) -> str:
         """Generate a deterministic device fingerprint using HMAC-SHA256."""
@@ -189,7 +189,7 @@ class MFAService:
                 return False
 
             for hashed_code in backup_codes.codes:
-                if self.verify_backup_code(code, hashed_code):
+                if await asyncio.to_thread(self.verify_backup_code, code, hashed_code):
                     await self._attempts_repo.delete(user_id)
                     await self._bc_repo.use_code(user_id, hashed_code)
                     return True

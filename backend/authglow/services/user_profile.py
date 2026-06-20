@@ -26,7 +26,7 @@ from authglow.models.user_profile import (
     UserProfileUpdate,
 )
 from authglow.services.email_verification import EmailVerificationService
-from authglow.services.password import hash_password, verify_password
+from authglow.services.password import hash_password_async, verify_password_async
 from authglow.services.security_notifications import SecurityNotificationService
 from authglow.services.user import UserService as UserStorage
 
@@ -142,11 +142,11 @@ class UserProfileService:
                 return False, "User not found"
 
             # Verify current password
-            if not verify_password(current_password, user.hashed_password):
+            if not await verify_password_async(current_password, user.hashed_password):
                 return False, "Current password is incorrect"
 
             # Update password
-            user.hashed_password = hash_password(new_password)
+            user.hashed_password = await hash_password_async(new_password)
             user.updated_at = utcnow()
 
             await self.user_storage._user_repo.update(user)
@@ -176,7 +176,7 @@ class UserProfileService:
                 return False, "User not found"
 
             # Verify password
-            if not verify_password(password, user.hashed_password):
+            if not await verify_password_async(password, user.hashed_password):
                 return False, "Password is incorrect"
 
             # Check if new email is already in use
@@ -228,7 +228,7 @@ class UserProfileService:
             )
 
         # Verify password
-        if not verify_password(password, user.hashed_password):
+        if not await verify_password_async(password, user.hashed_password):
             return False, "Password is incorrect"
 
         # Delete user preferences (delegated to the

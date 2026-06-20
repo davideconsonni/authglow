@@ -18,7 +18,11 @@ from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.email import EmailService
 from authglow.services.email.factory import get_email_service
-from authglow.services.password import PasswordValidator, hash_password, verify_password
+from authglow.services.password import (
+    PasswordValidator,
+    hash_password_async,
+    verify_password_async,
+)
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.user import UserService
 
@@ -180,7 +184,7 @@ async def confirm_password_reset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Hash new password
-    hashed_password = hash_password(reset_confirm.new_password)
+    hashed_password = await hash_password_async(reset_confirm.new_password)
 
     # Update user password
     user.hashed_password = hashed_password
@@ -233,7 +237,9 @@ async def change_password(
     settings = get_settings()
 
     # Verify current password
-    if not verify_password(password_change.current_password, current_user.hashed_password):
+    if not await verify_password_async(
+        password_change.current_password, current_user.hashed_password
+    ):
         await audit_service.log_event(
             event_type="password_change_failed",
             user_id=current_user.id,
@@ -256,14 +262,14 @@ async def change_password(
         )
 
     # Check if new password is same as current
-    if verify_password(password_change.new_password, current_user.hashed_password):
+    if await verify_password_async(password_change.new_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New password must be different from current password",
         )
 
     # Hash new password
-    hashed_password = hash_password(password_change.new_password)
+    hashed_password = await hash_password_async(password_change.new_password)
 
     # Update user password
     current_user.hashed_password = hashed_password

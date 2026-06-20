@@ -19,19 +19,19 @@ optimistic-concurrency ``_version`` checks, which surface as
 :class:`ConcurrentWriteError` and are retried inside the lock.
 """
 
+import asyncio
 import hashlib
 import hmac
 import secrets
 from datetime import timedelta
 from typing import List, Optional, Tuple
 
-import bcrypt
-
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 from authglow.repositories.protocols import RefreshTokenRepository
+from authglow.services.password import hash_password, verify_password_async
 
 
 class RefreshTokenService:
@@ -84,7 +84,7 @@ class RefreshTokenService:
             tuple: (plaintext_token, token_hash, token_lookup)
         """
         plaintext = secrets.token_urlsafe(32)
-        token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
+        token_hash = hash_password(plaintext)
         token_lookup = hmac.new(self._secret_bytes, plaintext.encode(), hashlib.sha256).hexdigest()
         return plaintext, token_hash, token_lookup
 
@@ -110,7 +110,7 @@ class RefreshTokenService:
         Only the bcrypt hash and HMAC lookup key are persisted to disk.
         The plaintext token is returned to the caller for delivery to the client.
         """
-        plaintext, token_hash, token_lookup = self._generate_token()
+        plaintext, token_hash, token_lookup = await asyncio.to_thread(self._generate_token)
 
         refresh_token = RefreshToken(
             token_hash=token_hash,
@@ -136,7 +136,7 @@ class RefreshTokenService:
         rt = await self._repo.get_by_lookup(token_lookup)
         if rt is None:
             return None
-        if not bcrypt.checkpw(token.encode(), rt.token_hash.encode()):
+        if not await verify_password_async(token, rt.token_hash):
             return None
         rt.token = token  # restore the plaintext for callers
         return rt

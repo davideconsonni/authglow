@@ -17,17 +17,17 @@ stats, revoke, etc.) so concurrent updates from the same process
 are serialised.
 """
 
+import asyncio
 import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
-
-import bcrypt
 
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKey, APIKeyCreate
 from authglow.repositories.protocols import APIKeyRepository
+from authglow.services.password import hash_password, verify_password
 
 PREFIX_LENGTH = 12
 
@@ -73,14 +73,14 @@ class APIKeyService:
 
         prefix = full_key[:PREFIX_LENGTH]
 
-        key_hash = bcrypt.hashpw(full_key.encode(), bcrypt.gensalt()).decode()
+        key_hash = hash_password(full_key)
 
         return full_key, prefix, key_hash
 
     def _verify_api_key(self, key_hash: str, provided_key: str) -> bool:
         """Verify an API key against its hash."""
         try:
-            return bcrypt.checkpw(provided_key.encode(), key_hash.encode())
+            return verify_password(provided_key, key_hash)
         except Exception:
             return False
 
@@ -166,7 +166,7 @@ class APIKeyService:
             if api_key is None:
                 continue
 
-            if self._verify_api_key(api_key.key_hash, provided_key):
+            if await asyncio.to_thread(self._verify_api_key, api_key.key_hash, provided_key):
                 if not api_key.is_active:
                     return None
 

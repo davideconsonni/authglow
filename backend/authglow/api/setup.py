@@ -11,7 +11,7 @@ from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
-from authglow.services.password import PasswordValidator, hash_password
+from authglow.services.password import PasswordValidator, hash_password_async
 from authglow.services.user import UserService
 
 # Back-compat alias for Fase 21 transition window
@@ -111,7 +111,7 @@ async def create_admin_user(
 
         admin_user = User(
             email=admin_request.email,
-            hashed_password=hash_password(admin_request.password),
+            hashed_password=await hash_password_async(admin_request.password),
             first_name=admin_request.first_name,
             last_name=admin_request.last_name,
             scopes=["read", "write", "admin"],

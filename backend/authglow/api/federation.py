@@ -309,11 +309,11 @@ async def federation_callback(
 
         if existing_user is None:
             from authglow.models.user import User
-            from authglow.services.password import hash_password
+            from authglow.services.password import hash_password_async
 
             user = User(
                 email=email or f"{external_id}@federated.local",
-                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                hashed_password=await hash_password_async(secrets.token_urlsafe(32)),
                 first_name=mapped.get("given_name") or mapped.get("name", ""),
                 last_name=mapped.get("family_name", ""),
                 scopes=["read"],

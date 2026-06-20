@@ -16,6 +16,9 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "performance: performance / micro-benchmark tests (run with -m performance)",
+]
 
 [tool.mypy]
 python_version = "3.11"

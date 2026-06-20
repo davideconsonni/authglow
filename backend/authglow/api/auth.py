@@ -26,7 +26,11 @@ from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService, resolve_rbac_permissions
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
-from authglow.services.password import PasswordValidator, hash_password, verify_password
+from authglow.services.password import (
+    PasswordValidator,
+    hash_password_async,
+    verify_password_async,
+)
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.session import SessionService
@@ -488,7 +492,7 @@ async def authorize_post(
             )
 
         user = await storage.get_user_by_email(email)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user or not await verify_password_async(password, user.hashed_password):
             if user:
                 await storage.record_failed_login(user.id)
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1004,7 +1008,7 @@ async def login_for_access_token(
         )
 
     # Check if user exists and verify password
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not await verify_password_async(form_data.password, user.hashed_password):
         await handle_failed_login()
     assert user is not None  # help mypy narrow after NoReturn handler
 
@@ -1316,7 +1320,7 @@ async def invite_user(
     # Create user
     user = User(
         email=invite.email,
-        hashed_password=hash_password(temp_password),
+        hashed_password=await hash_password_async(temp_password),
         first_name=invite.first_name,
         last_name=invite.last_name,
         scopes=invite.scopes,
@@ -1508,7 +1512,7 @@ async def register_user(
 
     user = User(
         email=user_data.email,
-        hashed_password=hash_password(user_data.password),
+        hashed_password=await hash_password_async(user_data.password),
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         scopes=["read"],

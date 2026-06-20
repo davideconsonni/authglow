@@ -817,10 +817,13 @@ class TestCreateUser:
         def fake_hash(pw):
             return f"hashed-{pw}"
 
+        async def fake_hash_async(pw):
+            return fake_hash(pw)
+
         with (
             patch("authglow.api.admin.UserStorage", return_value=mock_storage),
             patch("authglow.api.admin.AuditService", return_value=audit_svc),
-            patch("authglow.api.admin.hash_password", side_effect=fake_hash),
+            patch("authglow.api.admin.hash_password_async", side_effect=fake_hash_async),
             patch("authglow.api.admin.EmailVerificationService") as mock_ver_svc,
         ):
             mock_ver = AsyncMock()
@@ -889,7 +892,7 @@ class TestCreateUser:
 
         with (
             patch("authglow.api.admin.UserStorage", return_value=mock_storage),
-            patch("authglow.api.admin.hash_password"),
+            patch("authglow.api.admin.hash_password_async"),
         ):
             with pytest.raises(HTTPException) as exc:
                 asyncio.get_event_loop().run_until_complete(

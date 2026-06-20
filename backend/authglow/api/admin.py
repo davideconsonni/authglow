@@ -26,7 +26,7 @@ from authglow.services.jwt import JWTService
 from authglow.services.mfa import MFAService
 from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.passkey import PasskeyService
-from authglow.services.password import PasswordValidator, hash_password
+from authglow.services.password import PasswordValidator, hash_password_async
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.user import UserService
@@ -257,7 +257,7 @@ async def create_user(
 
     user = User(
         email=body.email,
-        hashed_password=hash_password(body.password),
+        hashed_password=await hash_password_async(body.password),
         first_name=body.first_name,
         last_name=body.last_name,
         phone=body.phone,
@@ -647,7 +647,7 @@ async def set_user_password(
             detail=f"Password does not meet requirements: {'; '.join(errors or [])}",
         )
 
-    hashed = hash_password(body.password)
+    hashed = await hash_password_async(body.password)
     updated = await storage.set_password(user_id, hashed, require_change=body.require_change)
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")

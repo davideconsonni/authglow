@@ -31,7 +31,7 @@ from authglow.core.config import Settings, get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_client import OAuth2Client
 from authglow.repositories.protocols import OAuth2ClientRepository
-from authglow.services.password import hash_password, verify_password
+from authglow.services.password import hash_password_async, verify_password_async
 
 
 class OAuth2ClientStorage:
@@ -69,7 +69,7 @@ class OAuth2ClientStorage:
         (use ``generate_client_secret`` to obtain a plaintext
         secret for the API response).
         """
-        client.client_secret = hash_password(plaintext_secret)
+        client.client_secret = await hash_password_async(plaintext_secret)
         await self._repository.create(client)
         return client
 
@@ -100,7 +100,7 @@ class OAuth2ClientStorage:
         """Verify client credentials."""
         if not client or not client.is_active:
             return False
-        return verify_password(client_secret, client.client_secret)
+        return await verify_password_async(client_secret, client.client_secret)
 
     async def verify_redirect_uri(self, client_id: str, redirect_uri: str) -> bool:
         """Verify if redirect_uri is allowed for the client."""
@@ -159,7 +159,7 @@ class OAuth2ClientStorage:
                 if client is None:
                     raise ValueError("Client not found")
                 new_secret = secrets.token_urlsafe(32)
-                client.client_secret = hash_password(new_secret)
+                client.client_secret = await hash_password_async(new_secret)
                 try:
                     await self._repository.update(client)
                     return new_secret

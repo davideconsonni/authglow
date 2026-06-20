@@ -129,6 +129,8 @@ Page component
 
 5. **All filesystem access goes through fsspec** — the `BaseFileRepository` base class owns the fsspec filesystem selection (`storage_backend`) and the `AsyncFileSystem` wrapper. Direct `os.path` / `open()` in repository code is a violation. Every entity, including the JWT keyring (`repositories/file/keystore.py`), rides on fsspec via `BaseFileRepository` and honours `STORAGE_BACKEND` like the rest. The keyring uses a `_version` field in `keyring.json` for object-store atomicity (CAS via `_write_json_versioned`).
 
+6. **CPU-bound work off the event loop** — bcrypt (`services/password.py:hash_password_async` / `verify_password_async`) and fsspec I/O (`core/async_io.py:AsyncFileSystem`) are offloaded to the default thread pool via `asyncio.to_thread`. All async request handlers must use the `*_async` variants of these helpers — see Tier 1.1 of `docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md` for the rollout. The sync `hash_password` / `verify_password` remain available for CLI scripts and offline jobs.
+
 ## Key Files
 
 | File                                            | Why important                                                         |

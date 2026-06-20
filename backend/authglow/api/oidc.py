@@ -689,9 +689,9 @@ async def _authenticate_client_for_dcr(
             detail="Client not found or inactive.",
         )
 
-    from authglow.services.password import verify_password
+    from authglow.services.password import verify_password_async
 
-    if not verify_password(basic_secret, client.client_secret):
+    if not await verify_password_async(basic_secret, client.client_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid client credentials.",
