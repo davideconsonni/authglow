@@ -5,6 +5,7 @@ POST body is decoded and used to pre-populate the login email field
 (OIDC Core §3.1.2.1).
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
@@ -90,7 +91,7 @@ class TestIdTokenHintPrePopulation:
 
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         id_token = jwt_svc.create_id_token(
             user_id="hint-user-1",
             client_id="client-abc",
@@ -98,7 +99,11 @@ class TestIdTokenHintPrePopulation:
             user_claims={"email": "hintuser@example.com", "email_verified": True},
         )
 
-        with patch("authglow.api.auth.JWTService", return_value=jwt_svc):
+        # Patch both the class symbol and ``new()`` so direct
+        # ``await JWTService.new()`` calls in the route handler
+        # resolve to the pre-built ``jwt_svc`` instance.
+        with patch("authglow.api.auth.JWTService") as mock_cls:
+            mock_cls.new = AsyncMock(return_value=jwt_svc)
             http_client = TestClient(app)
             response = http_client.post(
                 "/api/oauth2/authorize",
@@ -135,7 +140,7 @@ class TestIdTokenHintPrePopulation:
         )
         storage.get_user_by_email.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
 
         with patch("authglow.api.auth.JWTService", return_value=jwt_svc):
             http_client = TestClient(app)

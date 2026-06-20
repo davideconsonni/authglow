@@ -44,9 +44,9 @@ def get_audit_service():
     return AuditService()
 
 
-def get_jwt_service():
-    """Get JWT service instance."""
-    return JWTService()
+async def get_jwt_service() -> JWTService:
+    """Get JWT service instance (async — keyring is loaded from fsspec)."""
+    return await JWTService.new()
 
 
 @router.post("/api/mfa/enroll", response_model=MFAEnrollResponse)

@@ -5,6 +5,7 @@ token is provided and ``c_hash`` when an authorization code is provided
 (OIDC Core §3.1.3.6).
 """
 
+import asyncio
 import base64
 import hashlib
 
@@ -16,7 +17,7 @@ class TestAccessTokenHash:
         from authglow.services.jwt import JWTService
 
         access_token = "my-access-token-abc123"
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",
@@ -42,7 +43,7 @@ class TestAccessTokenHash:
     def test_at_hash_absent_when_no_access_token(self, test_settings):
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",
@@ -65,7 +66,7 @@ class TestCodeHash:
         from authglow.services.jwt import JWTService
 
         code = "auth-code-value-xyz"
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",
@@ -91,7 +92,7 @@ class TestCodeHash:
     def test_c_hash_absent_when_no_code(self, test_settings):
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",

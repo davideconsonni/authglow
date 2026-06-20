@@ -343,7 +343,7 @@ async def federation_callback(
 
         oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
 
-        jwt_service = JWTService()
+        jwt_service = await JWTService.new()
         auth_tokens = jwt_service.create_token_response(
             user_id=user.id,
             email=user.email,

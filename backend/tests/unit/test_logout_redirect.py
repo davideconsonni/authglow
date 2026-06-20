@@ -79,7 +79,12 @@ class TestLogoutRedirectStrictValidation:
         audit_mock.log_event = AsyncMock()
 
         stack = ExitStack()
-        stack.enter_context(patch("authglow.api.oidc.JWTService", return_value=jwt_mock))
+        # Patch the class symbol and the ``new()`` classmethod so the
+        # route handler's ``await JWTService.new()`` resolves to the
+        # pre-built ``jwt_mock`` instead of constructing a real one.
+        jwt_cls_mock = MagicMock()
+        jwt_cls_mock.new = AsyncMock(return_value=jwt_mock)
+        stack.enter_context(patch("authglow.api.oidc.JWTService", jwt_cls_mock))
         stack.enter_context(
             patch("authglow.services.oauth2.OAuth2Service", return_value=oauth2_service_mock)
         )

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import pytest
@@ -93,15 +94,18 @@ def _make_mock_settings(keys_dir, secret, tmp_path):
     settings.issuer = "http://localhost:8000"
     settings.private_key_path = os.path.join(keys_dir, "private_key.pem")
     settings.public_key_path = os.path.join(keys_dir, "public_key.pem")
+    settings.storage_backend = "file"
+    settings.get_storage_options = lambda: {}
     return settings
 
 
 def _make_jwt_service(settings):
-    """Create a JWTService with mocked settings."""
+    """Create a JWTService with mocked settings (async — uses ``new()``)."""
+    import asyncio as _asyncio
     from authglow.services.jwt import JWTService
 
     with patch("authglow.services.jwt.get_settings", return_value=settings):
-        return JWTService()
+        return _asyncio.run(JWTService.new())
 
 
 class TestKeyringInitialization:
@@ -323,7 +327,7 @@ class TestJWTVerification:
         settings = _make_mock_settings(keys_dir, secret, tmp_path)
         svc = _make_jwt_service(settings)
 
-        svc.rotate_keys()
+        asyncio.run(svc.rotate_keys())
         new_kid = svc._active_kid
 
         new_token = svc.create_access_token("user-post", "post@test.com", ["read"])
@@ -347,11 +351,11 @@ class TestJWTVerification:
         kid1 = svc._active_kid
         token1 = svc.create_access_token("user1", "u1@test.com", ["read"])
 
-        svc.rotate_keys()
+        asyncio.run(svc.rotate_keys())
         kid2 = svc._active_kid
         token2 = svc.create_access_token("user2", "u2@test.com", ["read"])
 
-        svc.rotate_keys()
+        asyncio.run(svc.rotate_keys())
         kid3 = svc._active_kid
         token3 = svc.create_access_token("user3", "u3@test.com", ["read"])
 
@@ -378,10 +382,10 @@ class TestKeyRevocation:
         old_kid = svc._active_kid
         old_token = svc.create_access_token("user-rev", "rev@test.com", ["read"])
 
-        svc.rotate_keys()
+        asyncio.run(svc.rotate_keys())
 
         # Revoke the old (now verifying) key
-        result = svc.revoke_key(old_kid)
+        result = asyncio.run(svc.revoke_key(old_kid))
         assert result is True
         assert svc._keyring["keys"][old_kid]["status"] == "revoked"
 
@@ -396,7 +400,7 @@ class TestKeyRevocation:
         settings = _make_mock_settings(keys_dir, secret, tmp_path)
         svc = _make_jwt_service(settings)
 
-        result = svc.revoke_key(svc._active_kid)
+        result = asyncio.run(svc.revoke_key(svc._active_kid))
         assert result is False
         assert svc._keyring["keys"][svc._active_kid]["status"] == "active"
 
@@ -407,7 +411,7 @@ class TestKeyRevocation:
         settings = _make_mock_settings(keys_dir, secret, tmp_path)
         svc = _make_jwt_service(settings)
 
-        result = svc.revoke_key("nonexistent-kid-000")
+        result = asyncio.run(svc.revoke_key("nonexistent-kid-000"))
         assert result is False
 
     def test_new_token_after_revocation_uses_active_key(self, tmp_path):
@@ -417,9 +421,9 @@ class TestKeyRevocation:
         settings = _make_mock_settings(keys_dir, secret, tmp_path)
         svc = _make_jwt_service(settings)
 
-        svc.rotate_keys()
+        asyncio.run(svc.rotate_keys())
         old_kid = [k for k, m in svc._keyring["keys"].items() if m.get("status") == "verifying"][0]
-        svc.revoke_key(old_kid)
+        asyncio.run(svc.revoke_key(old_kid))
 
         # New tokens from active key work fine
         new_token = svc.create_access_token("user-post-rev", "pr@test.com", ["read"])

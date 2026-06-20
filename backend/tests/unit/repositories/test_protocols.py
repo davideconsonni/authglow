@@ -195,8 +195,9 @@ _IMPL_TABLE = [
 
 # UserRepository and KeyStoreRepository are tested separately
 # below because they have richer setup (PII encryption, keyring
-# directory) that does not fit the simple ``FileXxxRepository(
-# test_settings)`` pattern.
+# directory that does not use the standard
+# ``storage_path/<subdir>`` layout) that does not fit the simple
+# ``FileXxxRepository(test_settings)`` pattern.
 
 
 @pytest.mark.parametrize(
@@ -284,3 +285,90 @@ class TestFileUserPreferencesRepositoryConformance:
         assert fetched.theme == "dark"
         assert fetched.language == "it"
         assert isinstance(repo, UserPreferencesRepository)
+
+
+# ---------------------------------------------------------------------------
+# KeyStoreRepository — separate because it has a custom root_dir
+# (settings.keys_dir, not settings.storage_path/<subdir>)
+# ---------------------------------------------------------------------------
+
+
+class TestFileKeyStoreRepositoryConformance:
+    """The keyring repository is a BaseFileRepository
+    subclass with a custom root_dir pointing at
+    ``settings.keys_dir``. It honours the
+    ``KeyStoreRepository`` Protocol — this test proves the
+    contract still holds after the fsspec refactor (Fase 22)."""
+
+    def test_subclass_declares_protocol(self):
+        from authglow.repositories.file.keystore import (
+            FileKeyStoreRepository,
+        )
+        from authglow.repositories.protocols import KeyStoreRepository
+
+        assert issubclass(FileKeyStoreRepository, KeyStoreRepository)
+
+    def test_satisfies_protocol_at_runtime(self, test_settings):
+        from authglow.repositories.file.keystore import (
+            FileKeyStoreRepository,
+        )
+        from authglow.repositories.protocols import KeyStoreRepository
+
+        repo = FileKeyStoreRepository(settings=test_settings)
+        assert isinstance(repo, KeyStoreRepository)
+
+    async def test_create_then_rotate_then_get_round_trip(
+        self, test_settings, tmp_path
+    ):
+        """Smoke test: generate a keyring, rotate, then read
+        the new active keypair. Exercises every Protocol
+        method on the happy path."""
+        from authglow.repositories.file.keystore import (
+            FileKeyStoreRepository,
+        )
+        from authglow.repositories.protocols import KeyStoreRepository
+
+        # Override keys_dir with a per-test path so the
+        # lru_cache'd test_keys_dir is not touched.
+        class _Stub:
+            storage_backend = "file"
+
+            def __init__(self, kd: str) -> None:
+                self.keys_dir = kd
+
+            def get_storage_options(self) -> dict:
+                return {}
+
+        keys_dir = tmp_path / "conformance_keys"
+        keys_dir.mkdir()
+        repo = FileKeyStoreRepository(settings=_Stub(str(keys_dir)))
+
+        # Empty keyring
+        assert await repo.get_active_keypair() is None
+        assert await repo.get_public_keys() == []
+
+        # Bootstrap a fresh keyring (the repository's
+        # startup path — same code that
+        # ``core.config.get_or_generate_keyring`` runs).
+        await repo.bootstrap_if_missing(secret_key="test-secret")
+        first_active = await repo.get_active_keypair()
+        assert first_active is not None
+        assert first_active.meta.status == "active"
+
+        # Rotate the active key
+        new_keypair = await repo.rotate(secret_key="test-secret")
+        assert new_keypair.kid != first_active.kid
+        assert new_keypair.meta.status == "active"
+
+        # The new key must be visible via get_active_keypair
+        active = await repo.get_active_keypair()
+        assert active is not None
+        assert active.kid == new_keypair.kid
+
+        # And via get_public_keys
+        pub = await repo.get_public_keys()
+        kids = {k.kid for k in pub}
+        assert new_keypair.kid in kids
+        assert first_active.kid in kids  # the old (now verifying) key is still listed
+
+        assert isinstance(repo, KeyStoreRepository)

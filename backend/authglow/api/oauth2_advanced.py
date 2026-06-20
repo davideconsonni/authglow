@@ -27,9 +27,9 @@ def get_refresh_token_service():
     return RefreshTokenService()
 
 
-def get_jwt_service():
-    """Get JWT service instance."""
-    return JWTService()
+async def get_jwt_service() -> JWTService:
+    """Get JWT service instance (async — keyring is loaded from fsspec)."""
+    return await JWTService.new()
 
 
 def get_oauth2_service():

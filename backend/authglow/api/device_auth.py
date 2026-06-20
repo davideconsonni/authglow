@@ -90,7 +90,9 @@ async def device_verify(
         raise HTTPException(status_code=404, detail="Invalid or expired user code")
 
     if auth.status != "pending":
-        raise HTTPException(status_code=400, detail="This device authorization is no longer pending")
+        raise HTTPException(
+            status_code=400, detail="This device authorization is no longer pending"
+        )
 
     return DeviceVerifyResponse(
         client_id=auth.client_id,

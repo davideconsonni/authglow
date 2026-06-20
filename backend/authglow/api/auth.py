@@ -109,9 +109,9 @@ def get_user_storage():
     return UserStorage()
 
 
-def get_jwt_service():
-    """Get JWT service instance."""
-    return JWTService()
+async def get_jwt_service() -> JWTService:
+    """Get JWT service instance (async — keyring is loaded from fsspec)."""
+    return await JWTService.new()
 
 
 def get_oauth2_service():
@@ -342,7 +342,7 @@ async def authorize_post(
     hint_user: Optional[User] = None
     if id_token_hint:
         try:
-            jwt_svc = JWTService()
+            jwt_svc = await JWTService.new()
             hint_token = jwt_svc.decode_id_token(id_token_hint, expected_aud=client_id)
             if hint_token and not email:
                 hint_user = await storage.get_user(hint_token.sub)
@@ -390,7 +390,7 @@ async def authorize_post(
     access_token = request.cookies.get(settings.auth_cookie_access_name)
     if access_token and "login" not in parsed_prompts:
         try:
-            jwt_svc = JWTService()
+            jwt_svc = await JWTService.new()
             token_data = jwt_svc.decode_token(access_token)
             if token_data:
                 user = await storage.get_user(token_data.sub)
@@ -892,7 +892,10 @@ async def token_endpoint(
         if auth is None:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "expired_token", "error_description": "The device code has expired."},
+                detail={
+                    "error": "expired_token",
+                    "error_description": "The device code has expired.",
+                },
             )
 
         if auth.status == "pending":
@@ -904,13 +907,19 @@ async def token_endpoint(
                 )
             raise HTTPException(
                 status_code=400,
-                detail={"error": "authorization_pending", "error_description": "User has not yet authorized."},
+                detail={
+                    "error": "authorization_pending",
+                    "error_description": "User has not yet authorized.",
+                },
             )
 
         if auth.status == "denied":
             raise HTTPException(
                 status_code=400,
-                detail={"error": "access_denied", "error_description": "The user denied the request."},
+                detail={
+                    "error": "access_denied",
+                    "error_description": "The user denied the request.",
+                },
             )
 
         if auth.status == "authorized" and auth.user_id:

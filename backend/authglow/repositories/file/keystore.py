@@ -3,8 +3,9 @@
 On-disk layout (relative to ``settings.keys_dir``):
 
 * ``<keys_dir>/keyring.json`` — index of every key + which is
-  active. Atomic write via ``tmp+rename`` (crash-safe on
-  local filesystems; cloud backends fall back to plain write).
+  active. Atomic write via ``_write_json_versioned`` (CAS via the
+  ``_version`` field; tmp+rename on local filesystems, optimistic
+  concurrency on S3/GCS/ABFS).
 * ``<keys_dir>/<kid>/private_key.pem`` — encrypted private
   key (AES-256-GCM with the project secret via
   :func:`authglow.core.crypto.encrypt_private_key`).
@@ -14,42 +15,42 @@ On-disk layout (relative to ``settings.keys_dir``):
   backward-compat **copies** of the active key (legacy code
   paths still read these).
 
-The pre-refactor ``core/config.py`` had the keyring I/O
-inlined as module-level helpers (``_load_keyring``,
-``_save_keyring``, ``_new_kid``, ``_generate_key_pair``,
-``_write_active_symlinks``, ``_perform_rotation``,
-``get_or_generate_keyring``). The
-:class:`FileKeyStoreRepository` consolidates all of this
-behind a single class with the Protocol-defined
-``KeyStoreRepository`` interface.
+The class is a ``BaseFileRepository`` subclass with a custom
+``root_dir=settings.keys_dir`` so the keyring rides on the same
+fsspec layer as every other entity and honours
+``Settings.storage_backend``. Atomicity is guaranteed by the
+``_version`` field in ``keyring.json``: every ``rotate`` / ``revoke``
+reads the current version, increments it, and writes back via
+``_write_json_versioned`` which raises ``ConcurrentWriteError`` on
+a version mismatch.
 
-The repository does **not** call the legacy
-``get_or_generate_keyring`` migration logic on
-construction — that's a startup concern owned by
-``Settings.__init__`` (see ``core/config.py``). The
-repository starts in a "keyring not loaded" state and the
-first call to ``get_active_keypair`` (or any other read
-method) triggers the on-disk load.
+Cross-process safety:
 
-Cross-process safety: the ``tmp+rename`` atomic-write
-pattern is the only cross-process safety the keyring has
-(no CAS, no version field). For the local filesystem this
-is crash-safe; for cloud backends the rename is **not**
-available and the write is best-effort (a comment in
-:meth:`_save_keyring` documents the fallback). This matches
-the pre-refactor behaviour and the requirements of the
-``BaseFileRepository._write_json_atomic`` helper.
+* Local filesystem: ``tmp+rename`` (POSIX atomic) wrapped in a
+  version check.
+* S3 / GCS / ABFS: optimistic concurrency via the fsspec
+  implementation's native CAS (S3 conditional ``PutObject``,
+  GCS ``generation`` match, ABFS lease). Concurrent writers
+  (multiple instances rotating at once) get
+  ``ConcurrentWriteError`` and the service layer retries.
+
+The legacy ``_write_active_symlinks`` helper is renamed to
+``_write_active_copies`` (the pre-refactor code used symlinks
+on POSIX and copies on Windows; the function name survived
+code-search compat). It is implemented in terms of
+``AsyncFileSystem.read_bytes`` / ``write_bytes`` so it works on
+every backend.
 """
 
 from __future__ import annotations
 
 import base64
-import json
-import os
 import secrets
-import shutil
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+
+from authglow.core.concurrency import ConcurrentWriteError
+from authglow.repositories.file.base import BaseFileRepository
 
 if TYPE_CHECKING:
     from authglow.core.config import Settings
@@ -125,129 +126,159 @@ def _rsa_pem_to_jwk_components(public_pem: bytes) -> tuple[str, str]:
     return _b64u(numbers.n), _b64u(numbers.e)
 
 
-class FileKeyStoreRepository:
+class FileKeyStoreRepository(BaseFileRepository):
     """File-backed implementation of :class:`KeyStoreRepository`.
 
-    The repository is **not** a ``BaseFileRepository``
-    subclass because the keyring layout spans multiple
-    files (the index + per-kid PEM files + the legacy flat
-    paths) and uses the ``tmp+rename`` atomic-write pattern
-    directly. The fsspec + ``AsyncFileSystem`` abstraction is
-    not relevant here — the keyring is a local-only concern
-    (the cloud backends would store the keyring differently
-    in any case, e.g. AWS KMS or HashiCorp Vault).
+    Inherits the fsspec / ``AsyncFileSystem`` plumbing from
+    :class:`BaseFileRepository` and overrides the root directory
+    to ``settings.keys_dir`` (the keyring lives outside
+    ``storage_path`` by design — it's a separate secret). The
+    ``_storage_path`` / ``_path`` / ``_afs`` machinery therefore
+    works for ``keyring.json`` and per-kid PEMs without any
+    subclass-specific fsspec code.
 
-    For the same reason this class does not participate in
-    the lru_cache-bypass dance of the other repositories:
-    the ``Settings.keys_dir`` is set once at startup and
-    never changes mid-process.
+    Atomicity is provided by the ``_version`` field in
+    ``keyring.json``: every write goes through
+    ``_write_json_versioned`` which raises
+    :class:`ConcurrentWriteError` on a version mismatch. Callers
+    (the service layer) must catch and retry the read-modify-write
+    loop on this error.
+
+    For the lru_cache bypass pattern see :class:`BaseFileRepository`
+    and :func:`get_keystore_repository` — the repository accepts
+    an explicit ``settings=`` argument so tests and the startup
+    path can route around the process-cached
+    :func:`authglow.core.config.get_settings`.
     """
 
-    # NB: not @runtime_checkable — we use ``isinstance`` for
-    # Protocol conformance via duck-typing (the Protocol is
-    # @runtime_checkable, so isinstance() still works).
+    _subdir = ""
 
-    def __init__(
-        self,
-        settings: Optional["Settings"] = None,
-    ) -> None:
-        from authglow.core.config import get_settings
-
-        self.settings: "Settings" = settings or get_settings()
-        self._keys_dir: str = self.settings.keys_dir
-        self._keyring_path: str = os.path.join(self._keys_dir, _KEYRING_FILENAME)
-        self._legacy_priv_path: str = os.path.join(self._keys_dir, "private_key.pem")
-        self._legacy_pub_path: str = os.path.join(self._keys_dir, "public_key.pem")
+    def __init__(self, settings: Optional["Settings"] = None) -> None:
+        super().__init__(settings=settings, root_dir=self._resolve_root_dir(settings))
         self._keyring: Optional[Dict[str, Any]] = None
         self._active_kid: Optional[str] = None
 
+    @staticmethod
+    def _resolve_root_dir(settings: Optional["Settings"]) -> str:
+        """Return the keys_dir from settings, falling back to get_settings()."""
+        if settings is not None:
+            return settings.keys_dir
+        from authglow.core.config import get_settings
+
+        return get_settings().keys_dir
+
     # ------------------------------------------------------------------
-    # Internal I/O helpers
+    # Path helpers (relative to the keys_dir root)
     # ------------------------------------------------------------------
 
-    def _load_keyring(self) -> Optional[Dict[str, Any]]:
-        """Load keyring.json, return None if missing or corrupt.
+    def _kid_dir(self, kid: str) -> str:
+        """Return the on-disk directory for a single key (relative to root)."""
+        return kid
+
+    def _keyring_path(self) -> str:
+        """Return the fsspec path to keyring.json."""
+        return self._path(_KEYRING_FILENAME)
+
+    def _legacy_priv_path(self) -> str:
+        return self._path("private_key.pem")
+
+    def _legacy_pub_path(self) -> str:
+        return self._path("public_key.pem")
+
+    def _kid_priv_path(self, kid: str) -> str:
+        return self._path(f"{kid}/private_key.pem")
+
+    def _kid_pub_path(self, kid: str) -> str:
+        return self._path(f"{kid}/public_key.pem")
+
+    # ------------------------------------------------------------------
+    # Keyring I/O
+    # ------------------------------------------------------------------
+
+    async def _load_keyring(self) -> Optional[Dict[str, Any]]:
+        """Load keyring.json via fsspec. Returns None if missing/corrupt.
 
         The repository caches the loaded keyring in
-        ``self._keyring`` to avoid repeated disk reads.
-        Callers that need a fresh view should call
-        :meth:`_reload_keyring` explicitly.
+        ``self._keyring`` to avoid repeated reads. Callers that
+        need a fresh view should call :meth:`_reload_keyring`
+        explicitly.
         """
-        if not os.path.exists(self._keyring_path):
+        if not await self._exists(self._keyring_path()):
             return None
-        with open(self._keyring_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data  # type: ignore[no-any-return]
+        data, version = await self._read_json_versioned(self._keyring_path())
+        if data is None:
+            return None
+        if version > 0:
+            data["_version"] = version
+        return cast(Optional[Dict[str, Any]], data)
 
-    def _save_keyring(self, keyring: Dict[str, Any]) -> None:
-        """Atomically save keyring.json (tmp+rename).
+    async def _save_keyring(self, keyring: Dict[str, Any]) -> None:
+        """Atomically save keyring.json with CAS.
 
-        The tmp+rename pattern is crash-safe on POSIX
-        filesystems (``os.replace`` is atomic on the same
-        filesystem). The pre-refactor code used this same
-        pattern.
+        The ``_version`` field is stripped from the input dict,
+        re-computed, and re-attached so callers don't have to
+        manage it. On a version mismatch (another instance
+        rotated first) this raises :class:`ConcurrentWriteError`.
         """
-        tmp = self._keyring_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(keyring, f, indent=2)
-        os.replace(tmp, self._keyring_path)
+        expected_version = int(keyring.get("_version", 0))
+        payload = {k: v for k, v in keyring.items() if k != "_version"}
+        await self._write_json_versioned(self._keyring_path(), payload, expected_version)
+        # Update the in-memory version so the next save has the
+        # right expected value.
+        keyring["_version"] = expected_version + 1
 
-    def _write_active_symlinks(self, keyring: Dict[str, Any]) -> None:
+    async def _write_active_copies(self, keyring: Dict[str, Any]) -> None:
         """Copy the active key to the legacy flat paths for
         backward compatibility with code that still reads
         ``<keys_dir>/private_key.pem`` / ``public_key.pem``.
 
-        The pre-refactor used symlinks (hence the name
+        Implemented via :meth:`AsyncFileSystem.read_bytes` /
+        :meth:`AsyncFileSystem.write_bytes` so it works on every
+        fsspec backend (local, S3, GCS, ABFS). The pre-refactor
+        used POSIX symlinks (hence the original name
         ``_write_active_symlinks``) but on Windows symlinks
-        require elevated privileges — we use ``shutil.copy2``
-        which works on every platform. The function name is
-        preserved for code-search compatibility.
+        require elevated privileges — copies work everywhere.
         """
         active_kid = keyring["active_kid"]
-        src_priv = os.path.join(self._keys_dir, active_kid, "private_key.pem")
-        src_pub = os.path.join(self._keys_dir, active_kid, "public_key.pem")
-        dst_priv = self._legacy_priv_path
-        dst_pub = self._legacy_pub_path
+        priv_src = self._kid_priv_path(active_kid)
+        pub_src = self._kid_pub_path(active_kid)
+        priv_dst = self._legacy_priv_path()
+        pub_dst = self._legacy_pub_path()
 
-        for dst in (dst_priv, dst_pub):
-            try:
-                os.remove(dst)
-            except FileNotFoundError:
-                pass
+        priv_bytes = await self._afs.read_bytes(priv_src)
+        pub_bytes = await self._afs.read_bytes(pub_src)
 
-        shutil.copy2(src_priv, dst_priv)
-        shutil.copy2(src_pub, dst_pub)
+        # Best-effort delete-then-write on the legacy paths.
+        # On local this is rm(1)+write(2); on cloud this is
+        # delete+put — the legacy files are backward-compat
+        # mirrors, not security-critical, so a torn window is
+        # acceptable.
+        for dst in (priv_dst, pub_dst):
+            await self._delete(dst)
+        await self._afs.write_bytes(priv_dst, priv_bytes)
+        await self._afs.write_bytes(pub_dst, pub_bytes)
 
-    def _kid_dir(self, kid: str) -> str:
-        """Return the on-disk directory for a single key."""
-        return os.path.join(self._keys_dir, kid)
-
-    def _read_kid_pems(self, kid: str) -> Optional[tuple[bytes, bytes]]:
+    async def _read_kid_pems(self, kid: str) -> Optional[tuple[bytes, bytes]]:
         """Read a kid's encrypted private + plaintext public PEMs.
 
         Returns ``None`` if either file is missing.
         """
-        priv_path = os.path.join(self._kid_dir(kid), "private_key.pem")
-        pub_path = os.path.join(self._kid_dir(kid), "public_key.pem")
-        if not os.path.exists(priv_path) or not os.path.exists(pub_path):
+        priv_path = self._kid_priv_path(kid)
+        pub_path = self._kid_pub_path(kid)
+        if not (await self._exists(priv_path)) or not (await self._exists(pub_path)):
             return None
-        with open(priv_path, "rb") as f:
-            private_pem = f.read()
-        with open(pub_path, "rb") as f:
-            public_pem = f.read()
+        private_pem = await self._afs.read_bytes(priv_path)
+        public_pem = await self._afs.read_bytes(pub_path)
         return private_pem, public_pem
 
-    def _write_kid_pems(self, kid: str, private_pem: bytes, public_pem: bytes) -> None:
+    async def _write_kid_pems(self, kid: str, private_pem: bytes, public_pem: bytes) -> None:
         """Write a kid's encrypted private + plaintext public PEMs."""
-        os.makedirs(self._kid_dir(kid), exist_ok=True)
-        priv_path = os.path.join(self._kid_dir(kid), "private_key.pem")
-        pub_path = os.path.join(self._kid_dir(kid), "public_key.pem")
-        with open(priv_path, "wb") as f:
-            f.write(private_pem)
-        with open(pub_path, "wb") as f:
-            f.write(public_pem)
+        kid_dir = self._path(self._kid_dir(kid))
+        await self._afs.makedirs(kid_dir, exist_ok=True)
+        await self._afs.write_bytes(self._kid_priv_path(kid), private_pem)
+        await self._afs.write_bytes(self._kid_pub_path(kid), public_pem)
 
-    def _ensure_loaded(self) -> None:
+    async def _ensure_loaded(self) -> None:
         """Load the keyring on the first read.
 
         Subsequent reads use the in-memory cache. Callers
@@ -256,15 +287,15 @@ class FileKeyStoreRepository:
         the in-memory state in sync.
         """
         if self._keyring is None:
-            self._keyring = self._load_keyring()
+            self._keyring = await self._load_keyring()
             if self._keyring is not None:
-                self._active_kid = self._keyring["active_kid"]
+                self._active_kid = self._keyring.get("active_kid")
 
-    def _reload_keyring(self) -> None:
-        """Force a re-read of the keyring from disk."""
-        self._keyring = self._load_keyring()
+    async def _reload_keyring(self) -> None:
+        """Force a re-read of the keyring from disk (fsspec)."""
+        self._keyring = await self._load_keyring()
         if self._keyring is not None:
-            self._active_kid = self._keyring["active_kid"]
+            self._active_kid = self._keyring.get("active_kid")
 
     # ------------------------------------------------------------------
     # Protocol: get_active_keypair
@@ -275,10 +306,10 @@ class FileKeyStoreRepository:
         metadata), or ``None`` if the keyring is missing.
         """
 
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None or self._active_kid is None:
             return None
-        return self._build_keypair(self._active_kid, self._keyring)
+        return await self._build_keypair(self._active_kid, self._keyring)
 
     # ------------------------------------------------------------------
     # Protocol: get_keypair_by_kid
@@ -290,21 +321,21 @@ class FileKeyStoreRepository:
         missing).
         """
 
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None:
             return None
         if kid not in self._keyring["keys"]:
             return None
-        return self._build_keypair(kid, self._keyring)
+        return await self._build_keypair(kid, self._keyring)
 
-    def _build_keypair(self, kid: str, keyring: Dict[str, Any]) -> Optional["KeyPair"]:
+    async def _build_keypair(self, kid: str, keyring: Dict[str, Any]) -> Optional["KeyPair"]:
         """Build a ``KeyPair`` from the in-memory keyring +
         on-disk PEMs. Returns ``None`` if the on-disk PEMs
         are missing (corrupt / partial state)."""
         from authglow.models.keystore import KeyPair, KeyPairMeta
 
         meta_dict = keyring["keys"][kid]
-        pems = self._read_kid_pems(kid)
+        pems = await self._read_kid_pems(kid)
         if pems is None:
             return None
         private_pem, public_pem = pems
@@ -326,7 +357,7 @@ class FileKeyStoreRepository:
         """
         from authglow.models.keystore import PublicKey
 
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None:
             return []
 
@@ -334,7 +365,7 @@ class FileKeyStoreRepository:
         for kid, meta in self._keyring["keys"].items():
             if meta.get("status") == "revoked":
                 continue
-            pems = self._read_kid_pems(kid)
+            pems = await self._read_kid_pems(kid)
             if pems is None:
                 continue
             _, public_pem = pems
@@ -364,12 +395,16 @@ class FileKeyStoreRepository:
 
         Implementation note: the encryption is delegated to
         :func:`authglow.core.crypto.encrypt_private_key` for
-        symmetry with the pre-refactor behaviour.
+        symmetry with the pre-refactor behaviour. The write
+        goes through ``_write_json_versioned`` for cloud
+        atomicity — a concurrent rotator on another instance
+        gets :class:`ConcurrentWriteError` and the service
+        layer retries.
         """
         from authglow.core.crypto import encrypt_private_key
         from authglow.models.keystore import KeyPair, KeyPairMeta
 
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None:
             raise RuntimeError(
                 "Cannot rotate: keyring not initialised. Call "
@@ -378,11 +413,10 @@ class FileKeyStoreRepository:
 
         old_kid = self._keyring["active_kid"]
         new_kid = _new_kid()
-        os.makedirs(self._kid_dir(new_kid), exist_ok=True)
 
         priv_bytes, pub_bytes = _generate_key_pair(key_size)
         encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-        self._write_kid_pems(new_kid, encrypted_priv, pub_bytes)
+        await self._write_kid_pems(new_kid, encrypted_priv, pub_bytes)
 
         now_str = datetime.now(timezone.utc).isoformat()
         self._keyring["keys"][new_kid] = {
@@ -395,8 +429,17 @@ class FileKeyStoreRepository:
         self._keyring["keys"][old_kid]["retired_at"] = now_str
         self._keyring["active_kid"] = new_kid
 
-        self._save_keyring(self._keyring)
-        self._write_active_symlinks(self._keyring)
+        try:
+            await self._save_keyring(self._keyring)
+        except ConcurrentWriteError:
+            # Another instance rotated first — reload and let
+            # the caller retry. The new PEM we just wrote is
+            # orphaned but harmless (no kid in the keyring
+            # points to it).
+            await self._reload_keyring()
+            raise
+
+        await self._write_active_copies(self._keyring)
         self._active_kid = new_kid
 
         return KeyPair(
@@ -415,17 +458,23 @@ class FileKeyStoreRepository:
 
         Revoked keys remain in the ring (for audit) but are
         excluded from :meth:`get_public_keys`. No-op if
-        *kid* is not in the ring.
+        *kid* is not in the ring. Like :meth:`rotate`, the
+        write goes through ``_write_json_versioned`` for
+        cloud atomicity.
         """
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None:
             return
         if kid not in self._keyring["keys"]:
             return
         self._keyring["keys"][kid]["status"] = "revoked"
         self._keyring["keys"][kid]["revoked_at"] = datetime.now(timezone.utc).isoformat()
-        self._save_keyring(self._keyring)
-        # No symlink update: revoking a non-active key does
+        try:
+            await self._save_keyring(self._keyring)
+        except ConcurrentWriteError:
+            await self._reload_keyring()
+            raise
+        # No legacy copy update: revoking a non-active key does
         # not change which key the legacy flat paths point
         # at. Revoking the active key would be a service-
         # level concern (call rotate() first).
@@ -439,12 +488,12 @@ class FileKeyStoreRepository:
         disk. Used by tests to assert lazy-load semantics."""
         return self._keyring is not None
 
-    def reload(self) -> None:
+    async def reload(self) -> None:
         """Force a re-read of the keyring from disk (useful
         after an external mutation, e.g. from the
         ``get_or_generate_keyring`` startup path).
         """
-        self._reload_keyring()
+        await self._reload_keyring()
 
     @classmethod
     def for_keys_dir(
@@ -453,10 +502,10 @@ class FileKeyStoreRepository:
         """Build a temporary ``Settings`` instance for
         direct ``keys_dir`` access.
 
-        Used by ``core.config._generate_fresh_keyring`` and
-        ``_perform_rotation`` (the startup migration / auto-
-        rotation paths) so the repository can read / write
-        the keyring files without going through the
+        Used by ``core.config.bootstrap_if_missing`` and
+        ``auto_rotate_if_needed`` (the startup migration /
+        auto-rotation paths) so the repository can read /
+        write the keyring files without going through the
         ``lru_cache``'d global ``get_settings()``.
 
         The ``secret_key`` is unused here — it's accepted for
@@ -464,36 +513,170 @@ class FileKeyStoreRepository:
         encrypt the freshly-generated private key with it).
         """
 
-        # Build a minimal Settings instance for the keyring
-        # location. The full Settings model has many
-        # required fields (secret_key, storage_path, etc.)
-        # — we just need ``keys_dir`` to resolve to the
-        # right directory.
-        # NB: instantiating ``Settings()`` triggers
-        # ``get_or_generate_keyring`` recursively, so we
-        # bypass the model entirely and construct a
-        # stub-like object.
+        # Bypass ``Settings()`` instantiation (which would
+        # recursively trigger ``get_or_generate_keyring``)
+        # and construct a stub with just the attributes
+        # :class:`BaseFileRepository` reads.
         class _KeysDirSettings:
+            storage_backend = "file"
+
             def __init__(self, kd: str) -> None:
                 self.keys_dir = kd
+
+            def get_storage_options(self) -> dict:
+                return {}
 
         repo = cls(settings=_KeysDirSettings(keys_dir))  # type: ignore[arg-type]
         return repo
 
-    def get_keyring_dict(self) -> Optional[Dict[str, Any]]:
+    async def get_keyring_dict(self) -> Optional[Dict[str, Any]]:
         """Return the in-memory keyring dict (for admin
         introspection). The pre-refactor ``JWTService.
         get_keyring_info`` returned a similar shape."""
-        self._ensure_loaded()
+        await self._ensure_loaded()
         if self._keyring is None:
             return None
-        # Cast to satisfy the typed return — self._keyring is
-        # already a Dict[str, Any] but mypy sees it as
-        # ``Optional[Any]`` after the json.load call.
         return self._keyring
 
-    def get_active_kid(self) -> Optional[str]:
+    async def get_active_kid(self) -> Optional[str]:
         """Return the active ``kid``, or ``None`` if the
         keyring is missing."""
-        self._ensure_loaded()
+        await self._ensure_loaded()
         return self._active_kid
+
+    # ------------------------------------------------------------------
+    # Startup bootstrap (used by core.config.get_or_generate_keyring)
+    # ------------------------------------------------------------------
+
+    async def bootstrap_if_missing(
+        self,
+        secret_key: str,
+        key_size: int = 2048,
+    ) -> None:
+        """Ensure the keyring exists. Called once at startup.
+
+        1. If the keyring is missing AND the legacy
+           ``private_key.pem`` / ``public_key.pem`` exist, migrate.
+        2. If the keyring is missing AND no legacy files,
+           generate a fresh keyring.
+        3. Otherwise no-op.
+        """
+        await self._ensure_loaded()
+        if self._keyring is not None:
+            return
+
+        if await self._exists(self._legacy_priv_path()) and await self._exists(
+            self._legacy_pub_path()
+        ):
+            await self._migrate_legacy(secret_key, key_size)
+            return
+
+        await self._generate_fresh(secret_key, key_size)
+
+    async def _migrate_legacy(self, secret_key: str, key_size: int) -> None:
+        """Migrate the pre-keyring single-key layout to the
+        per-kid directory layout. Reads the legacy
+        ``private_key.pem`` / ``public_key.pem`` (assumed
+        already-encrypted private bytes) and writes them to
+        ``<kid>/{private,public}_key.pem``.
+        """
+        import structlog
+
+        keys_log = structlog.get_logger("authglow.keys")
+        keys_log.info("keyring_migration_started")
+
+        kid = _LEGACY_KID
+        priv_bytes = await self._afs.read_bytes(self._legacy_priv_path())
+        pub_bytes = await self._afs.read_bytes(self._legacy_pub_path())
+        await self._write_kid_pems(kid, priv_bytes, pub_bytes)
+
+        keyring = {
+            "active_kid": kid,
+            "keys": {
+                kid: {
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "active",
+                    "algorithm": "RS256",
+                    "key_size": key_size,
+                }
+            },
+        }
+        await self._save_keyring(keyring)
+        await self._write_active_copies(keyring)
+        self._keyring = keyring
+        self._active_kid = kid
+
+    async def _generate_fresh(self, secret_key: str, key_size: int) -> None:
+        """Generate a brand-new keyring with a single active key."""
+        import structlog
+
+        from authglow.core.crypto import encrypt_private_key
+
+        keys_log = structlog.get_logger("authglow.keys")
+        keys_log.info("keyring_generation_started")
+
+        kid = _new_kid()
+        priv_bytes, pub_bytes = _generate_key_pair(key_size)
+        encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
+        await self._write_kid_pems(kid, encrypted_priv, pub_bytes)
+
+        keyring = {
+            "active_kid": kid,
+            "keys": {
+                kid: {
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "active",
+                    "algorithm": "RS256",
+                    "key_size": key_size,
+                }
+            },
+        }
+        await self._save_keyring(keyring)
+        await self._write_active_copies(keyring)
+        self._keyring = keyring
+        self._active_kid = kid
+        keys_log.info("keyring_initialised", kid=kid)
+
+    async def auto_rotate_if_needed(
+        self,
+        secret_key: str,
+        rotation_days: int,
+        key_size: int = 2048,
+    ) -> None:
+        """Rotate the active key if it's older than *rotation_days*."""
+        import structlog
+
+        await self._ensure_loaded()
+        if self._keyring is None or self._active_kid is None:
+            return
+        active_meta = self._keyring["keys"].get(self._active_kid, {})
+        created_str = active_meta.get("created_at", "")
+        if not created_str:
+            return
+        try:
+            created_dt = datetime.fromisoformat(created_str)
+        except ValueError:
+            return
+        age = datetime.now(timezone.utc) - created_dt
+        if age.days < rotation_days:
+            return
+
+        keys_log = structlog.get_logger("authglow.keys")
+        keys_log.info(
+            "keyring_rotation_started",
+            kid=self._active_kid,
+            age_days=age.days,
+            rotation_days=rotation_days,
+        )
+        try:
+            await self.rotate(secret_key, key_size=key_size)
+        except ConcurrentWriteError:
+            # Another instance rotated first; reload and accept
+            # their rotation as authoritative.
+            await self._reload_keyring()
+        else:
+            keys_log.info(
+                "keyring_rotated",
+                old_kid=self._active_kid,
+                new_kid=self._keyring["active_kid"],
+            )

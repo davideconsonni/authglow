@@ -63,9 +63,9 @@ def get_user_storage() -> UserStorage:
     return UserStorage()
 
 
-def get_jwt_service() -> JWTService:
-    """Get JWT service instance."""
-    return JWTService()
+async def get_jwt_service() -> JWTService:
+    """Get JWT service instance (async — keyring is loaded from fsspec)."""
+    return await JWTService.new()
 
 
 async def get_current_user(

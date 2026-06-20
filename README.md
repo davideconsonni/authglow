@@ -168,7 +168,18 @@ authglow/
 | **Azure Functions** | Container deploy, Azure Blob storage backend |
 | **VPS / Bare Metal** | systemd service, `STORAGE_PATH=/data/authglow` |
 
-Change storage backend at any time — your data stays the same, just a different `STORAGE_BACKEND` value.
+Change storage backend at any time — your data stays the same, just a different `STORAGE_BACKEND` value. **This includes the JWT keyring** — it lives at `data/keys/`, rides on the same fsspec layer as users/sessions/tokens, and honours `STORAGE_BACKEND` like everything else.
+
+### 🔐 Keyring & multi-instance
+
+The JWT signing keyring lives at `data/keys/` (overridable via `KEYS_DIR`) and is read/written through the **same fsspec layer** as every other entity. Setting `STORAGE_BACKEND=s3` puts the keyring in the same bucket as users/sessions; `STORAGE_BACKEND=file` keeps it on local disk. Multi-instance deployments just need the configured backend to be shared between instances — same rule as for users/sessions.
+
+| Scenario | Backend | Notes |
+|---|---|---|
+| Single host, persistent local disk | `file` (default) | `KEYS_DIR` on the same volume as `STORAGE_PATH` |
+| Multiple instances on a shared filesystem (NFS, SAN, cluster FS) | `file` | Mount the shared FS at both `STORAGE_PATH` and `KEYS_DIR` |
+| Multiple instances, each with its own ephemeral/local disk | any shared object store (`s3`, `gcs`, `abfs`, …) | Pick a backend where all instances can read and write the same keyring |
+| Multiple instances, each with its own disk + `STORAGE_BACKEND=file` | ❌ broken | Every instance would generate its own keyring and tokens would not verify across instances. This is the failure mode the fsspec refactor fixes. |
 
 ---
 

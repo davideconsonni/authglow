@@ -1,7 +1,34 @@
+"""Service layer for JWT issuance and validation.
+
+Wraps the :class:`KeyStoreRepository` (which owns the
+keyring on the fsspec layer) and provides the high-level
+``create_token`` / ``decode_token`` API used by the
+FastAPI route handlers. The service keeps an in-memory
+cache of the active keypair + the verifying-window public
+keys so the hot path (``decode_token``) is purely CPU
+work — no I/O per request.
+
+The keyring is owned by :class:`KeyStoreRepository` (the
+fsspec-backed implementation is
+:class:`FileKeyStoreRepository`). The service holds an
+in-memory snapshot of the keyring loaded at construction
+time; ``rotate_keys`` / ``revoke_key`` re-read the
+repository after the write so the in-memory cache stays
+in sync. The service never touches ``os.path`` /
+``open()`` directly — all filesystem access goes through
+the repository's fsspec layer.
+
+Async-first: ``JWTService.__init__`` is async because the
+keyring is loaded through the repository's fsspec layer
+via ``asyncio.to_thread``. Callers that need the service
+``await`` its constructor (or use a FastAPI dependency
+that does so).
+"""
+
+from __future__ import annotations
+
 import base64
 import hashlib
-import json
-import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
@@ -10,7 +37,7 @@ from uuid import uuid4
 import jwt
 
 from authglow.core.config import get_settings
-from authglow.core.crypto import decrypt_private_key, encrypt_private_key
+from authglow.core.crypto import decrypt_private_key
 from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
 from authglow.services.auth.token_blacklist import token_blacklist
@@ -43,56 +70,102 @@ class JWTService:
 
     Supports JWK key rotation: the active key is used for signing,
     while all active + verifying keys are used for verification.
+
+    The keyring is owned by :class:`KeyStoreRepository` (the
+    fsspec-backed implementation is
+    :class:`FileKeyStoreRepository`). The service holds an
+    in-memory snapshot of the keyring loaded at construction
+    time; ``rotate_keys`` / ``revoke_key`` re-read the
+    repository after the write so the in-memory cache stays
+    in sync.
     """
 
-    def __init__(self):
-        """Initialize JWT service with settings and keyring."""
+    def __init__(self) -> None:
+        # Sync attribute init only — the actual keyring
+        # load happens in ``__ainit__``. The split lets
+        # ``isinstance`` checks / DI wiring that don't
+        # actually need the keyring snapshot work
+        # synchronously; production code goes through
+        # ``await JWTService.new()`` or the
+        # ``get_jwt_service`` FastAPI dependency.
         self.settings = get_settings()
+        self._repository = self._build_repository()
+        self._keyring: Dict[str, Any] = {}
+        self._active_kid: Optional[str] = None
+        self._private_key: Optional[bytes] = None
+        self._public_keys: Dict[str, bytes] = {}
 
-        keyring_path = os.path.join(self.settings.keys_dir, "keyring.json")
-        if not os.path.exists(keyring_path):
-            raise RuntimeError(f"Keyring not found at {keyring_path}")
+    @classmethod
+    async def new(cls) -> "JWTService":
+        """Async constructor — preferred entry point.
 
-        with open(keyring_path, "r", encoding="utf-8") as f:
-            self._keyring = json.load(f)
+        Use this everywhere in production code:
+        ``svc = await JWTService.new()``.
+        """
+        svc = cls()
+        await svc._load_keyring_snapshot()
+        return svc
 
-        self._active_kid = self._keyring["active_kid"]
+    def _build_repository(self):
+        """Build the keyring repository honouring
+        ``Settings.storage_backend`` (the same factory every
+        other entity uses)."""
+        from authglow.repositories.dependencies import get_keystore_repository
 
-        self._private_key = self._load_private_key(self._active_kid)
-        self._public_keys: Dict[str, bytes] = self._load_public_keys()
+        return get_keystore_repository(settings=self.settings)
 
-    def _load_private_key(self, kid: str) -> bytes:
-        """Load and decrypt the private key for a given kid."""
-        priv_path = os.path.join(self.settings.keys_dir, kid, "private_key.pem")
-        if not os.path.exists(priv_path):
+    async def _load_keyring_snapshot(self) -> None:
+        """Read the keyring + per-kid PEMs into memory.
+
+        All I/O goes through the repository (fsspec layer
+        selected by ``Settings.storage_backend``). The
+        snapshot is rebuilt by :meth:`_reload_keyring` after
+        any mutation.
+        """
+        self._repository._keyring = None
+        self._repository._active_kid = None
+        data = await self._repository._load_keyring()
+        if data is None:
+            raise RuntimeError(
+                f"Keyring not found at {self._repository._keyring_path()}. "
+                "Did ``get_or_generate_keyring`` run at startup?"
+            )
+        self._keyring = data
+        self._active_kid = data["active_kid"]
+        self._private_key = await self._load_private_key(self._active_kid)
+        self._public_keys = await self._load_public_keys()
+
+    async def _load_private_key(self, kid: str) -> bytes:
+        """Load and decrypt the private key for a given kid.
+
+        Reads via the repository (fsspec layer) — no
+        ``os.path`` / ``open()`` direct access.
+        """
+        priv_path = self._repository._kid_priv_path(kid)
+        if not await self._repository._exists(priv_path):
             raise RuntimeError(f"Private key missing for kid={kid}: {priv_path}")
-        with open(priv_path, "rb") as f:
-            raw = f.read()
+        raw = await self._repository._afs.read_bytes(priv_path)
         return decrypt_private_key(raw, secret_key=self.settings.secret_key)
 
-    def _load_public_keys(self) -> Dict[str, bytes]:
+    async def _load_public_keys(self) -> Dict[str, bytes]:
         """Load all public keys for verification (active + verifying, not revoked)."""
         public_keys: Dict[str, bytes] = {}
         for kid, meta in self._keyring["keys"].items():
             status = meta.get("status", "")
             if status in ("active", "verifying"):
-                pub_path = os.path.join(self.settings.keys_dir, kid, "public_key.pem")
-                if os.path.exists(pub_path):
-                    with open(pub_path, "rb") as f:
-                        public_keys[kid] = f.read()
+                pub_path = self._repository._kid_pub_path(kid)
+                if await self._repository._exists(pub_path):
+                    public_keys[kid] = await self._repository._afs.read_bytes(pub_path)
         return public_keys
 
-    def _reload_keyring(self):
-        """Reload keyring from disk (used after rotation/revocation)."""
-        keyring_path = os.path.join(self.settings.keys_dir, "keyring.json")
-        with open(keyring_path, "r", encoding="utf-8") as f:
-            self._keyring = json.load(f)
-        self._active_kid = self._keyring["active_kid"]
-        self._private_key = self._load_private_key(self._active_kid)
-        self._public_keys = self._load_public_keys()
+    async def _reload_keyring(self) -> None:
+        """Reload keyring from the repository (used after rotation/revocation)."""
+        await self._load_keyring_snapshot()
 
     def _encode_token(self, payload: dict) -> str:
         """Encode a token payload using the active private key, including kid in header."""
+        if self._private_key is None or self._active_kid is None:
+            raise RuntimeError("JWTService not initialised: call ``await JWTService.new()`` first")
         return jwt.encode(
             payload,
             self._private_key,
@@ -118,11 +191,11 @@ class JWTService:
 
         Args:
             token: The encoded JWT.
-            audience: When provided, PyJWT enforces ``aud == audience`` and the
-                ``aud`` claim is added to the required claims list. When
-                ``None`` the ``aud`` claim is not validated, preserving
-                back-compat with legacy cookie/MFA tokens that may not carry
-                an audience.
+            audience: When provided, PyJWT enforces ``aud == audience`` and
+                the ``aud`` claim is added to the required claims list.
+                When ``None`` the ``aud`` claim is not validated,
+                preserving back-compat with legacy cookie/MFA tokens
+                that may not carry an audience.
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -167,7 +240,7 @@ class JWTService:
             except jwt.PyJWTError:
                 return None
 
-        # Fallback: try all non-revoked keys (backward compat, no-kid tokens)
+        # Fallback: try all non-revoked keys (back-compat for no-kid tokens)
         for verify_kid, pub_key in self._public_keys.items():
             if verify_kid in self._keyring["keys"]:
                 if self._keyring["keys"][verify_kid].get("status") == "revoked":
@@ -184,6 +257,8 @@ class JWTService:
 
         return None
 
+    # --- Token Creation ---
+
     def create_access_token(
         self,
         user_id: str,
@@ -198,16 +273,18 @@ class JWTService:
         """Create an access token with a unique jti for revocation support.
 
         Args:
-            audience: When the token is issued on behalf of an OAuth2 client,
-                pass the client_id. The ``aud`` claim is then bound to that
-                client, enabling OIDC Core §3.1.3.7 audience validation on
-                the resource server. When ``None`` (cookie-first / password
-                grant flows) no ``aud`` claim is set, preserving the legacy
+            audience: When the token is issued on behalf of an OAuth2
+                client, pass the client_id. The ``aud`` claim is then
+                bound to that client, enabling OIDC Core §3.1.3.7
+                audience validation on the resource server. When
+                ``None`` (cookie-first / password grant flows) no
+                ``aud`` claim is set, preserving the legacy
                 back-compat path.
-            azp: Authorized party (OIDC Core §2). When ``audience`` is set,
-                ``azp`` defaults to the same value if not explicitly
-                provided. Following the AuthGlow convention, ``azp`` is
-                always set whenever the token is aud-bound.
+            azp: Authorized party (OIDC Core §2). When ``audience`` is
+                set, ``azp`` defaults to the same value if not
+                explicitly provided. Following the AuthGlow
+                convention, ``azp`` is always set whenever the token
+                is aud-bound.
         """
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
@@ -216,7 +293,7 @@ class JWTService:
                 minutes=self.settings.access_token_expire_minutes
             )
 
-        token_data = {
+        token_data: dict[str, Any] = {
             "iss": self.settings.issuer,
             "jti": str(uuid4()),
             "sub": user_id,
@@ -235,12 +312,17 @@ class JWTService:
             token_data["azp"] = azp if azp is not None else audience
         return self._encode_token(token_data)
 
-    def create_refresh_token(self, user_id: str, email: str, scopes: List[str]) -> str:
+    def create_refresh_token(
+        self,
+        user_id: str,
+        email: str,
+        scopes: List[str],
+    ) -> str:
         """Create a refresh token with jti for individual revocation."""
         expire = datetime.now(timezone.utc) + timedelta(
             days=self.settings.refresh_token_expire_days
         )
-        token_data = {
+        token_data: dict[str, Any] = {
             "iss": self.settings.issuer,
             "jti": str(uuid4()),
             "sub": user_id,
@@ -255,7 +337,7 @@ class JWTService:
     def create_mfa_session_token(self, user_id: str, email: str) -> str:
         """Create a temporary session token for MFA verification with jti for revocation."""
         expire = datetime.now(timezone.utc) + timedelta(minutes=5)
-        token_data = {
+        token_data: dict[str, Any] = {
             "iss": self.settings.issuer,
             "jti": str(uuid4()),
             "sub": user_id,
@@ -277,9 +359,10 @@ class JWTService:
 
         Args:
             token: The encoded JWT.
-            expected_aud: When provided, the token's ``aud`` claim must equal
-                this value (OIDC Core §3.1.3.7). When ``None`` the ``aud`` claim
-                is not enforced, preserving back-compat with cookie/MFA tokens.
+            expected_aud: When provided, the token's ``aud`` claim
+                must equal this value (OIDC Core §3.1.3.7). When
+                ``None`` the ``aud`` claim is not enforced,
+                preserving back-compat with cookie/MFA tokens.
         """
         payload = self._decode_token(token, audience=expected_aud)
         if not payload:
@@ -335,14 +418,14 @@ class JWTService:
         access_token: Optional[str] = None,
         authorization_code: Optional[str] = None,
     ) -> str:
-        """Create an OpenID Connect ID Token.
+        """Create an OpenID Connect ID Token (OIDC Core §2).
 
-        If *access_token* is provided, the ``at_hash`` claim is computed
-        (OIDC Core §3.1.3.6). If *authorization_code* is provided, the
-        ``c_hash`` claim is computed similarly.
+        If *access_token* is provided, the ``at_hash`` claim is
+        computed (OIDC Core §3.1.3.6). If *authorization_code* is
+        provided, the ``c_hash`` claim is computed similarly.
 
-        The hash algorithm is left-half SHA-256, base64url-encoded with
-        no padding.
+        The hash algorithm is left-half SHA-256, base64url-encoded
+        with no padding.
         """
         iat = datetime.now(timezone.utc)
         if expires_delta:
@@ -350,7 +433,7 @@ class JWTService:
         else:
             expire = iat + timedelta(minutes=10)
 
-        id_token_data = {
+        id_token_data: dict[str, Any] = {
             "iss": self.settings.issuer,
             "sub": user_id,
             "aud": client_id,
@@ -383,18 +466,23 @@ class JWTService:
 
         return self._encode_token(id_token_data)
 
-    def decode_id_token(self, token: str, expected_aud: str) -> Optional[IDTokenClaims]:
+    def decode_id_token(
+        self,
+        token: str,
+        expected_aud: str,
+    ) -> Optional[IDTokenClaims]:
         """Decode and validate an ID token.
 
         Args:
             token: The encoded ID token (JWT).
-            expected_aud: The client_id the token must be issued for. The
-                token's ``aud`` claim must equal this value (OIDC Core
-                §3.1.3.7). This is a required argument: the caller must
-                always know which client it is speaking on behalf of.
+            expected_aud: The client_id the token must be issued for.
+                The token's ``aud`` claim must equal this value (OIDC
+                Core §3.1.3.7). This is a required argument: the
+                caller must always know which client it is speaking
+                on behalf of.
 
-        Returns None on signature failure, expiration, missing ``aud``,
-        audience mismatch, or any other validation error.
+        Returns None on signature failure, expiration, missing
+        ``aud``, audience mismatch, or any other validation error.
         """
         payload = self._decode_token(token, audience=expected_aud)
         if not payload:
@@ -415,10 +503,11 @@ class JWTService:
         audience: Optional[str] = None,
         azp: Optional[str] = None,
     ) -> Token:
-        """Create a complete token response.
+        """Create a complete token response (OAuth2 §4.1.4 / §5.1).
 
-        ``audience``/``azp`` are forwarded to the access token so the
-        response is aud-bound when the caller knows the client_id.
+        ``audience``/``azp`` are forwarded to the access token so
+        the response is aud-bound when the caller knows the
+        client_id.
         """
         access_token = self.create_access_token(
             user_id,
@@ -442,107 +531,48 @@ class JWTService:
 
     # --- Key Rotation & Management ---
 
-    def rotate_keys(self) -> Dict[str, str]:
+    async def rotate_keys(self) -> Dict[str, str]:
         """Rotate the active signing key.
 
-        Generates a new RSA key pair, marks the old active key as 'verifying',
-        and makes the new key the active signer.
+        Generates a new RSA key pair, marks the old active key as
+        'verifying', and makes the new key the active signer. The
+        write is routed through the repository's CAS-protected path
+        so concurrent rotators on other instances get
+        ``ConcurrentWriteError`` and the call can be retried.
 
         Returns:
             Dict with ``old_kid`` and ``new_kid``.
         """
-        from cryptography.hazmat.backends import default_backend
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import rsa
-
         old_kid = self._active_kid
+        new_keypair = await self._repository.rotate(secret_key=self.settings.secret_key)
+        await self._load_keyring_snapshot()
+        return {"old_kid": old_kid, "new_kid": new_keypair.kid}
 
-        # Generate new kid using the canonical _new_kid from config
-        from authglow.core.config import _new_kid
-
-        new_kid = _new_kid()
-        new_dir = os.path.join(self.settings.keys_dir, new_kid)
-        os.makedirs(new_dir, exist_ok=True)
-
-        # Generate fresh key pair
-        private_key = rsa.generate_private_key(
-            public_exponent=65537, key_size=2048, backend=default_backend()
-        )
-        priv_bytes = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-        pub_bytes = private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-
-        encrypted_priv = encrypt_private_key(priv_bytes, secret_key=self.settings.secret_key)
-        with open(os.path.join(new_dir, "private_key.pem"), "wb") as f:
-            f.write(encrypted_priv)
-        with open(os.path.join(new_dir, "public_key.pem"), "wb") as f:
-            f.write(pub_bytes)
-
-        # Update keyring in memory and on disk
-        now_str = datetime.now(timezone.utc).isoformat()
-        self._keyring["keys"][new_kid] = {
-            "created_at": now_str,
-            "status": "active",
-            "algorithm": self.settings.jwt_algorithm,
-            "key_size": 2048,
-        }
-        self._keyring["keys"][old_kid]["status"] = "verifying"
-        self._keyring["keys"][old_kid]["retired_at"] = now_str
-        self._keyring["active_kid"] = new_kid
-
-        self._save_keyring()
-
-        # Reload in-process key references
-        self._reload_keyring()
-
-        return {"old_kid": old_kid, "new_kid": new_kid}
-
-    def revoke_key(self, kid: str) -> bool:
+    async def revoke_key(self, kid: str) -> bool:
         """Revoke a key so tokens signed with it are rejected.
 
         The active key cannot be revoked.
 
         Returns:
-            True if the key was revoked, False if the kid is unknown or is the active key.
+            True if the key was revoked, False if the kid is
+            unknown or is the active key.
         """
         if kid == self._active_kid:
             return False
         if kid not in self._keyring["keys"]:
             return False
-
-        self._keyring["keys"][kid]["status"] = "revoked"
-        self._keyring["keys"][kid]["revoked_at"] = datetime.now(timezone.utc).isoformat()
-        self._save_keyring()
-        self._reload_keyring()
+        await self._repository.revoke(kid)
+        await self._load_keyring_snapshot()
         return True
 
     def get_keyring_info(self) -> Dict[str, Any]:
         """Return keyring metadata for inspection.
 
         Returns:
-            Dict with ``active_kid`` and a ``keys`` dict keyed by kid with
-            status, created_at, algorithm, and key_size.
+            Dict with ``active_kid`` and a ``keys`` dict keyed by
+            kid with status, created_at, algorithm, and key_size.
         """
         return {
             "active_kid": self._active_kid,
             "keys": dict(self._keyring["keys"]),
         }
-
-    def _save_keyring(self):
-        """Atomically save the current keyring state to disk."""
-        keyring_path = os.path.join(self.settings.keys_dir, "keyring.json")
-        tmp = keyring_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self._keyring, f, indent=2)
-        os.replace(tmp, keyring_path)
-
-        # Also update legacy symlinks for backward compat
-        from authglow.core.config import _write_active_symlinks
-
-        _write_active_symlinks(self.settings.keys_dir, self._keyring)

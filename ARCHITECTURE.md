@@ -127,6 +127,8 @@ Page component
 
 4. **Security-first** — PII encrypted at rest (AES-256-GCM), bcrypt for credentials, RS256 JWT with auto-rotation, CSP/HSTS/CORS middleware, rate limiting, account lockout.
 
+5. **All filesystem access goes through fsspec** — the `BaseFileRepository` base class owns the fsspec filesystem selection (`storage_backend`) and the `AsyncFileSystem` wrapper. Direct `os.path` / `open()` in repository code is a violation. Every entity, including the JWT keyring (`repositories/file/keystore.py`), rides on fsspec via `BaseFileRepository` and honours `STORAGE_BACKEND` like the rest. The keyring uses a `_version` field in `keyring.json` for object-store atomicity (CAS via `_write_json_versioned`).
+
 ## Key Files
 
 | File                                            | Why important                                                         |

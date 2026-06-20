@@ -223,8 +223,7 @@ class EmailVerificationService:
             "user_name": user.first_name or user.email.split("@")[0],
             "verification_code": code,
             "verify_page_url": (
-                f"{self._settings.frontend_base_url}/auth/verify-email"
-                f"?email={quote(user.email)}"
+                f"{self._settings.frontend_base_url}/auth/verify-email?email={quote(user.email)}"
             ),
             "company_name": self._settings.company_name,
             "expires_hours": 24,

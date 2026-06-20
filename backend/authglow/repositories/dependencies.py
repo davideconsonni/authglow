@@ -523,7 +523,9 @@ def get_federation_provider_repository(
     return FileFederationProviderRepository(settings=settings)
 
 
-def get_keystore_repository() -> "KeyStoreRepository":
+def get_keystore_repository(
+    settings: "Settings | None" = None,
+) -> "KeyStoreRepository":
     """FastAPI factory for the keyring repository.
 
     Returns a fresh ``FileKeyStoreRepository`` per request —
@@ -536,18 +538,18 @@ def get_keystore_repository() -> "KeyStoreRepository":
     exposed for FastAPI route handlers or tests that want to
     inject the repository directly.
 
-    Note: this factory does NOT accept a ``settings`` argument
-    because the keyring repository reads from
-    ``settings.keys_dir`` (which is a *directory*, not a
-    single file). Tests use the autouse ``_override_settings``
-    fixture + the ``test_keys_dir`` session-scoped fixture to
-    control the keyring location.
+    The optional ``settings`` argument lets the caller
+    (typically the service constructor) propagate an
+    already-resolved ``Settings`` instance so the repository
+    reads from the same ``Settings`` as the service (the
+    ``BaseFileRepository`` default would otherwise hit the
+    ``lru_cache``'d global ``get_settings``).
     """
     from authglow.repositories.file.keystore import (
         FileKeyStoreRepository,
     )
 
-    return FileKeyStoreRepository()
+    return FileKeyStoreRepository(settings=settings)
 
 
 def get_device_authorization_repository(

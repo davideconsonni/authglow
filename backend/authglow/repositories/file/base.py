@@ -70,6 +70,7 @@ class BaseFileRepository:
         *,
         subdir: Optional[str] = None,
         extra_dirs: Optional[tuple[str, ...]] = None,
+        root_dir: Optional[str] = None,
     ) -> None:
         """Initialise fsspec, AsyncFileSystem, locks, and paths.
 
@@ -84,6 +85,12 @@ class BaseFileRepository:
             extra_dirs: Override ``_extra_dirs``. Additional
                 subdirectories (relative to the subdir) to create
                 on first construction.
+            root_dir: Override the on-disk root entirely. When set,
+                the repository uses *root_dir* as its storage root
+                (skipping ``settings.storage_path`` and the
+                ``_subdir`` concatenation). Required for entities
+                that live outside ``storage_path`` (e.g. the JWT
+                keyring at ``settings.keys_dir``).
         """
         self._settings: Settings = settings or get_settings()
 
@@ -92,14 +99,17 @@ class BaseFileRepository:
         if extra_dirs is not None:
             self._extra_dirs = extra_dirs
 
-        if not self._subdir:
-            raise ValueError(
-                f"{type(self).__name__} must set _subdir or pass subdir=... "
-                "to BaseFileRepository.__init__"
-            )
-
-        self._storage_root: str = self._settings.storage_path.rstrip("/")
-        self._storage_path: str = f"{self._storage_root}/{self._subdir}"
+        if root_dir is not None:
+            self._storage_root: str = root_dir.rstrip("/")
+            self._storage_path: str = self._storage_root
+        else:
+            if not self._subdir:
+                raise ValueError(
+                    f"{type(self).__name__} must set _subdir or pass subdir=... "
+                    "to BaseFileRepository.__init__"
+                )
+            self._storage_root = self._settings.storage_path.rstrip("/")
+            self._storage_path = f"{self._storage_root}/{self._subdir}"
 
         self._filesystem, self._afs = self._init_filesystem()
         self._lock = named_lock()

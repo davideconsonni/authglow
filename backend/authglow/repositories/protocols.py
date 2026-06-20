@@ -344,9 +344,7 @@ class DeviceAuthorizationRepository(Protocol):
     async def delete_expired(self) -> int:
         """Delete all expired entries. Returns count of deleted entries."""
 
-    async def list_all(
-        self, status_filter: Optional[str] = None
-    ) -> List["DeviceAuthorization"]:
+    async def list_all(self, status_filter: Optional[str] = None) -> List["DeviceAuthorization"]:
         """Return all device authorizations, optionally filtered by status."""
 
     async def delete(self, device_code: str) -> None:

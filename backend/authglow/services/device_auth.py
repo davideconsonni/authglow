@@ -131,9 +131,7 @@ class DeviceAuthorizationService:
         count: int = await self._repo.delete_expired()
         return count
 
-    async def list_all(
-        self, status_filter: Optional[str] = None
-    ) -> List[DeviceAuthorization]:
+    async def list_all(self, status_filter: Optional[str] = None) -> List[DeviceAuthorization]:
         """Return all device authorizations, optionally filtered by status."""
         result: List[DeviceAuthorization] = await self._repo.list_all(status_filter)
         return result
@@ -145,9 +143,7 @@ class DeviceAuthorizationService:
 
     async def revoke(self, device_code: str) -> bool:
         """Revoke a device authorization by setting it to denied."""
-        auth: Optional[DeviceAuthorization] = await self._repo.get_by_device_code(
-            device_code
-        )
+        auth: Optional[DeviceAuthorization] = await self._repo.get_by_device_code(device_code)
         if auth is None:
             return False
         if auth.status not in ("pending", "authorized"):

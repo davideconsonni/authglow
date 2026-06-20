@@ -7,6 +7,7 @@ See ``docs/plans/CONFORMANCE_REMEDIATION_PLAN.md`` for context
 (OIDC Core §2, §5.5.1.1).
 """
 
+import asyncio
 from datetime import datetime, timezone
 
 from authglow.models.token import AuthorizationCode
@@ -83,7 +84,7 @@ class TestCreateIdTokenAcrAmr:
     def test_id_token_includes_acr_amr_when_provided(self, test_settings):
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",
@@ -104,7 +105,7 @@ class TestCreateIdTokenAcrAmr:
     def test_id_token_omits_acr_amr_when_none(self, test_settings):
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         token = jwt_svc.create_id_token(
             user_id="user-1",
             client_id="client-abc",

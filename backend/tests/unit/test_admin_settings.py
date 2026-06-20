@@ -60,6 +60,7 @@ class TestAdminSettingsEndpointStructure:
             # Local variables from helper functions in config.py (not Settings fields)
             "keyring_path", "keyring", "kid", "old_kid", "key_size",
             "rotation_days", "auto_rotate", "options", "smtp_username", "try",
+            "finally", "Implementation",
         }
         unexpected = missing - acceptable_missing
         assert not unexpected, f"Fields in config.py but not in _FIELD_META: {unexpected}"

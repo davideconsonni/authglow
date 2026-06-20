@@ -9,6 +9,7 @@ Tested prompt values:
 - ``consent`` — skips prior-consent check, shows consent screen
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import FastAPI
@@ -99,7 +100,7 @@ class TestPromptNone:
         )
         storage.get_user.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         http_client = TestClient(app, follow_redirects=False)
@@ -167,7 +168,7 @@ class TestPromptLogin:
         )
         storage.get_user_by_email.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         http_client = TestClient(app, follow_redirects=False)

@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 import warnings
 import os
@@ -329,7 +330,7 @@ class TestRSAKeyEncryption:
         from authglow.services.jwt import JWTService
 
         with patch("authglow.services.jwt.get_settings", return_value=settings):
-            svc = JWTService()
+            svc = asyncio.run(JWTService.new())
 
         token = svc.create_access_token(
             user_id="user-enc", email="enc@example.com", scopes=["read"]

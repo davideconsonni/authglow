@@ -1,27 +1,48 @@
 """Configuration management for AuthGlow."""
 
-import json
-import os
+import asyncio
 import secrets
 import warnings
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import structlog
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Backward-compat re-exports for tests / external code that
-# imports these helpers from ``authglow.core.config`` (the
-# implementation moved to ``FileKeyStoreRepository`` in Fase 20).
-from authglow.repositories.file.keystore import (  # noqa: F401
-    _KEYRING_FILENAME,
-    _generate_key_pair,
-    _new_kid,
-)
+# Re-exports for tests / external code that imports these
+# helpers from ``authglow.core.config``. The implementation
+# lives in ``authglow.repositories.file.keystore``; we re-export
+# via module-level ``__getattr__`` to avoid the circular import
+# (the repository imports from ``authglow.repositories.file.base``
+# which imports from this module).
+__all__ = [  # noqa: F822
+    "Settings",
+    "get_settings",
+    "get_or_generate_keyring",
+    "_KEYRING_FILENAME",
+    "_generate_key_pair",
+    "_new_kid",
+]
 
-_LEGACY_KID = "klegacy"
-_keys_log = structlog.get_logger("authglow.keys")
+
+def __getattr__(name: str) -> Any:
+    if name in {"_KEYRING_FILENAME", "_generate_key_pair", "_new_kid"}:
+        from authglow.repositories.file.keystore import (
+            _KEYRING_FILENAME as _kr_filename,
+        )
+        from authglow.repositories.file.keystore import (
+            _generate_key_pair as _kr_gen,
+        )
+        from authglow.repositories.file.keystore import (
+            _new_kid as _kr_new_kid,
+        )
+
+        globals()["_KEYRING_FILENAME"] = _kr_filename
+        globals()["_generate_key_pair"] = _kr_gen
+        globals()["_new_kid"] = _kr_new_kid
+        return globals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_or_generate_keyring(
@@ -30,205 +51,73 @@ def get_or_generate_keyring(
     rotation_days: int = 90,
     auto_rotate: bool = True,
     key_size: int = 2048,
-):
+) -> None:
+    """Ensure the RSA keyring exists on the fsspec backend.
+
+    Delegates every I/O operation to
+    :class:`FileKeyStoreRepository`:
+
+    1. If the keyring is missing, bootstrap it (migrate the
+       legacy single-key layout if present, otherwise generate
+       a fresh key).
+    2. If ``auto_rotate`` is set, rotate the active key when
+       it's older than ``rotation_days``.
+
+    This is a startup-only function: it runs once when
+    :class:`Settings` is first instantiated.
+
+    Implementation: the repository is built with the fsspec
+    **sync** filesystem (the same fsspec layer every other
+    entity uses, selected by ``Settings.storage_backend``).
+    The bootstrap / auto-rotate paths are executed through a
+    private synchronous driver that uses ``asyncio.run`` in a
+    way that saves and restores the calling thread's current
+    event loop — so calling this from a sync test fixture
+    (e.g. :func:`tests.conftest.test_settings`) does not break
+    subsequent ``asyncio.get_event_loop()`` calls in the same
+    thread.
     """
-    Ensure the RSA keyring exists on disk with at least one active key.
-
-    1. Migrate legacy single-key format to keyring if needed.
-    2. Generate new keys if no keys exist.
-    3. Auto-rotate if the active key is older than *rotation_days*.
-
-    Backward compat: the active key is also written to
-    ``{keys_dir}/private_key.pem`` / ``{keys_dir}/public_key.pem``.
-
-    Implementation note (Fase 20): this function is a thin
-    orchestrator that delegates to
-    :class:`FileKeyStoreRepository` for the actual I/O
-    (keyring index, per-kid PEM files, atomic writes). The
-    migration path is special-cased because it does not
-    fit the repository's ``get/rotate/revoke`` API (it
-    needs to move existing files from flat paths into the
-    per-kid directory layout).
-    """
-    from datetime import datetime, timedelta, timezone
-
-    os.makedirs(keys_dir, exist_ok=True)
-    keyring_path = os.path.join(keys_dir, _KEYRING_FILENAME)
-    legacy_priv_path = os.path.join(keys_dir, "private_key.pem")
-    legacy_pub_path = os.path.join(keys_dir, "public_key.pem")
-
-    # Load keyring using the same JSON shape the
-    # FileKeyStoreRepository uses, so the repository can
-    # pick it up on the first read.
-    keyring: Optional[Dict[str, Any]] = None
-    if os.path.exists(keyring_path):
-        with open(keyring_path, "r", encoding="utf-8") as f:
-            keyring = json.load(f)
-
-    # --- Migration from legacy single-key format ---
-    if keyring is None and os.path.exists(legacy_priv_path) and os.path.exists(legacy_pub_path):
-        _keys_log.info("keyring_migration_started")
-        kid = _LEGACY_KID
-        kid_dir = os.path.join(keys_dir, kid)
-        os.makedirs(kid_dir, exist_ok=True)
-        os.rename(legacy_priv_path, os.path.join(kid_dir, "private_key.pem"))
-        os.rename(legacy_pub_path, os.path.join(kid_dir, "public_key.pem"))
-        keyring = {
-            "active_kid": kid,
-            "keys": {
-                kid: {
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                    "status": "active",
-                    "algorithm": "RS256",
-                    "key_size": key_size,
-                }
-            },
-        }
-        _save_keyring(keyring_path, keyring)
-        _write_active_symlinks(keys_dir, keyring)
-
-    # --- Fresh generation ---
-    if keyring is None:
-        _keys_log.info("keyring_generation_started")
-        _generate_fresh_keyring(keys_dir, keyring_path, secret_key, key_size)
-        return
-
-    # --- Auto-rotate ---
-    if auto_rotate:
-        active_kid = keyring["active_kid"]
-        active_meta = keyring["keys"].get(active_kid, {})
-        created_str = active_meta.get("created_at", "")
-        if created_str:
-            created_dt = datetime.fromisoformat(created_str)
-            age = datetime.now(timezone.utc) - created_dt
-            if age > timedelta(days=rotation_days):
-                _keys_log.info(
-                    "keyring_rotation_started",
-                    kid=active_kid,
-                    age_days=age.days,
-                    rotation_days=rotation_days,
-                )
-                _perform_rotation(keys_dir, keyring_path, keyring, secret_key, active_kid, key_size)
-
-
-def _save_keyring(keyring_path: str, keyring: Dict[str, Any]):
-    """Atomically save keyring.json (tmp+rename)."""
-    tmp = keyring_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(keyring, f, indent=2)
-    os.replace(tmp, keyring_path)
-
-
-def _write_active_symlinks(keys_dir: str, keyring: Dict[str, Any]):
-    """Copy the active key to the legacy flat paths for backward compatibility."""
-    import shutil
-
-    active_kid = keyring["active_kid"]
-    src_priv = os.path.join(keys_dir, active_kid, "private_key.pem")
-    src_pub = os.path.join(keys_dir, active_kid, "public_key.pem")
-    dst_priv = os.path.join(keys_dir, "private_key.pem")
-    dst_pub = os.path.join(keys_dir, "public_key.pem")
-
-    for dst in (dst_priv, dst_pub):
-        try:
-            os.remove(dst)
-        except FileNotFoundError:
-            pass
-
-    shutil.copy2(src_priv, dst_priv)
-    shutil.copy2(src_pub, dst_pub)
-
-
-def _generate_fresh_keyring(
-    keys_dir: str,
-    keyring_path: str,
-    secret_key: str,
-    key_size: int,
-):
-    """Generate a brand-new keyring with a single active key.
-
-    Used by :func:`get_or_generate_keyring` when no
-    keyring exists and no legacy files are present.
-    Delegates the file I/O to
-    :class:`FileKeyStoreRepository`'s private helpers via
-    a short-lived instance (no fsspec / async overhead —
-    this is a local-only path).
-    """
-    from datetime import datetime, timezone
-
-    from authglow.core.crypto import encrypt_private_key
     from authglow.repositories.file.keystore import (
         FileKeyStoreRepository,
     )
 
-    repo = FileKeyStoreRepository.for_keys_dir(keys_dir, secret_key, key_size)
-    kid = _new_kid()
-    os.makedirs(repo._kid_dir(kid), exist_ok=True)
-
-    priv_bytes, pub_bytes = _generate_key_pair(key_size)
-    encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-    repo._write_kid_pems(kid, encrypted_priv, pub_bytes)
-
-    keyring = {
-        "active_kid": kid,
-        "keys": {
-            kid: {
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "status": "active",
-                "algorithm": "RS256",
-                "key_size": key_size,
-            }
-        },
-    }
-    _save_keyring(keyring_path, keyring)
-    _write_active_symlinks(keys_dir, keyring)
-    _keys_log.info("keyring_initialised", kid=kid)
-
-
-def _perform_rotation(
-    keys_dir: str,
-    keyring_path: str,
-    keyring: Dict[str, Any],
-    secret_key: str,
-    old_kid: str,
-    key_size: int,
-):
-    """Generate a new key pair, mark old active as verifying, save.
-
-    Delegates the file I/O to
-    :class:`FileKeyStoreRepository`'s private helpers
-    (same rationale as :func:`_generate_fresh_keyring`).
-    """
-    from datetime import datetime, timezone
-
-    from authglow.repositories.file.keystore import (
-        FileKeyStoreRepository,
+    repo = FileKeyStoreRepository.for_keys_dir(
+        keys_dir=keys_dir, secret_key=secret_key, key_size=key_size
     )
 
-    repo = FileKeyStoreRepository.for_keys_dir(keys_dir, secret_key, key_size)
-    kid = _new_kid()
-    os.makedirs(repo._kid_dir(kid), exist_ok=True)
+    # Save the calling thread's current event loop (if any)
+    # and restore it after ``asyncio.run`` returns. Without
+    # this, callers that already had a loop set (e.g. the
+    # ``_ensure_event_loop`` autouse fixture in tests/conftest)
+    # would silently lose it after the first ``Settings``
+    # instantiation, breaking the next ``asyncio.get_event_loop()``
+    # call in the same thread.
+    try:
+        previous_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        previous_loop = None
 
-    priv_bytes, pub_bytes = _generate_key_pair(key_size)
-    from authglow.core.crypto import encrypt_private_key
+    async def _run() -> None:
+        await repo.bootstrap_if_missing(secret_key=secret_key, key_size=key_size)
+        if auto_rotate:
+            await repo.auto_rotate_if_needed(
+                secret_key=secret_key,
+                rotation_days=rotation_days,
+                key_size=key_size,
+            )
 
-    encrypted_priv = encrypt_private_key(priv_bytes, secret_key=secret_key)
-    repo._write_kid_pems(kid, encrypted_priv, pub_bytes)
-
-    now_str = datetime.now(timezone.utc).isoformat()
-    keyring["keys"][kid] = {
-        "created_at": now_str,
-        "status": "active",
-        "algorithm": "RS256",
-        "key_size": key_size,
-    }
-    keyring["keys"][old_kid]["status"] = "verifying"
-    keyring["keys"][old_kid]["retired_at"] = now_str
-    keyring["active_kid"] = kid
-
-    _save_keyring(keyring_path, keyring)
-    _write_active_symlinks(keys_dir, keyring)
-    _keys_log.info("keyring_rotated", old_kid=old_kid, new_kid=kid)
+    try:
+        asyncio.run(_run())
+    finally:
+        if previous_loop is not None:
+            try:
+                asyncio.set_event_loop(previous_loop)
+            except RuntimeError:
+                # The previous loop is already closed (e.g. the
+                # conftest's ``_ensure_event_loop`` created and
+                # closed it in the same test). Nothing to
+                # restore.
+                pass
 
 
 class Settings(BaseSettings):

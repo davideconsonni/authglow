@@ -275,7 +275,7 @@ async def change_password(
     if not access_token:
         access_token = request.cookies.get(settings.auth_cookie_access_name)
     if access_token:
-        jwt_svc = JWTService()
+        jwt_svc = await JWTService.new()
         at_data = jwt_svc.decode_token(access_token)
         if at_data and at_data.jti:
             await get_blacklist().revoke(at_data.jti, at_data.exp.timestamp())

@@ -4,6 +4,7 @@ Validates that ``max_age`` forces re-authentication when the user's
 ``last_login`` is older than the threshold (OIDC Core §3.1.2.1).
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -88,7 +89,7 @@ class TestMaxAge:
         )
         storage.get_user.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         http_client = TestClient(app, follow_redirects=False)
@@ -131,7 +132,7 @@ class TestMaxAge:
         )
         storage.get_user.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         http_client = TestClient(app, follow_redirects=False)
@@ -173,7 +174,7 @@ class TestMaxAge:
         )
         storage.get_user.return_value = user
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         http_client = TestClient(app, follow_redirects=False)

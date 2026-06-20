@@ -6,6 +6,7 @@ Validates that:
 - ``POST /api/oauth2/authorize`` with a valid CSRF token → proceeds past CSRF.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
@@ -188,7 +189,7 @@ class TestAuthorizePostCsrfEnforcement:
         # Produce a valid JWT access token in the cookie
         from authglow.services.jwt import JWTService
 
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
@@ -250,7 +251,7 @@ class TestAuthorizePostCsrfEnforcement:
         token = loop.run_until_complete(_gen_token())
 
         # Produce a valid JWT access token in the cookie
-        jwt_svc = JWTService()
+        jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
         with (

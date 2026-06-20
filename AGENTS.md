@@ -359,9 +359,9 @@ File<Entity>Repository(BaseFileRepository, <Entity>Repository)
   ├── backend-specific concerns (PII encryption, HMAC keys, CAS)
   └── public surface = Protocol methods
 
-KeyStoreRepository  (authglow/repositories/file/keystore.py) — special
-  ├── NOT a BaseFileRepository subclass (multi-file layout)
-  ├── tmp+rename atomic write inline
+FileKeyStoreRepository  (authglow/repositories/file/keystore.py)
+  ├── BaseFileRepository subclass with root_dir=settings.keys_dir
+  ├── _version field in keyring.json for cloud atomicity (_write_json_versioned)
   └── for_keys_dir() classmethod for lru_cache bypass at startup
 ```
 

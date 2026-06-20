@@ -1,5 +1,6 @@
 """Tests for VAPT-010: OIDC logout open redirect prevention."""
 
+import asyncio
 from unittest.mock import patch
 
 
@@ -37,7 +38,7 @@ class TestDecodeTokenReadsAud:
     def test_decode_token_sets_aud(self):
         from authglow.services.jwt import JWTService
 
-        svc = JWTService()
+        svc = asyncio.run(JWTService.new())
         payload = {
             "sub": "user-1",
             "email": "test@test.com",
@@ -55,7 +56,7 @@ class TestDecodeTokenReadsAud:
     def test_decode_token_aud_none_when_missing(self):
         from authglow.services.jwt import JWTService
 
-        svc = JWTService()
+        svc = asyncio.run(JWTService.new())
         payload = {
             "sub": "user-1",
             "email": "test@test.com",

@@ -62,11 +62,35 @@ async def openid_configuration(request: Request):
         [s.strip() for s in settings.oidc_claims_supported.split(",") if s.strip()]
         if settings.oidc_claims_supported
         else [
-            "sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "acr", "amr", "sid",
-            "name", "given_name", "family_name", "middle_name", "nickname",
-            "preferred_username", "profile", "picture", "website",
-            "email", "email_verified", "gender", "birthdate", "zoneinfo",
-            "locale", "phone_number", "phone_number_verified", "address", "updated_at",
+            "sub",
+            "iss",
+            "aud",
+            "exp",
+            "iat",
+            "auth_time",
+            "nonce",
+            "acr",
+            "amr",
+            "sid",
+            "name",
+            "given_name",
+            "family_name",
+            "middle_name",
+            "nickname",
+            "preferred_username",
+            "profile",
+            "picture",
+            "website",
+            "email",
+            "email_verified",
+            "gender",
+            "birthdate",
+            "zoneinfo",
+            "locale",
+            "phone_number",
+            "phone_number_verified",
+            "address",
+            "updated_at",
         ]
     )
 
@@ -106,7 +130,7 @@ async def jwks(request: Request):
     Spec: https://tools.ietf.org/html/rfc7517
     """
     settings = get_settings()
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     keyring_info = jwt_service.get_keyring_info()
 
     def int_to_base64(n):
@@ -163,7 +187,7 @@ async def jwks_status(request: Request):
     this endpoint exposes status metadata for all keys so that
     clients can detect when a cached ``kid`` has been revoked.
     """
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     keyring_info = jwt_service.get_keyring_info()
 
     keys_meta = []
@@ -198,7 +222,7 @@ async def userinfo(request: Request, credentials: HTTPAuthorizationCredentials =
     Returns:
         User information based on the scopes in the access token
     """
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     oidc_service = OIDCService()
 
     # Decode and validate access token
@@ -272,7 +296,7 @@ async def logout_get(
     from authglow.services.audit import AuditService
     from authglow.services.oauth2 import OAuth2Service
 
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     oauth2_service = OAuth2Service()
     audit_service = AuditService()
 
@@ -424,7 +448,7 @@ async def logout_post(
     """
     from authglow.services.audit import AuditService
 
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     audit_service = AuditService()
 
     # Decode token for audit logging
@@ -557,7 +581,13 @@ async def register_oauth_client(
     invalid_grants = [
         g
         for g in allowed_grant_types
-        if g not in ("authorization_code", "refresh_token", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code")
+        if g
+        not in (
+            "authorization_code",
+            "refresh_token",
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:device_code",
+        )
     ]
     if invalid_grants:
         raise HTTPException(

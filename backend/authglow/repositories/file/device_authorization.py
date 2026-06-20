@@ -22,9 +22,7 @@ from authglow.repositories.file.base import BaseFileRepository
 from authglow.repositories.protocols import DeviceAuthorizationRepository
 
 
-class FileDeviceAuthorizationRepository(
-    BaseFileRepository, DeviceAuthorizationRepository
-):
+class FileDeviceAuthorizationRepository(BaseFileRepository, DeviceAuthorizationRepository):
     """Persists device authorizations as JSON files.
 
     Two indices:
@@ -135,9 +133,7 @@ class FileDeviceAuthorizationRepository(
                 count += 1
         return count
 
-    async def list_all(
-        self, status_filter: Optional[str] = None
-    ) -> List[DeviceAuthorization]:
+    async def list_all(self, status_filter: Optional[str] = None) -> List[DeviceAuthorization]:
         """Return all device authorizations, optionally filtered by status."""
         import os as _os
 

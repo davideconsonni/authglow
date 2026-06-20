@@ -24,7 +24,7 @@ class TestLazyJWTServiceInit:
 
             perm_mod._jwt_service = None
 
-            svc = _get_jwt_service()
+            svc = asyncio_run(_get_jwt_service())
             assert svc is not None
             assert perm_mod._jwt_service is svc
 
@@ -34,8 +34,8 @@ class TestLazyJWTServiceInit:
 
             perm_mod._jwt_service = None
 
-            svc1 = perm_mod._get_jwt_service()
-            svc2 = perm_mod._get_jwt_service()
+            svc1 = asyncio_run(perm_mod._get_jwt_service())
+            svc2 = asyncio_run(perm_mod._get_jwt_service())
             assert svc1 is svc2
 
     def test_reset_lazy_singleton(self, test_settings):
@@ -43,9 +43,9 @@ class TestLazyJWTServiceInit:
             import authglow.core.permissions as perm_mod
 
             perm_mod._jwt_service = None
-            svc1 = perm_mod._get_jwt_service()
+            svc1 = asyncio_run(perm_mod._get_jwt_service())
             perm_mod._jwt_service = None
-            svc2 = perm_mod._get_jwt_service()
+            svc2 = asyncio_run(perm_mod._get_jwt_service())
             assert svc1 is not svc2
 
 
@@ -66,9 +66,11 @@ class TestPermissionChecker:
     def test_admin_scope_bypasses_permissions(self, test_settings):
         from authglow.core.permissions import PermissionChecker
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
             token_data = self._make_token_data(scopes=["read", "admin"])
-            mock_jwt.return_value.decode_token.return_value = token_data
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
 
             checker = PermissionChecker(required_permissions=["users.delete"])
             mock_request = MagicMock(spec=Request)
@@ -81,9 +83,11 @@ class TestPermissionChecker:
         from authglow.core.permissions import PermissionChecker
         from authglow.services.rbac import RBACService
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
             token_data = self._make_token_data(scopes=["read"])
-            mock_jwt.return_value.decode_token.return_value = token_data
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
 
             with patch.object(
                 RBACService, "get_user_permissions", new_callable=AsyncMock
@@ -104,9 +108,11 @@ class TestPermissionChecker:
         from authglow.core.permissions import PermissionChecker
         from authglow.services.rbac import RBACService
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
             token_data = self._make_token_data(scopes=["read"])
-            mock_jwt.return_value.decode_token.return_value = token_data
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
 
             with patch.object(
                 RBACService, "get_user_permissions", new_callable=AsyncMock
@@ -127,8 +133,10 @@ class TestPermissionChecker:
     def test_invalid_token_returns_401(self, test_settings):
         from authglow.core.permissions import PermissionChecker
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
-            mock_jwt.return_value.decode_token.return_value = None
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=None)
+            mock_jwt.return_value = fake_svc
 
             checker = PermissionChecker(required_permissions=["users.read"])
             mock_request = MagicMock(spec=Request)
@@ -145,7 +153,7 @@ class TestGetCurrentUser:
         from authglow.models.token import TokenData
         from datetime import datetime, timezone, timedelta
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
             token_data = TokenData(
                 sub="user-42",
                 email="test@example.com",
@@ -154,7 +162,9 @@ class TestGetCurrentUser:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc),
             )
-            mock_jwt.return_value.decode_token.return_value = token_data
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
 
             mock_request = MagicMock(spec=Request)
             mock_request.cookies = {}
@@ -165,8 +175,10 @@ class TestGetCurrentUser:
     def test_get_current_user_invalid_token(self, test_settings):
         from authglow.core.permissions import get_current_user
 
-        with patch("authglow.core.permissions._get_jwt_service") as mock_jwt:
-            mock_jwt.return_value.decode_token.return_value = None
+        with patch("authglow.core.permissions._get_jwt_service", new_callable=AsyncMock) as mock_jwt:
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=None)
+            mock_jwt.return_value = fake_svc
 
             mock_request = MagicMock(spec=Request)
             mock_request.cookies = {}
@@ -188,3 +200,13 @@ def asyncio_run(coro):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     return loop.run_until_complete(coro)
+
+
+def _make_jwt_service(test_settings):
+    """Build a fully-loaded ``JWTService`` for tests that
+    mock ``_get_jwt_service`` (sync-returning) and need
+    ``decode_token`` to work."""
+    from authglow.services.jwt import JWTService
+
+    with patch("authglow.services.jwt.get_settings", return_value=test_settings):
+        return asyncio_run(JWTService.new())

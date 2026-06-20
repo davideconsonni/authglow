@@ -1488,7 +1488,7 @@ async def get_jwk_keys(
     current_user: User = Depends(require_admin),
 ):
     """Get all JWK keys in the keyring."""
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     info = jwt_service.get_keyring_info()
 
     keys_list = []
@@ -1531,8 +1531,8 @@ async def rotate_jwk_keys(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Rotate the active JWK signing key."""
-    jwt_service = JWTService()
-    result = jwt_service.rotate_keys()
+    jwt_service = await JWTService.new()
+    result = await jwt_service.rotate_keys()
 
     await audit_service.log_event(
         event_type="jwk_key_rotated",
@@ -1558,7 +1558,7 @@ async def revoke_jwk_key(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a JWK key. Active key cannot be revoked."""
-    jwt_service = JWTService()
+    jwt_service = await JWTService.new()
     success = jwt_service.revoke_key(kid)
 
     if not success:
@@ -1625,7 +1625,9 @@ async def revoke_device_authorization(
     success = await service.revoke(device_code)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Device authorization not found or already finalized")
+        raise HTTPException(
+            status_code=404, detail="Device authorization not found or already finalized"
+        )
 
     await audit_service.log_event(
         event_type="device_authorization_revoked",

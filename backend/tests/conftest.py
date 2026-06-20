@@ -95,10 +95,12 @@ def _override_settings(test_settings):
 
 @pytest.fixture
 def jwt_service(test_settings):
+    import asyncio
+
     from authglow.services.jwt import JWTService
 
     with patch("authglow.services.jwt.get_settings", return_value=test_settings):
-        svc = JWTService()
+        svc = asyncio.run(JWTService.new())
         return svc
 
 
