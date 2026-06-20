@@ -450,6 +450,7 @@ class TestMFAVerifyRequestModel:
         assert decrypt_totp_secret(None) is None
 
     def test_wrong_key_fails(self):
+        from authglow.core import crypto
         from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
         from unittest.mock import patch, MagicMock
 
@@ -459,6 +460,7 @@ class TestMFAVerifyRequestModel:
         wrong_settings = MagicMock()
         wrong_settings.secret_key = "x" + "y" * 63
 
+        crypto._derive_key.cache_clear()
         with patch("authglow.core.config.get_settings", return_value=wrong_settings):
             with pytest.raises(Exception):
                 decrypt_totp_secret(encrypted)

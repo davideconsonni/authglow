@@ -23,16 +23,31 @@ no repository is injected — FastAPI's ``Depends(get_oauth2_service)``
 factory uses the default.
 """
 
+import contextvars
 import secrets
 from datetime import timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import Settings, get_settings
 from authglow.core.datetime import utcnow
+from authglow.models.oauth_client import OAuth2Client
 from authglow.models.token import AuthorizationCode
 from authglow.repositories.protocols import AuthorizationCodeRepository
 from authglow.services.oauth_client import OAuth2ClientStorage
+
+# Per-request cache of OAuth2Client lookups, keyed by client_id.
+# The :class:`contextvars.ContextVar` is automatically scoped to the
+# current asyncio Task (one Task per request handler under FastAPI's
+# ``async def`` routing), so concurrent requests see independent
+# caches. Populated lazily by :meth:`OAuth2Service._get_client_cached`
+# on the first lookup; cleared automatically when the request Task
+# completes. Caches both positive (client found) and negative (None)
+# results — a client create/delete is a separate code path that does
+# not race with an in-flight request, so caching ``None`` is safe.
+_client_cache: contextvars.ContextVar[Optional[Dict[str, Optional[OAuth2Client]]]] = (
+    contextvars.ContextVar("authglow_oauth2_client_cache", default=None)
+)
 
 
 class OAuth2Service:
@@ -68,6 +83,38 @@ class OAuth2Service:
     def repository(self) -> AuthorizationCodeRepository:
         """The underlying repository (exposed for tests / admin tools)."""
         return self._repository
+
+    # ------------------------------------------------------------------
+    # Per-request client cache (Tier 1.5 of PERFORMANCE_OPTIMIZATION_PLAN)
+    # ------------------------------------------------------------------
+
+    async def _get_client_cached(self, client_id: str) -> Optional[OAuth2Client]:
+        """Return the :class:`OAuth2Client` for *client_id*, caching
+        the result in a per-request :class:`contextvars.ContextVar`.
+
+        On the first call for a given ``client_id`` the underlying
+        ``self.client_storage.get_client`` is awaited and the result
+        (positive or negative) is stored in the per-request cache.
+        Subsequent calls within the same request — for example the
+        five ``verify_*`` / ``process_scopes`` methods on the
+        ``/oauth2/authorize`` flow — reuse the cached value without
+        re-reading the fsspec-backed client repository.
+
+        The cache is keyed by ``client_id`` only. Both positive
+        (``OAuth2Client``) and negative (``None``) results are cached
+        so a single in-flight request to an unknown client triggers
+        exactly one repository read regardless of how many methods
+        call into this helper.
+        """
+        cache = _client_cache.get()
+        if cache is None:
+            cache = {}
+            _client_cache.set(cache)
+        if client_id in cache:
+            return cache[client_id]
+        client = await self.client_storage.get_client(client_id)
+        cache[client_id] = client
+        return client
 
     # ------------------------------------------------------------------
     # Authorization code lifecycle
@@ -149,7 +196,7 @@ class OAuth2Service:
         clients through the admin API and the fallback is always rejected.
         """
         # Try dynamic client storage first
-        client = await self.client_storage.get_client(client_id)
+        client = await self._get_client_cached(client_id)
 
         if client:
             if not client.is_active:
@@ -176,7 +223,7 @@ class OAuth2Service:
 
     async def verify_redirect_uri(self, client_id: str, redirect_uri: str) -> bool:
         """Verify if redirect_uri is allowed for the client."""
-        client = await self.client_storage.get_client(client_id)
+        client = await self._get_client_cached(client_id)
 
         if client:
             return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
@@ -191,7 +238,7 @@ class OAuth2Service:
 
     async def verify_scopes(self, client_id: str, requested_scopes: list[str]) -> bool:
         """Verify if client is allowed to request these scopes."""
-        client = await self.client_storage.get_client(client_id)
+        client = await self._get_client_cached(client_id)
 
         if client:
             return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
@@ -218,7 +265,7 @@ class OAuth2Service:
             "offline_access",
         }
 
-        client = await self.client_storage.get_client(client_id)
+        client = await self._get_client_cached(client_id)
         allowed_scopes = list(client.allowed_scopes) if client else []
 
         # Settings-based fallback client — only permissible in non-production
@@ -248,7 +295,7 @@ class OAuth2Service:
 
     async def verify_grant_type(self, client_id: str, grant_type: str) -> bool:
         """Verify if client is allowed to use this grant type."""
-        client = await self.client_storage.get_client(client_id)
+        client = await self._get_client_cached(client_id)
 
         if client:
             return await self.client_storage.is_grant_type_allowed(client_id, grant_type)

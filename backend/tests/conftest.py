@@ -105,6 +105,20 @@ def _reset_jwt_singleton():
     asyncio.run(reset_jwt_singleton())
 
 
+@pytest.fixture(autouse=True)
+def _reset_http_client():
+    """Close the :func:`authglow.core.http_client.get_http_client` cache
+    between tests so the singleton is rebound to the current event
+    loop on next call (the httpx client is loop-bound).
+    """
+    import asyncio
+
+    from authglow.core.http_client import reset_http_client
+
+    yield
+    asyncio.run(reset_http_client())
+
+
 @pytest.fixture
 def jwt_service(test_settings):
     import asyncio

@@ -1,6 +1,7 @@
 """OpenID Connect API endpoints."""
 
 import base64
+import hashlib
 import os
 from typing import List, Optional
 from urllib.parse import urlparse
@@ -29,12 +30,19 @@ security = HTTPBearer()
 
 @router.get("/.well-known/openid-configuration", response_model=OpenIDConfiguration)
 @limiter.limit("60/minute")
-async def openid_configuration(request: Request):
+async def openid_configuration(request: Request, response: Response):
     """OpenID Connect Discovery endpoint.
 
     Returns metadata about the OpenID Provider's configuration.
     Spec: https://openid.net/specs/openid-connect-discovery-1_0.html
+
+    The response is publicly cacheable for one hour (Tier 1.6 of
+    PERFORMANCE_OPTIMIZATION_PLAN.md): the discovery document only
+    changes on operator-driven configuration changes, not on
+    per-request activity.  Public intermediaries (CDNs, reverse
+    proxies) can serve the cached document to many clients.
     """
+    response.headers["Cache-Control"] = "public, max-age=3600"
     settings = get_settings()
     base_url = settings.issuer
 
@@ -122,16 +130,37 @@ async def openid_configuration(request: Request):
 
 @router.get("/.well-known/jwks.json", response_model=JWKSResponse)
 @limiter.limit("60/minute")
-async def jwks(request: Request):
+async def jwks(request: Request, response: Response):
     """JSON Web Key Set (JWKS) endpoint.
 
     Returns all active and verifying public keys in JWK format.
     Revoked keys are excluded.
     Spec: https://tools.ietf.org/html/rfc7517
+
+    The response is publicly cacheable for five minutes and
+    carries an ETag derived from the keyring ``_version`` field
+    (Tier 1.6 of PERFORMANCE_OPTIMIZATION_PLAN.md).  Clients
+    (RPs) that re-fetch the JWKS within the cache window get
+    a ``304 Not Modified`` from intermediaries, avoiding the
+    cost of re-reading every public key file.
     """
+    response.headers["Cache-Control"] = "public, max-age=300"
     settings = get_settings()
     jwt_service = await get_jwt_service()
     keyring_info = jwt_service.get_keyring_info()
+
+    # ETag: any change to the keyring (rotation, revocation) bumps
+    # ``_version``; combine with the active kid so the ETag is
+    # also invalidated when a new active key is promoted.
+    keyring_version = keyring_info.get("_version", 0)
+    etag_source = f"{keyring_version}:{keyring_info['active_kid']}"
+    response.headers["ETag"] = f'W/"{hashlib.sha256(etag_source.encode()).hexdigest()[:16]}"'
+
+    # Honour conditional GET: if the client's If-None-Match matches
+    # the current ETag, return 304 without re-serializing the body.
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match == response.headers["ETag"]:
+        return Response(status_code=304, headers=dict(response.headers))
 
     def int_to_base64(n):
         return (
@@ -209,7 +238,11 @@ async def jwks_status(request: Request):
 
 @router.get("/oauth2/userinfo", response_model=UserInfoResponse)
 @limiter.limit("120/minute")
-async def userinfo(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def userinfo(
+    request: Request,
+    response: Response,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     """OpenID Connect UserInfo endpoint.
 
     Returns claims about the authenticated user.
@@ -221,7 +254,13 @@ async def userinfo(request: Request, credentials: HTTPAuthorizationCredentials =
 
     Returns:
         User information based on the scopes in the access token
+
+    Tier 1.6 of PERFORMANCE_OPTIMIZATION_PLAN.md: the response is
+    explicitly non-cacheable (``private, max-age=0, no-cache``).
+    UserInfo is personalised and the response MUST NOT leak
+    across users via shared caches.
     """
+    response.headers["Cache-Control"] = "private, max-age=0, no-cache"
     jwt_service = await get_jwt_service()
     oidc_service = OIDCService()
 

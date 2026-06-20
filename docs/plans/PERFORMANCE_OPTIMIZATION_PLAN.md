@@ -106,43 +106,91 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ### 1.3 — `httpx.AsyncClient` singleton in `federation.py`
 
-- [ ] **`services/federation.py:122, 178, 195`** — estrarre il `with
+- [x] **`services/federation.py:122, 178, 195`** — estrarre il `with
   httpx.AsyncClient(...) as client:` in un singleton module-level con
   `httpx.Limits(max_connections=50, max_keepalive_connections=20)`. Init lazy
   dentro un async lock.
-- [ ] **Test**: `pytest tests/integration/test_federation*.py
-  tests/unit/test_federation_*.py` deve passare.
+- [x] **Posizionato in modulo dedicato** `core/http_client.py` (parallelo a
+  `core/jwt_singleton.py`): `get_http_client()` + `reset_http_client()`.
+  `reset_http_client` defensively gestisce `RuntimeError("Event loop is closed")`
+  al teardown dei test.
+- [x] **Test isolation**: fixture autouse `_reset_http_client` in `tests/conftest.py`.
+- [x] **Verifica scope**: nessun altro modulo fa HTTP outbound (`requests`,
+  `aiohttp`, `urllib.request` assenti; `urllib.parse` usato solo per
+  `urlparse`/`urlencode`).
+- [x] **Test**: `pytest tests/integration/test_federation*.py
+  tests/unit/test_federation_*.py` deve passare. Aggiunta nuova suite
+  `tests/performance/test_httpx_singleton.py` (5 test: reuse, concorrenza,
+  limits 50/20 verificati sul pool transport, concurrent discover via
+  `httpx.MockTransport`, reset closes & replaces).
 
 ### 1.4 — `lru_cache` su `_derive_key`
 
-- [ ] **`core/crypto.py:33-40`** — wrappare `_derive_key` con
+- [x] **`core/crypto.py:33-40`** — wrappare `_derive_key` con
   `@functools.lru_cache(maxsize=8)`. La funzione è deterministica in
   `(secret_key, info)` → sicuro cachare.
-- [ ] **Test**: `pytest tests/unit/test_crypto.py` (se esiste) o smoke test in
-  `tests/unit/test_admin_users_phase2.py` (cambio password).
+- [x] **Estensione scope** (uniformità): applicato `@lru_cache(maxsize=8)` anche a
+  `hash_index_key`, `reset_code_lookup_key`, `verification_code_lookup_key` (tutte
+  funzioni HMAC deterministiche in `core/crypto.py`).
+- [x] **Refactor opportunistico**: `derive_federation_state_key` ora è un thin
+  wrapper di `_derive_key(info=_FEDERATION_STATE_INFO)` — rimossa duplicazione
+  della logica HKDF.
+- [x] **Sentinel per `None`**: `_DEFAULT_SECRET_SENTINEL` perché `lru_cache`
+  richiede argomenti hashable e `None` non lo è. Il sentinel non è mai un
+  `SECRET_KEY` reale (i secret sono 48-char base64url).
+- [x] **Test isolation**: fixture autouse `_clear_crypto_caches` in
+  `tests/unit/test_crypto.py` che chiama `cache_clear()` su tutti e 4 i cache
+  ad ogni test. Aggiornato `tests/unit/test_mfa.py::test_wrong_key_fails`
+  per chiamare `cache_clear()` prima del patch di `get_settings`.
+- [x] **Test**: `pytest tests/unit/test_crypto.py` (nuovo, 20 test) + smoke
+  test in `tests/unit/test_admin_users_phase2.py`.
 
 ### 1.5 — Cache `client_id` per-request in `OAuth2Service`
 
-- [ ] **`services/oauth2.py:152, 179, 221`** — accettare `client_id_cache: dict[str,
+- [x] **`services/oauth2.py:152, 179, 221`** — accettare `client_id_cache: dict[str,
   OAuth2Client] | None = None` come parametro, oppure cachare per-request via
   `contextvars.ContextVar`. Popolato al primo lookup, rimosso a fine request.
-- [ ] **Test**: `pytest tests/integration/test_oauth2*.py` deve passare.
+- [x] **Estensione scope** (uniformità): convertiti **5** call site (non 3) —
+  `verify_client` (152), `verify_redirect_uri` (179), `verify_scopes` (194),
+  `process_scopes` (221), `verify_grant_type` (251). Il piano ne citava 3, ne
+  esistevano 5.
+- [x] **Pattern scelto**: `contextvars.ContextVar` con cache positivo+negativo
+  (cached ``None`` per client sconosciuto). Helper `_get_client_cached()` su
+  `OAuth2Service`. Scope automatico per `asyncio.Task` (una request = un Task
+  in FastAPI), zero modifiche alle signature pubbliche.
+- [x] **Test**: `pytest tests/integration/test_oauth2*.py` deve passare. Aggiunta
+  nuova suite `tests/performance/test_oauth2_cache.py` (5 test: cache hit
+  in-request, isolamento tra Task concorrenti via `asyncio.create_task`, cache
+  negativo, distinct clients cached separately, cache clears between Task
+  lifecycle). Tutti i test esistenti che mockano `client_storage` continuano a
+  funzionare senza modifiche.
 
 ### 1.6 — ETag + Cache-Control su endpoint statici
 
-- [ ] **`api/oidc.py:30`** (`openid_configuration`) — aggiungere
+- [x] **`api/oidc.py:30`** (`openid_configuration`) — aggiungere
   `response.headers["Cache-Control"] = "public, max-age=3600"`.
-- [ ] **`api/oidc.py:123`** (`jwks`) — aggiungere
+- [x] **`api/oidc.py:123`** (`jwks`) — aggiungere
   `response.headers["Cache-Control"] = "public, max-age=300"` + ETag basato su
   `keyring.json` mtime + content hash.
-- [ ] **`api/oidc.py:210`** (`userinfo`) — `private, max-age=0, no-cache`.
-- [ ] **Test**: `pytest tests/unit/test_oidc.py tests/unit/test_discovery.py` deve passare.
+- [x] **`api/oidc.py:210`** (`userinfo`) — `private, max-age=0, no-cache`.
+- [x] **ETag implementation**: `W/"<sha256(f"{_version}:{active_kid}")[:16]>"`
+  con gestione `If-None-Match` per `304 Not Modified`. Headers impostati
+  PRIMA del check di autenticazione (privacy-by-design: l'header
+  `private, no-cache` su userinfo viene settato anche se il token
+  è invalido, impedendo cache accidentale di risposte personalizzate).
+- [x] **Test**: `pytest tests/unit/test_oidc.py tests/unit/test_discovery.py` deve passare.
+  Aggiunta nuova suite `tests/unit/test_oidc_cache_headers.py` (7 test:
+  discovery cache-control, jwks cache-control, jwks ETag format, jwks
+  ETag stability, jwks 304 su If-None-Match, jwks full body su
+  If-None-Match stale, userinfo no-cache header).
 
 ### 1.7 — Lazy import moduli pesanti
 
-- [ ] **Spostare `import pyotp`**, **`import qrcode`**, **`import webauthn`** dentro le
-  rispettive funzioni (vedi `services/mfa.py`, `services/passkey.py`).
-- [ ] **Test**: `pytest tests/unit/test_mfa.py tests/unit/test_passkey.py` deve passare.
+- [ ] *(skipped — owner decision)* **Spostare `import pyotp`**, **`import qrcode`**,
+  **`import webauthn`** dentro le rispettive funzioni (vedi `services/mfa.py`,
+  `services/passkey.py`).
+- [ ] *(skipped — owner decision)* **Test**: `pytest tests/unit/test_mfa.py tests/unit/test_passkey.py`
+  deve passare.
 
 ### 1.8 — Rimuovere I/O sync in `jwks`
 
@@ -564,6 +612,9 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 
 ## Changelog
 
-- **2026-06-20** — §1.1 e §1.2 completate. Tier 1 al 2/8 punti. Suite `tests/performance/`
-  istituita (15 test totali: 12 bcrypt + 3 jwt singleton). Fixture autouse
-  `_reset_jwt_singleton` aggiunta a `tests/conftest.py`.
+- **2026-06-20** — §1.1, §1.2, §1.3, §1.4, §1.5 e §1.6 completate; §1.7 skipped su
+  decisione dell'owner. Tier 1 al 6/8 punti effettivi. Suite `tests/performance/`
+  a 25 test (12 bcrypt + 3 jwt singleton + 5 httpx + 5 oauth2) +
+  `tests/unit/test_crypto.py` a 20 test + `tests/unit/test_oidc_cache_headers.py`
+  a 7 test. Fixture autouse `_reset_jwt_singleton`, `_reset_http_client`,
+  `_clear_crypto_caches`.

@@ -4,9 +4,9 @@ import secrets
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
-import httpx
 import jwt as pyjwt
 
+from authglow.core.http_client import get_http_client
 from authglow.models.federation import ExternalIdpConfig
 from authglow.services.federation_provider import (
     FederationProviderService as FederationStorage,
@@ -119,11 +119,11 @@ class FederationService:
     async def discover(self, issuer: str) -> OidcDiscoveryData:
         """Fetch and parse the OIDC discovery document from the issuer."""
         url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
-            return OidcDiscoveryData(data)
+        client = await get_http_client()
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+        return OidcDiscoveryData(data)
 
     async def get_authorization_url(
         self,
@@ -175,14 +175,14 @@ class FederationService:
             "client_secret": provider.client_secret,
         }
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            resp = await client.post(
-                discovery.token_endpoint,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            return cast(Dict[str, Any], resp.json())
+        client = await get_http_client()
+        resp = await client.post(
+            discovery.token_endpoint,
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp.raise_for_status()
+        return cast(Dict[str, Any], resp.json())
 
     async def fetch_userinfo(
         self,
@@ -192,13 +192,13 @@ class FederationService:
         """Fetch userinfo claims from the external IdP."""
         discovery = await self.discover(provider.issuer)
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            resp = await client.get(
-                discovery.userinfo_endpoint,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            resp.raise_for_status()
-            return cast(Dict[str, Any], resp.json())
+        client = await get_http_client()
+        resp = await client.get(
+            discovery.userinfo_endpoint,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        resp.raise_for_status()
+        return cast(Dict[str, Any], resp.json())
 
     async def map_claims_to_user(
         self,

@@ -1,6 +1,7 @@
 """AES-256-GCM encryption for sensitive fields (TOTP secrets, RSA keys, user PII)."""
 
 import base64
+import functools
 import hashlib
 import hmac
 import os
@@ -21,6 +22,12 @@ _KEY_AAD = b"authglow-private-key"
 _USER_INFO = b"authglow-user-field-v1"
 _FEDERATION_STATE_INFO = b"authglow-federation-state-v1"
 
+# Sentinel used as the lru_cache key for the "no explicit secret_key"
+# call site — None is not hashable. The sentinel is never a real
+# ``SECRET_KEY`` value (those are 48-char base64url strings from
+# ``secrets.token_urlsafe``).
+_DEFAULT_SECRET_SENTINEL = "__default__"
+
 
 def _resolve_secret_key(secret_key: Optional[str] = None) -> str:
     if secret_key is not None:
@@ -30,24 +37,25 @@ def _resolve_secret_key(secret_key: Optional[str] = None) -> str:
     return get_settings().secret_key
 
 
-def _derive_key(secret_key: Optional[str] = None, info: bytes = _INFO) -> bytes:
+@functools.lru_cache(maxsize=8)
+def _derive_key(secret_key: str = _DEFAULT_SECRET_SENTINEL, info: bytes = _INFO) -> bytes:
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=32,
         salt=None,
         info=info,
     )
-    return hkdf.derive(_resolve_secret_key(secret_key).encode())
+    effective_secret = (
+        _resolve_secret_key() if secret_key == _DEFAULT_SECRET_SENTINEL else secret_key
+    )
+    return hkdf.derive(effective_secret.encode())
 
 
 def derive_federation_state_key(secret_key: Optional[str] = None) -> bytes:
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
+    return _derive_key(
+        secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
         info=_FEDERATION_STATE_INFO,
     )
-    return hkdf.derive(_resolve_secret_key(secret_key).encode())
 
 
 def encrypt_totp_secret(plaintext: str) -> str:
@@ -76,7 +84,10 @@ def decrypt_totp_secret(ciphertext: str) -> str:
 
 def encrypt_private_key(plaintext: bytes, secret_key: Optional[str] = None) -> bytes:
     iv = os.urandom(12)
-    key = _derive_key(secret_key=secret_key, info=_KEY_INFO)
+    key = _derive_key(
+        secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
+        info=_KEY_INFO,
+    )
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(iv, plaintext, _KEY_AAD)
     return _KEY_PREFIX.encode() + base64.b64encode(iv + ciphertext)
@@ -88,7 +99,10 @@ def decrypt_private_key(encrypted: bytes, secret_key: Optional[str] = None) -> b
     raw = base64.b64decode(encrypted[len(_KEY_PREFIX) :])
     iv = raw[:12]
     ciphertext = raw[12:]
-    key = _derive_key(secret_key=secret_key, info=_KEY_INFO)
+    key = _derive_key(
+        secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
+        info=_KEY_INFO,
+    )
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(iv, ciphertext, _KEY_AAD)
 
@@ -122,6 +136,7 @@ def decrypt_field(ciphertext: str) -> str:
     return aesgcm.decrypt(iv, encrypted, _AAD).decode()
 
 
+@functools.lru_cache(maxsize=8)
 def hash_index_key(email_lower: str) -> str:
     """Compute HMAC-SHA256 index key from an email address.
 
@@ -132,6 +147,7 @@ def hash_index_key(email_lower: str) -> str:
     return hmac.new(secret, email_lower.encode(), hashlib.sha256).hexdigest()
 
 
+@functools.lru_cache(maxsize=8)
 def reset_code_lookup_key(secret_key: str, code: str) -> str:
     """Compute the HMAC-SHA256 lookup key for a password-reset code.
 
@@ -150,13 +166,14 @@ def reset_code_lookup_key(secret_key: str, code: str) -> str:
     return hmac.new(secret_key.encode(), normalised.encode(), hashlib.sha256).hexdigest()
 
 
+@functools.lru_cache(maxsize=8)
 def verification_code_lookup_key(secret_key: str, code: str) -> str:
     """Compute the HMAC-SHA256 lookup key for an email-verification code.
 
     Mirrors :func:`reset_code_lookup_key` for the email-verification
     flow. The code is normalised to upper-case and stripped of
-    whitespace so user input variants (``abcd-efgh-jkmn``) match
-    the stored value.
+    whitespace so user input variants (``abcd-efgh-jkmn``) match the
+    stored value.
 
     The verification flow uses the human-friendly ``XXXX-XXXX-XXXX``
     code (VAPT-022 alignment) rather than a long opaque bearer
