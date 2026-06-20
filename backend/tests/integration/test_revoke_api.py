@@ -2,9 +2,9 @@
 and access token blacklist."""
 
 import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from authglow.services.auth.token_blacklist import _reset_token_blacklist
@@ -22,8 +22,14 @@ def _clean_blacklist():
 def _revoke_app():
     """Create a fresh FastAPI app with dependency overrides for each test."""
     from fastapi import FastAPI
-    from authglow.api.oauth2_advanced import router, get_refresh_token_service
-    from authglow.api.oauth2_advanced import get_jwt_service, get_oauth2_service, get_audit_service
+
+    from authglow.api.oauth2_advanced import (
+        get_audit_service,
+        get_jwt_service,
+        get_oauth2_service,
+        get_refresh_token_service,
+        router,
+    )
 
     app = FastAPI()
     app.include_router(router)
@@ -58,9 +64,10 @@ def _revoke_app():
 
 
 def _make_refresh_token(token_id="rt-revoke-001", user_id="user-1", client_id="test-client"):
-    from authglow.models.refresh_token import RefreshToken
-    from authglow.core.datetime import utcnow
     from datetime import timedelta
+
+    from authglow.core.datetime import utcnow
+    from authglow.models.refresh_token import RefreshToken
 
     return RefreshToken(
         token_id=token_id,
@@ -116,11 +123,11 @@ class TestRevokeEndpoint:
         _revoke_app._mock_audit.log_event.assert_awaited_once()
 
     def test_revoke_access_token(self, _revoke_app):
-        import time
-        from authglow.models.token import TokenData
-        from authglow.core.datetime import utcnow
-        from authglow.services.auth.token_blacklist import token_blacklist
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.models.token import TokenData
+        from authglow.services.auth.token_blacklist import token_blacklist
 
         future = utcnow() + timedelta(minutes=30)
         mock_token_data = TokenData(
@@ -150,9 +157,10 @@ class TestRevokeEndpoint:
         assert token_blacklist().is_revoked("test-jti-revoke-001")
 
     def test_revoke_access_token_without_jti_skipped(self, _revoke_app):
-        from authglow.models.token import TokenData
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.models.token import TokenData
 
         future = utcnow() + timedelta(minutes=30)
         mock_token_data = TokenData(
@@ -304,16 +312,16 @@ class TestTokenBlacklist:
 
     async def test_revoked_token_is_rejected_on_decode(self, test_settings):
         """After revocation, the same jti must return None from decode_token."""
-        from authglow.services.jwt import JWTService
         from authglow.services.auth.token_blacklist import (
             _reset_token_blacklist,
             token_blacklist,
         )
+        from authglow.services.jwt import JWTService
 
         _reset_token_blacklist()
 
         with patch("authglow.services.jwt.get_settings", return_value=test_settings):
-            svc = JWTService()
+            svc = await JWTService.new()
 
         token = svc.create_access_token(
             user_id="user-revoke", email="revoke@test.com", scopes=["read"]
@@ -329,13 +337,15 @@ class TestTokenBlacklist:
 
     def test_non_revoked_token_still_works(self, test_settings):
         """Non-revoked tokens must still decode successfully."""
-        from authglow.services.jwt import JWTService
+        import asyncio
+
         from authglow.services.auth.token_blacklist import _reset_token_blacklist
+        from authglow.services.jwt import JWTService
 
         _reset_token_blacklist()
 
         with patch("authglow.services.jwt.get_settings", return_value=test_settings):
-            svc = JWTService()
+            svc = asyncio.run(JWTService.new())
 
         token = svc.create_access_token(user_id="user-ok", email="ok@test.com", scopes=["read"])
         decoded = svc.decode_token(token)
@@ -356,21 +366,23 @@ class TestTokenBlacklist:
 
     async def test_introspect_revoked_token_returns_inactive(self):
         """Introspection must return active=false for revoked tokens."""
+        from datetime import timedelta
+
         from fastapi import FastAPI
+
         from authglow.api.oauth2_advanced import (
-            router,
-            get_refresh_token_service,
             get_jwt_service,
             get_oauth2_service,
+            get_refresh_token_service,
             get_user_storage,
+            router,
         )
-        from authglow.models.token import TokenData
         from authglow.core.datetime import utcnow
+        from authglow.models.token import TokenData
         from authglow.services.auth.token_blacklist import (
             _reset_token_blacklist,
             token_blacklist,
         )
-        from datetime import timedelta
 
         _reset_token_blacklist()
 
@@ -424,19 +436,21 @@ class TestTokenBlacklist:
 
     async def test_http_revoke_refresh_token_jti(self, test_settings):
         """POST /oauth2/revoke with a JWT refresh token must blacklist its jti."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
         from authglow.services.auth.token_blacklist import (
             _reset_token_blacklist,
             token_blacklist,
         )
         from authglow.services.jwt import JWTService
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-        from unittest.mock import AsyncMock, MagicMock
 
         _reset_token_blacklist()
 
         with patch("authglow.services.jwt.get_settings", return_value=test_settings):
-            real_jwt_svc = JWTService()
+            real_jwt_svc = await JWTService.new()
 
         real_token = real_jwt_svc.create_refresh_token(
             user_id="u-revoke-rt", email="rt-jti@test.com", scopes=["read"]
@@ -446,11 +460,11 @@ class TestTokenBlacklist:
         assert decoded.jti is not None
 
         from authglow.api.oauth2_advanced import (
-            router,
-            get_refresh_token_service,
+            get_audit_service,
             get_jwt_service,
             get_oauth2_service,
-            get_audit_service,
+            get_refresh_token_service,
+            router,
         )
 
         app = FastAPI()
@@ -481,19 +495,21 @@ class TestTokenBlacklist:
 
     async def test_http_revoke_mfa_session_token_jti(self, test_settings):
         """POST /oauth2/revoke with an MFA session JWT must blacklist its jti."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
         from authglow.services.auth.token_blacklist import (
             _reset_token_blacklist,
             token_blacklist,
         )
         from authglow.services.jwt import JWTService
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-        from unittest.mock import AsyncMock, MagicMock
 
         _reset_token_blacklist()
 
         with patch("authglow.services.jwt.get_settings", return_value=test_settings):
-            real_jwt_svc = JWTService()
+            real_jwt_svc = await JWTService.new()
 
         real_token = real_jwt_svc.create_mfa_session_token(
             user_id="u-revoke-mfa", email="mfa-jti@test.com"
@@ -503,11 +519,11 @@ class TestTokenBlacklist:
         assert decoded.jti is not None
 
         from authglow.api.oauth2_advanced import (
-            router,
-            get_refresh_token_service,
+            get_audit_service,
             get_jwt_service,
             get_oauth2_service,
-            get_audit_service,
+            get_refresh_token_service,
+            router,
         )
 
         app = FastAPI()
