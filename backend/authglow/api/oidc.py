@@ -1,8 +1,8 @@
 """OpenID Connect API endpoints."""
 
+import asyncio
 import base64
 import hashlib
-import os
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -20,6 +20,7 @@ from authglow.core.rate_limit import limiter
 from authglow.models.keystore import KeyPairMeta, KeyringInfo
 from authglow.models.oauth_client import OAuth2Client, OAuth2ClientResponse, OAuth2ClientUpdate
 from authglow.models.oidc import IDTokenClaims, JWKSResponse, OpenIDConfiguration, UserInfoResponse
+from authglow.repositories.dependencies import get_keystore_repository
 from authglow.services.audit import AuditService
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oidc import OIDCService
@@ -169,19 +170,28 @@ async def jwks(request: Request, response: Response):
             .decode("utf-8")
         )
 
+    # Tier 1.8: route the per-kid PEM read through the async
+    # repository (existence check + read both via fsspec on a
+    # background thread) and parse the RSA key in ``asyncio.to_thread``
+    # so the CPU-bound ``load_pem_public_key`` call does not block
+    # the event loop. The previous implementation used
+    # ``os.path.exists`` + ``open(..., "rb")`` which blocked the
+    # loop for the full fsspec I/O latency on every kid.
+    keystore = get_keystore_repository(settings=settings)
     keys = []
     for kid, meta in keyring_info["keys"].items():
-        status = meta.get("status", "")
-        if status not in ("active", "verifying"):
+        kid_status = meta.get("status", "")
+        if kid_status not in ("active", "verifying"):
             continue
 
-        pub_path = os.path.join(settings.keys_dir, kid, "public_key.pem")
-        if not os.path.exists(pub_path):
+        pub_pem = await keystore.read_public_key(kid)
+        if pub_pem is None:
             continue
 
         try:
-            with open(pub_path, "rb") as f:
-                public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+            public_key = await asyncio.to_thread(
+                serialization.load_pem_public_key, pub_pem, backend=default_backend()
+            )
         except Exception:
             continue
 

@@ -5,7 +5,7 @@ keyring with ``status`` for every ``kid``, including revoked
 keys that are hidden from ``/.well-known/jwks.json``.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -43,7 +43,9 @@ class TestJwksStatus:
         app = _build_app()
         http_client = TestClient(app)
 
-        with patch.object(oidc_module, "JWTService", return_value=mock_jwt):
+        with patch.object(
+            oidc_module, "get_jwt_service", AsyncMock(return_value=mock_jwt)
+        ):
             response = http_client.get("/oauth2/jwks/status")
 
         assert response.status_code == 200, response.text
@@ -84,7 +86,9 @@ class TestJwksStatus:
         app = _build_app()
         http_client = TestClient(app)
 
-        with patch.object(oidc_module, "JWTService", return_value=mock_jwt):
+        with patch.object(
+            oidc_module, "get_jwt_service", AsyncMock(return_value=mock_jwt)
+        ):
             response = http_client.get("/oauth2/jwks/status")
 
         assert response.status_code == 200, response.text
@@ -124,7 +128,9 @@ class TestJwksStatus:
         app = _build_app()
         http_client = TestClient(app)
 
-        with patch.object(oidc_module, "JWTService", return_value=mock_jwt):
+        with patch.object(
+            oidc_module, "get_jwt_service", AsyncMock(return_value=mock_jwt)
+        ):
             response = http_client.get("/oauth2/jwks/status")
 
         assert response.status_code == 200, response.text
@@ -172,7 +178,9 @@ class TestJwksStatus:
         app = _build_app()
         http_client = TestClient(app)
 
-        with patch.object(oidc_module, "JWTService", return_value=mock_jwt):
+        with patch.object(
+            oidc_module, "get_jwt_service", AsyncMock(return_value=mock_jwt)
+        ):
             response = http_client.get("/oauth2/jwks/status")
 
         assert response.status_code == 200, response.text

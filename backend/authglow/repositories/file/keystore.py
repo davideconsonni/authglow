@@ -192,6 +192,32 @@ class FileKeyStoreRepository(BaseFileRepository):
         return self._path(f"{kid}/public_key.pem")
 
     # ------------------------------------------------------------------
+    # Public key access (Tier 1.8 of PERFORMANCE_OPTIMIZATION_PLAN.md)
+    # ------------------------------------------------------------------
+
+    async def read_public_key(self, kid: str) -> Optional[bytes]:
+        """Return the PEM-encoded public key for *kid*, or ``None``.
+
+        Both the existence check and the file read are routed
+        through :class:`AsyncFileSystem` so the operation does not
+        block the asyncio event loop (the legacy implementation in
+        :func:`authglow.api.oidc.jwks` used ``os.path.exists`` +
+        ``open(..., "rb")`` which blocks for the full fsspec I/O
+        latency on every call).
+
+        The bytes returned are the raw PEM contents; callers are
+        responsible for parsing (kept sync because the parse is
+        CPU-bound and trivially fast for a 2048-bit RSA key — see
+        :func:`authglow.api.oidc.jwks` for the
+        ``asyncio.to_thread`` wrapping that the route handler
+        applies).
+        """
+        pub_path = self._kid_pub_path(kid)
+        if not await self._exists(pub_path):
+            return None
+        return await self._afs.read_bytes(pub_path)
+
+    # ------------------------------------------------------------------
     # Keyring I/O
     # ------------------------------------------------------------------
 

@@ -1010,6 +1010,16 @@ class KeyStoreRepository(Protocol):
         entries for the JWKS endpoint. Revoked keys are
         excluded (they cannot be used to verify signatures)."""
 
+    async def read_public_key(self, kid: str) -> "Optional[bytes]":
+        """Return the raw PEM-encoded public key for *kid*,
+        or ``None`` if the kid is unknown or the file is
+        missing.
+
+        Implemented as an async, fsspec-routed accessor so the
+        ``/.well-known/jwks.json`` route handler does not block
+        the event loop on per-kid file reads (Tier 1.8 of
+        ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md``)."""
+
     async def rotate(self, secret_key: str, key_size: int = 2048) -> object:
         """Generate a new RSA key pair, mark the current
         active key as ``verifying``, and persist. Returns

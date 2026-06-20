@@ -194,11 +194,19 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ### 1.8 — Rimuovere I/O sync in `jwks`
 
-- [ ] **`api/oidc.py:149-155`** — rimuovere `os.path.exists` + `open(..., "rb")` +
+- [x] **`api/oidc.py:149-155`** — rimuovere `os.path.exists` + `open(..., "rb")` +
   `serialization.load_pem_public_key` sync. Usare
   `await self._repository._afs.read_bytes(...)` e parse async-safe
   (`asyncio.to_thread` per il parse RSA che è CPU-bound).
-- [ ] **Test**: `pytest tests/unit/test_oidc.py` deve passare.
+- [x] **Estensione scope**: aggiunto metodo pubblico `async def read_public_key(kid)`
+  al `FileKeyStoreRepository` (routed via fsspec, ritorna `Optional[bytes]`)
+  e al `KeyStoreRepository` Protocol. Il route handler `jwks` ora
+  costruisce il repository via `get_keystore_repository(settings=...)`
+  e chiama `await keystore.read_public_key(kid)` invece di accedere
+  direttamente al filesystem.
+- [x] **Test**: `pytest tests/unit/test_oidc.py` deve passare. Aggiunti 4 test
+  in `tests/unit/repositories/file/test_keystore.py` (`TestFileKeyStoreRepositoryReadPublicKey`):
+  PEM bytes, kid sconosciuto, round-trip dopo rotate, non-blocking event loop.
 
 ### Validazione Tier 1
 
@@ -612,9 +620,11 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 
 ## Changelog
 
-- **2026-06-20** — §1.1, §1.2, §1.3, §1.4, §1.5 e §1.6 completate; §1.7 skipped su
-  decisione dell'owner. Tier 1 al 6/8 punti effettivi. Suite `tests/performance/`
-  a 25 test (12 bcrypt + 3 jwt singleton + 5 httpx + 5 oauth2) +
-  `tests/unit/test_crypto.py` a 20 test + `tests/unit/test_oidc_cache_headers.py`
-  a 7 test. Fixture autouse `_reset_jwt_singleton`, `_reset_http_client`,
+- **2026-06-20** — §1.1, §1.2, §1.3, §1.4, §1.5, §1.6, §1.8 completate; §1.7 skipped su
+  decisione dell'owner. **Tier 1 al 7/8 punti effettivi.** Suite
+  `tests/performance/` a 25 test (12 bcrypt + 3 jwt singleton + 5 httpx +
+  5 oauth2) + `tests/unit/test_crypto.py` a 20 test +
+  `tests/unit/test_oidc_cache_headers.py` a 7 test +
+  `tests/unit/repositories/file/test_keystore.py` +4 test per `read_public_key`.
+  Fixture autouse `_reset_jwt_singleton`, `_reset_http_client`,
   `_clear_crypto_caches`.

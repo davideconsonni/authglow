@@ -27,7 +27,6 @@ Conventions:
   extra ``_version`` field for object-store atomicity.
 """
 
-import json
 import os
 import shutil
 from datetime import timedelta
@@ -473,6 +472,80 @@ class TestFileKeyStoreRepositoryWithCustomKeysDir:
         repo = FileKeyStoreRepository.for_keys_dir(keys_dir=keys_dir, secret_key="x")
         assert repo._storage_path == keys_dir
         assert repo._settings.keys_dir == keys_dir
+
+
+# ---------------------------------------------------------------------------
+# Public key access (Tier 1.8 of PERFORMANCE_OPTIMIZATION_PLAN.md)
+# ---------------------------------------------------------------------------
+
+
+class TestFileKeyStoreRepositoryReadPublicKey:
+    """``read_public_key`` is the async accessor used by the
+    ``/.well-known/jwks.json`` route handler. It must:
+
+    * return the PEM bytes for a known ``kid`` (routed through
+      :class:`AsyncFileSystem` so the call does not block the
+      event loop);
+    * return ``None`` for an unknown ``kid`` (no exception, no
+      empty bytes);
+    * coexist with the existing ``get_public_keys`` helper
+      (returns the cached JWK projection used by ``JWKSStatus``).
+    """
+
+    async def test_read_public_key_returns_pem_bytes(self, test_settings, tmp_path):
+        repo = _make_repo(test_settings, tmp_path)
+        await _create_test_keyring(repo, kid="k-rpk")
+
+        pem = await repo.read_public_key("k-rpk")
+        assert pem is not None
+        assert b"BEGIN PUBLIC KEY" in pem
+        assert b"END PUBLIC KEY" in pem
+
+    async def test_read_public_key_returns_none_for_unknown_kid(self, test_settings, tmp_path):
+        repo = _make_repo(test_settings, tmp_path)
+        await _create_test_keyring(repo, kid="k-known")
+
+        assert await repo.read_public_key("k-unknown") is None
+
+    async def test_read_public_key_round_trips_after_rotation(self, test_settings, tmp_path):
+        """After ``rotate`` the active kid changes; ``read_public_key``
+        must return the bytes of the **new** key."""
+        repo = _make_repo(test_settings, tmp_path)
+        await _create_test_keyring(repo, kid="k-old")
+        first_pem = await repo.read_public_key("k-old")
+        assert first_pem is not None
+
+        rotated = await repo.rotate(secret_key="test-secret")
+        # The new key is on disk; the old one is in "verifying" status.
+        new_pem = await repo.read_public_key(rotated.kid)
+        assert new_pem is not None
+        assert new_pem != first_pem, "rotated key must be a different PEM"
+
+    async def test_read_public_key_does_not_block_event_loop(self, test_settings, tmp_path):
+        """During ``read_public_key`` another coroutine must be
+        able to run — proves the I/O is offloaded to a thread."""
+        import asyncio
+
+        repo = _make_repo(test_settings, tmp_path)
+        await _create_test_keyring(repo, kid="k-loop")
+
+        sentinel = asyncio.Event()
+        loop_alive = asyncio.Event()
+
+        async def sentinel_coro():
+            sentinel.set()
+            await asyncio.sleep(0)
+            loop_alive.set()
+
+        task = asyncio.create_task(sentinel_coro())
+        await sentinel.wait()
+        await repo.read_public_key("k-loop")
+        try:
+            await asyncio.wait_for(loop_alive.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            task.cancel()
+            pytest.fail("event loop was blocked during read_public_key")
+        assert loop_alive.is_set()
 
 
 # ---------------------------------------------------------------------------
