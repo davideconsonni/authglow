@@ -210,8 +210,12 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ### Validazione Tier 1
 
-- [x] `pytest -q --tb=line -n auto` deve passare (zero regressions). — **1735 passed, 8 pre-existing failures (JWT su Py 3.13, vedi AGENTS.md), 0 regressioni**.
-- [x] `ruff check authglow/ && ruff format --check authglow/ && mypy authglow/`. — ruff/format puliti; mypy: 2 errori pre-esistenti (`oidc.py:553`, `federation.py:636`).
+- [x] `pytest -q --tb=line -n auto` deve passare (zero regressions). — **1784 passed, 0 failures, 0 regressions**.
+  - Baseline pre-Tier 1: 1730 passed, 8 pre-existing failures (Python 3.13 event loop su `test_revoke_api.py` + `test_jwks_status.py`).
+  - Tutti e 8 i pre-existing failures sono stati investigati e fixati:
+    - 4 in `test_jwks_status.py`: test patchavano `authglow.api.oidc.JWTService` (rimosso in §1.2). Fix: patch su `oidc.get_jwt_service` (nuovo pattern singleton).
+    - 4 in `test_revoke_api.py::TestTokenBlacklist`: test istanziavano `JWTService()` sync invece di `await JWTService.new()`. Fix: `await JWTService.new()` (con `asyncio.run()` per il test sync rimanente).
+- [x] `ruff check authglow/ && ruff format --check authglow/ && mypy authglow/`. — ruff/format puliti; mypy: 2 errori pre-esistenti (`oidc.py:553`, `federation.py:636`, non causati da Tier 1).
 - [ ] Misurare throughput: prima/dopo con load test (vedi §Validazione). — da fare in Tier 2 / fine-piano.
 
 ### Rollback Tier 1
@@ -621,9 +625,13 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 ## Changelog
 
 - **2026-06-20** — §1.1, §1.2, §1.3, §1.4, §1.5, §1.6, §1.8 completate; §1.7 skipped su
-  decisione dell'owner. **Tier 1 al 7/8 punti effettivi.** Suite
-  `tests/performance/` a 25 test (12 bcrypt + 3 jwt singleton + 5 httpx +
-  5 oauth2) + `tests/unit/test_crypto.py` a 20 test +
+  decisione dell'owner. **Tier 1 al 7/8 punti effettivi; full suite a 1784
+  passed / 0 failures** (tutti gli 8 pre-existing failures investigati e
+  fixati: 4 in `test_jwks_status.py` per la rimozione di `JWTService` import
+  in §1.2, 4 in `test_revoke_api.py::TestTokenBlacklist` per `JWTService()`
+  sync invece di `await JWTService.new()`). Suite `tests/performance/` a 25
+  test (12 bcrypt + 3 jwt singleton + 5 httpx + 5 oauth2) +
+  `tests/unit/test_crypto.py` a 20 test +
   `tests/unit/test_oidc_cache_headers.py` a 7 test +
   `tests/unit/repositories/file/test_keystore.py` +4 test per `read_public_key`.
   Fixture autouse `_reset_jwt_singleton`, `_reset_http_client`,
