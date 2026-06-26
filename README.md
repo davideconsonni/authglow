@@ -9,8 +9,6 @@
   <img alt="AI Generated" src="https://img.shields.io/badge/AI%20Generated-100%25-blueviolet.svg">
 </p>
 
-<p align="center"><strong>150+ REST endpoints · 1,200+ automated tests · zero database</strong></p>
-
 ---
 
 ## What is AuthGlow?
