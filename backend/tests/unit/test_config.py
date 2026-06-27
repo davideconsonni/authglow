@@ -364,3 +364,143 @@ class TestRSAKeyEncryption:
         assert decrypted == priv_bytes, "Roundtrip must restore original PEM bytes"
         assert encrypted != priv_bytes, "Encrypted data must differ from plaintext"
         assert encrypted.startswith(b"agk1:"), "Must have agk1: prefix"
+
+
+class TestSetupTokenPersistence:
+    """The setup token must be persisted so that uvicorn's reloader
+    subprocess and subsequent boots return the same value instead of
+    regenerating one (which would leak a stale token to the logs and
+    invalidate anything captured from the worker).
+    """
+
+    def test_generates_token_on_first_call(self, tmp_path):
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        token = get_or_generate_setup_token(str(keys_dir))
+
+        assert token, "Token must not be empty"
+        assert len(token) >= 32, "Token must be at least 32 bytes of entropy"
+        assert (keys_dir / "setup_token").exists(), "Token must be persisted to disk"
+        assert (keys_dir / "setup_token").read_text(encoding="utf-8").strip() == token
+
+    def test_returns_same_token_on_subsequent_calls(self, tmp_path):
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        first = get_or_generate_setup_token(str(keys_dir))
+        # Second call simulates the uvicorn reloader subprocess re-importing
+        # the app: it must observe the persisted value, not regenerate.
+        second = get_or_generate_setup_token(str(keys_dir))
+
+        assert first == second, "Subsequent calls must return the same persisted token"
+        later = [get_or_generate_setup_token(str(keys_dir)) for _ in range(3)]
+        assert later == [second] * 3, "All later calls must return the persisted token"
+
+    def test_existing_token_is_preserved_across_reinits(self, tmp_path):
+        """If the operator pre-seeds ``setup_token`` (e.g. restored from
+        backup), the helper must NOT overwrite it."""
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        (keys_dir).mkdir(parents=True, exist_ok=True)
+        preset = "pre-existing-operator-supplied-token-32bytes!!"
+        (keys_dir / "setup_token").write_text(preset, encoding="utf-8")
+
+        result = get_or_generate_setup_token(str(keys_dir))
+
+        assert result == preset, "Pre-existing token must be returned as-is"
+        assert (keys_dir / "setup_token").read_text(encoding="utf-8") == preset
+
+    def test_blank_file_is_regenerated(self, tmp_path):
+        """A whitespace-only or empty file should trigger regeneration
+        rather than returning an empty string."""
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        (keys_dir).mkdir(parents=True, exist_ok=True)
+        (keys_dir / "setup_token").write_text("   \n  ", encoding="utf-8")
+
+        result = get_or_generate_setup_token(str(keys_dir))
+
+        assert result, "Blank file must be replaced with a real token"
+        assert result.strip(), "Regenerated token must be non-empty"
+
+    def test_unreadable_file_falls_back_to_regeneration(self, tmp_path):
+        """If the file exists but can't be read (permission denied,
+        I/O error), the helper must regenerate so the operator isn't
+        permanently locked out of setup."""
+        from unittest.mock import patch
+
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        keys_dir.mkdir(parents=True, exist_ok=True)
+        (keys_dir / "setup_token").write_text("stale", encoding="utf-8")
+
+        with patch.object(Path, "read_text", side_effect=OSError("simulated I/O error")):
+            result = get_or_generate_setup_token(str(keys_dir))
+
+        assert result, "Must regenerate when the existing file is unreadable"
+        assert result != "stale", "Must NOT return the stale content"
+        assert (keys_dir / "setup_token").read_text(encoding="utf-8").strip() == result
+
+    def test_writes_atomically_no_tmp_left_behind(self, tmp_path):
+        """``os.replace`` must move the temp file into place, leaving no
+        ``.tmp`` artifact on success."""
+        from authglow.core.config import get_or_generate_setup_token
+
+        keys_dir = tmp_path / "keys"
+        get_or_generate_setup_token(str(keys_dir))
+
+        leftover = list(keys_dir.glob("setup_token.tmp"))
+        assert leftover == [], f"No tmp file must remain, found: {leftover}"
+
+    def test_settings_init_persists_token(self, tmp_path):
+        """End-to-end: ``Settings(...)`` with no ``SETUP_TOKEN`` env var
+        must create a persisted file under ``keys_dir``."""
+        keys_dir = str(tmp_path / "keys")
+        os.makedirs(keys_dir, exist_ok=True)
+
+        settings = Settings(
+            secret_key="a" * 32,
+            storage_path=str(tmp_path / "data" / "users"),
+            storage_backend="file",
+            keys_dir=keys_dir,
+            private_key_path=str(tmp_path / "keys" / "private_key.pem"),
+            public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+            jwt_auto_rotate=False,
+        )
+
+        token_path = tmp_path / "keys" / "setup_token"
+        assert token_path.exists(), "Settings.__init__ must persist the token"
+        assert settings.setup_token == token_path.read_text(encoding="utf-8").strip()
+
+    def test_repeated_settings_init_returns_same_token(self, tmp_path):
+        """Two ``Settings(...)`` calls in the same process (the reloader
+        scenario) must observe the same persisted token."""
+        keys_dir = str(tmp_path / "keys")
+        os.makedirs(keys_dir, exist_ok=True)
+
+        first = Settings(
+            secret_key="a" * 32,
+            storage_path=str(tmp_path / "data" / "users"),
+            storage_backend="file",
+            keys_dir=keys_dir,
+            private_key_path=str(tmp_path / "keys" / "private_key.pem"),
+            public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+            jwt_auto_rotate=False,
+        )
+        second = Settings(
+            secret_key="a" * 32,
+            storage_path=str(tmp_path / "data" / "users"),
+            storage_backend="file",
+            keys_dir=keys_dir,
+            private_key_path=str(tmp_path / "keys" / "private_key.pem"),
+            public_key_path=str(tmp_path / "keys" / "public_key.pem"),
+            jwt_auto_rotate=False,
+        )
+
+        assert first.setup_token == second.setup_token, (
+            "Reloader subprocess must see the same persisted token as the parent"
+        )

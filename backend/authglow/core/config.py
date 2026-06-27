@@ -1,9 +1,11 @@
 """Configuration management for AuthGlow."""
 
 import asyncio
+import os
 import secrets
 import warnings
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Optional
 
 import structlog
@@ -20,6 +22,7 @@ __all__ = [  # noqa: F822
     "Settings",
     "get_settings",
     "get_or_generate_keyring",
+    "get_or_generate_setup_token",
     "_KEYRING_FILENAME",
     "_generate_key_pair",
     "_new_kid",
@@ -120,6 +123,62 @@ def get_or_generate_keyring(
                 pass
 
 
+def get_or_generate_setup_token(keys_dir: str) -> str:
+    """Return the one-time setup token, persisting it on first call.
+
+    The token is stored at ``<keys_dir>/setup_token`` so that every
+    subsequent boot (notably uvicorn's reloader subprocess, which
+    re-imports ``main.py`` and rebuilds ``Settings``) returns the
+    same value instead of regenerating one. This prevents the
+    reloader parent from leaking a stale token to the logs while
+    the worker uses a different one.
+
+    The file is written atomically via ``os.replace`` (POSIX and
+    Windows both guarantee rename-atomicity at the filesystem
+    level). On the very first boot the new token is emitted once
+    via ``structlog`` at WARNING level so the operator can copy
+    it; later boots are silent.
+
+    Security: the file is written in plaintext inside ``keys_dir``
+    alongside the encrypted keyring. The directory is expected to
+    be protected at the OS level (same as the keyring itself). For
+    CI/CD, prefer setting ``SETUP_TOKEN`` in the environment
+    instead of relying on auto-generation.
+    """
+    keys_path = Path(keys_dir)
+    token_file = keys_path / "setup_token"
+
+    if token_file.exists():
+        try:
+            existing = token_file.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+        except OSError:
+            # Corrupt / unreadable file: fall through to regenerate
+            # so the operator isn't permanently locked out of setup.
+            pass
+
+    keys_path.mkdir(parents=True, exist_ok=True)
+    new_token = secrets.token_urlsafe(32)
+
+    tmp_file = token_file.with_name(token_file.name + ".tmp")
+    try:
+        tmp_file.write_text(new_token, encoding="utf-8")
+        os.replace(tmp_file, token_file)
+    except OSError:
+        try:
+            tmp_file.unlink()
+        except OSError:
+            pass
+        raise
+
+    structlog.get_logger("authglow.setup").warning(
+        "setup_token_generated",
+        token=new_token,
+    )
+    return new_token
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -151,11 +210,7 @@ class Settings(BaseSettings):
             self.jwt_auto_rotate,
         )
         if not self.setup_token:
-            self.setup_token = secrets.token_urlsafe(32)
-            structlog.get_logger("authglow.setup").warning(
-                "setup_token_generated",
-                token=self.setup_token,
-            )
+            self.setup_token = get_or_generate_setup_token(self.keys_dir)
         if self.cors_allow_credentials and self.cors_allowed_headers == "*":
             warnings.warn(
                 "CORS misconfiguration: cors_allow_credentials=true combined with "
@@ -335,8 +390,11 @@ class Settings(BaseSettings):
 
     # Setup / Bootstrap
     # One-time token required to call POST /api/setup/create-admin (RFC 7591 Initial Access Token pattern).
-    # If not set via environment variable, a token is generated at startup and printed to stdout.
-    # Set SETUP_TOKEN=<value> in your .env to supply a fixed token (e.g. for CI/CD).
+    # If not set via environment variable, a token is generated on the first
+    # boot, persisted to ``<keys_dir>/setup_token`` and logged once. Subsequent
+    # boots (including uvicorn's reloader subprocess) read the same value
+    # instead of regenerating. Set SETUP_TOKEN=<value> in your .env to supply
+    # a fixed token (e.g. for CI/CD or to reset the persisted one).
     setup_token: Optional[str] = None
 
     @field_validator("secret_key")

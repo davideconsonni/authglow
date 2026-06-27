@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer } from 'react'
+import { useState, useEffect, useReducer, useRef } from 'react'
 import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, X, Trash2, LogOut, RefreshCw, Smartphone, KeyRound, Monitor, Fingerprint, History, AlertTriangle, Globe, Download, Ban, Clock, Check } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -6,6 +6,7 @@ import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Banner } from '@/components/shared/Banner'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useAuthStore } from '@/stores/authStore'
@@ -234,6 +235,11 @@ export function AdminUsersPage() {
 
 function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClose: () => void; onUserUpdated: () => void }) {
   const queryClient = useQueryClient()
+  const drawerRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null)
+  const [activeTab, setActiveTab] = useState('profile')
+
   const { data: user, isLoading } = useApiQuery<AdminUserDetail>(['user-detail', userId], `/api/admin/users/${userId}`)
   const { data: keys } = useApiQuery<unknown[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
   const { data: passkeys } = useApiQuery<PasskeyItem[]>(['user-passkeys', userId], `/api/admin/users/${userId}/passkeys/list`)
@@ -252,6 +258,46 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const { data: adminActions } = useApiQuery<{ items: AdminActionItem[]; total: number }>(
     ['user-admin-actions', userId], `/api/admin/users/${userId}/admin-actions`, { enabled: true },
   )
+
+  // Close on Escape, trap Tab focus inside drawer, lock body scroll
+  useEffect(() => {
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const root = drawerRef.current
+      if (!root) return
+      const focusables = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && (active === first || !root.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    // Defer focus until the close button is mounted
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 0)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+      window.clearTimeout(focusTimer)
+      previouslyFocusedRef.current?.focus?.()
+    }
+  }, [onClose])
 
   interface SessionItem {
     id: string; client_id: string; scopes: string[]
@@ -525,183 +571,472 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const isLocked = user?.locked_until ? new Date(user.locked_until) > new Date() : false
   const isSuspended = user?.suspended_until ? new Date(user.suspended_until) > new Date() : false
 
+  const initials = `${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`.toUpperCase() || '?'
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-surface-1 border-l border-surface-2 overflow-y-auto p-6 space-y-5 shadow-glow-violet" data-testid="user-detail-drawer">
-        <div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-text-primary">User Detail</h3><button onClick={onClose} className="rounded-lg p-1 text-text-muted hover:text-text-secondary">✕</button></div>
-
-        {isLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
-        : user ? <>
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-violet/20 text-sm font-bold text-brand-violet">{(user.first_name?.[0]||'')+(user.last_name?.[0]||'')||'?'}</span>
-              <div><p className="text-sm font-semibold text-text-primary">{user.first_name} {user.last_name}</p><p className="text-xs text-text-muted">{user.email}</p></div>
-            </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Status</p><p className="text-text-primary font-medium">{user.is_active?'Active':'Inactive'}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">MFA</p><p className="text-text-primary font-medium">{user.mfa_enabled?'Enabled':'Disabled'}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Logins</p><p className="text-text-primary font-medium">{user.login_count??0}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Created</p><p className="text-text-primary font-medium">{user.created_at?formatDateTime(user.created_at):'-'}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Password</p><p className={`font-medium ${user.password_expired ? 'text-semantic-error' : 'text-semantic-success'}`}>{user.password_expired ? 'Expired' : 'Active'}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Failed</p><p className="text-text-primary font-medium">{user.failed_login_count ?? 0}</p></div>
-              <div className="rounded-lg bg-surface-2 p-2"><p className="text-text-muted">Suspended</p><p className={`font-medium ${isSuspended ? 'text-semantic-error' : 'text-semantic-success'}`}>{isSuspended ? 'Yes' : 'No'}</p></div>
-            </div>
-
-            <div className="border-t border-surface-2 pt-3 space-y-3">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Edit Profile</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-                <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-              </div>
-              <div><label className="mb-1 block text-xs text-text-muted">Email</label><input value={edit.email} onChange={e => dispatch({ type: 'SET_EMAIL', value: e.target.value })} type="email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-xs text-text-muted">Phone</label><input value={edit.phone} onChange={e => dispatch({ type: 'SET_PHONE', value: e.target.value })} placeholder="+1234567890" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-                <div><label className="mb-1 block text-xs text-text-muted">Avatar URL</label><input value={edit.avatar_url} onChange={e => dispatch({ type: 'SET_AVATAR', value: e.target.value })} placeholder="https://..." className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-              </div>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" /><span className="text-text-primary">Email verified</span></label>
-            </div>
-
-            <div className="border-t border-surface-2 pt-3 space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Scopes</h4>
-              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-                {edit.scopes.map(s => (
-                  <span key={s} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] text-text-secondary">
-                    {s}
-                    <button onClick={() => removeScope(s)} className="text-text-muted hover:text-semantic-error"><X size={12} /></button>
-                  </span>
-                ))}
-                {edit.scopes.length === 0 && <span className="text-[11px] text-text-muted italic">No scopes</span>}
-              </div>
-              <div className="flex gap-2">
-                <input value={newScope} onChange={e => setNewScope(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScope() } }} placeholder="Add scope..." className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
-                <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-violet/10 px-2.5 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-40"><Plus size={14} /></button>
-              </div>
-            </div>
-
-            {!user?.is_federated && (
-            <div className="border-t border-surface-2 pt-3 space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Password &amp; Credentials</h4>
-              <div className="grid grid-cols-1 gap-2">
-                <button onClick={() => setShowSetPassword(true)} data-testid="set-password-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                  Set Password
-                </button>
-                <button onClick={() => setConfirmAction('send-password-reset')} data-testid="send-password-reset-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                  Send Password Reset
-                </button>
-                {!user.password_expired && (
-                  <button onClick={() => setConfirmAction('expire-password')} data-testid="expire-password-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    Expire Password
-                  </button>
-                )}
-                {isLocked && (
-                  <button onClick={() => setConfirmAction('unlock')} data-testid="unlock-account-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    Unlock Account
-                  </button>
-                )}
-                {user.failed_login_count > 0 && (
-                  <button onClick={() => setConfirmAction('reset-failed-attempts')} data-testid="reset-attempts-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    Reset Failed Attempts
-                  </button>
-                )}
-              </div>
-            </div>
-            )}
-
-            {!user?.is_federated && (
-            <div className="border-t border-surface-2 pt-3 space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">MFA</h4>
-              <div className="grid grid-cols-1 gap-2">
-                {user.mfa_enabled && (
-                  <button onClick={() => setConfirmAction('disable-mfa')} data-testid="disable-mfa-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    <Shield size={12} className="inline mr-1.5" />Disable MFA
-                  </button>
-                )}
-                {user.mfa_enabled && (
-                  <button onClick={() => setConfirmAction('reset-mfa')} data-testid="reset-mfa-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    <ShieldOff size={12} className="inline mr-1.5" />Reset MFA
-                  </button>
-                )}
-                {user.mfa_enabled && (
-                  <button onClick={() => setConfirmAction('regenerate-backup-codes')} data-testid="regenerate-codes-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    <RefreshCw size={12} className="inline mr-1.5" />Regenerate Backup Codes
-                  </button>
-                )}
-                {!user.mfa_enabled && (
-                  <p className="text-xs text-text-muted italic py-1">MFA is not enabled</p>
-                )}
-              </div>
-            </div>
-            )}
-
-            {user?.is_federated && (
-            <div className="border-t border-surface-2 pt-3">
-              <p className="text-xs text-text-muted italic">
-                Credentials and MFA for this account are managed by an external identity provider.
-              </p>
-            </div>
-            )}
-
-            <div className="border-t border-surface-2 pt-3 space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Account Status</h4>
-              <div className="grid grid-cols-1 gap-2">
-                {isSuspended ? (
-                  <button onClick={() => setConfirmAction('unsuspend')} data-testid="unsuspend-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    <Clock size={12} className="inline mr-1.5" />Remove Suspension (until {formatDateTime(user.suspended_until!)})
-                  </button>
-                ) : (
-                  <button onClick={() => setShowSuspend(true)} data-testid="suspend-btn" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
-                    <Ban size={12} className="inline mr-1.5" />Suspend User
-                  </button>
-                )}
-              </div>
-            </div>
+      <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} aria-hidden />
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-drawer-title"
+        className="relative z-10 flex w-full flex-col bg-surface-1 border-l border-surface-2 shadow-glow-violet animate-slide-in-right sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl"
+        data-testid="user-detail-drawer"
+      >
+        {/* Sticky header */}
+        <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-2 bg-surface-1/95 px-6 py-4 backdrop-blur">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-violet/20 text-sm font-bold text-brand-violet">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <h2 id="user-drawer-title" className="truncate text-base font-semibold text-text-primary">
+              {user?.first_name} {user?.last_name}
+            </h2>
+            <p className="truncate text-xs text-text-muted">{user?.email}</p>
           </div>
+          <button
+            ref={closeButtonRef}
+            onClick={onClose}
+            aria-label="Close user detail"
+            className="shrink-0 rounded-lg p-1.5 text-base leading-none text-text-muted hover:text-text-secondary hover:bg-surface-2"
+          >
+            ✕
+          </button>
+        </div>
 
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Active Sessions</h4>
-              {(sessionsData?.items ?? []).length > 0 && (
-                <button onClick={() => setConfirmAction('revoke-all-sessions')} data-testid="revoke-all-sessions-btn" className="flex items-center gap-1 rounded-lg bg-semantic-error/10 px-2 py-1 text-[11px] font-medium text-semantic-error hover:bg-semantic-error/20">
-                  <LogOut size={12} />Revoke All
-                </button>
+        {isLoading ? <div className="flex-1 overflow-y-auto p-6"><div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div></div>
+        : !user ? <div className="flex-1 overflow-y-auto p-6"><p className="text-sm text-text-muted text-center py-8">Could not load user details.</p></div>
+        : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+            {/* Tab strip (sticky under header) */}
+            <TabsList className="sticky top-[73px] z-10 flex h-12 w-full justify-start gap-1 overflow-x-auto whitespace-nowrap border-b border-surface-2 bg-surface-1/95 px-2 backdrop-blur">
+              <TabsTrigger value="profile" data-testid="user-tab-profile" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">Profile</TabsTrigger>
+              <TabsTrigger value="sessions" data-testid="user-tab-sessions" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Sessions{sessionsData ? ` (${sessionsData.total})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="passkeys" data-testid="user-tab-passkeys" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Passkeys{passkeys ? ` (${passkeys.length})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="history" data-testid="user-tab-history" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Login History{loginHistory ? ` (${loginHistory.total})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="events" data-testid="user-tab-events" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Security Events{securityEvents ? ` (${securityEvents.total})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="apps" data-testid="user-tab-apps" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Connected Apps{oauthConsents ? ` (${oauthConsents.length})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="admin-log" data-testid="user-tab-admin-log" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                Admin Log{adminActions ? ` (${adminActions.total})` : ''}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto">
+              {formError && (
+                <div className="px-6 pt-4">
+                  <Banner variant="error" size="sm" onDismiss={() => setFormError(null)} data-testid="user-drawer-form-error">
+                    {formError}
+                  </Banner>
+                </div>
               )}
-            </div>
-            {!sessionsData ? (
-              <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : sessionsData.items.length === 0 ? (
-              <p className="text-xs text-text-muted italic py-2">No active sessions</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-surface-2">
-                      <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Client</th>
-                      <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Created</th>
-                      <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Last Used</th>
-                      <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">IP</th>
-                      <th className="px-2 py-1.5" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-2">
-                    {sessionsData.items.map(s => (
-                      <tr key={s.id} className="hover:bg-surface-2/50">
-                        <td className="px-2 py-1.5 text-text-primary font-medium">{s.client_id}</td>
-                        <td className="px-2 py-1.5 text-text-muted">{formatDateTime(s.created_at)}</td>
-                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted">{s.last_used_at ? formatDateTime(s.last_used_at) : '-'}</td>
-                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted font-mono">{s.ip_address ?? '-'}</td>
-                        <td className="px-2 py-1.5 text-right">
-                          <button onClick={() => setRevokeSessionId(s.id)} data-testid={`revoke-session-${s.id}`} className="rounded p-1 text-text-muted hover:text-semantic-error" title="Revoke session">
-                            <Trash2 size={12} />
+
+              <TabsContent value="profile" className="m-0 focus-visible:outline-none">
+                <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[260px_1fr]">
+                  {/* Aside — sticky within the scroll container on lg+ */}
+                  <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
+                    <div className="flex flex-col items-center rounded-2xl border border-surface-2 bg-surface-1 p-5 text-center">
+                      <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-brand-violet/20 text-2xl font-bold text-brand-violet">{initials}</span>
+                      <p className="mt-3 text-sm font-semibold text-text-primary">{user.first_name} {user.last_name}</p>
+                      <p className="text-xs text-text-muted">{user.email}</p>
+                      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                        <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-medium ${user.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${user.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        {user.mfa_enabled && <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-[11px] font-medium text-brand-violet">MFA</span>}
+                        {isSuspended && <span className="inline-flex rounded-lg bg-semantic-warning/10 px-2 py-0.5 text-[11px] font-medium text-semantic-warning">Suspended</span>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-surface-1 border border-surface-2 p-2"><p className="text-text-muted">Logins</p><p className="text-text-primary font-medium">{user.login_count ?? 0}</p></div>
+                      <div className="rounded-lg bg-surface-1 border border-surface-2 p-2"><p className="text-text-muted">Failed</p><p className="text-text-primary font-medium">{user.failed_login_count ?? 0}</p></div>
+                      <div className="rounded-lg bg-surface-1 border border-surface-2 p-2 col-span-2"><p className="text-text-muted">Created</p><p className="text-text-primary font-medium">{user.created_at ? formatDateTime(user.created_at) : '-'}</p></div>
+                      <div className="rounded-lg bg-surface-1 border border-surface-2 p-2 col-span-2"><p className="text-text-muted">Last login</p><p className="text-text-primary font-medium">{user.last_login ? formatDateTime(user.last_login) : '-'}</p></div>
+                    </div>
+                  </aside>
+
+                  {/* Main column */}
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                      <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Edit Profile</h3>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                      </div>
+                      <div><label className="mb-1 block text-xs text-text-muted">Email</label><input value={edit.email} onChange={e => dispatch({ type: 'SET_EMAIL', value: e.target.value })} type="email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div><label className="mb-1 block text-xs text-text-muted">Phone</label><input value={edit.phone} onChange={e => dispatch({ type: 'SET_PHONE', value: e.target.value })} placeholder="+1234567890" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">Avatar URL</label><input value={edit.avatar_url} onChange={e => dispatch({ type: 'SET_AVATAR', value: e.target.value })} placeholder="https://..." className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" /><span className="text-text-primary">Email verified</span></label>
+                    </div>
+
+                    <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                      <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Scopes</h3>
+                      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                        {edit.scopes.map(s => (
+                          <span key={s} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] text-text-secondary">
+                            {s}
+                            <button onClick={() => removeScope(s)} className="text-text-muted hover:text-semantic-error"><X size={12} /></button>
+                          </span>
+                        ))}
+                        {edit.scopes.length === 0 && <span className="text-[11px] text-text-muted italic">No scopes</span>}
+                      </div>
+                      <div className="flex gap-2">
+                        <input value={newScope} onChange={e => setNewScope(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScope() } }} placeholder="Add scope..." className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                        <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-violet/10 px-2.5 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-40"><Plus size={14} /></button>
+                      </div>
+                    </div>
+
+                    {!user.is_federated && (
+                      <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Password &amp; Credentials</h3>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <button onClick={() => setShowSetPassword(true)} data-testid="set-password-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                            Set Password
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                          <button onClick={() => setConfirmAction('send-password-reset')} data-testid="send-password-reset-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                            Send Password Reset
+                          </button>
+                          {!user.password_expired && (
+                            <button onClick={() => setConfirmAction('expire-password')} data-testid="expire-password-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              Expire Password
+                            </button>
+                          )}
+                          {isLocked && (
+                            <button onClick={() => setConfirmAction('unlock')} data-testid="unlock-account-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              Unlock Account
+                            </button>
+                          )}
+                          {user.failed_login_count > 0 && (
+                            <button onClick={() => setConfirmAction('reset-failed-attempts')} data-testid="reset-attempts-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              Reset Failed Attempts
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!user.is_federated && (
+                      <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">MFA</h3>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {user.mfa_enabled && (
+                            <button onClick={() => setConfirmAction('disable-mfa')} data-testid="disable-mfa-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              <Shield size={12} className="inline mr-1.5" />Disable MFA
+                            </button>
+                          )}
+                          {user.mfa_enabled && (
+                            <button onClick={() => setConfirmAction('reset-mfa')} data-testid="reset-mfa-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              <ShieldOff size={12} className="inline mr-1.5" />Reset MFA
+                            </button>
+                          )}
+                          {user.mfa_enabled && (
+                            <button onClick={() => setConfirmAction('regenerate-backup-codes')} data-testid="regenerate-codes-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                              <RefreshCw size={12} className="inline mr-1.5" />Regenerate Backup Codes
+                            </button>
+                          )}
+                          {!user.mfa_enabled && (
+                            <p className="col-span-full text-xs text-text-muted italic py-1">MFA is not enabled</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {user.is_federated && (
+                      <div className="rounded-xl border border-surface-2 bg-surface-1 p-4">
+                        <p className="text-xs text-text-muted italic">
+                          Credentials and MFA for this account are managed by an external identity provider.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                      <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Account Status</h3>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {isSuspended ? (
+                          <button onClick={() => setConfirmAction('unsuspend')} data-testid="unsuspend-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                            <Clock size={12} className="inline mr-1.5" />Remove Suspension (until {formatDateTime(user.suspended_until!)})
+                          </button>
+                        ) : (
+                          <button onClick={() => setShowSuspend(true)} data-testid="suspend-btn" className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-2 text-left">
+                            <Ban size={12} className="inline mr-1.5" />Suspend User
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {keys && keys.length > 0 && (
+                      <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">API Keys ({keys.length})</h3>
+                        <div className="space-y-1.5">
+                          {(keys as Array<Record<string, unknown>>).map(k => (
+                            <div key={k.key_id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs">
+                              <span className="text-text-primary font-medium">{k.name as string}</span>
+                              <code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.key_id as string)?.slice(0,8)) as string)}...</code>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="sessions" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Active Sessions</h3>
+                    {(sessionsData?.items ?? []).length > 0 && (
+                      <button onClick={() => setConfirmAction('revoke-all-sessions')} data-testid="revoke-all-sessions-btn" className="flex items-center gap-1 rounded-lg bg-semantic-error/10 px-2 py-1 text-[11px] font-medium text-semantic-error hover:bg-semantic-error/20">
+                        <LogOut size={12} />Revoke All
+                      </button>
+                    )}
+                  </div>
+                  {!sessionsData ? (
+                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : sessionsData.items.length === 0 ? (
+                    <p className="text-xs text-text-muted italic py-2">No active sessions</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-surface-2">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-surface-2 bg-surface-2/50">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Client</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Created</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Last Used</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">IP</th>
+                            <th className="px-3 py-2" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-2">
+                          {sessionsData.items.map(s => (
+                            <tr key={s.id} className="hover:bg-surface-2/30">
+                              <td className="px-3 py-2 text-text-primary font-medium">{s.client_id}</td>
+                              <td className="px-3 py-2 text-text-muted">{formatDateTime(s.created_at)}</td>
+                              <td className="px-3 py-2 text-text-muted">{s.last_used_at ? formatDateTime(s.last_used_at) : '-'}</td>
+                              <td className="px-3 py-2 text-text-muted font-mono">{s.ip_address ?? '-'}</td>
+                              <td className="px-3 py-2 text-right">
+                                <button onClick={() => setRevokeSessionId(s.id)} data-testid={`revoke-session-${s.id}`} className="rounded p-1 text-text-muted hover:text-semantic-error" title="Revoke session">
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="passkeys" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-3">
+                  <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Passkeys {passkeys ? `(${passkeys.length})` : ''}</h3>
+                  {!passkeys ? (
+                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : passkeys.length === 0 ? (
+                    <div className="flex flex-col items-center py-8 text-center rounded-xl border border-surface-2 bg-surface-1">
+                      <Fingerprint size={32} className="text-text-muted mb-2 opacity-40" />
+                      <p className="text-sm text-text-muted italic">No passkeys registered</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {passkeys.map(pk => (
+                        <div key={pk.credential_id} className="flex items-center justify-between rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {pk.device_type === 'phone' ? <Smartphone size={16} className="shrink-0 text-text-muted" />
+                              : pk.device_type === 'computer' ? <Monitor size={16} className="shrink-0 text-text-muted" />
+                              : <KeyRound size={16} className="shrink-0 text-text-muted" />}
+                            <div className="min-w-0">
+                              <p className="text-text-primary truncate font-medium">{pk.name}</p>
+                              <p className="text-xs text-text-muted">
+                                {formatDateTime(pk.created_at)}
+                                {pk.last_used_at ? ` · Last used ${formatDateTime(pk.last_used_at)}` : ''}
+                                {pk.transports?.length ? ` · ${pk.transports.join(', ')}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <button onClick={() => setDeletePasskeyId(pk.credential_id)} data-testid={`delete-passkey-${pk.credential_id}`} className="shrink-0 rounded p-1 text-text-muted hover:text-semantic-error ml-2" title="Delete passkey">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="history" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-3">
+                  <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <History size={12} />Login History {loginHistory ? `(${loginHistory.total})` : ''}
+                  </h3>
+                  {!loginHistory ? (
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : loginHistory.items.length === 0 ? (
+                    <p className="text-xs text-text-muted italic py-2">No login history</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-surface-2">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-surface-1"><tr className="border-b border-surface-2">
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Status</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Time</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">IP</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-surface-2">
+                          {loginHistory.items.slice(0, 20).map(h => (
+                            <tr key={h.id} className="hover:bg-surface-2/30">
+                              <td className="px-3 py-2">
+                                <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${h.success ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
+                                  {h.success ? 'OK' : 'FAIL'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-text-muted whitespace-nowrap">{formatDateTime(h.timestamp)}</td>
+                              <td className="px-3 py-2 text-text-muted font-mono">{h.ip_address ?? '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="events" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-3">
+                  <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle size={12} />Security Events {securityEvents ? `(${securityEvents.total})` : ''}
+                  </h3>
+                  {!securityEvents ? (
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : securityEvents.items.length === 0 ? (
+                    <p className="text-xs text-text-muted italic py-2">No security events</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-surface-2">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-surface-1"><tr className="border-b border-surface-2">
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Event</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Time</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Description</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-surface-2">
+                          {securityEvents.items.slice(0, 20).map(e => (
+                            <tr key={e.id} className="hover:bg-surface-2/30">
+                              <td className="px-3 py-2">
+                                <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-xs text-brand-violet">
+                                  {e.event_type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-text-muted whitespace-nowrap">{formatDateTime(e.timestamp)}</td>
+                              <td className="px-3 py-2 text-text-muted truncate max-w-[280px]">{e.description ?? '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="apps" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-3">
+                  <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe size={12} />Connected Apps {oauthConsents ? `(${oauthConsents.length})` : ''}
+                  </h3>
+                  {!oauthConsents ? (
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : oauthConsents.length === 0 ? (
+                    <p className="text-xs text-text-muted italic py-2">No connected apps</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {oauthConsents.filter(c => !c.revoked).map(c => (
+                        <div key={c.consent_id} className="flex items-center justify-between rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm">
+                          <div className="min-w-0">
+                            <p className="text-text-primary font-medium">{c.client_name}</p>
+                            <p className="text-xs text-text-muted">
+                              {c.scopes.join(', ')} · {formatDateTime(c.granted_at)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {oauthConsents.filter(c => c.revoked).length > 0 && (
+                        <>
+                          <p className="text-xs text-text-muted pt-2 pb-1 uppercase tracking-wider">Revoked</p>
+                          {oauthConsents.filter(c => c.revoked).map(c => (
+                            <div key={c.consent_id} className="flex items-center justify-between rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm opacity-60">
+                              <div className="min-w-0">
+                                <p className="text-text-primary font-medium">{c.client_name}</p>
+                                <p className="text-xs text-text-muted">Revoked {c.revoked_at ? formatDateTime(c.revoked_at) : ''}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="admin-log" className="m-0 focus-visible:outline-none">
+                <div className="p-6 space-y-3">
+                  <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <History size={12} />Admin Actions {adminActions ? `(${adminActions.total})` : ''}
+                  </h3>
+                  {!adminActions ? (
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                  ) : adminActions.items.length === 0 ? (
+                    <p className="text-xs text-text-muted italic py-2">No admin actions</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-surface-2">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-surface-1"><tr className="border-b border-surface-2">
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Action</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Admin</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Time</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-surface-2">
+                          {adminActions.items.slice(0, 20).map(a => (
+                            <tr key={a.id} className="hover:bg-surface-2/30">
+                              <td className="px-3 py-2">
+                                <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-xs text-brand-violet">
+                                  {a.action_type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-text-muted">{a.admin_email}</td>
+                              <td className="px-3 py-2 text-text-muted whitespace-nowrap">{formatDateTime(a.timestamp)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </div>
+
+            {/* Sticky footer */}
+            <div className="sticky bottom-0 z-10 flex shrink-0 gap-2 border-t border-surface-2 bg-surface-1/95 px-6 py-3 backdrop-blur">
+              <button onClick={handleExport} className="flex items-center justify-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary hover:bg-surface-2">
+                <Download size={16} />Export
+              </button>
+              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Save Changes
+              </button>
+            </div>
+          </Tabs>
+        )}
 
           {showSetPassword && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -756,7 +1091,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           <ConfirmDialog open={confirmAction === 'reset-failed-attempts'} title={getActionTitle('reset-failed-attempts')} message={getActionMessage('reset-failed-attempts')} confirmLabel="Reset" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'revoke-all-sessions'} title={getActionTitle('revoke-all-sessions')} message={getActionMessage('revoke-all-sessions')} confirmLabel="Revoke All" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'disable-mfa'} title={getActionTitle('disable-mfa')} message={getActionMessage('disable-mfa')} confirmLabel="Disable" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
-          <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
+          <ConfirmDialog open={confirmAction === 'reset-mfa'} title={getActionTitle('reset-mfa')} message={getActionMessage('reset-mfa')} confirmLabel="Reset MFA" variant="danger" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'regenerate-backup-codes'} title={getActionTitle('regenerate-backup-codes')} message={getActionMessage('regenerate-backup-codes')} confirmLabel="Regenerate" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={confirmAction === 'unsuspend'} title={getActionTitle('unsuspend')} message={getActionMessage('unsuspend')} confirmLabel="Remove Suspension" variant="default" loading={confirming} onConfirm={handleConfirmAction} onCancel={() => setConfirmAction(null)} />
           <ConfirmDialog open={!!revokeSessionId} title="Revoke Session" message="Revoke this session? The user will be logged out of this device." confirmLabel="Revoke" variant="danger" onConfirm={handleRevokeSession} onCancel={() => setRevokeSessionId(null)} />
@@ -821,203 +1156,6 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               </div>
             </div>
           )}
-
-          {formError && (
-            <Banner
-              variant="error"
-              size="sm"
-              className="mb-3"
-              onDismiss={() => setFormError(null)}
-              data-testid="user-drawer-form-error"
-            >
-              {formError}
-            </Banner>
-          )}
-
-          <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 rounded-xl border border-surface-2 px-4 py-2.5 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
-            <Download size={16} />Export User Data
-          </button>
-
-          <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Save Changes
-          </button>
-
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <History size={12} />Login History {loginHistory ? `(${loginHistory.total})` : ''}
-            </h4>
-            {!loginHistory ? (
-              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : loginHistory.items.length === 0 ? (
-              <p className="text-xs text-text-muted italic py-2">No login history</p>
-            ) : (
-              <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b border-surface-2">
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Status</th>
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
-                    <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">IP</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-surface-2">
-                    {loginHistory.items.slice(0, 10).map(h => (
-                      <tr key={h.id} className="hover:bg-surface-2/50">
-                        <td className="px-2 py-1.5">
-                          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${h.success ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
-                            {h.success ? 'OK' : 'FAIL'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(h.timestamp)}</td>
-                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted font-mono">{h.ip_address ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <AlertTriangle size={12} />Security Events {securityEvents ? `(${securityEvents.total})` : ''}
-            </h4>
-            {!securityEvents ? (
-              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : securityEvents.items.length === 0 ? (
-              <p className="text-xs text-text-muted italic py-2">No security events</p>
-            ) : (
-              <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b border-surface-2">
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Event</th>
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
-                    <th className="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Description</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-surface-2">
-                    {securityEvents.items.slice(0, 10).map(e => (
-                      <tr key={e.id} className="hover:bg-surface-2/50">
-                        <td className="px-2 py-1.5">
-                          <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-violet">
-                            {e.event_type.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(e.timestamp)}</td>
-                        <td className="hidden sm:table-cell px-2 py-1.5 text-text-muted truncate max-w-[120px]">{e.description ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <Globe size={12} />Connected Apps {oauthConsents ? `(${oauthConsents.length})` : ''}
-            </h4>
-            {!oauthConsents ? (
-              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : oauthConsents.length === 0 ? (
-              <p className="text-xs text-text-muted italic py-2">No connected apps</p>
-            ) : (
-              <div className="space-y-1.5">
-                {oauthConsents.filter(c => !c.revoked).map(c => (
-                  <div key={c.consent_id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs">
-                    <div className="min-w-0">
-                      <p className="text-text-primary font-medium">{c.client_name}</p>
-                      <p className="text-text-muted">
-                        {c.scopes.join(', ')} · {formatDateTime(c.granted_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {oauthConsents.filter(c => c.revoked).length > 0 && (
-                  <>
-                    <p className="text-[10px] text-text-muted pt-2 pb-1 uppercase tracking-wider">Revoked</p>
-                    {oauthConsents.filter(c => c.revoked).map(c => (
-                      <div key={c.consent_id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs opacity-60">
-                        <div className="min-w-0">
-                          <p className="text-text-primary font-medium">{c.client_name}</p>
-                          <p className="text-text-muted">Revoked {c.revoked_at ? formatDateTime(c.revoked_at) : ''}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <History size={12} />Admin Actions {adminActions ? `(${adminActions.total})` : ''}
-            </h4>
-            {!adminActions ? (
-              <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : adminActions.items.length === 0 ? (
-              <p className="text-xs text-text-muted italic py-2">No admin actions</p>
-            ) : (
-              <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b border-surface-2">
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Action</th>
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Admin</th>
-                    <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-muted">Time</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-surface-2">
-                    {adminActions.items.slice(0, 10).map(a => (
-                      <tr key={a.id} className="hover:bg-surface-2/50">
-                        <td className="px-2 py-1.5">
-                          <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-violet">
-                            {a.action_type.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-text-muted">{a.admin_email}</td>
-                        <td className="px-2 py-1.5 text-text-muted whitespace-nowrap">{formatDateTime(a.timestamp)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {keys && keys.length > 0 && <div><h4 className="text-sm font-semibold text-text-primary mb-2">API Keys ({keys.length})</h4><div className="space-y-1.5">{(keys as Array<Record<string, unknown>>).map(k => <div key={k.key_id as string} className="rounded-lg bg-surface-2 px-3 py-2 text-xs"><span className="text-text-primary font-medium">{k.name as string}</span><code className="ml-2 text-text-muted">{((k.key_prefix ?? (k.key_id as string)?.slice(0,8)) as string)}...</code></div>)}</div></div>}
-          <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Passkeys {passkeys ? `(${passkeys.length})` : ''}</h4>
-            {!passkeys ? (
-              <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
-            ) : passkeys.length === 0 ? (
-              <div className="flex flex-col items-center py-4 text-center">
-                <Fingerprint size={24} className="text-text-muted mb-2 opacity-40" />
-                <p className="text-xs text-text-muted italic">No passkeys registered</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {passkeys.map(pk => (
-                  <div key={pk.credential_id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {pk.device_type === 'phone' ? <Smartphone size={14} className="shrink-0 text-text-muted" />
-                        : pk.device_type === 'computer' ? <Monitor size={14} className="shrink-0 text-text-muted" />
-                        : <KeyRound size={14} className="shrink-0 text-text-muted" />}
-                      <div className="min-w-0">
-                        <p className="text-text-primary truncate">{pk.name}</p>
-                        <p className="text-text-muted">
-                          {formatDateTime(pk.created_at)}
-                          {pk.last_used_at ? ` · Last used ${formatDateTime(pk.last_used_at)}` : ''}
-                          {pk.transports?.length ? ` · ${pk.transports.join(', ')}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <button onClick={() => setDeletePasskeyId(pk.credential_id)} data-testid={`delete-passkey-${pk.credential_id}`} className="shrink-0 rounded p-1 text-text-muted hover:text-semantic-error ml-2" title="Delete passkey">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </> : <p className="text-sm text-text-muted text-center py-8">Could not load user details.</p>}
       </div>
     </div>
   )

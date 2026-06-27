@@ -107,11 +107,11 @@ export function DeviceAuthorizationsPage() {
 
       <ConfirmDialog
         open={!!revokeTarget}
-        onOpenChange={(open) => { if (!open) setRevokeTarget(null) }}
         title="Revoke Device Authorization"
-        description={`Revoke device authorization ${revokeTarget?.user_code} for ${revokeTarget?.client_id}?`}
+        message={`Revoke device authorization ${revokeTarget?.user_code} for ${revokeTarget?.client_id}?`}
         confirmLabel="Revoke"
         onConfirm={handleRevoke}
+        onCancel={() => setRevokeTarget(null)}
         loading={revoking}
         variant="danger"
       />

@@ -261,7 +261,7 @@ export function AdminSettingsPage() {
         title="Restart required"
         message="Some changed settings require a server restart to take effect. Save changes anyway?"
         confirmLabel="Save & restart later"
-        variant="warning"
+        variant="default"
         onConfirm={doSave}
         onCancel={() => setShowRestartConfirm(false)}
       />

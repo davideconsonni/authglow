@@ -302,4 +302,45 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
       expect(content).toContain('cnf')
     })
   })
+
+  describe('CONFORMANCE U.3-U.5 — documentazione release', () => {
+    const securityPath = resolve(ROOT, '..', 'docs', 'SECURITY.md')
+    const featuresPath = resolve(ROOT, '..', 'docs', 'FEATURES.md')
+    const changelogPath = resolve(ROOT, '..', 'CHANGELOG.md')
+
+    it('docs/SECURITY.md esiste e documenta i fix di conformance', () => {
+      expect(existsSync(securityPath)).toBe(true)
+      const content = readFileSync(securityPath, 'utf-8')
+      // La tabella dei fix di conformance deve esistere.
+      expect(content).toContain('Conformance Fixes Applied')
+      // Tutti i workstream A-T devono essere citati almeno
+      // una volta (a parte U.1/U.2 deferred).
+      for (const ws of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T.2', 'T.3', 'T.4']) {
+        expect(content).toContain(`**${ws}**`)
+      }
+    })
+
+    it('docs/FEATURES.md esiste e cataloga le feature OIDC', () => {
+      expect(existsSync(featuresPath)).toBe(true)
+      const content = readFileSync(featuresPath, 'utf-8')
+      expect(content).toContain('Supported OAuth 2.0 / OIDC Standards')
+      // I claim OIDC devono essere documentati.
+      expect(content).toContain('`acr`')
+      expect(content).toContain('`amr`')
+      expect(content).toContain('`at_hash`')
+      expect(content).toContain('`c_hash`')
+      expect(content).toContain('`sid`')
+    })
+
+    it('CHANGELOG.md esiste e documenta i breaking changes', () => {
+      expect(existsSync(changelogPath)).toBe(true)
+      const content = readFileSync(changelogPath, 'utf-8')
+      expect(content).toContain('Breaking Changes')
+      // I breaking changes principali.
+      expect(content).toContain('`password` grant')
+      expect(content).toContain('`implicit` grant')
+      expect(content).toContain('PKCE mandatory')
+      expect(content).toContain('post_logout_redirect_uri')
+    })
+  })
 })

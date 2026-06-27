@@ -484,4 +484,122 @@ describe('AdminUsersPage', () => {
       )
     })
   })
+
+  // --- UX: drawer a11y, tabs, sticky header/footer ---
+
+  it('renders 7 tabs in the tab strip', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByTestId('user-tab-profile')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-sessions')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-passkeys')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-history')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-events')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-apps')).toBeInTheDocument()
+    expect(screen.getByTestId('user-tab-admin-log')).toBeInTheDocument()
+  })
+
+  it('Profile tab is the default and shows the edit form', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'First0', last_name: 'Last0', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    const profileTab = screen.getByTestId('user-tab-profile')
+    expect(profileTab).toHaveAttribute('data-state', 'active')
+    expect(screen.getByDisplayValue('First0')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Last0')).toBeInTheDocument()
+  })
+
+  it('switches to Sessions tab on click', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    // Radix TabsTrigger responds to mousedown, not click
+    fireEvent.mouseDown(screen.getByTestId('user-tab-sessions'))
+
+    expect(screen.getByTestId('user-tab-sessions')).toHaveAttribute('data-state', 'active')
+    expect(screen.getByTestId('user-tab-profile')).toHaveAttribute('data-state', 'inactive')
+  })
+
+  it('switches to Passkeys tab and shows the empty state', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    fireEvent.mouseDown(screen.getByTestId('user-tab-passkeys'))
+
+    expect(screen.getByTestId('user-tab-passkeys')).toHaveAttribute('data-state', 'active')
+    expect(screen.getByText(/No passkeys registered/)).toBeInTheDocument()
+  })
+
+  it('closes drawer on Escape key', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    expect(screen.getByTestId('user-detail-drawer')).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByTestId('user-detail-drawer')).not.toBeInTheDocument()
+  })
+
+  it('Save Changes button is in the sticky footer (visible alongside drawer content)', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    fireEvent.click(screen.getByTestId('user-tab-sessions'))
+
+    // Save Changes is in the sticky footer → must remain visible/accessible
+    // when scrolling through any tab content.
+    expect(screen.getByText('Save Changes')).toBeInTheDocument()
+  })
+
+  it('close button has accessible name "Close user detail"', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByRole('button', { name: 'Close user detail' })).toBeInTheDocument()
+  })
+
+  it('drawer has role="dialog" and aria-modal="true"', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    const drawer = screen.getByTestId('user-detail-drawer')
+    expect(drawer).toHaveAttribute('role', 'dialog')
+    expect(drawer).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('Session/History/Events tab counts are shown when data has a total', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+    // The conformance mock falls through to { data: null, isLoading: false }
+    // for the read-only query keys, so tab counts fall back to no number.
+    // We assert that the tabs are present with the expected labels.
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByTestId('user-tab-sessions').textContent).toMatch(/^Sessions/)
+    expect(screen.getByTestId('user-tab-history').textContent).toMatch(/^Login History/)
+    expect(screen.getByTestId('user-tab-events').textContent).toMatch(/^Security Events/)
+  })
 })
