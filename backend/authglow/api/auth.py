@@ -946,10 +946,24 @@ async def token_endpoint(
         raise HTTPException(status_code=400, detail="Unexpected device authorization state")
 
     else:
+        # CONFORMANCE T.1: AuthGlow explicitly rejects `grant_type=password`
+        # (Resource Owner Password Credentials, RFC 6749 §4.3). Only the
+        # following grants are accepted on the standard OAuth2 token endpoint:
+        #   - authorization_code (with PKCE mandatory)
+        #   - client_credentials
+        #   - refresh_token
+        #   - urn:ietf:params:oauth:grant-type:device_code
+        # First-party browser login goes through `/api/token` below, which is
+        # NOT a standard OAuth2 grant and MUST NOT be exposed to third-party
+        # clients. See docs/SECURITY.md.
         raise HTTPException(status_code=400, detail="Unsupported grant_type")
 
 
-# Traditional token endpoint (for browser login)
+# Traditional first-party token endpoint (browser login).
+# NOT a standard OAuth2 grant: reserved for the AuthGlow frontend only.
+# Third-party clients must use the standard `/oauth2/token` endpoint above
+# with one of the supported grants (see CONFORMANCE T.1, docs/SECURITY.md).
+@router.post("/api/token")
 @router.post("/api/token")
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login_for_access_token(

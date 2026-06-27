@@ -322,7 +322,8 @@ Non implementato. Necessario per client IoT / CLI headless.
 
 Cleanup e rimozione pattern deprecati.
 
-- [ ] **T.1** Rimuovere `Resource Owner Password Credentials` flow da `api/auth.py` o documentarlo esplicitamente come first-party-only.
+- [x] **T.1** Rimuovere `Resource Owner Password Credentials` flow da `api/auth.py` o documentarlo esplicitamente come first-party-only.
+  - **Done**: documentato first-party-only in `docs/SECURITY.md` (sezione "OAuth Grants supportati" + endpoint first-party). Nuovo test di non-regressione in `tests/integration/test_token_endpoint_ropc.py` (3 test: `password_grant_rejected`, `unknown_grant_rejected`, `no_token_leaked`). Commento esplicito in `api/auth.py:948-957` che elenca i grant accettati e dichiara ROPC rifiutato. Scelta: documentare invece di rimuovere `/api/token` (è il login del frontend first-party, non un grant OAuth2). 41/41 test passati su `test_auth_api.py + test_oidc_api.py + test_token_endpoint_ropc.py + test_dynamic_client_registration.py`. ruff+mypy clean.
 - [ ] **T.2** Aggiungere supporto `client_secret_jwt` e `private_key_jwt` per `token_endpoint_auth_method` (opzionale FAPI).
 - [ ] **T.3** Considerare `sender-constrained` tokens (DPoP, RFC 9449) per FAPI 2.0.
 - [ ] **T.4** Documentare le differenze rispetto a FAPI 2.0 in `docs/FAPI.md`.
