@@ -34,6 +34,10 @@ class TokenData(BaseModel):
     aud: Optional[str] = None  # audience — client_id for ID tokens, RP-initiated logout
     permissions: Optional[List[str]] = None  # RBAC permissions from assigned roles
     roles: Optional[List[str]] = None  # RBAC role names
+    # T.3 / RFC 9449 / RFC 7800: ``cnf`` confirmation claim binds the
+    # token to a specific key. Present for DPoP-bound tokens
+    # (e.g. ``{"jkt": "<thumbprint>"}``). ``None`` for legacy bearer.
+    cnf: Optional[dict] = None
 
 
 class AuthorizationCode(BaseModel):

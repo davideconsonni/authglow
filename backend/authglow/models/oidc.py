@@ -87,6 +87,10 @@ class OpenIDConfiguration(BaseModel):
     token_endpoint_auth_methods_supported: List[str]
     claims_supported: List[str]
     code_challenge_methods_supported: List[str] = ["S256"]
+    # T.3: DPoP support (RFC 9449). The algorithms clients may use
+    # when signing DPoP proof JWTs. Empty list means DPoP is not
+    # supported; AuthGlow advertises ES256.
+    dpop_signing_alg_values_supported: List[str] = []
 
     # Additional endpoints
     device_authorization_endpoint: Optional[str] = None

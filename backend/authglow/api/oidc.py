@@ -132,6 +132,10 @@ async def openid_configuration(request: Request, response: Response):
             "private_key_jwt",
             "none",
         ],
+        # T.3: DPoP support (RFC 9449). Opt-in per client via the
+        # ``dpop_bound`` field on OAuth2Client. ES256 is the only
+        # accepted algorithm — see services/dpop.py.
+        dpop_signing_alg_values_supported=["ES256"],
         claims_supported=claims_supported,
         code_challenge_methods_supported=["S256"],
         device_authorization_endpoint=f"{base_url}/oauth2/device/authorize",
@@ -266,9 +270,16 @@ async def jwks_status(request: Request):
 async def userinfo(
     request: Request,
     response: Response,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """OpenID Connect UserInfo endpoint.
+
+    T.3 / RFC 9449 §7.1: the ``Authorization`` header for
+    DPoP-bound tokens uses the ``DPoP`` scheme (``Authorization:
+    DPoP <token>``). FastAPI's :class:`HTTPBearer` security only
+    accepts ``Bearer``, so we read the header manually and accept
+    both schemes. The DPoP proof verification is performed later
+    in the handler — the credential here is the access token, not
+    the proof.
 
     Returns claims about the authenticated user.
     Spec: https://openid.net/specs/openid-connect-core-1_0.html#UserInfo
@@ -289,8 +300,23 @@ async def userinfo(
     jwt_service = await get_jwt_service()
     oidc_service = OIDCService()
 
+    # T.3 / RFC 9449 §7.1: DPoP-bound tokens use the ``DPoP``
+    # auth-scheme. We accept both ``Bearer`` and ``DPoP`` here;
+    # the proof is verified later when the ``cnf`` claim is
+    # present.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("DPoP "):
+        token = auth_header[len("DPoP ") :].strip()
+    elif auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer ") :].strip()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": 'Bearer realm="OAuth2"'},
+        )
+
     # Decode and validate access token
-    token = credentials.credentials
     token_data = jwt_service.decode_token(token)
 
     if not token_data:
@@ -317,6 +343,41 @@ async def userinfo(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Token does not have 'openid' scope"
         )
+
+    # T.3 / RFC 9449: DPoP-bound tokens (those carrying a ``cnf``
+    # claim) require a fresh DPoP proof JWT in the ``DPoP`` header.
+    # The proof is bound to this access token via the ``ath`` claim.
+    if token_data.cnf:
+        from authglow.services.dpop import extract_dpop_proof, verify_dpop_proof
+
+        proof = extract_dpop_proof(request)
+        if not proof:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="DPoP proof is required for this token.",
+                headers={"WWW-Authenticate": 'DPoP error="invalid_dpop_proof"'},
+            )
+        userinfo_htu = f"{get_settings().issuer.rstrip('/')}/oauth2/userinfo"
+        try:
+            verify_dpop_proof(
+                proof,
+                expected_htm="GET",
+                expected_htu=userinfo_htu,
+                access_token=token,
+            )
+        except HTTPException as exc:
+            # Re-raise with a clearer header so the client knows
+            # the failure is DPoP-related, not bearer-related.
+            headers = dict(exc.headers or {})
+            headers["WWW-Authenticate"] = (
+                'DPoP error="invalid_dpop_proof", '
+                'error_description="DPoP proof validation failed"'
+            )
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=exc.detail,
+                headers=headers,
+            )
 
     # Get user info based on scopes
     user_info = await oidc_service.get_user_info(token_data.sub, token_data.scopes)

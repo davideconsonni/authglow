@@ -269,6 +269,7 @@ class JWTService:
         roles: Optional[List[str]] = None,
         audience: Optional[str] = None,
         azp: Optional[str] = None,
+        cnf: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Create an access token with a unique jti for revocation support.
 
@@ -285,6 +286,10 @@ class JWTService:
                 explicitly provided. Following the AuthGlow
                 convention, ``azp`` is always set whenever the token
                 is aud-bound.
+            cnf: T.3 / RFC 9449 / RFC 7800 — confirmation claim binding
+                the token to a specific key (e.g. ``{"jkt": "<thumbprint>"}``
+                for DPoP-bound tokens). The resource server enforces
+                the binding. ``None`` for legacy bearer tokens.
         """
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
@@ -310,6 +315,8 @@ class JWTService:
         if audience is not None:
             token_data["aud"] = audience
             token_data["azp"] = azp if azp is not None else audience
+        if cnf is not None:
+            token_data["cnf"] = cnf
         return self._encode_token(token_data)
 
     def create_refresh_token(
@@ -394,6 +401,7 @@ class JWTService:
             aud=payload.get("aud") if isinstance(payload.get("aud"), str) else None,
             permissions=payload.get("permissions"),
             roles=payload.get("roles"),
+            cnf=payload.get("cnf") if isinstance(payload.get("cnf"), dict) else None,
         )
 
         if token_data.exp < datetime.now(timezone.utc):
@@ -502,12 +510,16 @@ class JWTService:
         roles: Optional[List[str]] = None,
         audience: Optional[str] = None,
         azp: Optional[str] = None,
+        cnf: Optional[Dict[str, Any]] = None,
+        token_type: str = "Bearer",
     ) -> Token:
         """Create a complete token response (OAuth2 §4.1.4 / §5.1).
 
         ``audience``/``azp`` are forwarded to the access token so
         the response is aud-bound when the caller knows the
-        client_id.
+        client_id. ``cnf`` is forwarded to bind the token to a
+        specific key (T.3 DPoP). ``token_type`` is ``"Bearer"`` by
+        default and ``"DPoP"`` for DPoP-bound responses.
         """
         access_token = self.create_access_token(
             user_id,
@@ -517,10 +529,11 @@ class JWTService:
             roles=roles,
             audience=audience,
             azp=azp,
+            cnf=cnf,
         )
         token_response = Token(
             access_token=access_token,
-            token_type="Bearer",
+            token_type=token_type,
             expires_in=self.settings.access_token_expire_minutes * 60,
             scope=" ".join(scopes),
         )

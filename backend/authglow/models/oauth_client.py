@@ -173,6 +173,12 @@ class OAuth2Client(BaseModel):
     # ``token_endpoint_auth_method == "private_key_jwt"``. Embedded to
     # avoid the round-trip of a JWKS URI fetch.
     public_jwk: Optional[Dict[str, Any]] = None
+    # T.3: opt-in DPoP-bound tokens (RFC 9449 / FAPI 2.0 §5.2.2). When
+    # ``True``, the token endpoint requires a DPoP proof JWT on every
+    # request and the access token is issued with a ``cnf`` claim
+    # binding it to the client's public key. Default ``False`` for
+    # backward compatibility.
+    dpop_bound: bool = False
 
     @field_validator("grant_types")
     @classmethod
@@ -241,6 +247,9 @@ class OAuth2ClientCreate(BaseModel):
     # ``client_secret_jwt_key`` is server-generated on creation and never
     # accepted from the wire.
     public_jwk: Optional[Dict[str, Any]] = None
+    # T.3: opt-in DPoP binding. When ``True`` the token endpoint
+    # requires a DPoP proof JWT on every request.
+    dpop_bound: bool = False
 
     @field_validator("grant_types")
     @classmethod
@@ -323,6 +332,10 @@ class OAuth2ClientUpdate(BaseModel):
     # the wire (use the rotate-JWT-key admin flow for that).
     token_endpoint_auth_method: Optional[str] = None
     public_jwk: Optional[Dict[str, Any]] = None
+    # T.3: opt-in DPoP binding. Admins can flip it on/off after
+    # creation. Toggling off does NOT invalidate already-issued
+    # tokens; they remain valid until expiry.
+    dpop_bound: Optional[bool] = None
     # Optional explicit ``None`` to clear the public JWK. Pydantic does
     # not distinguish ``None`` from "field not sent" for ``Optional``;
     # admins can clear the JWK via the admin endpoint with
@@ -422,6 +435,8 @@ class OAuth2ClientResponse(BaseModel):
     token_endpoint_auth_method: str = "client_secret_basic"
     has_client_secret_jwt_key: bool = False
     public_jwk: Optional[Dict[str, Any]] = None
+    # T.3: DPoP binding flag.
+    dpop_bound: bool = False
 
 
 def _client_response_from_model(client: "OAuth2Client") -> "OAuth2ClientResponse":
@@ -457,6 +472,7 @@ def _client_response_from_model(client: "OAuth2Client") -> "OAuth2ClientResponse
         token_endpoint_auth_method=client.token_endpoint_auth_method,
         has_client_secret_jwt_key=bool(client.client_secret_jwt_key),
         public_jwk=client.public_jwk,
+        dpop_bound=client.dpop_bound,
     )
 
 

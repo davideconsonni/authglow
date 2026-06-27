@@ -40,6 +40,10 @@ interface OAuthClient {
   has_client_secret_jwt_key?: boolean
   // T.2: embedded public JWK for ``private_key_jwt`` clients.
   public_jwk?: Record<string, unknown> | null
+  // T.3: DPoP binding (RFC 9449 / FAPI 2.0). When ``true`` the
+  // client must send a DPoP proof JWT on every token endpoint
+  // and resource server request.
+  dpop_bound?: boolean
 }
 
 type GrantType = 'authorization_code' | 'client_credentials' | 'refresh_token'
@@ -176,6 +180,8 @@ export function AdminOAuthClientsPage() {
   // auth method requires it.
   const [publicJwkText, setPublicJwkText] = useState('')
   const [publicJwkError, setPublicJwkError] = useState<string | null>(null)
+  // T.3: DPoP binding toggle. Default false for back-compat.
+  const [dpopBound, setDpopBound] = useState(false)
 
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
   const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as { items?: OAuthClient[] } | undefined)?.items as OAuthClient[]) ?? []
@@ -190,6 +196,7 @@ export function AdminOAuthClientsPage() {
     setShowAdvanced(false); setFormErrors({}); setSelectedTemplate(null)
     setEditClientId(null); setOriginalGrantTypes([]); setOriginalIsConfidential(true)
     setPublicJwkText(''); setPublicJwkError(null)
+    setDpopBound(false)
     setJwtKeyModal(null)
     setFormError(null)
   }
@@ -239,6 +246,7 @@ export function AdminOAuthClientsPage() {
     setRefreshTokenLifetime(c.refresh_token_lifetime ?? 2592000)
     setPublicJwkText(c.public_jwk ? JSON.stringify(c.public_jwk, null, 2) : '')
     setPublicJwkError(null)
+    setDpopBound(c.dpop_bound ?? false)
     setShowForm(true)
     setShowAdvanced(true)
     setFormErrors({})
@@ -321,6 +329,9 @@ export function AdminOAuthClientsPage() {
       allowed_scopes: allowedScopes.trim().split(/\s+/).filter(Boolean),
       access_token_lifetime: accessTokenLifetime,
       refresh_token_lifetime: refreshTokenLifetime,
+      // T.3: opt-in DPoP binding. The server stores this as a
+      // boolean flag on the client.
+      dpop_bound: dpopBound,
     }
     if (grantTypes.includes('authorization_code')) {
       payload.redirect_uris = redirectUris.map(u => u.trim()).filter(Boolean)
@@ -474,7 +485,7 @@ export function AdminOAuthClientsPage() {
                       {clientScopes(c).length === 0 && <span className="text-[10px] text-text-muted">-</span>}
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}</span></td>
+                  <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}{c.dpop_bound ? <span className="ml-1 inline-flex rounded-lg bg-semantic-info/10 px-1.5 py-0.5 text-[10px] font-semibold text-semantic-info" data-testid="dpop-badge">DPoP</span> : null}</span></td>
                   <td className="px-4 py-2.5">
                     <button onClick={() => handleToggle(c.client_id, c.is_active)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${c.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${c.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
@@ -813,6 +824,26 @@ export function AdminOAuthClientsPage() {
                       />
                       <span className="text-[11px] text-text-primary">Require consent screen</span>
                     </label>
+
+                    {/* T.3: DPoP binding toggle (RFC 9449). */}
+                    <label className="flex items-center gap-2 cursor-pointer" data-testid="dpop-bound-label">
+                      <input
+                        type="checkbox"
+                        checked={dpopBound}
+                        onChange={e => setDpopBound(e.target.checked)}
+                        data-testid="dpop-bound-toggle"
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                      />
+                      <span className="text-[11px] text-text-primary">
+                        DPoP-bound tokens
+                        <span className="ml-1 text-[10px] text-text-muted">(FAPI 2.0)</span>
+                      </span>
+                    </label>
+                    {dpopBound && (
+                      <p className="text-[10px] text-text-muted pl-5">
+                        Client must generate an ES256 key pair and sign a DPoP proof JWT on every request.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

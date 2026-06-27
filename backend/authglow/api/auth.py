@@ -3,8 +3,9 @@
 import base64
 import hashlib
 from datetime import timedelta
-from typing import Annotated, Dict, List, NoReturn, Optional, Tuple
+from typing import Annotated, Any, Dict, List, NoReturn, Optional, Tuple
 
+import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -122,6 +123,69 @@ def _extract_bearer_auth(request: Request) -> Optional[str]:
         return None
     token = auth_header[len("Bearer ") :].strip()
     return token or None
+
+
+async def _require_dpop_proof_if_bound(
+    request: Request,
+    client: OAuth2Client,
+    expected_htm: str,
+) -> Optional[Dict[str, Any]]:
+    """Return a ``cnf`` claim if the client is DPoP-bound, else ``None``.
+
+    T.3 / RFC 9449: when ``client.dpop_bound`` is ``True`` the
+    caller MUST have supplied a valid DPoP proof JWT in the
+    ``DPoP`` header. The function verifies the proof and returns
+    the resulting ``cnf`` claim (``{"jkt": "<thumbprint>"}``) so
+    the caller can embed it in the access token.
+
+    Raises ``HTTPException(400|401)`` when the client is
+    DPoP-bound but the proof is missing or invalid. The
+    ``WWW-Authenticate`` header advertises DPoP to the client.
+    """
+    # ``is True`` (not truthy) so MagicMock-based unit tests that
+    # do not set ``dpop_bound`` explicitly default to "off".
+    if getattr(client, "dpop_bound", None) is not True:
+        return None
+    from authglow.services.dpop import (
+        build_cnf_claim,
+        extract_dpop_proof,
+        verify_dpop_proof,
+    )
+
+    proof = extract_dpop_proof(request)
+    if not proof:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_request",
+                "error_description": (
+                    "DPoP proof is required for this client "
+                    "(token_endpoint_auth_method is DPoP-bound)."
+                ),
+                "error_code": "missing_dpop_proof",
+            },
+            headers={"WWW-Authenticate": 'DPoP algs="ES256"'},
+        )
+
+    # The token endpoint URL is the target the proof declares
+    # — RFC 9449 §4.2 htu claim.
+    settings_ = get_settings()
+    expected_htu = f"{settings_.issuer.rstrip('/')}/oauth2/token"
+
+    claims = verify_dpop_proof(
+        proof,
+        expected_htm=expected_htm,
+        expected_htu=expected_htu,
+    )
+    jwk = claims.get("jwk") or jwt.get_unverified_header(proof).get("jwk")
+    if not jwk:
+        # Should not happen — verify_dpop_proof already enforces
+        # the jwk header — defensive fallback.
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "invalid_dpop_proof", "error_code": "missing_jwk"},
+        )
+    return build_cnf_claim(jwk)
 
 
 async def _authenticate_client_at_token_endpoint(
@@ -813,6 +877,13 @@ async def token_endpoint(
             raise HTTPException(status_code=400, detail="Invalid client_id")
         # --- End Client Authentication ---
 
+        # T.3: DPoP-bound clients must supply a fresh DPoP proof
+        # JWT. The check sits between client authentication and
+        # PKCE validation: it is a second client-auth factor
+        # (proof-of-possession) so it logically belongs with the
+        # auth checks, before the user-facing PKCE / scope work.
+        dpop_cnf = await _require_dpop_proof_if_bound(request, oauth_client, "POST")
+
         if auth_code.redirect_uri != redirect_uri:
             raise HTTPException(status_code=400, detail="Redirect URI mismatch")
 
@@ -874,6 +945,8 @@ async def token_endpoint(
             roles=rbac_roles,
             audience=auth_code.client_id,
             azp=auth_code.client_id,
+            cnf=dpop_cnf,
+            token_type="DPoP" if dpop_cnf else "Bearer",
         )
 
         # Create persistent refresh token with rotation
@@ -954,12 +1027,22 @@ async def token_endpoint(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid scope")
 
+        # T.3: DPoP-bound clients must supply a fresh DPoP proof.
+        # We re-load the client from storage to check the flag —
+        # ``verify_client`` only returns a boolean.
+        dpop_bound_client = await oauth2_service.client_storage.get_client(resolved_client_id)
+        cc_dpop_cnf: Optional[Dict[str, Any]] = None
+        if dpop_bound_client is not None and getattr(dpop_bound_client, "dpop_bound", None) is True:
+            cc_dpop_cnf = await _require_dpop_proof_if_bound(request, dpop_bound_client, "POST")
+
         # Create token for client (no specific user)
         return jwt_service.create_token_response(
             user_id=resolved_client_id,
             email=f"{resolved_client_id}@client.internal",
             scopes=validated_scopes,
             include_refresh=False,
+            cnf=cc_dpop_cnf,
+            token_type="DPoP" if cc_dpop_cnf else "Bearer",
         )
 
     elif grant_type == "refresh_token":

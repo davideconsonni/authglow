@@ -150,6 +150,17 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
       expect(s).toContain('token_endpoint_auth_method: authMethod')
     })
 
+    it('invia dpop_bound (T.3 DPoP / RFC 9449)', () => {
+      const s = source()
+      expect(s).toContain('dpop_bound: dpopBound')
+    })
+
+    it('ha il toggle DPoP-bound nella UI', () => {
+      const s = source()
+      // T.3: il toggle deve avere data-testid per testing E2E
+      expect(s).toContain('data-testid="dpop-bound-toggle"')
+    })
+
     it('invia description, homepage_uri, logo_uri, terms_uri, privacy_uri', () => {
       const s = source()
       expect(s).toContain('description:')
@@ -258,6 +269,37 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
     it('chiama DELETE con token id', async () => {
       const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminPasswordResetsPage.tsx'), 'utf-8')
       expect(source).toContain('/api/admin/password-resets/')
+    })
+  })
+
+  describe('CONFORMANCE T.4 — docs/FAPI.md', () => {
+    const fapiPath = resolve(ROOT, '..', 'docs', 'FAPI.md')
+
+    it('docs/FAPI.md esiste', () => {
+      expect(existsSync(fapiPath)).toBe(true)
+    })
+
+    it('docs/FAPI.md contiene il gap analysis principale', () => {
+      const content = readFileSync(fapiPath, 'utf-8')
+      // Le sezioni obbligatorie devono essere presenti.
+      expect(content).toContain('Conformance Matrix')
+      expect(content).toContain('Gap Roadmap')
+      expect(content).toContain('PAR')
+      expect(content).toContain('DPoP')
+      expect(content).toContain('mTLS')
+    })
+
+    it('docs/FAPI.md documenta T.2 (client_secret_jwt / private_key_jwt)', () => {
+      const content = readFileSync(fapiPath, 'utf-8')
+      expect(content).toContain('client_secret_jwt')
+      expect(content).toContain('private_key_jwt')
+    })
+
+    it('docs/FAPI.md documenta T.3 (DPoP RFC 9449)', () => {
+      const content = readFileSync(fapiPath, 'utf-8')
+      expect(content).toContain('RFC 9449')
+      expect(content).toContain('ES256')
+      expect(content).toContain('cnf')
     })
   })
 })
