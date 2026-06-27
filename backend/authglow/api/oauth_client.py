@@ -1,6 +1,6 @@
 """OAuth2 Client Management API endpoints."""
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -13,9 +13,14 @@ from authglow.models.oauth_client import (
     OAuth2ClientSecretRotation,
     OAuth2ClientUpdate,
     OAuth2ClientWithSecret,
+    _client_response_from_model,
 )
 from authglow.models.user import User
 from authglow.services.audit import AuditService
+from authglow.services.client_jwt_auth import (
+    encrypt_client_jwt_key_value,
+    generate_client_jwt_symmetric_key,
+)
 from authglow.services.oauth_client import OAuth2ClientStorage
 
 router = APIRouter(prefix="/api/oauth-clients")
@@ -56,6 +61,14 @@ async def create_oauth_client(
     # Generate client secret
     plaintext_secret = storage.generate_client_secret()
 
+    # T.2: if the admin picked ``client_secret_jwt``, mint a fresh
+    # symmetric key and show it **once** in the response, exactly like
+    # the regular ``client_secret``. The encrypted copy is persisted
+    # via ``client_secret_jwt_key``; the plaintext is never stored.
+    plaintext_jwt_key: Optional[str] = None
+    if client_data.token_endpoint_auth_method == "client_secret_jwt":
+        plaintext_jwt_key = generate_client_jwt_symmetric_key()
+
     # Create client
     client = OAuth2Client(
         client_name=client_data.client_name,
@@ -75,6 +88,13 @@ async def create_oauth_client(
         access_token_lifetime=client_data.access_token_lifetime,
         refresh_token_lifetime=client_data.refresh_token_lifetime,
         created_by=current_user.id,
+        token_endpoint_auth_method=client_data.token_endpoint_auth_method or "client_secret_basic",
+        public_jwk=client_data.public_jwk,
+        client_secret_jwt_key=(
+            encrypt_client_jwt_key_value(plaintext_jwt_key)
+            if plaintext_jwt_key is not None
+            else None
+        ),
     )
 
     await storage.create_client(client, plaintext_secret)
@@ -84,12 +104,22 @@ async def create_oauth_client(
         event_type="oauth_client_created",
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"client_id": client.client_id, "client_name": client.client_name},
+        metadata={
+            "client_id": client.client_id,
+            "client_name": client.client_name,
+            "token_endpoint_auth_method": client.token_endpoint_auth_method,
+        },
     )
 
-    # Return client with plaintext secret (only shown once)
+    # Return client with plaintext secret (only shown once). The JWT key
+    # is returned in the same envelope when applicable so the admin
+    # can hand it to the client operator through the established
+    # "show-once" UI flow.
+    response_kwargs = client.model_dump(exclude={"client_secret"})
     response = OAuth2ClientWithSecret(
-        **client.model_dump(exclude={"client_secret"}), client_secret=plaintext_secret
+        **response_kwargs,
+        client_secret=plaintext_secret,
+        client_secret_jwt_key=plaintext_jwt_key,
     )
 
     return response
@@ -106,9 +136,7 @@ async def list_oauth_clients(
     """List all OAuth2 clients (admin only)."""
     clients = await storage.list_clients(limit=limit, offset=offset, active_only=active_only)
 
-    return [
-        OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"})) for client in clients
-    ]
+    return [_client_response_from_model(client) for client in clients]
 
 
 @router.get("/{client_id}", response_model=OAuth2ClientResponse)
@@ -123,7 +151,7 @@ async def get_oauth_client(
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found")
 
-    return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
+    return _client_response_from_model(client)
 
 
 @router.put("/{client_id}", response_model=OAuth2ClientResponse)
@@ -157,7 +185,7 @@ async def update_oauth_client(
         metadata={"client_id": client_id, "updated_fields": list(update_dict.keys())},
     )
 
-    return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
+    return _client_response_from_model(client)
 
 
 @router.delete("/{client_id}")
@@ -227,6 +255,49 @@ async def rotate_client_secret(
     )
 
     return OAuth2ClientSecretRotation(client_id=client_id, new_client_secret=new_secret)
+
+
+@router.post("/{client_id}/rotate-jwt-key", response_model=OAuth2ClientSecretRotation)
+@limiter.limit("10/day")
+async def rotate_client_jwt_key(
+    request: Request,
+    client_id: str,
+    current_user: User = Depends(require_admin),
+    storage: OAuth2ClientStorage = Depends(get_client_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Rotate the symmetric key used by ``token_endpoint_auth_method=client_secret_jwt``.
+
+    T.2: the new key is only shown once. The encrypted copy is
+    persisted, the plaintext is returned to the admin for handoff to
+    the client operator.
+    """
+    client = await storage.get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth2 client not found")
+    if client.token_endpoint_auth_method != "client_secret_jwt":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "rotate-jwt-key is only valid for clients with "
+                "token_endpoint_auth_method='client_secret_jwt'."
+            ),
+        )
+
+    new_key = await storage.rotate_client_jwt_key(client_id)
+
+    await audit_service.log_event(
+        event_type="oauth_client_jwt_key_rotated",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={"client_id": client_id, "client_name": client.client_name},
+        severity="high",
+    )
+
+    # Reuse the secret-rotation response envelope but the field
+    # semantic is "new JWT key". The OpenAPI response_model documents
+    # the actual field meaning through the description in the admin UI.
+    return OAuth2ClientSecretRotation(client_id=client_id, new_client_secret=new_key)
 
 
 @router.post("/{client_id}/activate")

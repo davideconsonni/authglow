@@ -288,6 +288,11 @@ class Settings(BaseSettings):
     cache_refresh_token_ttl: int = 60
     cache_user_maxsize: int = 2000
     cache_user_ttl: int = 300
+    # JTI replay-protection cache for client_assertion JWTs (T.2). Bounds
+    # the in-process state of recently-seen ``jti`` claims — entries evict
+    # automatically when the JWT expires.
+    cache_jti_maxsize: int = 10000
+    cache_jti_ttl: int = 3600
 
     @property
     def is_production(self) -> bool:

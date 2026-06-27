@@ -324,7 +324,8 @@ Cleanup e rimozione pattern deprecati.
 
 - [x] **T.1** Rimuovere `Resource Owner Password Credentials` flow da `api/auth.py` o documentarlo esplicitamente come first-party-only.
   - **Done**: documentato first-party-only in `docs/SECURITY.md` (sezione "OAuth Grants supportati" + endpoint first-party). Nuovo test di non-regressione in `tests/integration/test_token_endpoint_ropc.py` (3 test: `password_grant_rejected`, `unknown_grant_rejected`, `no_token_leaked`). Commento esplicito in `api/auth.py:948-957` che elenca i grant accettati e dichiara ROPC rifiutato. Scelta: documentare invece di rimuovere `/api/token` (è il login del frontend first-party, non un grant OAuth2). 41/41 test passati su `test_auth_api.py + test_oidc_api.py + test_token_endpoint_ropc.py + test_dynamic_client_registration.py`. ruff+mypy clean.
-- [ ] **T.2** Aggiungere supporto `client_secret_jwt` e `private_key_jwt` per `token_endpoint_auth_method` (opzionale FAPI).
+- [x] **T.2** Aggiungere supporto `client_secret_jwt` e `private_key_jwt` per `token_endpoint_auth_method` (opzionale FAPI).
+  - **Done**: implementato HS256 (client_secret_jwt) + RS256 (private_key_jwt) su token endpoint, DCR, DCR Management (RFC 7592) e discovery. Chiave simmetrica cifrata con Fernet/SECRET_KEY (encryption at rest); JWK pubblico embedded. Replay protection via TTLCache su jti. 28 unit + 24 integration test passano (52 nuovi); ruff+mypy clean (1 errore pre-esistente non mio in federation.py:636); 327 frontend test passano; nessuna regressione su DCR/PKCE/JWT/Auth API. UI admin estesa con dropdown 5 metodi, textarea public_jwk, validazione JSON, bottone rotate-jwt-key, modal show-once per la chiave HS256.
 - [ ] **T.3** Considerare `sender-constrained` tokens (DPoP, RFC 9449) per FAPI 2.0.
 - [ ] **T.4** Documentare le differenze rispetto a FAPI 2.0 in `docs/FAPI.md`.
 

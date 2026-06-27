@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -17,6 +17,58 @@ _GRANT_TYPES_REJECTED_MESSAGE = (
     "The 'implicit' grant_type is not supported (OAuth 2.0 Security BCP). "
     "Use 'authorization_code' with PKCE instead."
 )
+
+# Allowed values for ``token_endpoint_auth_method`` (RFC 7591 §2 + FAPI 2.0).
+# ``client_secret_jwt`` and ``private_key_jwt`` are the FAPI-aligned
+# alternatives to ``client_secret_basic``/``client_secret_post`` — see
+# CONFORMANCE_REMEDIATION_PLAN.md workstream T.2.
+_ALLOWED_AUTH_METHODS = (
+    "client_secret_basic",
+    "client_secret_post",
+    "client_secret_jwt",
+    "private_key_jwt",
+    "none",
+)
+_AUTH_METHOD_MESSAGE = (
+    "token_endpoint_auth_method must be one of "
+    "client_secret_basic, client_secret_post, client_secret_jwt, "
+    "private_key_jwt, none"
+)
+
+# Minimal JWK validation: must be a dict with ``kty`` present and ``use``/``alg``
+# consistent with asymmetric signature use. Full JWKS spec validation is out of
+# scope for this module — the ``services.client_jwt_auth`` module performs
+# the cryptographic verification.
+_ALLOWED_JWK_KTY = ("RSA", "EC", "OKP")
+
+
+def _validate_token_endpoint_auth_method(v: Optional[str]) -> Optional[str]:
+    """Shared whitelist check for ``token_endpoint_auth_method``."""
+    if v is None:
+        return v
+    if v not in _ALLOWED_AUTH_METHODS:
+        raise ValueError(_AUTH_METHOD_MESSAGE)
+    return v
+
+
+def _validate_public_jwk(v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Light JWK shape check. The cryptographic verification happens later."""
+    if v is None:
+        return v
+    if not isinstance(v, dict):
+        raise ValueError("public_jwk must be a dict")
+    kty = v.get("kty")
+    if kty not in _ALLOWED_JWK_KTY:
+        raise ValueError(f"public_jwk.kty must be one of {_ALLOWED_JWK_KTY}")
+    if kty == "RSA" and "n" not in v and "e" not in v:
+        raise ValueError("public_jwk for RSA must contain 'n' and 'e'")
+    if kty == "EC" and "crv" not in v and "x" not in v:
+        raise ValueError("public_jwk for EC must contain 'crv' and 'x'")
+    if kty == "OKP" and "x" not in v:
+        raise ValueError("public_jwk for OKP must contain 'x'")
+    if "use" in v and v["use"] not in ("sig", "enc"):
+        raise ValueError("public_jwk.use must be 'sig' or 'enc'")
+    return v
 
 
 def _reject_implicit_grant(v: List[str]) -> List[str]:
@@ -108,10 +160,38 @@ class OAuth2Client(BaseModel):
     access_token_lifetime: int = 3600  # seconds (1 hour)
     refresh_token_lifetime: int = 2592000  # seconds (30 days)
 
+    # token_endpoint_auth_method (RFC 7591 §2, FAPI 2.0). Defaults to
+    # ``client_secret_basic`` for backward compatibility with clients
+    # registered before T.2 (CONFORMANCE_REMEDIATION_PLAN).
+    token_endpoint_auth_method: str = "client_secret_basic"
+    # Fernet-encrypted symmetric key used to verify HS256 client_assertion
+    # JWTs when ``token_endpoint_auth_method == "client_secret_jwt"``.
+    # Stored as a string with the ``agcj1:`` prefix from
+    # ``core.crypto.encrypt_client_jwt_key``. Never sent over the wire.
+    client_secret_jwt_key: Optional[str] = None
+    # Public JWK used to verify RS256 client_assertion JWTs when
+    # ``token_endpoint_auth_method == "private_key_jwt"``. Embedded to
+    # avoid the round-trip of a JWKS URI fetch.
+    public_jwk: Optional[Dict[str, Any]] = None
+
     @field_validator("grant_types")
     @classmethod
     def _reject_implicit_grant_on_client(cls, v: List[str]) -> List[str]:
         return _reject_implicit_grant(v)
+
+    @field_validator("token_endpoint_auth_method")
+    @classmethod
+    def _validate_token_endpoint_auth_method_on_client(cls, v: str) -> str:
+        result = _validate_token_endpoint_auth_method(v)
+        assert result is not None  # type narrowing for mypy
+        return result
+
+    @field_validator("public_jwk")
+    @classmethod
+    def _validate_public_jwk_on_client(
+        cls, v: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        return _validate_public_jwk(v)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -152,10 +232,32 @@ class OAuth2ClientCreate(BaseModel):
     access_token_lifetime: int = Field(3600, ge=300, le=86400)  # 5 min to 24 hours
     refresh_token_lifetime: int = Field(2592000, ge=3600, le=7776000)  # 1 hour to 90 days
 
+    # See ``OAuth2Client`` for the semantics. Optional on the create payload
+    # because ``is_confidential`` is still the primary signal — admins can
+    # leave this at the default and rely on the legacy secret-only flow.
+    token_endpoint_auth_method: Optional[str] = "client_secret_basic"
+    # Public JWK is optional; only meaningful when
+    # ``token_endpoint_auth_method == "private_key_jwt"``. The server-side
+    # ``client_secret_jwt_key`` is server-generated on creation and never
+    # accepted from the wire.
+    public_jwk: Optional[Dict[str, Any]] = None
+
     @field_validator("grant_types")
     @classmethod
     def _reject_implicit_grant_on_create(cls, v: List[str]) -> List[str]:
         return _reject_implicit_grant(v)
+
+    @field_validator("token_endpoint_auth_method")
+    @classmethod
+    def _validate_token_endpoint_auth_method_on_create(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_token_endpoint_auth_method(v)
+
+    @field_validator("public_jwk")
+    @classmethod
+    def _validate_public_jwk_on_create(
+        cls, v: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        return _validate_public_jwk(v)
 
     @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
     @classmethod
@@ -216,12 +318,36 @@ class OAuth2ClientUpdate(BaseModel):
     access_token_lifetime: Optional[int] = Field(None, ge=300, le=86400)
     refresh_token_lifetime: Optional[int] = Field(None, ge=3600, le=7776000)
 
+    # T.2: allow admins to switch a client between auth methods.
+    # ``client_secret_jwt_key`` is server-managed and never accepted on
+    # the wire (use the rotate-JWT-key admin flow for that).
+    token_endpoint_auth_method: Optional[str] = None
+    public_jwk: Optional[Dict[str, Any]] = None
+    # Optional explicit ``None`` to clear the public JWK. Pydantic does
+    # not distinguish ``None`` from "field not sent" for ``Optional``;
+    # admins can clear the JWK via the admin endpoint with
+    # ``public_jwk = {}`` (validated to fail) — instead, the admin route
+    # uses a separate "clear_jwk" boolean. This pattern is consistent
+    # with the rest of the update schema.
+
     @field_validator("grant_types")
     @classmethod
     def _reject_implicit_grant_on_update(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is None:
             return v
         return _reject_implicit_grant(v)
+
+    @field_validator("token_endpoint_auth_method")
+    @classmethod
+    def _validate_token_endpoint_auth_method_on_update(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_token_endpoint_auth_method(v)
+
+    @field_validator("public_jwk")
+    @classmethod
+    def _validate_public_jwk_on_update(
+        cls, v: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        return _validate_public_jwk(v)
 
     @field_validator("logo_uri", "homepage_uri", "terms_uri", "privacy_uri")
     @classmethod
@@ -290,11 +416,59 @@ class OAuth2ClientResponse(BaseModel):
     access_token_lifetime: int
     refresh_token_lifetime: int
 
+    # T.2: advertise the configured auth method and whether a server-side
+    # JWT key is present. The encrypted ``client_secret_jwt_key`` is
+    # never returned — the boolean is the only signal the admin UI needs.
+    token_endpoint_auth_method: str = "client_secret_basic"
+    has_client_secret_jwt_key: bool = False
+    public_jwk: Optional[Dict[str, Any]] = None
+
+
+def _client_response_from_model(client: "OAuth2Client") -> "OAuth2ClientResponse":
+    """Build an ``OAuth2ClientResponse`` from a stored ``OAuth2Client``.
+
+    Centralised here (rather than re-implemented at every call site) so
+    the secret-bearing fields (``client_secret``, ``client_secret_jwt_key``)
+    are never accidentally surfaced.
+    """
+    return OAuth2ClientResponse(
+        client_id=client.client_id,
+        client_name=client.client_name,
+        redirect_uris=client.redirect_uris,
+        allowed_post_logout_redirect_uris=client.allowed_post_logout_redirect_uris,
+        allowed_scopes=client.allowed_scopes,
+        grant_types=client.grant_types,
+        is_confidential=client.is_confidential,
+        require_pkce=client.require_pkce,
+        require_consent=client.require_consent,
+        backchannel_logout_uri=client.backchannel_logout_uri,
+        frontchannel_logout_uri=client.frontchannel_logout_uri,
+        description=client.description,
+        logo_uri=client.logo_uri,
+        homepage_uri=client.homepage_uri,
+        terms_uri=client.terms_uri,
+        privacy_uri=client.privacy_uri,
+        branding=client.branding,
+        is_active=client.is_active,
+        created_at=client.created_at,
+        last_used_at=client.last_used_at,
+        access_token_lifetime=client.access_token_lifetime,
+        refresh_token_lifetime=client.refresh_token_lifetime,
+        token_endpoint_auth_method=client.token_endpoint_auth_method,
+        has_client_secret_jwt_key=bool(client.client_secret_jwt_key),
+        public_jwk=client.public_jwk,
+    )
+
 
 class OAuth2ClientWithSecret(OAuth2ClientResponse):
     """OAuth2 client response with plaintext secret (only shown once at creation)."""
 
     client_secret: str  # Plaintext, only shown at creation
+    # T.2: plaintext JWT key for ``client_secret_jwt`` clients. Shown
+    # exactly once at creation (the admin must hand it to the client
+    # operator). ``None`` for clients that do not use the JWT method
+    # or for any read-back operation.
+    client_secret_jwt_key: Optional[str] = None
 
 
 class OAuth2ClientSecretRotation(BaseModel):

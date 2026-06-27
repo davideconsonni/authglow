@@ -3,7 +3,7 @@
 import asyncio
 import base64
 import hashlib
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import jwt
@@ -12,13 +12,19 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from authglow.core.config import get_settings
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.keystore import KeyPairMeta, KeyringInfo
-from authglow.models.oauth_client import OAuth2Client, OAuth2ClientResponse, OAuth2ClientUpdate
+from authglow.models.oauth_client import (
+    OAuth2Client,
+    OAuth2ClientUpdate,
+    _client_response_from_model,
+    _validate_public_jwk,
+    _validate_token_endpoint_auth_method,
+)
 from authglow.models.oidc import IDTokenClaims, JWKSResponse, OpenIDConfiguration, UserInfoResponse
 from authglow.repositories.dependencies import get_keystore_repository
 from authglow.services.audit import AuditService
@@ -116,7 +122,16 @@ async def openid_configuration(request: Request, response: Response):
         grant_types_supported=grant_types_supported,
         subject_types_supported=["public"],
         id_token_signing_alg_values_supported=[settings.jwt_algorithm],
-        token_endpoint_auth_methods_supported=["client_secret_basic", "client_secret_post", "none"],
+        # T.2: advertise ``client_secret_jwt`` (HS256) and
+        # ``private_key_jwt`` (RS256) per FAPI 2.0 / OpenID Connect Core
+        # §9. Clients can opt into either at registration time.
+        token_endpoint_auth_methods_supported=[
+            "client_secret_basic",
+            "client_secret_post",
+            "client_secret_jwt",
+            "private_key_jwt",
+            "none",
+        ],
         claims_supported=claims_supported,
         code_challenge_methods_supported=["S256"],
         device_authorization_endpoint=f"{base_url}/oauth2/device/authorize",
@@ -538,6 +553,20 @@ class ClientRegistrationRequest(BaseModel):
     response_types: Optional[List[str]] = None
     token_endpoint_auth_method: Optional[str] = "client_secret_basic"
     software_statement: Optional[str] = None
+    # T.2: public JWK for ``private_key_jwt`` clients. The server
+    # validates shape (kty, n/e or crv/x) — full cryptographic
+    # verification happens at the first ``client_assertion`` request.
+    public_jwk: Optional[Dict[str, Any]] = None
+
+    @field_validator("token_endpoint_auth_method")
+    @classmethod
+    def _validate_dcr_auth_method(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_token_endpoint_auth_method(v)
+
+    @field_validator("public_jwk")
+    @classmethod
+    def _validate_dcr_public_jwk(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return _validate_public_jwk(v)
 
 
 def _validate_redirect_uri(uri: str) -> None:
@@ -599,10 +628,10 @@ async def register_oauth_client(
 
     # P.2: metadata URIs must be https (or http localhost).
     for field_name in ("client_uri", "logo_uri", "tos_uri", "policy_uri"):
-        uri = getattr(payload, field_name, None)
-        if uri:
+        metadata_uri: Optional[str] = getattr(payload, field_name, None)
+        if metadata_uri:
             try:
-                _validate_redirect_uri(uri)
+                _validate_redirect_uri(metadata_uri)
             except ValueError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -650,6 +679,25 @@ async def register_oauth_client(
 
     plaintext_secret = storage.generate_client_secret()
 
+    # T.2: if the DCR request selects ``client_secret_jwt``, mint a
+    # fresh symmetric key and return it in plaintext exactly once,
+    # matching the ``client_secret`` pattern. The encrypted copy is
+    # persisted in ``client.client_secret_jwt_key`` (Fernet with the
+    # server's ``SECRET_KEY``); the plaintext is never stored.
+    from authglow.services.client_jwt_auth import (
+        encrypt_client_jwt_key_value,
+        generate_client_jwt_symmetric_key,
+    )
+
+    plaintext_jwt_key: Optional[str] = None
+    if payload.token_endpoint_auth_method == "client_secret_jwt":
+        plaintext_jwt_key = generate_client_jwt_symmetric_key()
+
+    # T.2: ``public_jwk`` is only meaningful for ``private_key_jwt``.
+    # We do not reject mismatched combinations at DCR time — admins
+    # can keep the JWK and switch the method later, and clients can
+    # experiment. The token endpoint enforces the method/key
+    # consistency at first use.
     client = OAuth2Client(
         client_name=payload.client_name or "Dynamically Registered Client",
         client_secret=plaintext_secret,
@@ -664,6 +712,13 @@ async def register_oauth_client(
         privacy_uri=payload.policy_uri,
         description=None,
         homepage_uri=payload.client_uri,
+        token_endpoint_auth_method=payload.token_endpoint_auth_method or "client_secret_basic",
+        public_jwk=payload.public_jwk,
+        client_secret_jwt_key=(
+            encrypt_client_jwt_key_value(plaintext_jwt_key)
+            if plaintext_jwt_key is not None
+            else None
+        ),
     )
 
     await storage.create_client(client, plaintext_secret)
@@ -679,6 +734,7 @@ async def register_oauth_client(
                 "client_id": client.client_id,
                 "client_name": client.client_name,
                 "grant_types": allowed_grant_types,
+                "token_endpoint_auth_method": client.token_endpoint_auth_method,
             },
             ip_address=request.client.host if request.client else None,
         )
@@ -700,7 +756,14 @@ async def register_oauth_client(
         "scope": " ".join(allowed_scopes),
         "grant_types": client.grant_types,
         "response_types": payload.response_types or ["code"],
-        "token_endpoint_auth_method": payload.token_endpoint_auth_method,
+        "token_endpoint_auth_method": client.token_endpoint_auth_method,
+        # T.2: only populated for ``client_secret_jwt`` clients. The
+        # server never returns the encrypted blob — only the
+        # plaintext (single-use, like ``client_secret``).
+        "client_secret_jwt_key": plaintext_jwt_key,
+        # T.2: echo the public JWK back so the client operator can
+        # confirm what was stored.
+        "public_jwk": client.public_jwk,
     }
 
 
@@ -712,40 +775,114 @@ async def _authenticate_client_for_dcr(
     storage: OAuth2ClientStorage,
     client_id: str,
 ) -> OAuth2Client:
-    """Validate HTTP Basic auth against the client with *client_id*.
+    """Authenticate the client on a DCR Management endpoint.
 
-    Returns the authenticated client or raises 401.
+    Supports two transports:
+
+    1. **HTTP Basic** (``client_secret_basic``) — the legacy
+       flow from RFC 7592.
+    2. **Bearer JWT** (``client_secret_jwt`` / ``private_key_jwt``)
+       — a T.2 extension. The client signs a JWT asserting its
+       identity and sends it as ``Authorization: Bearer <jwt>``.
+       The ``sub`` claim is used to identify the client; the
+       request ``client_id`` is cross-checked for symmetry.
+
+    The first matching transport wins. If neither succeeds, a
+    401 is raised with a ``WWW-Authenticate`` header advertising
+    the supported methods.
     """
-    from authglow.api.auth import _extract_basic_auth
+    from authglow.api.auth import _extract_basic_auth, _extract_bearer_auth
 
+    # --- HTTP Basic path ---
     basic_id, basic_secret = _extract_basic_auth(request)
-    if not basic_id or not basic_secret:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Client authentication required (HTTP Basic).",
-            headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
-        )
-    if basic_id != client_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authenticated client does not match the requested client_id.",
-        )
+    if basic_id is not None or basic_secret is not None:
+        if not basic_id or not basic_secret:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Malformed HTTP Basic credentials.",
+                headers={"WWW-Authenticate": ('Basic realm="OAuth2", Bearer realm="OAuth2"')},
+            )
+        if basic_id != client_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=("Authenticated client does not match the requested client_id."),
+            )
+        client = await storage.get_client(client_id)
+        if not client or not client.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Client not found or inactive.",
+            )
+        from authglow.services.password import verify_password_async
 
-    client = await storage.get_client(client_id)
-    if not client or not client.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found or inactive.",
-        )
+        if not await verify_password_async(basic_secret, client.client_secret):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid client credentials.",
+            )
+        return client
 
-    from authglow.services.password import verify_password_async
+    # --- Bearer JWT path (T.2) ---
+    bearer_token = _extract_bearer_auth(request)
+    if bearer_token is not None:
+        # T.2: extract the client_id from the JWT (without
+        # cryptographic verification) so we can locate the
+        # registered key material. The full verification happens
+        # in ``verify_client_assertion`` below.
+        import jwt as _jwt
 
-    if not await verify_password_async(basic_secret, client.client_secret):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid client credentials.",
+        try:
+            unverified = _jwt.decode(
+                bearer_token,
+                options={"verify_signature": False, "verify_exp": False},
+            )
+        except _jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid client_assertion: {exc}",
+                headers={"WWW-Authenticate": ('Basic realm="OAuth2", Bearer realm="OAuth2"')},
+            ) from exc
+        jwt_client_id = unverified.get("sub") or unverified.get("iss")
+        if not jwt_client_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="client_assertion is missing sub/iss claim.",
+            )
+        if jwt_client_id != client_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=("Authenticated client does not match the requested client_id."),
+            )
+        client = await storage.get_client(client_id)
+        if not client or not client.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Client not found or inactive.",
+            )
+        from authglow.services.client_jwt_auth import verify_client_assertion
+
+        verify_client_assertion(
+            request,
+            client,
+            client_assertion_type=("urn:ietf:params:oauth:client-assertion-type:jwt-bearer"),
+            client_assertion=bearer_token,
         )
-    return client
+        return client
+
+    # --- Neither transport present ---
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=(
+            "Client authentication required. Supported: HTTP Basic, "
+            "Bearer JWT (client_secret_jwt / private_key_jwt)."
+        ),
+        headers={
+            "WWW-Authenticate": (
+                'Basic realm="OAuth2", Bearer realm="OAuth2", '
+                'client_assertion_type="urn:ietf:params:oauth:client-assertion-type:jwt-bearer"'
+            )
+        },
+    )
 
 
 @router.get("/oauth2/register/{client_id}")
@@ -761,7 +898,7 @@ async def get_oauth_client_registration(
     Returns the registration metadata excluding the secret.
     """
     client = await _authenticate_client_for_dcr(request, storage, client_id)
-    return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
+    return _client_response_from_model(client)
 
 
 @router.put("/oauth2/register/{client_id}")
@@ -796,7 +933,7 @@ async def update_oauth_client_registration(
         severity="info",
     )
 
-    return OAuth2ClientResponse(**client.model_dump(exclude={"client_secret"}))
+    return _client_response_from_model(client)
 
 
 @router.delete("/oauth2/register/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

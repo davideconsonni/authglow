@@ -69,7 +69,7 @@ class CacheRegistry:
 def get_cache_registry() -> Dict[str, CacheRegistry]:
     """Return a dict of named ``CacheRegistry`` instances, lazy-init from Settings.
 
-    Keys: ``"refresh_token"``, ``"user"``.
+    Keys: ``"refresh_token"``, ``"user"``, ``"jti"``.
     """
     global _cache_registry
     if _cache_registry is None:
@@ -86,6 +86,11 @@ def get_cache_registry() -> Dict[str, CacheRegistry]:
                 maxsize=s.cache_user_maxsize,
                 ttl=s.cache_user_ttl,
                 name="user",
+            ),
+            "jti": CacheRegistry(
+                maxsize=s.cache_jti_maxsize,
+                ttl=s.cache_jti_ttl,
+                name="jti",
             ),
         }
     return _cache_registry
@@ -135,3 +140,4 @@ class _CacheProxy:
 
 refresh_token_cache = _CacheProxy("refresh_token")
 user_cache = _CacheProxy("user")
+jti_cache = _CacheProxy("jti")

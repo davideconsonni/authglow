@@ -35,10 +35,16 @@ interface OAuthClient {
   custom_css?: string | null
   branding?: Record<string, unknown> | null
   token_endpoint_auth_method?: string
+  // T.2: server-managed symmetric key for ``client_secret_jwt`` clients.
+  // The backend never returns the encrypted blob, only a boolean flag.
+  has_client_secret_jwt_key?: boolean
+  // T.2: embedded public JWK for ``private_key_jwt`` clients.
+  public_jwk?: Record<string, unknown> | null
 }
 
 type GrantType = 'authorization_code' | 'client_credentials' | 'refresh_token'
-type AuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none'
+// T.2: extended to cover the FAPI 2.0 / RFC 7521 alternatives.
+type AuthMethod = 'client_secret_basic' | 'client_secret_post' | 'client_secret_jwt' | 'private_key_jwt' | 'none'
 
 const ALL_GRANT_TYPES: { id: GrantType; label: string; desc: string }[] = [
   { id: 'authorization_code', label: 'Authorization Code', desc: 'User logs in via browser redirect' },
@@ -154,12 +160,22 @@ export function AdminOAuthClientsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [secretModal, setSecretModal] = useState<string | null>(null)
+  // T.2: when creating a ``client_secret_jwt`` client the backend
+  // returns the plaintext symmetric key in the same envelope as
+  // the regular client_secret. We display it once in the same modal
+  // so the operator can hand it to the client developer.
+  const [jwtKeyModal, setJwtKeyModal] = useState<string | null>(null)
   const [newClientId, setNewClientId] = useState('')
   const [editClientId, setEditClientId] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [previewClient, setPreviewClient] = useState<OAuthClient | null>(null)
   const [originalGrantTypes, setOriginalGrantTypes] = useState<GrantType[]>([])
   const [originalIsConfidential, setOriginalIsConfidential] = useState(true)
+  // T.2: client-controlled public JWK (textarea). Empty string means
+  // "not provided" — the server only persists the field when the
+  // auth method requires it.
+  const [publicJwkText, setPublicJwkText] = useState('')
+  const [publicJwkError, setPublicJwkError] = useState<string | null>(null)
 
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
   const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as { items?: OAuthClient[] } | undefined)?.items as OAuthClient[]) ?? []
@@ -173,6 +189,8 @@ export function AdminOAuthClientsPage() {
     setAccessTokenLifetime(3600); setRefreshTokenLifetime(2592000)
     setShowAdvanced(false); setFormErrors({}); setSelectedTemplate(null)
     setEditClientId(null); setOriginalGrantTypes([]); setOriginalIsConfidential(true)
+    setPublicJwkText(''); setPublicJwkError(null)
+    setJwtKeyModal(null)
     setFormError(null)
   }
 
@@ -191,6 +209,10 @@ export function AdminOAuthClientsPage() {
       setRedirectUris([])
     }
     setFormErrors({})
+    // T.2: a template switch implies a fresh symmetric key will be
+    // minted server-side, so drop any leftover JWK content.
+    setPublicJwkText('')
+    setPublicJwkError(null)
   }
 
   const openEdit = (c: OAuthClient) => {
@@ -215,6 +237,8 @@ export function AdminOAuthClientsPage() {
     setAllowedScopes((c.scopes || c.allowed_scopes || []).join(' ') || 'openid profile email')
     setAccessTokenLifetime(c.access_token_lifetime ?? 3600)
     setRefreshTokenLifetime(c.refresh_token_lifetime ?? 2592000)
+    setPublicJwkText(c.public_jwk ? JSON.stringify(c.public_jwk, null, 2) : '')
+    setPublicJwkError(null)
     setShowForm(true)
     setShowAdvanced(true)
     setFormErrors({})
@@ -238,6 +262,20 @@ export function AdminOAuthClientsPage() {
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
+  // T.2: rotate the server-managed symmetric key used by
+  // ``client_secret_jwt`` clients. The new key is shown once in
+  // the same modal as the regular client_secret.
+  const handleRotateJwtKey = async (id: string) => {
+    try {
+      const res = await api.post<{ new_client_secret: string }>(
+        `/api/oauth-clients/${id}/rotate-jwt-key`
+      )
+      setJwtKeyModal(res.new_client_secret)
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = 'Application name is required.'
@@ -245,6 +283,21 @@ export function AdminOAuthClientsPage() {
     if (grantTypes.includes('authorization_code')) {
       const uris = redirectUris.map(u => u.trim()).filter(Boolean)
       if (uris.length === 0) errs.redirect_uris = 'Redirect URIs are required for authorization_code.'
+    }
+    // T.2: ``private_key_jwt`` requires a public JWK; ``client_secret_jwt``
+    // mints the symmetric key server-side (no client input needed).
+    if (authMethod === 'private_key_jwt' && !publicJwkText.trim()) {
+      errs.public_jwk = 'A public JWK is required for private_key_jwt clients.'
+    } else if (authMethod === 'private_key_jwt') {
+      try {
+        JSON.parse(publicJwkText)
+        setPublicJwkError(null)
+      } catch {
+        errs.public_jwk = 'public_jwk is not valid JSON.'
+        setPublicJwkError('public_jwk is not valid JSON.')
+      }
+    } else {
+      setPublicJwkError(null)
     }
     setFormErrors(errs)
     return Object.keys(errs).length === 0
@@ -272,6 +325,19 @@ export function AdminOAuthClientsPage() {
     if (grantTypes.includes('authorization_code')) {
       payload.redirect_uris = redirectUris.map(u => u.trim()).filter(Boolean)
     }
+    // T.2: attach the public_jwk only when the selected method
+    // requires it. The textarea is JSON-encoded; validation
+    // happens client-side before the payload is sent.
+    if (authMethod === 'private_key_jwt' && publicJwkText.trim()) {
+      try {
+        payload.public_jwk = JSON.parse(publicJwkText)
+      } catch {
+        // The form-level validation should prevent this; if it
+        // slips through we surface a friendly error before
+        // dispatching.
+        throw new Error('public_jwk is not valid JSON')
+      }
+    }
     return payload
   }
 
@@ -279,9 +345,20 @@ export function AdminOAuthClientsPage() {
     if (!validateForm()) return
     setSaving(true); setFormError(null)
     try {
-      const { client_id, client_secret } = await api.post<{ client_id: string; client_secret: string }>('/api/oauth-clients', buildPayload())
-      setNewClientId(client_id)
-      setSecretModal(client_secret)
+      const res = await api.post<{
+        client_id: string
+        client_secret: string
+        // T.2: server returns the symmetric key in plaintext at
+        // creation time. May be ``null`` for non-JWT methods.
+        client_secret_jwt_key?: string | null
+      }>('/api/oauth-clients', buildPayload())
+      setNewClientId(res.client_id)
+      setSecretModal(res.client_secret)
+      // T.2: surface the JWT key in the same modal so the admin
+      // can hand it to the client operator. Both secrets are
+      // single-use; once the modal closes the server-side copies
+      // are the only source of truth.
+      setJwtKeyModal(res.client_secret_jwt_key ?? null)
       setShowForm(false)
       resetForm()
       notify.success('Client created.')
@@ -411,6 +488,17 @@ export function AdminOAuthClientsPage() {
                       )}
                       <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
                       <button onClick={() => handleRotate(c.client_id)} data-testid="rotate-secret-btn" className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
+                      {/* T.2: rotate the JWT key for client_secret_jwt clients. */}
+                      {c.token_endpoint_auth_method === 'client_secret_jwt' && c.has_client_secret_jwt_key && (
+                        <button
+                          onClick={() => handleRotateJwtKey(c.client_id)}
+                          data-testid="rotate-jwt-key-btn"
+                          className="text-text-muted hover:text-brand-violet"
+                          title="Rotate JWT key"
+                        >
+                          <Sparkles size={14} />
+                        </button>
+                      )}
                       <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -435,7 +523,41 @@ export function AdminOAuthClientsPage() {
               <code className="flex-1 break-all text-sm text-text-primary">{secretModal}</code>
               <CopyButton text={secretModal} label="Copy" />
             </div>
-            <button onClick={() => { setSecretModal(null); setNewClientId('') }} data-testid="client-created-done" className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
+            {/* T.2: client_secret_jwt clients also receive a symmetric
+                key in the same envelope. Display it in the same modal
+                so the admin can hand both secrets to the operator in
+                one step. */}
+            {jwtKeyModal && (
+              <div className="space-y-2 border-t border-surface-2 pt-4">
+                <p className="text-xs font-semibold text-text-secondary">JWT signing key (HS256)</p>
+                <p className="text-xs text-semantic-warning">Copy this key now. It will not be shown again.</p>
+                <div className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2 px-4 py-3">
+                  <code className="flex-1 break-all text-sm text-text-primary" data-testid="client-jwt-key">{jwtKeyModal}</code>
+                  <CopyButton text={jwtKeyModal} label="Copy" />
+                </div>
+              </div>
+            )}
+            <button onClick={() => { setSecretModal(null); setNewClientId(''); setJwtKeyModal(null) }} data-testid="client-created-done" className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* T.2: standalone modal for ``rotate-jwt-key`` (no client_id
+          is shown because the admin is mid-rotation on an existing
+          client). */}
+      {jwtKeyModal && !secretModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setJwtKeyModal(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="client-rotated-jwt-key">
+            <h3 className="text-lg font-semibold text-text-primary">New JWT Signing Key</h3>
+            <p className="text-xs text-semantic-warning">
+              The previous key is now invalid. Copy the new key and hand it to the client operator immediately.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2 px-4 py-3">
+              <code className="flex-1 break-all text-sm text-text-primary">{jwtKeyModal}</code>
+              <CopyButton text={jwtKeyModal} label="Copy" />
+            </div>
+            <button onClick={() => setJwtKeyModal(null)} data-testid="jwt-key-rotated-done" className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
           </div>
         </div>
       )}
@@ -612,9 +734,45 @@ export function AdminOAuthClientsPage() {
                     >
                       <option value="client_secret_basic">client_secret_basic</option>
                       <option value="client_secret_post">client_secret_post</option>
+                      {/* T.2: FAPI 2.0 / RFC 7521 alternatives. */}
+                      <option value="client_secret_jwt">client_secret_jwt (HS256)</option>
+                      <option value="private_key_jwt">private_key_jwt (RS256)</option>
                       {!isConfidential && <option value="none">none (public)</option>}
                     </select>
+                    <p className="mt-1 text-[10px] text-text-muted">
+                      {authMethod === 'client_secret_jwt' && 'Symmetric key is generated server-side and shown once.'}
+                      {authMethod === 'private_key_jwt' && 'Upload the public JWK below. Sign client_assertions with the matching private key.'}
+                      {(authMethod === 'client_secret_basic' || authMethod === 'client_secret_post') && 'Shared secret — the operator stores it.'}
+                    </p>
                   </div>
+
+                  {/* T.2: client_secret_jwt key indicator (read-only). */}
+                  {authMethod === 'client_secret_jwt' && (
+                    <div className="rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-[10px] text-text-muted">
+                      {editClientId
+                        ? 'A symmetric key is configured. Use Rotate JWT key to issue a new one (the old key is invalidated immediately).'
+                        : 'A symmetric key will be generated and shown once after creation.'}
+                    </div>
+                  )}
+
+                  {/* T.2: public JWK input for private_key_jwt. */}
+                  {authMethod === 'private_key_jwt' && (
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">
+                        Public JWK (JSON)
+                      </label>
+                      <textarea
+                        value={publicJwkText}
+                        onChange={e => { setPublicJwkText(e.target.value); setPublicJwkError(null); setFormErrors({ ...formErrors, public_jwk: '' }) }}
+                        placeholder={'{\n  "kty": "RSA",\n  "n": "...",\n  "e": "AQAB"\n}'}
+                        rows={5}
+                        data-testid="public-jwk-input"
+                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                      />
+                      {publicJwkError && <FieldError id="public-jwk-error">{publicJwkError}</FieldError>}
+                      {!publicJwkError && formErrors.public_jwk && <FieldError id="public-jwk-error">{formErrors.public_jwk}</FieldError>}
+                    </div>
+                  )}
 
                   {showRedirectUris && (
                     <div>

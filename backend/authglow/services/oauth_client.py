@@ -31,6 +31,10 @@ from authglow.core.config import Settings, get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_client import OAuth2Client
 from authglow.repositories.protocols import OAuth2ClientRepository
+from authglow.services.client_jwt_auth import (
+    encrypt_client_jwt_key_value,
+    generate_client_jwt_symmetric_key,
+)
 from authglow.services.password import hash_password_async, verify_password_async
 
 
@@ -171,6 +175,32 @@ class OAuth2ClientStorage:
         # ValueError (not found), or raises ConcurrentWriteError.
         raise ConcurrentWriteError(
             f"Failed to rotate secret for {client_id} after {self.MAX_CAS_RETRIES} attempts"
+        )
+
+    async def rotate_client_jwt_key(self, client_id: str) -> str:
+        """Rotate the symmetric key used for ``client_secret_jwt`` (T.2).
+
+        Returns the new **plaintext** key (shown to the admin once,
+        like the regular ``rotate_secret``). The encrypted copy is
+        persisted; the plaintext is never stored. Raises
+        ``ValueError`` if the client does not exist.
+        """
+        async with self._lock(f"oauth_client:{client_id}"):
+            for attempt in range(self.MAX_CAS_RETRIES):
+                client = await self._repository.get_by_id(client_id)
+                if client is None:
+                    raise ValueError("Client not found")
+                plaintext = generate_client_jwt_symmetric_key()
+                client.client_secret_jwt_key = encrypt_client_jwt_key_value(plaintext)
+                try:
+                    await self._repository.update(client)
+                    return plaintext
+                except ConcurrentWriteError:
+                    if attempt == self.MAX_CAS_RETRIES - 1:
+                        raise
+                    continue
+        raise ConcurrentWriteError(
+            f"Failed to rotate JWT key for {client_id} after {self.MAX_CAS_RETRIES} attempts"
         )
 
     def generate_client_secret(self) -> str:

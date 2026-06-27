@@ -22,6 +22,14 @@ _KEY_AAD = b"authglow-private-key"
 _USER_INFO = b"authglow-user-field-v1"
 _FEDERATION_STATE_INFO = b"authglow-federation-state-v1"
 
+# T.2: encryption context for the server-side symmetric key used to verify
+# HS256 client_assertion JWTs (``token_endpoint_auth_method=client_secret_jwt``).
+# Distinct AAD/info from TOTP/private-key encryption so a rotation of one
+# context does not invalidate the others.
+_CLIENT_JWT_KEY_PREFIX = "agcj1:"
+_CLIENT_JWT_KEY_INFO = b"authglow-client-jwt-key-encryption-v1"
+_CLIENT_JWT_KEY_AAD = b"authglow-client-jwt-key"
+
 # Sentinel used as the lru_cache key for the "no explicit secret_key"
 # call site — None is not hashable. The sentinel is never a real
 # ``SECRET_KEY`` value (those are 48-char base64url strings from
@@ -134,6 +142,47 @@ def decrypt_field(ciphertext: str) -> str:
     key = _derive_key(info=_USER_INFO)
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(iv, encrypted, _AAD).decode()
+
+
+def encrypt_client_jwt_key(plaintext: str) -> str:
+    """Encrypt the symmetric key used for HS256 client_assertion JWTs.
+
+    T.2 / FAPI 2.0: the server stores a per-client HMAC key in
+    encrypted form. Rotating ``Settings.secret_key`` invalidates all
+    stored client JWT keys (acceptable — the operator can re-issue
+    keys via the admin rotation flow).
+    """
+    if not plaintext:
+        return plaintext
+    iv = os.urandom(12)
+    key = _derive_key(info=_CLIENT_JWT_KEY_INFO)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, plaintext.encode(), _CLIENT_JWT_KEY_AAD)
+    return _CLIENT_JWT_KEY_PREFIX + base64.b64encode(iv + ciphertext).decode()
+
+
+def decrypt_client_jwt_key(ciphertext: str) -> str:
+    """Decrypt a client JWT key previously encrypted with ``encrypt_client_jwt_key``.
+
+    Returns the input unchanged if it does not start with the expected
+    prefix — the persistence layer treats an empty/missing value as
+    "no key configured" and we never want to silently fall back to a
+    plaintext key (it would be a config error).
+    """
+    if not ciphertext:
+        return ciphertext
+    if not ciphertext.startswith(_CLIENT_JWT_KEY_PREFIX):
+        raise ValueError(
+            "Client JWT key ciphertext is malformed (missing agcj1: prefix). "
+            "This usually indicates the data was written with a different "
+            "encryption context — re-issue the key via the admin rotation flow."
+        )
+    raw = base64.b64decode(ciphertext[len(_CLIENT_JWT_KEY_PREFIX) :])
+    iv = raw[:12]
+    encrypted = raw[12:]
+    key = _derive_key(info=_CLIENT_JWT_KEY_INFO)
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(iv, encrypted, _CLIENT_JWT_KEY_AAD).decode()
 
 
 @functools.lru_cache(maxsize=8)

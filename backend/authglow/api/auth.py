@@ -3,7 +3,7 @@
 import base64
 import hashlib
 from datetime import timedelta
-from typing import Dict, List, NoReturn, Optional, Tuple
+from typing import Annotated, Dict, List, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -13,6 +13,7 @@ from authglow.core.crypto import decrypt_totp_secret
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.oauth_client import OAuth2Client
 from authglow.models.token import Token
 from authglow.models.user import (
     InviteUser,
@@ -106,6 +107,100 @@ def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]
         return cid, csec
     except Exception:
         return None, None
+
+
+def _extract_bearer_auth(request: Request) -> Optional[str]:
+    """Extract a Bearer token from the ``Authorization`` header.
+
+    Used by T.2 to support ``client_assertion`` JWTs on the
+    DCR Management endpoints (RFC 7521 §2.2 — the JWT can travel
+    in a ``Bearer`` header for HTTP transports that lack a request
+    body, e.g. ``GET /oauth2/register/{client_id}``).
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[len("Bearer ") :].strip()
+    return token or None
+
+
+async def _authenticate_client_at_token_endpoint(
+    request: Request,
+    oauth2_service: OAuth2Service,
+    *,
+    resolved_client_id: Optional[str],
+    resolved_client_secret: Optional[str],
+    client_assertion_type: Optional[str],
+    client_assertion: Optional[str],
+) -> Optional["OAuth2Client"]:
+    """Authenticate a client on the token endpoint, dispatching on method.
+
+    T.2: when ``client_assertion_type`` is present we delegate to
+    :func:`authglow.services.client_jwt_auth.verify_client_assertion`,
+    which picks the verifier based on the client's registered
+    ``token_endpoint_auth_method``. Otherwise we fall back to the
+    legacy secret-based path (``oauth2_service.verify_client``).
+
+    For the legacy path the helper preserves the pre-T.2 error
+    contract: a confidential client with a missing secret is
+    rejected with ``401 "Client authentication required for
+    confidential clients"`` and a public client with a bad
+    ``client_id`` is rejected with ``400 "Invalid client_id"``.
+
+    Returns the authenticated :class:`OAuth2Client` when one can be
+    located, otherwise ``None``. The caller is responsible for the
+    subsequent 401 if the result is ``None``.
+    """
+    # Lazy import — circular-deps safe.
+    from authglow.models.oauth_client import OAuth2Client  # noqa: F401  (type)
+
+    if client_assertion_type or client_assertion:
+        if not resolved_client_id:
+            # JWT-Bearer needs a registered client to find the key.
+            raise HTTPException(status_code=400, detail="Missing client_id")
+        client = await oauth2_service.client_storage.get_client(resolved_client_id)
+        if not client or not client.is_active:
+            raise HTTPException(
+                status_code=401,
+                detail="Client authentication failed (unknown or inactive client).",
+            )
+        from authglow.services.client_jwt_auth import (
+            verify_client_assertion,
+        )
+
+        verify_client_assertion(
+            request,
+            client,
+            client_assertion_type=client_assertion_type,
+            client_assertion=client_assertion,
+        )
+        # Update last_used asynchronously — same as legacy path.
+        await oauth2_service.client_storage.update_last_used(client.client_id)
+        return client
+
+    # Legacy secret-based path. We need to know whether the client is
+    # confidential before deciding which error to raise — load it
+    # first, then either return the client (legacy verify_client
+    # path) or raise the legacy 401/400 errors. Public clients with
+    # ``is_confidential=False`` do not need a secret.
+    if not resolved_client_id:
+        return None
+    client = await oauth2_service.client_storage.get_client(resolved_client_id)
+    is_confidential = bool(getattr(client, "is_confidential", True)) if client else True
+
+    if is_confidential:
+        if not resolved_client_secret:
+            raise HTTPException(
+                status_code=401,
+                detail="Client authentication required for confidential clients",
+                headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
+            )
+        if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+            raise HTTPException(status_code=401, detail="Invalid client credentials")
+    else:
+        if not await oauth2_service.verify_client(resolved_client_id):
+            raise HTTPException(status_code=400, detail="Invalid client_id")
+    return client
 
 
 # Dependency injection
@@ -640,13 +735,24 @@ async def token_endpoint(
     request: Request,
     response: Response,
     grant_type: str = Form(...),
-    code: Optional[str] = Form(None),
-    redirect_uri: Optional[str] = Form(None),
-    client_id: Optional[str] = Form(None),
-    client_secret: Optional[str] = Form(None),
-    refresh_token: Optional[str] = Form(None),
-    scope: Optional[str] = Form(None),
-    code_verifier: Optional[str] = Form(None),
+    # T.2: ``Annotated[Optional[str], Form()] = None`` is used
+    # instead of ``Optional[str] = Form(None)`` because the latter
+    # evaluates the default to a truthy ``Form(None)`` object when
+    # the function is called directly (e.g. from unit tests). The
+    # ``Annotated`` form keeps the default at ``None`` for Python
+    # while still being recognised as a form parameter by FastAPI.
+    code: Annotated[Optional[str], Form()] = None,
+    redirect_uri: Annotated[Optional[str], Form()] = None,
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    refresh_token: Annotated[Optional[str], Form()] = None,
+    scope: Annotated[Optional[str], Form()] = None,
+    code_verifier: Annotated[Optional[str], Form()] = None,
+    # T.2: client_assertion (RFC 7521) — the JWT-Bearer alternative
+    # to ``client_secret_basic``/``client_secret_post``. Accepted on
+    # every grant_type that requires client authentication.
+    client_assertion_type: Annotated[Optional[str], Form()] = None,
+    client_assertion: Annotated[Optional[str], Form()] = None,
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
@@ -679,27 +785,32 @@ async def token_endpoint(
         if resolved_client_id != auth_code.client_id:
             raise HTTPException(status_code=400, detail="Client ID mismatch")
 
-        # Determine if client is confidential or public
-        oauth_client = await oauth2_service.client_storage.get_client(resolved_client_id)
-        is_confidential = True  # Default for settings-based fallback client
-
-        if oauth_client:
-            is_confidential = oauth_client.is_confidential
-
-        if is_confidential:
-            # Confidential clients MUST authenticate with client_secret
-            if not resolved_client_secret:
+        # T.2: when client_assertion is present, the helper routes to
+        # the JWT-Bearer verifier (HS256 or RS256 depending on the
+        # registered method). Otherwise, fall back to the legacy
+        # secret-based path.
+        oauth_client = await _authenticate_client_at_token_endpoint(
+            request,
+            oauth2_service,
+            resolved_client_id=resolved_client_id,
+            resolved_client_secret=resolved_client_secret,
+            client_assertion_type=client_assertion_type,
+            client_assertion=client_assertion,
+        )
+        if not oauth_client:
+            # Determine is_confidential for the public-client branch
+            # of the legacy path.
+            is_confidential = True
+            stored = await oauth2_service.client_storage.get_client(resolved_client_id)
+            if stored:
+                is_confidential = stored.is_confidential
+            if is_confidential:
                 raise HTTPException(
                     status_code=401,
                     detail="Client authentication required for confidential clients",
                     headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
                 )
-            if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-                raise HTTPException(status_code=401, detail="Invalid client credentials")
-        else:
-            # Public client: validate client_id exists but don't require secret
-            if not await oauth2_service.verify_client(resolved_client_id):
-                raise HTTPException(status_code=400, detail="Invalid client_id")
+            raise HTTPException(status_code=400, detail="Invalid client_id")
         # --- End Client Authentication ---
 
         if auth_code.redirect_uri != redirect_uri:
@@ -810,11 +921,29 @@ async def token_endpoint(
         resolved_client_id = client_id or basic_client_id
         resolved_client_secret = client_secret or basic_client_secret
 
-        if not resolved_client_id or not resolved_client_secret:
+        if not resolved_client_id:
             raise HTTPException(status_code=400, detail="Missing client credentials")
 
-        if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-            raise HTTPException(status_code=401, detail="Invalid client credentials")
+        # T.2: JWT-Bearer auth is acceptable for client_credentials
+        # (FAPI 2.0 §5.2.2) when ``client_assertion`` is supplied.
+        # The legacy secret path still applies when the assertion is
+        # absent.
+        if client_assertion:
+            oauth_client = await _authenticate_client_at_token_endpoint(
+                request,
+                oauth2_service,
+                resolved_client_id=resolved_client_id,
+                resolved_client_secret=None,
+                client_assertion_type=client_assertion_type,
+                client_assertion=client_assertion,
+            )
+            if not oauth_client:
+                raise HTTPException(status_code=401, detail="Invalid client credentials")
+        else:
+            if not resolved_client_secret:
+                raise HTTPException(status_code=400, detail="Missing client credentials")
+            if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+                raise HTTPException(status_code=401, detail="Invalid client credentials")
 
         # Process and validate scopes
         requested_scopes = scope.split() if scope else []
