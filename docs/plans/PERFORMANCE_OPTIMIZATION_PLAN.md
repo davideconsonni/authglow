@@ -238,24 +238,25 @@ wrapper delle sync originali (no API break).
 orjson>=3.10
 ```
 
-- [ ] **`requirements.in`** + `requirements.txt` (rigenerare via `uv pip compile`).
-- [ ] **`core/async_io.py:42-48`** (`read_json`) — usare `orjson.loads` invece di
+- [ ] *(skipped — owner decision)* **`requirements.in`** + `requirements.txt` (rigenerare via `uv pip compile`).
+- [ ] *(skipped — owner decision)* **`core/async_io.py:42-48`** (`read_json`) — usare `orjson.loads` invece di
   `json.load`. Wrappare in `asyncio.to_thread` solo per il file I/O; il parsing è veloce.
-- [ ] **`core/async_io.py:49-56`** (`write_json`) — usare `orjson.dumps`, convertire
+- [ ] *(skipped — owner decision)* **`core/async_io.py:49-56`** (`write_json`) — usare `orjson.dumps`, convertire
   bytes → write bytes. Gestire `default=` callback per `datetime`/`UUID` se
   Pydantic non le gestisce già.
-- [ ] **Verifica compat Pydantic v2**: Pydantic v2 `model_dump_json()` è già
+- [ ] *(skipped — owner decision)* **Verifica compat Pydantic v2**: Pydantic v2 `model_dump_json()` è già
   veloce ma usa `orjson` opzionalmente tramite `model_dump(mode="json")` +
   `orjson.dumps`. Per FastAPI response: configurare `ORJSONResponse` come
   default in `main.py:43` (`default_response_class=ORJSONResponse`).
-- [ ] **`services/passkey.py:195, 227, 265, 334`** — sostituire `json.dumps`/`json.loads`
+- [ ] *(skipped — owner decision)* **`services/passkey.py:195, 227, 265, 334`** — sostituire `json.dumps`/`json.loads`
   con `orjson`.
-- [ ] **`services/email/file_storage.py:32`** — `json.dump` con `orjson`.
-- [ ] **`services/auth/token_blacklist.py:109`** — `json.load` con `orjson`.
-- [ ] **Configurare `structlog` renderer** per usare `orjson.dumps` in
+- [ ] *(skipped — owner decision)* **`services/email/file_storage.py:32`** — `json.dump` con `orjson`.
+- [ ] *(skipped — owner decision)* **`services/auth/token_blacklist.py:109`** — `json.load` con `orjson`.
+- [ ] *(skipped — owner decision)* **Configurare `structlog` renderer** per usare `orjson.dumps` in
   `main.py` (opzionale, vedi §2.6).
-- [ ] **Test**: `pytest -q --tb=line -n auto` deve passare (in particolare i test
+- [ ] *(skipped — owner decision)* **Test**: `pytest -q --tb=line -n auto` deve passare (in particolare i test
   JSON-schema che asseriscono presenza di keys).
+  - **Done**: deferred — owner non vuole introdurre `orjson` (decisione 2026-06-27). **2.6 dipende da `orjson`** → di fatto non attuabile anch'esso.
 
 ### 2.2 — `aiofiles` per `storage_backend="file"` (bypass `to_thread`)
 
