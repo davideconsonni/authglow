@@ -1381,6 +1381,12 @@ async def login_for_access_token(
 
     # Generate JWT token response (without refresh token from JWT service)
     rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+    # VAPT-046: tag the access token with the internal-flow
+    # audience so a future resource server that wants to
+    # accept only federated OAuth2 traffic can reject tokens
+    # minted by the first-party login flow.
+    from authglow.services.jwt import INTERNAL_AUDIENCE
+
     token_response = jwt_service.create_token_response(
         user.id,
         user.email,
@@ -1388,6 +1394,7 @@ async def login_for_access_token(
         include_refresh=False,
         permissions=rbac_perms,
         roles=rbac_roles,
+        audience=INTERNAL_AUDIENCE,
     )
 
     # Check if password is expired
@@ -1485,12 +1492,19 @@ async def exchange_api_key_for_token(
 
     # Return access token with API key scopes
     rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+    # VAPT-046: tag the access token with the internal-flow
+    # audience so a future resource server that wants to
+    # accept only federated OAuth2 traffic can reject tokens
+    # minted by the first-party API-key exchange.
+    from authglow.services.jwt import INTERNAL_AUDIENCE
+
     return jwt_service.create_token_response(
         user.id,
         user.email,
         key_data.scopes,
         permissions=rbac_perms,
         roles=rbac_roles,
+        audience=INTERNAL_AUDIENCE,
     )
 
 
@@ -1531,7 +1545,17 @@ async def cookie_refresh(
         _clear_auth_cookies(response, settings)
         raise HTTPException(status_code=401, detail="Invalid user")
 
-    access_token = jwt_service.create_access_token(user.id, user.email, new_rt.scopes)
+    # VAPT-046: tag the rotated access token with the
+    # internal-flow audience (same convention as the password
+    # login + API-key paths).
+    from authglow.services.jwt import INTERNAL_AUDIENCE
+
+    access_token = jwt_service.create_access_token(
+        user.id,
+        user.email,
+        new_rt.scopes,
+        audience=INTERNAL_AUDIENCE,
+    )
     _set_auth_cookies(response, access_token, new_rt.token, settings)
 
     return {"ok": True}

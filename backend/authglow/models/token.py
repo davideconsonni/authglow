@@ -32,6 +32,9 @@ class TokenData(BaseModel):
     token_type: str = "access"  # access or refresh
     jti: Optional[str] = None  # JWT ID for revocation blacklist
     aud: Optional[str] = None  # audience — client_id for ID tokens, RP-initiated logout
+    azp: Optional[str] = (
+        None  # authorized party (OIDC Core §2) — the OAuth2 client that requested the token
+    )
     permissions: Optional[List[str]] = None  # RBAC permissions from assigned roles
     roles: Optional[List[str]] = None  # RBAC role names
     # T.3 / RFC 9449 / RFC 7800: ``cnf`` confirmation claim binds the

@@ -43,6 +43,20 @@ from authglow.models.token import Token, TokenData
 from authglow.services.auth.token_blacklist import token_blacklist
 
 
+# VAPT-046: audience identifier for tokens issued on the
+# internal first-party flows (password login, API-key
+# exchange, refresh-token rotation, passkey login). The OAuth2
+# ``authorization_code`` flow uses ``aud=<client_id>`` (set by
+# the route handler) so the resource server can enforce
+# audience binding per OIDC Core §3.1.3.7. The internal flows
+# do not have a per-client audience — they are issued for
+# AuthGlow's own use — so we tag them with a fixed identifier
+# that any future resource server can opt to reject (``aud !=
+# <expected_audience>``) to keep internal traffic separate
+# from federated OAuth2 traffic.
+INTERNAL_AUDIENCE = "authglow-internal"
+
+
 async def resolve_rbac_permissions(user_id: str) -> tuple:
     """Resolve RBAC permissions and roles for a user.
 
@@ -399,6 +413,9 @@ class JWTService:
             token_type=str(payload.get("token_type", "access")),
             jti=jti if isinstance(jti, str) else None,
             aud=payload.get("aud") if isinstance(payload.get("aud"), str) else None,
+            # VAPT-046: expose ``azp`` so resource servers can
+            # check the "authorized party" claim alongside ``aud``.
+            azp=payload.get("azp") if isinstance(payload.get("azp"), str) else None,
             permissions=payload.get("permissions"),
             roles=payload.get("roles"),
             cnf=payload.get("cnf") if isinstance(payload.get("cnf"), dict) else None,

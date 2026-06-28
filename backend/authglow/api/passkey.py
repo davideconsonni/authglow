@@ -291,12 +291,18 @@ async def complete_authentication(
 
         # Generate access token
         rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+        # VAPT-046: tag the passkey-minted access token with
+        # the internal-flow audience (same convention as the
+        # password login + API-key + refresh paths).
+        from authglow.services.jwt import INTERNAL_AUDIENCE
+
         access_token = jwt_service.create_access_token(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
             permissions=rbac_perms,
             roles=rbac_roles,
+            audience=INTERNAL_AUDIENCE,
         )
 
         # Create persistent refresh token for session tracking
