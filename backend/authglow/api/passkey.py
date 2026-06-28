@@ -309,12 +309,19 @@ async def complete_authentication(
         )
 
         # Log successful passkey login
+        # VAPT-085: truncate credential_id to 8 chars. The full
+        # WebAuthn credential_id is a stable per-user-device
+        # fingerprint; combined with the cleartext email and IP
+        # in the audit log it was a permanent tracking primitive.
+        # The first 8 chars are enough to correlate events from
+        # the same passkey; the full id is still in the
+        # ``passkeys`` table for lookups.
         await audit_service.log_event(
             event_type="passkey_login_success",
             user_id=user.id,
             email=user.email,
             ip_address=request.client.host if request.client else None,
-            metadata={"credential_id": verification.credential_id},
+            metadata={"credential_id": verification.credential_id[:8]},
             severity="info",
         )
 

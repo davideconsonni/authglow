@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.pii import hash_pii, mask_ip
 
 if TYPE_CHECKING:
     from authglow.repositories.protocols import AdminActionRepository
@@ -57,6 +58,27 @@ class AdminAction:
             "ip_address": self.ip_address,
             "timestamp": self.timestamp.isoformat(),
         }
+
+    def to_masked_dict(self, secret_key: str) -> dict:
+        """Return the *masked* view for persistence (VAPT-081).
+
+        ``admin_email``, ``target_user_email``, and any
+        ``details`` keys containing ``"email"`` are HMAC-hashed.
+        ``ip_address`` is truncated to ``/24`` / ``/48``.
+        """
+        d = self.to_dict()
+        d["admin_email"] = hash_pii(self.admin_email, secret_key)
+        d["target_user_email"] = hash_pii(self.target_user_email, secret_key)
+        d["ip_address"] = mask_ip(self.ip_address)
+        if isinstance(self.details, dict):
+            masked_details: dict = {}
+            for k, v in self.details.items():
+                if "email" in k.lower() and isinstance(v, str):
+                    masked_details[k] = hash_pii(v, secret_key)
+                else:
+                    masked_details[k] = v
+            d["details"] = masked_details
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "AdminAction":
@@ -128,14 +150,16 @@ class AdminActionService:
             details=details,
             ip_address=ip_address,
         )
+        # VAPT-081: mask PII before persistence.
+        masked = action.to_masked_dict(self.settings.secret_key)
         await self._repo.record(
-            admin_user_id=admin_user_id,
-            admin_email=admin_email,
-            action_type=action_type,
-            target_user_id=target_user_id,
-            target_user_email=target_user_email,
-            details=details,
-            ip_address=ip_address,
+            admin_user_id=masked["admin_user_id"],
+            admin_email=masked["admin_email"],
+            action_type=masked["action_type"],
+            target_user_id=masked["target_user_id"],
+            target_user_email=masked["target_user_email"],
+            details=masked["details"],
+            ip_address=masked["ip_address"],
         )
         return action
 

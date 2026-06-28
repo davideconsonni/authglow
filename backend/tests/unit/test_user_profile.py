@@ -143,6 +143,7 @@ class TestChangeEmail:
         user_profile_service.security_service.send_email_changed_alert = AsyncMock(
             return_value=True
         )
+        user_profile_service.audit_service.log_event = AsyncMock()
 
         success, msg = asyncio_run(
             user_profile_service.change_email(
@@ -150,6 +151,19 @@ class TestChangeEmail:
             )
         )
         assert success is True
+        # VAPT-130: self-service change_email must call the audit
+        # log with event_type="user_email_changed", severity
+        # "warning", and both old + new email in metadata.
+        user_profile_service.audit_service.log_event.assert_awaited_once()
+        call_kwargs = user_profile_service.audit_service.log_event.call_args.kwargs
+        assert call_kwargs["event_type"] == "user_email_changed"
+        assert call_kwargs["severity"] == "warning"
+        assert call_kwargs["user_id"] == "profile-user-1"
+        # The user's existing email is "profile1@example.com"
+        # (set in ``_make_user``); the new email is the one
+        # passed to ``change_email``.
+        assert call_kwargs["metadata"]["old_email"] == "profile1@example.com"
+        assert call_kwargs["metadata"]["new_email"] == "newemail@example.com"
 
     def test_change_email_wrong_password(self, user_profile_service):
         user = _make_user()

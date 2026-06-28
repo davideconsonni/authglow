@@ -25,6 +25,7 @@ from authglow.models.user_profile import (
     UserProfileResponse,
     UserProfileUpdate,
 )
+from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
 from authglow.services.password import hash_password_async, verify_password_async
 from authglow.services.security_notifications import SecurityNotificationService
@@ -53,6 +54,8 @@ class UserProfileService:
         self.user_storage = UserStorage()
         self.email_service = EmailVerificationService()
         self.security_service = SecurityNotificationService()
+        # VAPT-130: inject AuditService for change_email self-service.
+        self.audit_service = AuditService()
         self._lock = named_lock()
 
         if user_preferences_repository is None:
@@ -200,6 +203,24 @@ class UserProfileService:
         # Send notification to old email
         await self.security_service.send_email_changed_alert(
             old_email, user.first_name or "User", new_email, ip_address
+        )
+
+        # VAPT-130: audit the self-service email change. The admin
+        # route already logs; this closes the gap where a
+        # session-hijacker could change the email + password and
+        # leave no audit trail. ``old_email`` and ``new_email``
+        # are masked by the audit service (default hash) so the
+        # log line is itself PII-safe.
+        await self.audit_service.log_event(
+            event_type="user_email_changed",
+            user_id=user_id,
+            email=new_email,
+            ip_address=ip_address,
+            metadata={
+                "old_email": old_email,
+                "new_email": new_email,
+            },
+            severity="warning",
         )
 
         return True, "Email changed. Please verify your new email address."

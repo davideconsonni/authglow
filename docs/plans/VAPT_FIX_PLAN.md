@@ -15,15 +15,16 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 10 | 43 | Fix or document risk-acceptance |
+| MEDIUM | 53 | 12 | 41 | Fix or document risk-acceptance |
 | LOW | 26 | 2 | 24 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **49** | **77** | — |
+| **Total** | **126** | **51** | **75** | — |
 
 **Aggiornamento 2026-06-28**: +9 item chiusi (cleanup pass: 043, 045, 046, 047, 051,
-052, 078, 108, 117) + **+3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131)**.
+052, 078, 108, 117) + **+3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131)** +
+**+3 item chiusi (block 🅰️.2 Service PII + notifications: 081, 085, 130)**.
 4 item in "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21
-refactor (040, 103). 1 partial fix annotato (039).
+refactor (040, 103). 1 partial fix annotato (039, 081: GDPR purge API ancora pending).
 
 ---
 
@@ -472,10 +473,11 @@ refactor (040, 103). 1 partial fix annotato (039).
   - **Fix**: Make `"hash"` the default; never allow `"none"` in production.
   - **Done** (2026-06-28): default `audit_email_log_level` ora `"hash"` (era `"mask"`). `_mask_pii` rifiuta `level="none"` se `settings.is_production` con `ValueError` (audit startup fail-fast). Test esistenti aggiornati per riflettere il nuovo default.
 
-- [ ] **VAPT-081** — `LoginHistoryService`, `SecurityEventService`, `AdminActionService` store cleartext PII per record
-  - **Location**: `backend/authglow/services/login_history.py:36-46`; `backend/authglow/services/security_event.py:35-45`; `backend/authglow/services/admin_action.py:37-48`
+- [x] **VAPT-081** — `LoginHistoryService`, `SecurityEventService`, `AdminActionService` store cleartext PII per record
+  - **Location**: `backend/authglow/services/login_history.py:60-91`; `backend/authglow/services/security_event.py:46-74`; `backend/authglow/services/admin_action.py:46-82`; `backend/authglow/core/pii.py`
   - **Description**: Per-record JSON files contain `email`, `ip_address`, `user_agent`. `export_user_data` returns raw PII to any admin. No per-field hashing, no documented right-to-erasure API.
   - **Fix**: Hash email on disk; truncate IP; provide `purge_user_pii(user_id)` API as part of right-to-erasure.
+  - **Done** (2026-06-28, partial): helper `core/pii.py` (hash_pii/mask_ip/truncate) riusato da `AuditService` + i 3 service. Ogni service ha ora un metodo `to_masked_dict(secret_key)` che applica il masking prima della persistenza. `record_login`/`record_event`/`record_action` chiamano `to_masked_dict` prima di passare i dati al repository. **Gap residuo**: `purge_user_pii(user_id)` (per right-to-erasure GDPR Art. 17) non ancora implementato; verrà coperto in 🅰️.3 (VAPT-082). Pre-existing on-disk records non sono stati bonificati (env dev, owner accetta il rischio).
 
 - [ ] **VAPT-082** — Account deletion does not purge login history, security events, admin actions, refresh tokens
   - **Location**: `backend/authglow/services/user_profile.py:183-213`; `backend/authglow/services/storage.py:190-209`
@@ -492,10 +494,11 @@ refactor (040, 103). 1 partial fix annotato (039).
   - **Description**: Mixes free-form email text (including reset/verification URLs, API key names) with the JSON audit stream. CloudWatch/Cloud Logging ingesters expecting JSON see free-form text.
   - **Fix**: Use the `file_storage` provider or a separate stderr/file sink; if console output is required, base64-encode the body.
 
-- [ ] **VAPT-085** — `passkey_login_success` audit metadata contains the full WebAuthn `credential_id`
-  - **Location**: `backend/authglow/api/passkey.py:298-305`
+- [x] **VAPT-085** — `passkey_login_success` audit metadata contains the full WebAuthn `credential_id`
+  - **Location**: `backend/authglow/api/passkey.py:311-328`
   - **Description**: Combined with cleartext email and IP, this is a stable per-user-device fingerprint shipped to the audit log.
   - **Fix**: Drop the credential_id or store only a short prefix (first 8 chars).
+  - **Done** (2026-06-28): `metadata={"credential_id": verification.credential_id[:8]}` — primi 8 char sufficienti per correlare eventi dello stesso passkey, full id ancora nella tabella `passkeys` per lookup. Test in `test_passkey.py::TestPasskeyAuditCredentialIdTruncation`.
 
 - [ ] **VAPT-086** — OAuth2 consent records stored indefinitely (no retention cleanup wired to a scheduler)
   - **Location**: `backend/authglow/services/oauth_consent.py:64-90, 240-265`
@@ -745,10 +748,11 @@ refactor (040, 103). 1 partial fix annotato (039).
   - **Description**: `PrintLoggerFactory()` writes to stdout with no level filter. Every `log_event` writes a JSON line regardless of severity.
   - **Fix**: Configure a structlog `filtering` processor (or `min_level`) so low-severity events can be dropped.
 
-- [ ] **VAPT-130** — `change_email` self-service flow does not call `audit_service`
-  - **Location**: `backend/authglow/services/user_profile.py:135-179`
+- [x] **VAPT-130** — `change_email` self-service flow does not call `audit_service`
+  - **Location**: `backend/authglow/services/user_profile.py:161-222`; `backend/tests/unit/test_user_profile.py`
   - **Description**: The admin route does; the self-service one does not. An attacker who hijacks a session and changes the email + password would leave no audit trail beyond email notifications.
   - **Fix**: Add `audit_service.log_event(event_type="user_email_changed", ...)` in the self-service flow.
+  - **Done** (2026-06-28): `AuditService` iniettato in `UserProfileService.__init__`; `change_email` ora chiama `audit_service.log_event(event_type="user_email_changed", severity="warning", metadata={"old_email": ..., "new_email": ...})`. Test in `test_user_profile.py::test_change_email_success` verifica la chiamata con metadata corretti.
 
 - [x] **VAPT-131** — `AuditService` does not accept a `request_id` / `correlation_id` field
   - **Location**: `backend/authglow/services/audit.py:96-128`; `backend/authglow/models/admin.py:128-141`
@@ -888,6 +892,7 @@ These were audited and found to be correctly implemented. Re-audit not needed un
 
 ### Changelog
 
+- **2026-06-28** — **Block 🅰️.2 Service PII + notifications** (VAPT-081, 085, 130) implementato. Nuovo helper `authglow/core/pii.py` con `hash_pii`/`mask_ip`/`truncate`, riusato da `AuditService` + `LoginHistoryService`/`SecurityEventService`/`AdminActionService` (metodo `to_masked_dict` su ogni service). `passkey_login_success` audit log ora tronca `credential_id[:8]`. `change_email` self-service ora chiama `audit_service.log_event(event_type="user_email_changed", severity="warning")`. +3 item chiusi, 1 partial fix (VAPT-081: serve ancora `purge_user_pii` per GDPR Art. 17 → 🅰️.3). +14 nuovi test (10 in `test_pii.py` + 2 in `test_passkey.py` + 1 in `test_user_profile.py`).
 - **2026-06-28** — **Block 🅰️.1 PII/Audit** (VAPT-079, 080, 131) implementato: `_mask_ip` /24 (v4) / /48 (v6), `_truncate` 256 char con marker, default `audit_email_log_level=hash` con guard `none` in production, `AuditLogEntry.request_id` field. +3 item chiusi. +18 nuovi test in `test_audit.py`.
 - **2026-06-28** — Cleanup pass: 9 item chiusi (043, 045, 046, 047, 051, 052, 078, 108, 117) — fix già presenti nel codice ma non ancora accreditati nel piano. 4 item marcati "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21 refactor (040, 103). 1 partial fix annotato (039). Severity summary aggiornata: 37→46 fixed, 89→80 remaining.
 - **2026-06-04** — Initial audit, 126 distinct findings.

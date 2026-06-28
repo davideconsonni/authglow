@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.pii import hash_pii, mask_ip
 
 if TYPE_CHECKING:
     from authglow.repositories.protocols import SecurityEventRepository
@@ -54,6 +55,20 @@ class SecurityEvent:
             "metadata": self.metadata,
             "timestamp": self.timestamp.isoformat(),
         }
+
+    def to_masked_dict(self, secret_key: str) -> dict:
+        """Return the *masked* view for persistence (VAPT-081).
+
+        ``email`` is replaced with a stable 16-char HMAC digest;
+        ``ip_address`` is truncated to ``/24`` / ``/48``.
+        ``description`` and arbitrary ``metadata`` strings are
+        NOT masked here — the caller is responsible for not
+        putting PII in those fields.
+        """
+        d = self.to_dict()
+        d["email"] = hash_pii(self.email, secret_key)
+        d["ip_address"] = mask_ip(self.ip_address)
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "SecurityEvent":
@@ -113,6 +128,8 @@ class SecurityEventService:
         repository). The persisted record has its own
         ``id`` / ``timestamp`` for cross-process safety; see
         :class:`SecurityEvent` for the inconsistency note.
+
+        VAPT-081: PII (email, IP) is masked before persistence.
         """
         event = SecurityEvent(
             user_id=user_id,
@@ -122,13 +139,14 @@ class SecurityEventService:
             ip_address=ip_address,
             metadata=metadata,
         )
+        masked = event.to_masked_dict(self.settings.secret_key)
         await self._repo.record(
-            user_id=user_id,
-            event_type=event_type,
-            email=email,
-            description=description,
-            ip_address=ip_address,
-            metadata=metadata,
+            user_id=masked["user_id"],
+            event_type=masked["event_type"],
+            email=masked["email"],
+            description=masked["description"],
+            ip_address=masked["ip_address"],
+            metadata=masked["metadata"],
         )
         return event
 

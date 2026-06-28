@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.pii import hash_pii, mask_ip, truncate
 from authglow.repositories.protocols import LoginHistoryRepository
 
 
@@ -57,6 +58,12 @@ class LoginHistoryEntry:
         self.timestamp = utcnow()
 
     def to_dict(self) -> dict:
+        """Return the *raw* (in-memory) view of the record.
+
+        The persistence path (:meth:`LoginHistoryService.record`)
+        calls :meth:`to_masked_dict` instead, which is what
+        actually hits disk.
+        """
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -67,6 +74,21 @@ class LoginHistoryEntry:
             "failure_reason": self.failure_reason,
             "timestamp": self.timestamp.isoformat(),
         }
+
+    def to_masked_dict(self, secret_key: str) -> dict:
+        """Return the *masked* view for persistence (VAPT-081).
+
+        ``email`` is replaced with a stable 16-char HMAC digest;
+        ``ip_address`` is truncated to a ``/24`` / ``/48`` prefix;
+        ``user_agent`` is capped to 256 chars with a marker.
+        ``user_id`` is left untouched (it is an opaque
+        identifier, not PII).
+        """
+        d = self.to_dict()
+        d["email"] = hash_pii(self.email, secret_key)
+        d["ip_address"] = mask_ip(self.ip_address)
+        d["user_agent"] = truncate(self.user_agent)
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "LoginHistoryEntry":
@@ -123,7 +145,14 @@ class LoginHistoryService:
     ) -> LoginHistoryEntry:
         """Record a new login attempt and trigger the per-user
         retention sweep (90 days, configurable via
-        :attr:`RETENTION_DAYS`)."""
+        :attr:`RETENTION_DAYS`).
+
+        VAPT-081: PII is masked *before* persistence. The raw
+        values are kept on the returned :class:`LoginHistoryEntry`
+        so the API response can still surface them to the admin
+        viewer (per the pre-VAPT-081 contract). What hits disk
+        via :meth:`record` is the masked form.
+        """
         entry = LoginHistoryEntry(
             user_id=user_id,
             email=email,
@@ -132,15 +161,18 @@ class LoginHistoryService:
             user_agent=user_agent,
             failure_reason=failure_reason,
         )
+        # VAPT-081: mask PII before persistence. The repository
+        # takes individual kwargs so we unwrap ``to_masked_dict``.
+        masked = entry.to_masked_dict(self.settings.secret_key)
         await self._repo.record(
-            user_id=entry.user_id,
-            email=entry.email,
-            success=entry.success,
-            ip_address=entry.ip_address,
-            user_agent=entry.user_agent,
-            failure_reason=entry.failure_reason,
-            entry_id=entry.id,
-            timestamp=entry.timestamp.isoformat(),
+            user_id=masked["user_id"],
+            email=masked["email"],
+            success=masked["success"],
+            ip_address=masked["ip_address"],
+            user_agent=masked["user_agent"],
+            failure_reason=masked["failure_reason"],
+            entry_id=masked["id"],
+            timestamp=masked["timestamp"],
         )
         await self._cleanup_old_entries(entry.user_id)
         return entry

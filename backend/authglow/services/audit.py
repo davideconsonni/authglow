@@ -6,14 +6,13 @@ The app never reads audit logs back --- analysis, search, and
 retention are handled by the cloud platform.
 """
 
-import hashlib
-import hmac
 import ipaddress
 from typing import Optional
 
 import structlog
 
 from authglow.core.config import get_settings
+from authglow.core.pii import hash_pii, mask_ip, truncate
 from authglow.models.admin import AuditLogEntry
 
 if not structlog.is_configured():
@@ -42,12 +41,6 @@ _LEVEL_METHOD = {
 # detail for security investigations. (VAPT-079)
 _USER_AGENT_MAX_LEN = 256
 
-# Truncation masks for IP addresses. We keep enough granularity
-# for geo-location / network analysis without exposing the
-# individual client address. (VAPT-079)
-_IPV4_PREFIX_LEN = 24
-_IPV6_PREFIX_LEN = 48
-
 
 class AuditService:
     """Write-only audit logging service via structlog (stdout JSON)."""
@@ -74,51 +67,24 @@ class AuditService:
             return f"{masked_local}@{masked_domain}"
 
         if level == "hash":
-            digest = hmac.new(
-                secret_key.encode("utf-8"),
-                email.lower().strip().encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
-            return digest[:16]
+            # VAPT-081: reuse the centralised PII helper so the
+            # same hash format is produced by the audit log and
+            # the three persistent record services.
+            return hash_pii(email, secret_key)
 
         return email
 
     @staticmethod
-    def _mask_ip(ip: str) -> str:
-        """Truncate an IP address to a network prefix.
-
-        IPv4 → ``/24`` (e.g. ``1.2.3.4`` → ``1.2.3.0/24``).
-        IPv6 → ``/48`` (e.g. ``2001:db8::1`` → ``2001:db8::/48``).
-        Invalid input → ``"[invalid_ip]"`` to avoid leaking the
-        original string back into the log.
-        """
-        if not ip:
-            return ip
-        try:
-            addr = ipaddress.ip_address(ip)
-        except ValueError:
-            return "[invalid_ip]"
-        prefix_len = (
-            _IPV4_PREFIX_LEN if isinstance(addr, ipaddress.IPv4Address) else _IPV6_PREFIX_LEN
-        )
-        try:
-            network = ipaddress.ip_network(f"{addr}/{prefix_len}", strict=False)
-        except ValueError:
-            return "[invalid_ip]"
-        return str(network)
+    def _mask_ip(ip: Optional[str]) -> Optional[str]:
+        """Backwards-compatible thin wrapper around
+        :func:`authglow.core.pii.mask_ip`."""
+        return mask_ip(ip)
 
     @staticmethod
     def _truncate(value: str, max_len: int = _USER_AGENT_MAX_LEN) -> str:
-        """Truncate a string to ``max_len`` characters with a
-        marker so it is obvious the value was clipped."""
-        if not isinstance(value, str):
-            return value
-        if len(value) <= max_len:
-            return value
-        marker = "…[truncated]"
-        if max_len <= len(marker):
-            return value[:max_len]
-        return value[: max_len - len(marker)] + marker
+        """Backwards-compatible thin wrapper around
+        :func:`authglow.core.pii.truncate`."""
+        return truncate(value, max_len=max_len)
 
     @staticmethod
     def _mask_pii(entry_dict: dict, level: str, secret_key: str) -> dict:
@@ -141,9 +107,9 @@ class AuditService:
         # user-agent length so the audit log is not a source of
         # full PII (network-level fingerprinting, browser history).
         if entry_dict.get("ip_address"):
-            entry_dict["ip_address"] = AuditService._mask_ip(entry_dict["ip_address"])
+            entry_dict["ip_address"] = mask_ip(entry_dict["ip_address"])
         if entry_dict.get("user_agent"):
-            entry_dict["user_agent"] = AuditService._truncate(entry_dict["user_agent"])
+            entry_dict["user_agent"] = truncate(entry_dict["user_agent"])
 
         # Metadata is walked recursively. Any value that looks like
         # an email, IP, or long string is masked. The existing
@@ -156,11 +122,14 @@ class AuditService:
                 if not isinstance(value, str):
                     continue
                 if "email" in key.lower():
+                    # Honour the chosen ``level`` (mask / hash /
+                    # none) so the existing ``mask`` contract is
+                    # preserved for callers that use it.
                     metadata[key] = AuditService._mask_email(value, level, secret_key)
                 elif AuditService._looks_like_ip_value(value):
-                    metadata[key] = AuditService._mask_ip(value)
+                    metadata[key] = mask_ip(value)
                 elif len(value) > _USER_AGENT_MAX_LEN:
-                    metadata[key] = AuditService._truncate(value)
+                    metadata[key] = truncate(value)
 
         return entry_dict
 
