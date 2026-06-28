@@ -225,86 +225,14 @@ wrapper delle sync originali (no API break).
 
 ---
 
-## Tier 2 — Nuove librerie cross-platform
+## Tier 2 — Tuning runtime cross-platform
 
-**Tempo stimato**: ~3 ore
-**Impatto atteso**: ×4-10x cumulato (Tier 1 + Tier 2)
-**Rischio**: medio (richiede test approfonditi di compat Pydantic)
-
-### 2.1 — `orjson` per JSON
-
-**`requirements.in`** (cross-platform ✓):
-```text
-orjson>=3.10
-```
-
-- [ ] *(skipped — owner decision)* **`requirements.in`** + `requirements.txt` (rigenerare via `uv pip compile`).
-- [ ] *(skipped — owner decision)* **`core/async_io.py:42-48`** (`read_json`) — usare `orjson.loads` invece di
-  `json.load`. Wrappare in `asyncio.to_thread` solo per il file I/O; il parsing è veloce.
-- [ ] *(skipped — owner decision)* **`core/async_io.py:49-56`** (`write_json`) — usare `orjson.dumps`, convertire
-  bytes → write bytes. Gestire `default=` callback per `datetime`/`UUID` se
-  Pydantic non le gestisce già.
-- [ ] *(skipped — owner decision)* **Verifica compat Pydantic v2**: Pydantic v2 `model_dump_json()` è già
-  veloce ma usa `orjson` opzionalmente tramite `model_dump(mode="json")` +
-  `orjson.dumps`. Per FastAPI response: configurare `ORJSONResponse` come
-  default in `main.py:43` (`default_response_class=ORJSONResponse`).
-- [ ] *(skipped — owner decision)* **`services/passkey.py:195, 227, 265, 334`** — sostituire `json.dumps`/`json.loads`
-  con `orjson`.
-- [ ] *(skipped — owner decision)* **`services/email/file_storage.py:32`** — `json.dump` con `orjson`.
-- [ ] *(skipped — owner decision)* **`services/auth/token_blacklist.py:109`** — `json.load` con `orjson`.
-- [ ] *(skipped — owner decision)* **Configurare `structlog` renderer** per usare `orjson.dumps` in
-  `main.py` (opzionale, vedi §2.6).
-- [ ] *(skipped — owner decision)* **Test**: `pytest -q --tb=line -n auto` deve passare (in particolare i test
-  JSON-schema che asseriscono presenza di keys).
-  - **Done**: deferred — owner non vuole introdurre `orjson` (decisione 2026-06-27). **2.6 dipende da `orjson`** → di fatto non attuabile anch'esso.
-
-### 2.2 — `aiofiles` per `storage_backend="file"` (bypass `to_thread`)
-
-**`requirements.in`**:
-```text
-aiofiles>=23.0
-```
-
-- [ ] **`requirements.in`** + rigenerare `requirements.txt`.
-- [ ] **`repositories/file/base.py:67-115`** — aggiungere parametro `async_io:
-  Literal["asyncio", "fsspec", "aiofiles"] = "fsspec"`. Quando `storage_backend == "file"`,
-  usare `aiofiles` invece di `fsspec` + `asyncio.to_thread`. I file locali non hanno
-  il bisogno dell'astrazione fsspec, e `aiofiles` è un thin wrapper sopra
-  `os.read`/`os.write` event-driven.
-- [ ] **Test**: `pytest tests/unit/repositories/ -n auto` deve passare; in
-  particolare `test_protocols.py` (39 test conformance) e
-  `test_keystore_shared_backend.py`.
-- [ ] **Benchmark**: scrivere micro-benchmark con `pytest-benchmark` per misurare
-  il delta su I/O locale. Target: <50μs per `read_json` invece di ~200μs.
-
-### 2.3 — `argon2-cffi` al posto di `bcrypt` con graceful re-hash
-
-**`requirements.in`**:
-```text
-argon2-cffi>=23.0
-```
-
-- [ ] **`requirements.in`** + `requirements.txt`.
-- [ ] **`services/password.py`** — aggiungere `Argon2Hasher` con i parametri
-  OWASP-recommended (t=3, m=64MB, p=4). Algoritmo di identificazione: controllare
-  il prefisso dell'hash (`$argon2id$` vs `$2b$`).
-- [ ] **`services/password.py:hash_password`** — se algoritmo scelto è argon2id,
-  usa `Argon2Hasher().hash()`. Se `bcrypt`, fallback.
-- [ ] **`services/password.py:verify_password`** — usa `phcrypt.verify(stored,
-  plain)` (dalla lib `pwdlib` o `passlib`) che identifica automaticamente.
-- [ ] **Aggiungere re-hash lazy**: in `services/user.py:update_password` (o dove
-  l'utente cambia password), dopo `verify_password` se l'hash era bcrypt,
-  ri-hashare con argon2. Aggiungere una colonna `password_algo` nel User (se
-  si vuole esplicito) o usare il prefisso hash.
-- [ ] **Migration strategy**: nessuna migrazione forzata. Vecchi utenti bcrypt
-  rimangono bcrypt fino al prossimo login o change-password. Documentare in
-  `SECURITY.md`.
-- [ ] **Test**: `pytest tests/unit/test_password.py
-  tests/unit/test_admin_users_phase2.py` deve passare. Aggiungere test che
-  verifica un hash bcrypt si autentica e viene re-hashed a argon2 al primo
-  cambio password.
-- [ ] **Documentare in `SECURITY.md`**: parametri OWASP, motivazione, piano di
-  deprecazione bcrypt.
+**Tempo stimato**: ~30 min
+**Impatto atteso**: ×1.2-1.5x cumulato (Tier 1 + Tier 2)
+**Rischio**: basso (modifiche puntuali a pool di default e limiti httpx)
+**Decisione owner (2026-06-28)**: le voci §2.1 `orjson`, §2.2 `aiofiles`, §2.3 `argon2-cffi`
+e §2.6 `structlog con orjson` (dipendente da §2.1) sono rimosse dal piano.
+Nessuna nuova dipendenza in Tier 2. Restano solo tuning di risorse esistenti.
 
 ### 2.4 — `httpx.AsyncClient` singleton (multi-target, già in Tier 1.3 ma
 qui rafforzato con `Limits` tuning)
@@ -318,27 +246,19 @@ Vedi §1.3.
   Default CPython è 8 → triplica la capacità di I/O off-loop.
 - [ ] **Test**: smoke test che 50 richieste concorrenti non saturino il pool.
 
-### 2.6 — structlog con `orjson` per JSON rendering
-
-- [ ] **`main.py`** (dove si configura structlog) — usare
-  `structlog.processors.JSONRenderer(orjson.dumps)` invece del default
-  `json.dumps`. Richiede `orjson` (già in §2.1).
-- [ ] **Test**: i test esistenti che asseriscono formato log devono passare.
-
 ### Validazione Tier 2
 
 - [ ] `pytest -q --tb=line -n auto` (tutti i 1478 test esistenti) deve passare.
 - [ ] `ruff check && ruff format --check && mypy`.
+- [ ] Smoke test `§2.5`: 50 richieste concorrenti non saturano il pool.
 - [ ] Confronto benchmark Tier 1 vs Tier 2 (load test).
 
 ### Rollback Tier 2
 
-- `orjson`: revert a `json` (basta togliere la sostituzione, API quasi identica).
-  Attenzione a `default=` callback per datetime/UUID.
-- `aiofiles`: revert a fsspec (mantenere la signature `async_io` con default
-  "fsspec").
-- `argon2-cffi`: tenere bcrypt come fallback, basta disattivare la scelta
-  argon2 se emergono bug.
+- `§2.5` (executor): rimuovere la `set_default_executor` da `lifespan` in
+  `main.py`; il default CPython (8 worker) riprende immediatamente.
+- `§2.4` (httpx Limits): revert dell'eventuale tuning aggiuntivo; il singleton
+  resta comunque ereditato da §1.3.
 
 ---
 
@@ -478,7 +398,8 @@ opentelemetry-sdk>=1.27
   `OTEL_EXPORTER_OTLP_ENDPOINT` env var è settata. Setup idempotente.
 - [ ] **Auto-instrument FastAPI**: `FastAPIInstrumentor.instrument_app(app)`.
 - [ ] **Auto-instrument httpx**: `HTTPXClientInstrumentor().instrument()`.
-- [ ] **Auto-instrument bcrypt / argon2**: opzionale, con `BcryptInstrumentor`.
+- [ ] **Auto-instrument bcrypt**: opzionale, con `BcryptInstrumentor`
+  (rilevante post §1.1, irrilevante se argon2 non viene introdotto).
 - [ ] **Test**: smoke test che l'app si avvii senza `OTEL_EXPORTER_OTLP_ENDPOINT`
   (deve essere no-op).
 - [ ] **Documentare in `OBSERVABILITY.md`**: come configurare un collector locale
@@ -612,9 +533,9 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
   atteso, skip e passa al successivo.
 - **Standard OAuth2/OIDC**: il piano non compromette la conformità OIDC. Le
   ottimizzazioni sono trasparenti al protocollo.
-- **Sicurezza**: argon2 è memory-hard e più robusto di bcrypt. uvloop non
-  cambia la semantica. orjson è spec-compliant (rifiuta JSON invalido). Nessun
-  trade-off sicurezza vs performance.
+- **Sicurezza**: nessun trade-off sicurezza vs performance. uvloop non cambia
+  la semantica. Restiamo su `bcrypt` (Tier 1.1) come unico algoritmo di
+  password hashing, e sulla `json` stdlib per la serializzazione.
 
 **Data creazione**: 2026-06-20
 **Stato**: pronto per esecuzione
