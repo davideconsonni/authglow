@@ -15,17 +15,15 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 8 | 45 | Fix or document risk-acceptance |
-| LOW | 26 | 1 | 25 | Hardening backlog |
+| MEDIUM | 53 | 10 | 43 | Fix or document risk-acceptance |
+| LOW | 26 | 2 | 24 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **46** | **80** | — |
+| **Total** | **126** | **49** | **77** | — |
 
-**Aggiornamento 2026-06-28**: +9 item chiusi (VAPT-043, 045, 046, 047, 051, 052, 078,
-108, 117) grazie a fix già presenti nel codice (DPoP, client_secret_jwt, JWKS async,
-Fase 21 refactor). 4 item aggiunti a "Recheck 2026-06-28" (063, 071, 075, 110).
-1 location aggiornata (VAPT-103: `federation_storage.py` → `federation_provider.py`).
-1 location aggiornata (VAPT-040: `core/token_blacklist.py` → `services/auth/token_blacklist.py`).
-1 partial fix annotato (VAPT-039: UTF-8 boundary ok, 72-byte cap mancante).
+**Aggiornamento 2026-06-28**: +9 item chiusi (cleanup pass: 043, 045, 046, 047, 051,
+052, 078, 108, 117) + **+3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131)**.
+4 item in "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21
+refactor (040, 103). 1 partial fix annotato (039).
 
 ---
 
@@ -462,15 +460,17 @@ Fase 21 refactor). 4 item aggiunti a "Recheck 2026-06-28" (063, 071, 075, 110).
 
 ### Logging / PII
 
-- [ ] **VAPT-079** — `AuditLogEntry` masks only the `email` field; IP, UA, and metadata emails are in cleartext
-  - **Location**: `backend/authglow/services/audit.py:75-88, 113-118`
+- [x] **VAPT-079** — `AuditLogEntry` masks only the `email` field; IP, UA, and metadata emails are in cleartext
+  - **Location**: `backend/authglow/services/audit.py:75-127, 165-188`; `backend/tests/unit/test_audit.py`
   - **Description**: `_mask_pii` only inspects `entry_dict["email"]` and metadata keys whose name contains the substring `"email"`. Full `user_agent`, full `ip_address`, and `metadata` dicts with `admin_email`/`target_email`/`invited_email` are emitted verbatim.
   - **Fix**: Mask `ip_address` (e.g. `/24` truncation for v4); recursively walk `metadata` to mask all string values that look like emails; add a length cap for unknown string values.
+  - **Done** (2026-06-28): `_mask_ip()` tronca IPv4 a `/24`, IPv6 a `/48`; `_truncate()` capa stringhe a 256 char con marker `…[truncated]`. Metadata viene walkata ricorsivamente: chiavi con "email" → masked, valori che parsano come IP → troncati, stringhe > 256 char → troncate. `ip_address` e `user_agent` top-level ora mascherati di default.
 
-- [ ] **VAPT-080** — `audit_email_log_level` default `"mask"` is weak obfuscation, not a hash
-  - **Location**: `backend/authglow/core/config.py:308`; `backend/authglow/services/audit.py:54-62`
+- [x] **VAPT-080** — `audit_email_log_level` default `"mask"` is weak obfuscation, not a hash
+  - **Location**: `backend/authglow/core/config.py:295-301`; `backend/authglow/services/audit.py:127-133`
   - **Description**: Default `"mask"` produces `jo***@gm***.com` which is trivially reversible. The `"hash"` mode uses HMAC-SHA256 truncated to 16 hex chars. No default `"hash"` mode; production deployments may keep `"mask"`.
   - **Fix**: Make `"hash"` the default; never allow `"none"` in production.
+  - **Done** (2026-06-28): default `audit_email_log_level` ora `"hash"` (era `"mask"`). `_mask_pii` rifiuta `level="none"` se `settings.is_production` con `ValueError` (audit startup fail-fast). Test esistenti aggiornati per riflettere il nuovo default.
 
 - [ ] **VAPT-081** — `LoginHistoryService`, `SecurityEventService`, `AdminActionService` store cleartext PII per record
   - **Location**: `backend/authglow/services/login_history.py:36-46`; `backend/authglow/services/security_event.py:35-45`; `backend/authglow/services/admin_action.py:37-48`
@@ -750,10 +750,11 @@ Fase 21 refactor). 4 item aggiunti a "Recheck 2026-06-28" (063, 071, 075, 110).
   - **Description**: The admin route does; the self-service one does not. An attacker who hijacks a session and changes the email + password would leave no audit trail beyond email notifications.
   - **Fix**: Add `audit_service.log_event(event_type="user_email_changed", ...)` in the self-service flow.
 
-- [ ] **VAPT-131** — `AuditService` does not accept a `request_id` / `correlation_id` field
-  - **Location**: `backend/authglow/services/audit.py:90-123`; `backend/authglow/models/admin.py:126-138`
+- [x] **VAPT-131** — `AuditService` does not accept a `request_id` / `correlation_id` field
+  - **Location**: `backend/authglow/services/audit.py:96-128`; `backend/authglow/models/admin.py:128-141`
   - **Description**: The model and the function lack a `request_id` field. Pairs with VAPT-042.
   - **Fix**: Add `request_id: Optional[str] = None` defaulting to `structlog.contextvars.get_contextvars().get("request_id")`.
+  - **Done** (2026-06-28): `AuditLogEntry.request_id: Optional[str] = None` aggiunto al modello. `log_event()` accetta `request_id` esplicito o lo eredita da `structlog.contextvars`. Per ora sempre `None` finché VAPT-042 (middleware X-Request-ID) non viene implementato.
 
 - [ ] **VAPT-132** — `OAuth2 consent` audit metadata can include scopes with newlines (log injection)
   - **Location**: `backend/authglow/api/oauth_consent_handler.py:137-171`
@@ -887,6 +888,7 @@ These were audited and found to be correctly implemented. Re-audit not needed un
 
 ### Changelog
 
+- **2026-06-28** — **Block 🅰️.1 PII/Audit** (VAPT-079, 080, 131) implementato: `_mask_ip` /24 (v4) / /48 (v6), `_truncate` 256 char con marker, default `audit_email_log_level=hash` con guard `none` in production, `AuditLogEntry.request_id` field. +3 item chiusi. +18 nuovi test in `test_audit.py`.
 - **2026-06-28** — Cleanup pass: 9 item chiusi (043, 045, 046, 047, 051, 052, 078, 108, 117) — fix già presenti nel codice ma non ancora accreditati nel piano. 4 item marcati "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21 refactor (040, 103). 1 partial fix annotato (039). Severity summary aggiornata: 37→46 fixed, 89→80 remaining.
 - **2026-06-04** — Initial audit, 126 distinct findings.
 - **After deduplication**: 126 distinct items (some agents flagged the same root cause under different lenses).

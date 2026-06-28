@@ -137,6 +137,7 @@ class AuditLogEntry(BaseModel):
     timestamp: datetime = Field(default_factory=utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     severity: str = "info"  # info, warning, error, critical
+    request_id: Optional[str] = None  # correlation ID propagated by middleware (VAPT-042)
 
 
 class AuditLogFilter(BaseModel):

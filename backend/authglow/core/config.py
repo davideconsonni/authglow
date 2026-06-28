@@ -292,7 +292,14 @@ class Settings(BaseSettings):
     timing_leak_protection: bool = True
 
     # Audit Log Settings
-    audit_email_log_level: str = "mask"  # "mask", "hash", "none"
+    # VAPT-080: default flipped from "mask" to "hash". The "mask"
+    # format (e.g. ``jo***@gm***.com``) is too weak — an attacker
+    # who steals the audit log can often recover the original email.
+    # ``hash`` produces a 16-char hex digest that is stable per
+    # email (so events for the same user can still be grouped) but
+    # not reversible. ``"none"`` is refused at runtime when
+    # ``is_production`` is True (see ``AuditService._mask_pii``).
+    audit_email_log_level: str = "hash"  # "mask", "hash", "none"
 
     # Security Headers Settings
     csp_header: str = (
