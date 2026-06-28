@@ -1,6 +1,8 @@
-import pytest
 import base64
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from authglow.models.user import User
 from authglow.services.password import hash_password
 
@@ -23,8 +25,9 @@ class TestAuthAPIEndpointStructure:
         assert "/api/token/api-key" in paths
 
     def test_token_endpoint_code_references_authorization_code(self):
-        from authglow.api.auth import token_endpoint
         import inspect
+
+        from authglow.api.auth import token_endpoint
 
         source = inspect.getsource(token_endpoint)
         assert "authorization_code" in source
@@ -33,16 +36,26 @@ class TestAuthAPIEndpointStructure:
 
 
 class TestLoginLockoutOrder:
-    def test_login_checks_account_lockout_after_password(self):
-        from authglow.api.auth import login_for_access_token
+    def test_login_checks_account_lockout_before_password(self):
+        """VAPT-048: lockout must be checked BEFORE bcrypt to prevent
+        CPU DoS amplification. The per-request cost on a locked
+        account must be a cheap file read, not a full bcrypt
+        comparison (~100ms at rounds=12)."""
         import inspect
 
+        from authglow.api.auth import login_for_access_token
+
         source = inspect.getsource(login_for_access_token)
-        verify_pwd_pos = source.find("verify_password")
         lockout_pos = source.find("is_account_locked")
-        assert verify_pwd_pos < lockout_pos, (
-            "Bug: Account lockout should be checked BEFORE password verification "
-            "to prevent timing attacks. Currently, lockout is checked after."
+        verify_pwd_pos = source.find("verify_and_maybe_rehash_password")
+        assert lockout_pos != -1, "is_account_locked call missing from login_for_access_token"
+        assert verify_pwd_pos != -1, (
+            "verify_and_maybe_rehash_password call missing from login_for_access_token"
+        )
+        assert lockout_pos < verify_pwd_pos, (
+            "Regression: account lockout must be checked BEFORE the "
+            "bcrypt compare to prevent CPU DoS amplification. "
+            f"lockout_pos={lockout_pos}, verify_pwd_pos={verify_pwd_pos}"
         )
 
 
@@ -110,9 +123,10 @@ class TestTokenEndpointClientAuth:
     authorization_code exchange (RFC 6749 Section 4.1.3)."""
 
     def _make_auth_code(self, client_id="test-client-id", user_id="user-1"):
-        from authglow.models.token import AuthorizationCode
         from datetime import timedelta
+
         from authglow.core.datetime import utcnow
+        from authglow.models.token import AuthorizationCode
 
         return AuthorizationCode(
             client_id=client_id,
@@ -125,9 +139,10 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_confidential_client_requires_secret(self, oauth2_service):
         """C4: Confidential client MUST provide client_secret."""
-        from authglow.api.auth import token_endpoint
         from fastapi import HTTPException
         from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
@@ -172,9 +187,10 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_confidential_client_wrong_secret_rejected(self, oauth2_service):
         """C4: Confidential client with wrong secret must be rejected."""
-        from authglow.api.auth import token_endpoint
         from fastapi import HTTPException
         from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
@@ -219,9 +235,10 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_client_id_mismatch_rejected(self, oauth2_service):
         """C4: client_id must match the authorization code's client_id."""
-        from authglow.api.auth import token_endpoint
         from fastapi import HTTPException
         from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code(client_id="correct-client")
         auth_code_used = auth_code.model_copy(update={"used": False})
@@ -260,9 +277,10 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_missing_client_id_rejected(self, oauth2_service):
         """C4: Missing client_id must be rejected."""
-        from authglow.api.auth import token_endpoint
         from fastapi import HTTPException
         from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
@@ -301,9 +319,10 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_public_client_without_pkce_rejected(self, oauth2_service):
         """C4: Public clients without PKCE must be rejected."""
-        from authglow.api.auth import token_endpoint
         from fastapi import HTTPException
         from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_no_pkce = auth_code.model_copy(
@@ -354,9 +373,11 @@ class TestTokenEndpointClientAuth:
     @pytest.mark.asyncio
     async def test_basic_auth_credentials_extracted(self, oauth2_service):
         """C4: Client credentials from HTTP Basic Auth should be accepted."""
-        from authglow.api.auth import token_endpoint
-        from starlette.datastructures import Headers
         import hashlib
+
+        from starlette.datastructures import Headers
+
+        from authglow.api.auth import token_endpoint
 
         code_verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         challenge_bytes = hashlib.sha256(code_verifier.encode()).digest()
@@ -432,7 +453,8 @@ class TestInviteUserSetPasswordLink:
     def _invite_app(self, test_settings, jwt_service):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from authglow.api.auth import router, get_user_storage
+
+        from authglow.api.auth import get_user_storage, router
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -461,8 +483,8 @@ class TestInviteUserSetPasswordLink:
 
         from authglow.api.auth import (
             get_api_key_service,
-            get_oauth2_service,
             get_audit_service,
+            get_oauth2_service,
         )
 
         app.dependency_overrides[get_user_storage] = lambda: mock_storage
@@ -478,6 +500,7 @@ class TestInviteUserSetPasswordLink:
         self, _invite_app, test_settings, jwt_service
     ):
         from unittest.mock import AsyncMock, MagicMock, patch
+
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -497,8 +520,6 @@ class TestInviteUserSetPasswordLink:
         mock_storage.get_user = AsyncMock(return_value=invited_user)
         mock_storage.get_user_by_email = AsyncMock(return_value=None)
         mock_storage.create_user = AsyncMock(return_value=invited_user)
-
-        from authglow.services.email_verification import EmailVerificationService
 
         mock_verification = MagicMock()
         mock_verification.create_verification_token = AsyncMock(
@@ -622,8 +643,6 @@ class TestInviteUserSetPasswordLink:
         _invite_app._mock_storage.get_user = AsyncMock(side_effect=_mock_get_user)
         _invite_app._mock_storage.create_user = AsyncMock(return_value=invited_user)
 
-        from authglow.services.email_verification import EmailVerificationService
-
         mock_verification = MagicMock()
         mock_verification.create_verification_token = AsyncMock(
             return_value=MagicMock(verification_code="WXYZ-QRST-2345")
@@ -638,9 +657,10 @@ class TestInviteUserSetPasswordLink:
         mock_email = MagicMock()
         mock_email.send_template = AsyncMock(side_effect=capture_send_template)
 
-        from authglow.models.password_reset import PasswordResetToken
-        from authglow.core.datetime import utcnow
         from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.models.password_reset import PasswordResetToken
 
         mock_reset_plaintext = "reset-plaintext-token-for-test"
         mock_reset_token = PasswordResetToken(
@@ -710,7 +730,6 @@ class TestInviteUserSetPasswordLink:
         )
 
     def test_invite_user_requires_admin_scope(self, _invite_app, jwt_service):
-        from unittest.mock import AsyncMock, MagicMock
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -747,9 +766,10 @@ class TestVerificationEmailNoTokenInUrl:
     def test_send_verification_email_sends_code_not_url(self, test_settings):
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
+
         from authglow.models.user import User
-        from authglow.services.password import hash_password
         from authglow.services.email_verification import EmailVerificationService
+        from authglow.services.password import hash_password
 
         user = User(
             id="verify-email-user",
@@ -811,9 +831,11 @@ class TestPasswordResetEmailNoTokenInUrl:
 
     def test_reset_email_context_uses_code_not_url_token(self, test_settings):
         import asyncio
+
+        from fastapi import Request
+
         from authglow.api.password_reset import request_password_reset
         from authglow.models.user import User
-        from fastapi import Request
 
         user = User(
             id="reset-email-user",

@@ -15,7 +15,7 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 23 | 30 | Fix or document risk-acceptance |
+| MEDIUM | 53 | 24 | 29 | Fix or document risk-acceptance |
 | LOW | 26 | 2 | 24 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
 | **Total** | **126** | **63** | **63** | — |
@@ -30,7 +30,8 @@ chiusi (block 🅰️.2 Service PII + notifications: 081, 085, 130) + **+5 item 
 (VAPT-041 AAD AES-GCM versionato + legacy fallback trasparente)** + **+1 item chiuso
 (VAPT-042 X-Request-ID middleware + structlog contextvars propagation)** + **+1 item chiuso
 (VAPT-044 state validation OAuth2: min length 16 + safe char set, 400 hard su invalid)** + **+1 item chiuso
-(VAPT-046 audience "authglow-internal" su tutti i flow first-party + azp esposto)**.
+(VAPT-046 audience "authglow-internal" su tutti i flow first-party + azp esposto)** +
+**+1 item chiuso (VAPT-048 lockout check prima del bcrypt in /oauth2/authorize e /api/token)**.
 4 item in "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21
 refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pending).
 
@@ -302,10 +303,11 @@ refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pend
 
 ### Account lockout / user enumeration
 
-- [ ] **VAPT-048** — `/oauth2/authorize` checks account lockout *after* bcrypt comparison (CPU amplification)
+- [x] **VAPT-048** — `/oauth2/authorize` checks account lockout *after* bcrypt comparison (CPU amplification)
   - **Location**: `backend/authglow/api/auth.py:236-246`
   - **Description**: User is fetched and password verified before `is_account_locked` is checked. With `10/minute` rate limit, 10 × ~100ms = 1s of CPU per minute per IP — a low-cost DoS amplification against the bcrypt path.
   - **Fix**: Check `is_account_locked` (or a cached `user.locked_until`) before the bcrypt comparison.
+  - **Done** (2026-06-28): reordered the password path in both `authorize_post` (`/api/oauth2/authorize`) and `login_for_access_token` (`/api/token`) so the `is_account_locked` check runs *before* `verify_and_maybe_rehash_password`. Per-request cost on a locked account drops from ~100ms (bcrypt) to <1ms (single file read). Pre-fix the 423 response was only reachable *after* spending the bcrypt budget; post-fix a locked account short-circuits before any crypto. Tests: new `tests/unit/test_vapt048.py` (8 — source-order checks for both endpoints, locked→423 without bcrypt, non-existent→401 without bcrypt, unlocked+wrong-pw→401+record_failed_login, mirrored for `/api/token`); existing `tests/integration/test_auth_api.py::TestLoginLockoutOrder` inverted to assert `lockout_pos < verify_pwd_pos`.
 
 - [ ] **VAPT-049** — Locked-account error code `423` leaks "this account exists and password is correct but it's locked"
   - **Location**: `backend/authglow/api/auth.py:242-246, 630-642`; `backend/authglow/api/password_reset.py:64-95`

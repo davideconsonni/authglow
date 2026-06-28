@@ -711,20 +711,33 @@ async def authorize_post(
             )
 
         user = await storage.get_user_by_email(email)
-        # VAPT-038: verify_and_maybe_rehash_password transparently
-        # re-hashes the stored hash to the configured bcrypt cost
-        # on a successful verify. The user is already authenticated
-        # at that point, so the re-hash is a benign side effect.
-        if not user or not (await storage.verify_and_maybe_rehash_password(user, password))[0]:
-            if user:
-                await storage.record_failed_login(user.id)
+        if not user:
+            # VAPT-050 will add a dummy bcrypt here to equalize
+            # timing for non-existent users. For now, the response
+            # shape is unchanged from the original implementation.
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
+        # VAPT-048: check account lockout BEFORE the bcrypt compare
+        # to prevent CPU DoS amplification. An attacker hammering
+        # a locked account would otherwise pay one full bcrypt
+        # cost (~100ms at rounds=12) per request, capped only by
+        # the per-IP rate limiter. The lockout check is a single
+        # file read with no crypto, so the per-request cost on
+        # a locked account drops from ~100ms to <1ms.
         if await storage.is_account_locked(user.id):
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
             )
+
+        # VAPT-038: verify_and_maybe_rehash_password transparently
+        # re-hashes the stored hash to the configured bcrypt cost
+        # on a successful verify. The user is already authenticated
+        # at that point, so the re-hash is a benign side effect.
+        is_valid, _ = await storage.verify_and_maybe_rehash_password(user, password)
+        if not is_valid:
+            await storage.record_failed_login(user.id)
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
@@ -1297,27 +1310,20 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if user exists and verify password
-    # VAPT-038: verify_and_maybe_rehash_password transparently re-hashes
-    # the stored hash to the configured bcrypt cost on a successful
-    # verify. Returns (True, user) on success, (False, None) on
-    # mismatch — the second tuple element is intentionally unused
-    # here since ``user`` was already fetched above.
-    if (
-        not user
-        or not (await storage.verify_and_maybe_rehash_password(user, form_data.password))[0]
-    ):
+    # Check if user exists.
+    # VAPT-048: the lockout check is performed BEFORE the bcrypt
+    # compare to prevent CPU DoS amplification — an attacker
+    # hammering a locked account would otherwise pay one full
+    # bcrypt cost (~100ms at rounds=12) per request, capped only
+    # by the per-IP rate limiter. The lockout check is a single
+    # file read with no crypto, so the per-request cost on a
+    # locked account drops from ~100ms to <1ms.
+    if not user:
+        # VAPT-050 will add a dummy bcrypt here to equalize
+        # timing for non-existent users.
         await handle_failed_login()
     assert user is not None  # help mypy narrow after NoReturn handler
 
-    # Check if account is suspended
-    if user.suspended_until and utcnow() < user.suspended_until:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail=f"Account suspended until {user.suspended_until.isoformat()}",
-        )
-
-    # Check if account is locked
     if await storage.is_account_locked(user.id):
         await audit_service.log_event(
             event_type="login_attempt_while_locked",
@@ -1330,6 +1336,23 @@ async def login_for_access_token(
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+        )
+
+    # VAPT-038: verify_and_maybe_rehash_password transparently
+    # re-hashes the stored hash to the configured bcrypt cost
+    # on a successful verify. Returns (True, user) on success,
+    # (False, None) on mismatch — the second tuple element is
+    # intentionally unused here since ``user`` was already
+    # fetched above.
+    if not (await storage.verify_and_maybe_rehash_password(user, form_data.password))[0]:
+        await handle_failed_login()
+    assert user is not None  # help mypy narrow after NoReturn handler
+
+    # Check if account is suspended
+    if user.suspended_until and utcnow() < user.suspended_until:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account suspended until {user.suspended_until.isoformat()}",
         )
 
     if not user.is_active:
