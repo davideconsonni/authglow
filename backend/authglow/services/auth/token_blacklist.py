@@ -8,12 +8,20 @@ impl, behind the ``TokenBlacklistRepository`` Protocol).
 
 RFC 7009 compliant: revoking an already-revoked token is idempotent,
 revoking a non-existent token is silently accepted.
+
+VAPT-040: the in-memory ``_store`` is keyed by the JTI's HMAC
+pseudonym (not the JTI itself), matching the on-disk filename
+envelope used by the file repository. Callers always pass
+plaintext JTIs; the translation to the HMAC pseudonym happens
+at the service boundary so the JTI never appears in the cache
+or on disk.
 """
 
 import time
 from typing import Dict, Optional
 
 from authglow.core.concurrency import named_lock
+from authglow.core.crypto import hmac_index_filename
 from authglow.repositories.dependencies import get_token_blacklist_repository
 from authglow.repositories.protocols import TokenBlacklistRepository
 
@@ -40,6 +48,10 @@ class TokenBlacklist:
         self._repository: TokenBlacklistRepository = (
             repository if repository is not None else get_token_blacklist_repository()
         )
+        # VAPT-040: keys are HMAC pseudonyms, not JTIs — see the
+        # module docstring. The repository returns HMAC keys from
+        # ``load_all`` and the service mirrors that shape so the
+        # in-memory cache matches the on-disk filename envelope.
         self._store: Dict[str, float] = {}
         self._initialized: bool = False
         self._lock = named_lock()
@@ -49,22 +61,34 @@ class TokenBlacklist:
     # ------------------------------------------------------------------
 
     async def startup_hydrate(self) -> None:
-        """Load persisted entries from disk into the in-memory cache."""
+        """Load persisted entries from disk into the in-memory cache.
+
+        VAPT-040: ``load_all`` already returns HMAC-pseudonym
+        keys, so the cache is consistent with the on-disk
+        envelope without further translation.
+        """
         entries = await self._repository.load_all()
         now = time.time()
         self._store = {jti: exp for jti, exp in entries.items() if exp > now}
         self._initialized = True
 
     async def revoke(self, jti: str, expires_at: float) -> None:
-        """Add a token JTI to the blacklist and persist to disk."""
+        """Add a token JTI to the blacklist and persist to disk.
+
+        VAPT-040: the cache key is the JTI's HMAC pseudonym,
+        so the in-memory representation never contains the
+        plaintext JTI either.
+        """
         if expires_at <= time.time():
             return
+
+        hmac_jti = hmac_index_filename(jti)
 
         async with self._lock("token_blacklist"):
             if len(self._store) >= self.MAX_ENTRIES:
                 self._sweep()
 
-            self._store[jti] = expires_at
+            self._store[hmac_jti] = expires_at
             await self._repository.save(jti, expires_at)
 
     def is_revoked(self, jti: str) -> bool:
@@ -77,14 +101,21 @@ class TokenBlacklist:
         one or accept a sync-async bridge here). The service
         populates the cache on a positive hit so the next call
         does not touch disk.
+
+        VAPT-040: both the cache lookup and the repository
+        hot-path primitives receive the HMAC pseudonym (the
+        repository's ``exists(jti)`` itself applies the HMAC
+        internally, but the cache layer has to do it here
+        because the cache is keyed on the HMAC).
         """
         now = time.time()
+        hmac_jti = hmac_index_filename(jti)
 
-        if jti in self._store:
-            if self._store[jti] <= now:
+        if hmac_jti in self._store:
+            if self._store[hmac_jti] <= now:
                 # Expired — lazy cleanup via the repository.
                 self._repository.delete(jti)
-                del self._store[jti]
+                del self._store[hmac_jti]
                 return False
             return True
 
@@ -107,9 +138,13 @@ class TokenBlacklist:
     # ------------------------------------------------------------------
 
     def _sweep(self) -> None:
-        """Remove every entry whose expiry has passed."""
+        """Remove every entry whose expiry has passed.
+
+        VAPT-040: keys are HMAC pseudonyms, so the dict
+        comprehension keeps the envelope consistent.
+        """
         now = time.time()
-        self._store = {jti: exp for jti, exp in self._store.items() if exp > now}
+        self._store = {key: exp for key, exp in self._store.items() if exp > now}
 
 
 # ---------------------------------------------------------------------------

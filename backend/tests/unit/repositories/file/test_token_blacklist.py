@@ -4,6 +4,14 @@
 Repository tests cover individual ``save`` / ``load_all`` /
 ``cleanup_expired``. Service tests cover revoke / is_revoked,
 cross-instance visibility via filesystem, and singleton lifecycle.
+
+VAPT-040: the on-disk filenames and the in-memory store keys
+are HMAC-SHA256 pseudonyms (``agk1:<hex>``) of the JTIs, not
+the JTIs themselves. The public API (``revoke(jti, ...)``,
+``is_revoked(jti)``) still receives the plaintext JTI and
+translates internally — tests assert on the public contract.
+Tests that need to inspect the internal store translate via
+:func:`hmac_index_filename` to keep the VAPT-040 invariants.
 """
 
 import os
@@ -11,6 +19,7 @@ import time
 
 import pytest
 
+from authglow.core.crypto import hmac_index_filename
 from authglow.repositories.file.token_blacklist import FileTokenBlacklistRepository
 from authglow.services.auth.token_blacklist import (
     TokenBlacklist,
@@ -59,20 +68,27 @@ class TestRepositoryLoadSave:
         await repo.save("jti-a", 1000.0)
         await repo.save("jti-b", 2000.0)
         loaded = await repo.load_all()
-        assert loaded == {"jti-a": 1000.0, "jti-b": 2000.0}
+        # VAPT-040: ``load_all`` returns HMAC-pseudonym keys.
+        assert loaded == {
+            hmac_index_filename("jti-a"): 1000.0,
+            hmac_index_filename("jti-b"): 2000.0,
+        }
 
     @pytest.mark.asyncio
     async def test_save_overwrites_existing(self, repo):
         await repo.save("jti-x", 1.0)
         await repo.save("jti-x", 2.0)
         loaded = await repo.load_all()
-        assert loaded == {"jti-x": 2.0}
+        # VAPT-040: the HMAC pseudonym is stable for a given JTI,
+        # so a second save overwrites the first file.
+        assert loaded == {hmac_index_filename("jti-x"): 2.0}
 
     @pytest.mark.asyncio
     async def test_persistence_survives_new_instance(self, repo_p):
         await repo_p.save("persisted", 42.0)
         repo2 = FileTokenBlacklistRepository(settings=repo_p._settings)
-        assert await repo2.load_all() == {"persisted": 42.0}
+        # VAPT-040: keys are HMAC pseudonyms.
+        assert await repo2.load_all() == {hmac_index_filename("persisted"): 42.0}
 
     @pytest.mark.asyncio
     async def test_storage_path_respects_settings(self, repo_p):
@@ -85,8 +101,9 @@ class TestRepositoryLoadSave:
         removed = await repo.cleanup_expired()
         assert removed >= 1
         loaded = await repo.load_all()
-        assert "keep" in loaded
-        assert "gone" not in loaded
+        # VAPT-040: keys are HMAC pseudonyms.
+        assert hmac_index_filename("keep") in loaded
+        assert hmac_index_filename("gone") not in loaded
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +178,11 @@ class TestServiceHydrate:
         await repo_p.save("jti-gone", 1.0)
         svc = TokenBlacklist(repository=FileTokenBlacklistRepository(settings=repo_p._settings))
         await svc.startup_hydrate()
-        assert "jti-keep" in svc._store
-        assert "jti-gone" not in svc._store
+        # VAPT-040: keys are HMAC pseudonyms.
+        assert hmac_index_filename("jti-keep") in svc._store
+        assert hmac_index_filename("jti-gone") not in svc._store
+        # Public API still works on plaintext JTIs.
+        assert svc.is_revoked("jti-keep") is True
 
 
 # ---------------------------------------------------------------------------
@@ -226,8 +246,10 @@ class TestServiceRevokeAndCheck:
 
         repo2 = FileTokenBlacklistRepository(settings=repo_p._settings)
         loaded = await repo2.load_all()
-        assert "persisted-jti" in loaded
-        assert loaded["persisted-jti"] == pytest.approx(future, abs=1)
+        # VAPT-040: ``load_all`` returns HMAC-pseudonym keys, not JTIs.
+        hmac_key = hmac_index_filename("persisted-jti")
+        assert hmac_key in loaded
+        assert loaded[hmac_key] == pytest.approx(future, abs=1)
 
     @pytest.mark.asyncio
     async def test_revoke_is_idempotent(self, repo):
@@ -276,12 +298,13 @@ class TestServiceSweep:
         await svc.revoke("expired-1", 1.0)
         assert len(svc._store) == 2
 
-        svc._store["expired-2"] = 1.0
+        # VAPT-040: store keys are HMAC pseudonyms.
+        svc._store[hmac_index_filename("expired-2")] = 1.0
         assert len(svc._store) == 3
 
         await svc.revoke("alive-3", now + 60)
-        assert "expired-2" not in svc._store
-        assert "alive-1" in svc._store
+        assert hmac_index_filename("expired-2") not in svc._store
+        assert hmac_index_filename("alive-1") in svc._store
 
 
 # ---------------------------------------------------------------------------

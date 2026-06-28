@@ -17,10 +17,20 @@ Firestore with a composite index, etc.) can implement ``get_by_prefix``
 via a native query and ignore the JSON index file. The three
 ``_load/_add/_remove`` helpers are private to ``FileAPIKeyRepository``
 on purpose.
+
+VAPT-040: the prefix index file is **encrypted** with the
+private-key envelope (``agk1:`` prefix) so a directory-read
+attacker cannot enumerate the live ``key_id``s registered
+under a given prefix. The plaintext filename (``<prefix>``)
+remains visible because the prefix is the public part of
+the API key (the first 12 chars shown to the user on
+issuance) — only the mapping to ``key_id``s is encrypted.
 """
 
-from typing import Any, List, Optional
+import json
+from typing import List, Optional
 
+from authglow.core.crypto import decrypt_index_value, encrypt_index_value
 from authglow.models.api_key import APIKey
 from authglow.repositories.file.base import BaseFileRepository
 from authglow.repositories.protocols import APIKeyRepository
@@ -60,25 +70,46 @@ class FileAPIKeyRepository(BaseFileRepository, APIKeyRepository):
         """Return the list of ``key_id``s registered for *prefix*.
 
         Returns an empty list if the index file is missing or corrupt.
+
+        VAPT-040: the file content is encrypted with the
+        private-key envelope (``agk1:``). Legacy plaintext
+        payloads (pre-VAPT-040) are accepted transparently
+        and re-encrypted on the next write.
         """
         index_file = self._index_path_for(prefix)
-        data: Optional[Any] = await self._read_json(index_file)
+        raw: Optional[str] = await self._read_text(index_file)
+        if raw is None:
+            return []
+        try:
+            plaintext = decrypt_index_value(raw)
+            data = json.loads(plaintext)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return []
         if not isinstance(data, dict):
             return []
         result = data.get("key_ids", [])
         return result if isinstance(result, list) else []
 
     async def _add_to_prefix_index(self, api_key: APIKey) -> None:
-        """Add ``api_key.key_id`` to the prefix index (idempotent)."""
+        """Add ``api_key.key_id`` to the prefix index (idempotent).
+
+        VAPT-040: the file content is encrypted with the
+        private-key envelope so a directory-read attacker
+        cannot enumerate live key IDs.
+        """
         index_file = self._index_path_for(api_key.key_prefix)
         existing_ids = await self._load_prefix_index(api_key.key_prefix)
         if api_key.key_id not in existing_ids:
             existing_ids.append(api_key.key_id)
-        await self._write_json(index_file, {"key_ids": existing_ids})
+        payload = json.dumps({"key_ids": existing_ids})
+        await self._write_text(index_file, encrypt_index_value(payload))
 
     async def _remove_from_prefix_index(self, prefix: str, key_id: str) -> None:
         """Remove ``key_id`` from the prefix index. If the resulting
-        list is empty, the index file is deleted entirely."""
+        list is empty, the index file is deleted entirely.
+
+        VAPT-040: same encryption envelope as the add path.
+        """
         index_file = self._index_path_for(prefix)
         existing_ids = await self._load_prefix_index(prefix)
         if key_id not in existing_ids:
@@ -87,7 +118,8 @@ class FileAPIKeyRepository(BaseFileRepository, APIKeyRepository):
         if not existing_ids:
             await self._delete(index_file)
         else:
-            await self._write_json(index_file, {"key_ids": existing_ids})
+            payload = json.dumps({"key_ids": existing_ids})
+            await self._write_text(index_file, encrypt_index_value(payload))
 
     # Protocol-visible wrappers around the private helpers above.
     # Backends with a native index (SQL) override these directly.

@@ -124,24 +124,53 @@ class BaseFileRepository:
         Honours ``settings.storage_backend``:
 
         * ``"file"`` (default) → local filesystem, root directory
-          pre-created with ``os.makedirs(..., exist_ok=True)``.
+          pre-created with ``os.makedirs(..., exist_ok=True)`` and
+          tightened to mode ``0o700`` (VAPT-040) so a directory-read
+          attacker with a non-owner account cannot enumerate the
+          index files. The ``chmod`` is a no-op on Windows —
+          the OS-level ACL on the user account is the equivalent
+          protection there.
         * ``"s3"`` / ``"gcs"`` / ``"abfs"`` → cloud filesystem
           with credentials from ``settings.get_storage_options()``.
           No local mkdir; the cloud provider creates the bucket /
           container on first write.
         """
-        import os
-
         if self._settings.storage_backend == "file":
-            os.makedirs(self._storage_path, exist_ok=True)
+            self._ensure_secure_dir(self._storage_path)
             for extra in self._extra_dirs:
-                os.makedirs(f"{self._storage_path}/{extra}", exist_ok=True)
+                self._ensure_secure_dir(f"{self._storage_path}/{extra}")
             return fsspec.filesystem("file"), AsyncFileSystem(fsspec.filesystem("file"))
 
         fs = fsspec.filesystem(
             self._settings.storage_backend, **self._settings.get_storage_options()
         )
         return fs, AsyncFileSystem(fs)
+
+    @staticmethod
+    def _ensure_secure_dir(path: str) -> None:
+        """Create *path* with mode ``0o700`` (VAPT-040).
+
+        Idempotent: existing directories are not re-created but
+        have their mode tightened (best-effort, no error if the
+        process does not own the directory). On Windows the
+        ``chmod`` call only honours the read-only bit; the
+        user-account ACL is the actual access boundary there.
+        """
+        import os
+        import stat
+
+        os.makedirs(path, exist_ok=True)
+        try:
+            current = stat.S_IMODE(os.stat(path).st_mode)
+            if current != 0o700:
+                os.chmod(path, 0o700)
+        except (OSError, PermissionError):
+            # Best-effort: if we cannot read/stat/chmod the
+            # directory (e.g. a different user owns it), leave
+            # the existing mode in place. The repo's contents
+            # are still protected by the per-file encryption
+            # envelope (VAPT-040 primary defense).
+            pass
 
     # ------------------------------------------------------------------
     # Path helpers

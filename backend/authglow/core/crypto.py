@@ -115,6 +115,91 @@ def decrypt_private_key(encrypted: bytes, secret_key: Optional[str] = None) -> b
     return aesgcm.decrypt(iv, ciphertext, _KEY_AAD)
 
 
+def encrypt_index_value(plaintext: str, secret_key: Optional[str] = None) -> str:
+    """Encrypt an index-file payload using the private-key envelope (VAPT-040).
+
+    The refresh-token ``id_index``/``active_index`` and the API-key
+    ``prefix_index`` used to store live ``token_id``s and ``key_id``s
+    in plaintext, so an attacker with read access to the storage
+    directory could enumerate every active session. This helper
+    encrypts those index payloads with the same AES-256-GCM envelope
+    (``agk1:`` prefix, ``_KEY_INFO`` / ``_KEY_AAD``) used for the
+    RSA keyring, so a single ``Settings.secret_key`` rotation
+    invalidates indexes and keys together.
+
+    ``plaintext`` is typically a JSON string (the serialized
+    index dict/list). The encryption is authenticated (GCM tag)
+    so any tamper on disk is detected at decrypt time.
+    """
+    if not plaintext:
+        return plaintext
+    iv = os.urandom(12)
+    key = _derive_key(
+        secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
+        info=_KEY_INFO,
+    )
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, plaintext.encode("utf-8"), _KEY_AAD)
+    return _KEY_PREFIX + base64.b64encode(iv + ciphertext).decode()
+
+
+def decrypt_index_value(ciphertext: str, secret_key: Optional[str] = None) -> str:
+    """Decrypt an index-file payload produced by :func:`encrypt_index_value`.
+
+    Tolerates a plaintext payload (missing ``agk1:`` prefix) for
+    backward compatibility with pre-VAPT-040 deployments — the
+    caller is expected to re-encrypt on the next write so the
+    legacy plaintext is replaced transparently.
+    """
+    if not ciphertext:
+        return ciphertext
+    if not ciphertext.startswith(_KEY_PREFIX):
+        # Migration: pre-VAPT-040 plaintext index. Return as-is
+        # so the caller can read the legacy data; the next
+        # ``encrypt_index_value`` call will rewrite it encrypted.
+        return ciphertext
+    raw = base64.b64decode(ciphertext[len(_KEY_PREFIX) :])
+    iv = raw[:12]
+    encrypted = raw[12:]
+    key = _derive_key(
+        secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
+        info=_KEY_INFO,
+    )
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(iv, encrypted, _KEY_AAD).decode("utf-8")
+
+
+def hmac_index_filename(value: str, secret_key: Optional[str] = None) -> str:
+    """Compute an HMAC-SHA256 pseudonym for use as a filename (VAPT-040).
+
+    The token-blacklist directory stores one JSON file per
+    revoked JTI. The pre-fix layout used ``<jti>.json`` as the
+    filename, which leaked the JTI to anyone with directory
+    read access. This helper returns a deterministic
+    64-char hex digest that is safe to expose as a filename:
+    an attacker who lists the directory sees only opaque
+    pseudonyms, while the service can still look up the right
+    file by computing the HMAC of the JTI it wants to check.
+
+    The returned value is **not** prefixed with the
+    ``agk1:`` envelope marker — the prefix is reserved for
+    *content* envelopes, and the file name only needs to be a
+    portable identifier on every supported filesystem
+    (notably Windows, where ``:`` is not a valid filename
+    character). Legacy plaintext JTI filenames are filtered
+    out by length/character-set checks at the repository
+    layer (``_is_legacy_filename``).
+
+    Uses the private-key context so a ``Settings.secret_key``
+    rotation invalidates the blacklist in lockstep with the
+    keyring.
+    """
+    if not value:
+        raise ValueError("hmac_index_filename: value must be non-empty")
+    effective = _resolve_secret_key() if secret_key is None else secret_key
+    return hmac.new(effective.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def encrypt_field(plaintext: str) -> str:
     """Encrypt a single PII field (email, name, phone) using AES-256-GCM.
 

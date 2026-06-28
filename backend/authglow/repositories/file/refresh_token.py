@@ -8,9 +8,13 @@ On-disk layout (relative to ``settings.storage_path``):
   as the filename for O(1) direct access).
 * ``<storage>/refresh_tokens/id_index.json`` — secondary index
   mapping ``token_id`` to ``token_lookup`` so ``get_by_id`` is O(1).
+  **Encrypted with the private-key envelope** (``agk1:`` prefix,
+  VAPT-040) so a directory-read attacker cannot enumerate live
+  ``token_id``s.
 * ``<storage>/refresh_tokens/active_index.json`` — list of
   currently-active ``token_id``s (not yet used, not revoked, not
   expired) so ``list_active`` is O(active) instead of O(all).
+  Same envelope as the id_index.
 
 Security: the plaintext ``token`` is **never** persisted — the
 service hands the repository a ``RefreshToken`` whose ``token_hash``
@@ -24,8 +28,10 @@ SQL backends would replace the JSON index files with native
 indexes and use row-level locking for ``update``.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+import json
+from typing import Dict, List, Optional, Tuple
 
+from authglow.core.crypto import decrypt_index_value, encrypt_index_value
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 from authglow.repositories.file.base import BaseFileRepository
@@ -66,33 +72,67 @@ class FileRefreshTokenRepository(BaseFileRepository, RefreshTokenRepository):
     # ------------------------------------------------------------------
 
     async def _load_id_index_dict(self) -> Dict[str, str]:
-        """Return the id_index as a dict (empty if missing/corrupt)."""
-        data: Optional[Any] = await self._read_json(self._id_index_path)
+        """Return the id_index as a dict (empty if missing/corrupt).
+
+        VAPT-040: the file content is encrypted with the
+        private-key envelope (``agk1:``). Reads transparently
+        migrate legacy plaintext (pre-VAPT-040) payloads —
+        ``decrypt_index_value`` returns the input unchanged
+        when the prefix is missing. The next write re-encrypts
+        so the legacy data is replaced on first mutation.
+        """
+        raw: Optional[str] = await self._read_text(self._id_index_path)
+        if raw is None:
+            return {}
+        try:
+            plaintext = decrypt_index_value(raw)
+            data = json.loads(plaintext)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return {}
         if not isinstance(data, dict):
             return {}
         return {str(k): str(v) for k, v in data.items()}
 
     async def _save_id_index_dict(self, idx: Dict[str, str]) -> None:
-        """Persist the id_index (deletes the file if ``idx`` is empty)."""
+        """Persist the id_index (deletes the file if ``idx`` is empty).
+
+        VAPT-040: encrypted with the private-key envelope so a
+        directory-read attacker cannot enumerate live token IDs.
+        """
         if not idx:
             await self._delete(self._id_index_path)
-        else:
-            await self._write_json(self._id_index_path, dict(idx))
+            return
+        encrypted = encrypt_index_value(json.dumps(dict(idx)))
+        await self._write_text(self._id_index_path, encrypted)
 
     async def _load_active_index_list(self) -> List[str]:
-        """Return the active_index as a list (empty if missing/corrupt)."""
-        data: Optional[Any] = await self._read_json(self._active_index_path)
+        """Return the active_index as a list (empty if missing/corrupt).
+
+        VAPT-040: same encryption envelope as the id_index.
+        """
+        raw: Optional[str] = await self._read_text(self._active_index_path)
+        if raw is None:
+            return []
+        try:
+            plaintext = decrypt_index_value(raw)
+            data = json.loads(plaintext)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return []
         if not isinstance(data, dict):
             return []
         result = data.get("token_ids", [])
         return result if isinstance(result, list) else []
 
     async def _save_active_index_list(self, token_ids: List[str]) -> None:
-        """Persist the active_index (deletes the file if empty)."""
+        """Persist the active_index (deletes the file if empty).
+
+        VAPT-040: encrypted with the private-key envelope.
+        """
         if not token_ids:
             await self._delete(self._active_index_path)
-        else:
-            await self._write_json(self._active_index_path, {"token_ids": list(token_ids)})
+            return
+        payload = json.dumps({"token_ids": list(token_ids)})
+        await self._write_text(self._active_index_path, encrypt_index_value(payload))
 
     # ------------------------------------------------------------------
     # Protocol: CRUD
