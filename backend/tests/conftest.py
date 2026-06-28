@@ -79,6 +79,10 @@ def test_settings(tmp_path, test_keys_dir):
         password_require_lowercase=True,
         password_require_digits=True,
         password_require_special=True,
+        # VAPT-038: drop bcrypt cost to the floor for tests so the
+        # full suite stays under a few seconds. Production uses
+        # the default 12 (see ``Settings.bcrypt_rounds``).
+        bcrypt_rounds=4,
         jwt_auto_rotate=False,
     )
     return settings

@@ -243,6 +243,14 @@ class Settings(BaseSettings):
     password_require_lowercase: bool = True
     password_require_digits: bool = True
     password_require_special: bool = True
+    # VAPT-038: bcrypt cost factor for all newly-issued hashes (user
+    # passwords, backup codes, API keys, refresh tokens, OAuth client
+    # secrets, password reset tokens). Default 12 matches the
+    # pre-fix behaviour; raise to 13+ in production over time.
+    # Stored hashes below the configured cost are transparently
+    # re-hashed on the next successful login (see
+    # ``UserService.verify_and_maybe_rehash_password``).
+    bcrypt_rounds: int = 12
 
     # Registration
     allow_public_registration: bool = True
@@ -403,6 +411,24 @@ class Settings(BaseSettings):
     # instead of regenerating. Set SETUP_TOKEN=<value> in your .env to supply
     # a fixed token (e.g. for CI/CD or to reset the persisted one).
     setup_token: Optional[str] = None
+
+    @field_validator("bcrypt_rounds")
+    @classmethod
+    def validate_bcrypt_rounds(cls, v: int) -> int:
+        """VAPT-038: enforce bcrypt's hard cost-factor range.
+
+        bcrypt accepts cost factors in ``[4, 31]``; values above
+        ~16 take seconds per verify and make login impractical, so
+        we cap the operational range at 16. Values below 4 are
+        rejected because they defeat bcrypt's purpose.
+        """
+        if v < 4 or v > 16:
+            raise ValueError(
+                f"bcrypt_rounds must be between 4 and 16 (got {v}). "
+                "Values below 4 are too weak; values above 16 make "
+                "login impractical (>5s per verify on 2026 hardware)."
+            )
+        return v
 
     @field_validator("secret_key")
     @classmethod

@@ -504,3 +504,49 @@ class TestSetupTokenPersistence:
         assert first.setup_token == second.setup_token, (
             "Reloader subprocess must see the same persisted token as the parent"
         )
+
+
+class TestVapt038BcryptRoundsValidation:
+    """VAPT-038: bcrypt_rounds is configurable and validated."""
+
+    def _valid_settings(self, **overrides):
+        import os
+        import tempfile
+
+        keys_dir = overrides.pop("keys_dir", tempfile.mkdtemp(prefix="vapt038_keys_"))
+        priv = overrides.pop("private_key_path", os.path.join(keys_dir, "private_key.pem"))
+        pub = overrides.pop("public_key_path", os.path.join(keys_dir, "public_key.pem"))
+        return Settings(
+            secret_key="a" * 32,
+            storage_path=overrides.pop("storage_path", tempfile.mkdtemp(prefix="vapt038_users_")),
+            storage_backend="file",
+            keys_dir=keys_dir,
+            private_key_path=priv,
+            public_key_path=pub,
+            jwt_auto_rotate=False,
+            **overrides,
+        )
+
+    def test_default_rounds_is_12(self):
+        s = self._valid_settings()
+        assert s.bcrypt_rounds == 12
+
+    def test_rounds_at_lower_bound_accepted(self):
+        s = self._valid_settings(bcrypt_rounds=4)
+        assert s.bcrypt_rounds == 4
+
+    def test_rounds_at_upper_bound_accepted(self):
+        s = self._valid_settings(bcrypt_rounds=16)
+        assert s.bcrypt_rounds == 16
+
+    def test_rounds_below_4_rejected(self):
+        with pytest.raises(Exception) as excinfo:
+            self._valid_settings(bcrypt_rounds=3)
+        assert "bcrypt_rounds" in str(excinfo.value).lower() or "between 4 and 16" in str(
+            excinfo.value
+        )
+
+    def test_rounds_above_16_rejected(self):
+        with pytest.raises(Exception) as excinfo:
+            self._valid_settings(bcrypt_rounds=17)
+        assert "between 4 and 16" in str(excinfo.value)

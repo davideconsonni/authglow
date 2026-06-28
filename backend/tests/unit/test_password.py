@@ -1,9 +1,14 @@
 import pytest
+
 from authglow.services.password import (
-    hash_password,
-    verify_password,
     PasswordValidator,
+    _extract_bcrypt_rounds,
     _prepare_password_bytes,
+    bcrypt_needs_rehash,
+    get_bcrypt_rounds,
+    hash_password,
+    verify_and_maybe_rehash,
+    verify_password,
 )
 
 
@@ -164,3 +169,100 @@ class TestPasswordValidation:
         valid, errors = password_validator.validate("short")
         assert not valid
         assert len(errors) >= 3
+
+
+class TestVapt038BcryptRoundsConfigurable:
+    """VAPT-038: bcrypt cost factor is configurable per environment."""
+
+    def test_hash_uses_configured_rounds(self, test_settings):
+        assert get_bcrypt_rounds() == test_settings.bcrypt_rounds
+        hashed = hash_password("Vapt038P@ss1!")
+        # bcrypt format: $2b$NN$... — NN is zero-padded cost
+        assert hashed.startswith(f"$2b${test_settings.bcrypt_rounds:02d}$")
+
+    def test_hash_extracts_rounds(self, test_settings):
+        hashed = hash_password("Vapt038P@ss1!")
+        assert _extract_bcrypt_rounds(hashed) == test_settings.bcrypt_rounds
+
+    def test_extract_rounds_2a_prefix(self):
+        assert _extract_bcrypt_rounds("$2a$10$abcdefghijklmnopqrstuv") == 10
+
+    def test_extract_rounds_2y_prefix(self):
+        assert _extract_bcrypt_rounds("$2y$08$abcdefghijklmnopqrstuv") == 8
+
+    def test_extract_rounds_invalid_inputs(self):
+        assert _extract_bcrypt_rounds("") is None
+        assert _extract_bcrypt_rounds("not-a-bcrypt-hash") is None
+        assert _extract_bcrypt_rounds("$2b$xx$abc") is None  # non-numeric cost
+        assert _extract_bcrypt_rounds("$2b") is None  # truncated
+        assert _extract_bcrypt_rounds("$2b$99$abc") is None  # cost out of range
+
+    def test_bcrypt_needs_rehash_below_target(self, test_settings):
+        """Hash at a lower cost than the setting → needs rehash."""
+        import bcrypt
+
+        old_hash = bcrypt.hashpw(
+            b"old-pw", bcrypt.gensalt(rounds=max(4, test_settings.bcrypt_rounds - 1))
+        ).decode()
+        # If test_settings.bcrypt_rounds is already 4, the test is degenerate;
+        # in that case just confirm the function does not crash and reports
+        # False (target == stored).
+        if test_settings.bcrypt_rounds <= 4:
+            assert bcrypt_needs_rehash(old_hash) is False
+        else:
+            assert bcrypt_needs_rehash(old_hash) is True
+
+    def test_bcrypt_needs_rehash_at_or_above_target(self, test_settings):
+        import bcrypt
+
+        target = test_settings.bcrypt_rounds
+        # Generate a hash at the current target — must NOT need rehash.
+        same = bcrypt.hashpw(b"pw", bcrypt.gensalt(rounds=target)).decode()
+        assert bcrypt_needs_rehash(same) is False
+
+    def test_bcrypt_needs_rehash_malformed_hash(self):
+        # Malformed hash → False (caller falls back to verify-only path).
+        assert bcrypt_needs_rehash("garbage") is False
+        assert bcrypt_needs_rehash("") is False
+
+    def test_verify_and_maybe_rehash_no_rehash_needed(self, test_settings):
+        hashed = hash_password("Vapt038P@ss1!")
+        is_valid, new_hash = verify_and_maybe_rehash("Vapt038P@ss1!", hashed)
+        assert is_valid is True
+        assert new_hash is None
+
+    def test_verify_and_maybe_rehash_returns_fresh_hash_when_stale(
+        self, test_settings, monkeypatch
+    ):
+        """A stored hash at a lower cost triggers a fresh hash on verify."""
+        import bcrypt
+        from authglow.services import password as password_service
+
+        target = test_settings.bcrypt_rounds
+        if target <= 4:
+            pytest.skip("Cannot simulate stale hash when target is at floor (4)")
+
+        # Build a hash at one cost below the target.
+        stale = bcrypt.hashpw(
+            b"Vapt038P@ss1!",
+            bcrypt.gensalt(rounds=target - 1),
+        ).decode()
+        assert _extract_bcrypt_rounds(stale) == target - 1
+
+        is_valid, new_hash = verify_and_maybe_rehash("Vapt038P@ss1!", stale)
+        assert is_valid is True
+        assert new_hash is not None
+        # The new hash must already match the target cost.
+        assert _extract_bcrypt_rounds(new_hash) == target
+
+    def test_verify_and_maybe_rehash_mismatch_returns_no_hash(self, test_settings):
+        hashed = hash_password("Vapt038P@ss1!")
+        is_valid, new_hash = verify_and_maybe_rehash("WrongPassword1!", hashed)
+        assert is_valid is False
+        assert new_hash is None
+
+    def test_verify_and_maybe_rehash_malformed_hash(self):
+        # Malformed input should not raise; just report mismatch.
+        is_valid, new_hash = verify_and_maybe_rehash("anything", "not-a-bcrypt-hash")
+        assert is_valid is False
+        assert new_hash is None

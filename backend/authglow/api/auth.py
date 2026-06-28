@@ -33,7 +33,6 @@ from authglow.services.oauth2 import OAuth2Service
 from authglow.services.password import (
     PasswordValidator,
     hash_password_async,
-    verify_password_async,
 )
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.refresh_token import RefreshTokenService
@@ -648,7 +647,11 @@ async def authorize_post(
             )
 
         user = await storage.get_user_by_email(email)
-        if not user or not await verify_password_async(password, user.hashed_password):
+        # VAPT-038: verify_and_maybe_rehash_password transparently
+        # re-hashes the stored hash to the configured bcrypt cost
+        # on a successful verify. The user is already authenticated
+        # at that point, so the re-hash is a benign side effect.
+        if not user or not (await storage.verify_and_maybe_rehash_password(user, password))[0]:
             if user:
                 await storage.record_failed_login(user.id)
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1231,7 +1234,15 @@ async def login_for_access_token(
         )
 
     # Check if user exists and verify password
-    if not user or not await verify_password_async(form_data.password, user.hashed_password):
+    # VAPT-038: verify_and_maybe_rehash_password transparently re-hashes
+    # the stored hash to the configured bcrypt cost on a successful
+    # verify. Returns (True, user) on success, (False, None) on
+    # mismatch — the second tuple element is intentionally unused
+    # here since ``user`` was already fetched above.
+    if (
+        not user
+        or not (await storage.verify_and_maybe_rehash_password(user, form_data.password))[0]
+    ):
         await handle_failed_login()
     assert user is not None  # help mypy narrow after NoReturn handler
 

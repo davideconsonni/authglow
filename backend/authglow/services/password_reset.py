@@ -127,9 +127,19 @@ class PasswordResetService:
 
         Returns:
             tuple: (plaintext_token, hashed_token, token_lookup)
+
+        The bcrypt cost factor is read from
+        ``settings.bcrypt_rounds`` (VAPT-038). Reset tokens are
+        short-lived (30 minutes) and single-use, so the impact
+        on verify latency is bounded — but the new cost is
+        still applied to keep ``token_hash`` policy-aligned
+        with the rest of the platform's credentials.
         """
         plaintext = secrets.token_urlsafe(32)
-        token_hash = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt()).decode()
+        token_hash = bcrypt.hashpw(
+            plaintext.encode(),
+            bcrypt.gensalt(rounds=self.settings.bcrypt_rounds),
+        ).decode()
         token_lookup = hmac.new(
             self.settings.secret_key.encode(),
             plaintext.encode(),

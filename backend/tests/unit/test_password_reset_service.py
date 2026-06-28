@@ -559,3 +559,28 @@ class TestVapt022ResetCodeFlow:
         assert plaintext not in code
         # And the stored code is separate from the bearer token.
         assert token.reset_code != plaintext
+
+
+class TestVapt038BcryptRoundsOnToken:
+    """VAPT-038: reset-token bcrypt hash uses the configured cost factor."""
+
+    def test_token_hash_uses_configured_rounds(self, password_reset_service):
+        token, _, _ = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-vapt038-rounds", email="rounds@example.com"
+            )
+        )
+        target = password_reset_service.settings.bcrypt_rounds
+        # bcrypt format: $2b$NN$...
+        assert token.token_hash.startswith(f"$2b${target:02d}$")
+
+    def test_token_hash_round_trip_at_configured_rounds(self, password_reset_service):
+        token, plaintext, _ = asyncio_run(
+            password_reset_service.create_reset_token(
+                user_id="user-vapt038-roundtrip", email="rt@example.com"
+            )
+        )
+        # Verify the token still works — the new cost is accepted by bcrypt.
+        verified = asyncio_run(password_reset_service.verify_token(plaintext))
+        assert verified is not None
+        assert verified.token_lookup == token.token_lookup

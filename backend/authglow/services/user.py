@@ -323,3 +323,55 @@ class UserService:
         """Set a new password for a user."""
         async with self._lock(f"user:{user_id}"):
             return await self._user_repo.set_password(user_id, hashed_password, require_change)
+
+    async def verify_and_maybe_rehash_password(
+        self, user: User, plain_password: str
+    ) -> tuple[bool, Optional[User]]:
+        """Verify a user's password and transparently re-hash if needed (VAPT-038).
+
+        On a successful verify the stored hash is checked against
+        the current ``bcrypt_rounds`` setting. If the on-disk
+        cost is below the target, a fresh hash is generated and
+        persisted via :meth:`set_password` (acquires the same
+        per-user lock the login flow already held, so concurrent
+        verifications for the same user cannot race the
+        migration).
+
+        Returns:
+            ``(is_valid, user_or_None)``:
+
+            * ``(True, user)`` when the password matches. ``user``
+              is the in-memory object — its ``hashed_password``
+              field is unchanged; the persisted file on disk is
+              the one updated by :meth:`set_password`.
+            * ``(False, None)`` on a mismatch. The caller is
+              expected to route through the existing
+              ``handle_failed_login`` / lockout machinery.
+
+        The function never raises on a malformed
+        ``user.hashed_password`` (treats it as a non-match) so
+        login flows stay linear.
+        """
+        from authglow.services.password import verify_and_maybe_rehash_async
+
+        is_valid, new_hash = await verify_and_maybe_rehash_async(
+            plain_password, user.hashed_password
+        )
+        if not is_valid:
+            return False, None
+        if new_hash is not None:
+            try:
+                await self.set_password(user.id, new_hash)
+            except Exception:
+                # The login still succeeds — the fresh hash will
+                # be re-attempted on the next successful verify.
+                # The failure path is intentionally swallow-and-log
+                # so an I/O blip on the user file does not turn
+                # into a 500 on the login endpoint.
+                import structlog
+
+                structlog.get_logger("authglow.audit").warning(
+                    "bcrypt_rehash_persist_failed",
+                    user_id=user.id,
+                )
+        return True, user

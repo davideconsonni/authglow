@@ -15,15 +15,16 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 16 | 37 | Fix or document risk-acceptance |
+| MEDIUM | 53 | 17 | 36 | Fix or document risk-acceptance |
 | LOW | 26 | 2 | 24 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **56** | **70** | — |
+| **Total** | **126** | **57** | **69** | — |
 
 **Aggiornamento 2026-06-28**: +9 item chiusi (cleanup pass: 043, 045, 046, 047, 051,
 052, 078, 108, 117) + +3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131) + +3 item
 chiusi (block 🅰️.2 Service PII + notifications: 081, 085, 130) + **+5 item chiusi
-(block 🅰️.3 GDPR + observability hygiene: 082, 083, 084, 086, 087)**.
+(block 🅰️.3 GDPR + observability hygiene: 082, 083, 084, 086, 087)** + **+1 item chiuso
+(VAPT-038 bcrypt rounds configurabile + re-hash on login)**.
 4 item in "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21
 refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pending).
 
@@ -228,10 +229,11 @@ refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pend
 
 ### Cryptography and config
 
-- [ ] **VAPT-038** — `bcrypt.gensalt()` uses library default cost (12) and is not configurable
+- [x] **VAPT-038** — `bcrypt.gensalt()` uses library default cost (12) and is not configurable
   - **Location**: `backend/authglow/services/password.py:97`; `backend/authglow/services/mfa.py:103`; `backend/authglow/services/api_key.py:95`; `backend/authglow/services/password_reset.py:53`
   - **Description**: All bcrypt calls use no explicit `rounds=`. Operators cannot raise the cost without code changes, and there is no re-hash on next login.
   - **Fix**: Add `bcrypt_rounds: int = 12` (or 13) to `Settings`; add a transparent re-hash on next login when the stored cost is below the current setting.
+  - **Done** (2026-06-28): `Settings.bcrypt_rounds: int = 12` con `field_validator` enforcing `[4, 16]`. Helpers `_extract_bcrypt_rounds`, `bcrypt_needs_rehash`, `verify_and_maybe_rehash` in `services/password.py`; `hash_password` passa `rounds=settings.bcrypt_rounds`; `password_reset.py:132` idem. Nuovo `UserService.verify_and_maybe_rehash_password(user, plain)` riusa `set_password` (lock + persistenza) per migrare l'hash su disco al login successivo. Wiring in `auth.py:651` (oauth2/authorize) e `auth.py:1234` (/api/token). Admin UI: `bcrypt_rounds` in `_FIELD_META` categoria `password_policy`, `restart_required=True` (compare automaticamente in `AdminSettingsPage` perché data-driven). Test: `tests/unit/test_password.py::TestVapt038BcryptRoundsConfigurable` (12), `tests/unit/test_password_reset_service.py::TestVapt038BcryptRoundsOnToken` (2), `tests/unit/test_config.py::TestVapt038BcryptRoundsValidation` (5), `tests/unit/test_user_service_rehash.py::TestVapt038RehashOnLogin` (5 — usa `monkeypatch.setattr(test_settings, "bcrypt_rounds", N)` per simulare bump a runtime + legge il JSON su disco per verificare la migrazione). `test_settings` ora ha `bcrypt_rounds=4` per non rallentare la suite.
 
 - [ ] **VAPT-039** — `_prepare_password_bytes` silently truncates long passwords at UTF-8 boundary (collisions)
   - **Location**: `backend/authglow/services/password.py:72-87`
@@ -898,6 +900,7 @@ These were audited and found to be correctly implemented. Re-audit not needed un
 
 ### Changelog
 
+- **2026-06-28** — **VAPT-038 bcrypt rounds configurabile + transparent re-hash on login** implementato. `Settings.bcrypt_rounds: int = 12` con `field_validator` enforcing `[4, 16]`. Helpers `_extract_bcrypt_rounds`/`bcrypt_needs_rehash`/`verify_and_maybe_rehash` in `services/password.py`; `hash_password` + `_generate_token` (password_reset) passano `rounds=settings.bcrypt_rounds`. Nuovo `UserService.verify_and_maybe_rehash_password(user, plain)` riusa `set_password` (lock + persistenza) per migrare l'hash su disco al login successivo; wired in `auth.py:651` (oauth2/authorize) e `auth.py:1234` (/api/token). Admin UI: `bcrypt_rounds` aggiunto a `_FIELD_META` categoria `password_policy` (`restart_required: True`); `AdminSettingsPage` lo renderizza automaticamente (è data-driven). Test: `TestVapt038BcryptRoundsConfigurable` (12) + `TestVapt038BcryptRoundsOnToken` (2) + `TestVapt038BcryptRoundsValidation` (5) + `TestVapt038RehashOnLogin` (5 — usa `monkeypatch.setattr(test_settings, "bcrypt_rounds", N)` per simulare bump a runtime + legge il JSON su disco per verificare la migrazione). `test_settings` ora `bcrypt_rounds=4` (suite resta < 15s). 0 modifiche frontend. Severity: MEDIUM 16→17 fixed, 36 remaining.
 - **2026-06-28** — **Block 🅰️.3 GDPR + observability hygiene** (VAPT-082, 083, 084, 086, 087) implementato. `delete_account` ora chiama `_purge_user_pii(user_id)` (GDPR Art. 17) che fa `asyncio.gather()` su 4 repository (login_history, security_event, admin_action, oauth_consent) + `_revoke_user_tokens(user_id)`. 8 `print(f"Failed to send ...")` sostituiti con `structlog.get_logger("authglow.email").warning(...)` in `security_notifications.py` (6) e `auth.py` (1, per welcome email). `ConsoleEmailProvider` ora scrive body a `sys.stderr` (default), header a `sys.stdout` — i token reset/verification non inquinano più il JSON audit log. `OAuth2ConsentService.RETENTION_DAYS = 365` aggiunto. +5 item chiusi, 1 partial fix (VAPT-086: scheduled job ancora pending). +11 nuovi test (4 in `test_user_profile.py` + 1 in `test_oauth_consent_service.py` + 1 in `test_security_notifications.py` + 3 in `test_email_subsystem.py` + 2 protocol conformance). **Side fix**: aggiunti `cache_jti_maxsize`/`cache_jti_ttl` a `_FIELD_META` in `admin_settings.py` (chiude pre-existing `test_admin_settings::test_field_meta_covers_all_categorized_fields`).
 - **2026-06-28** — **Block 🅰️.2 Service PII + notifications** (VAPT-081, 085, 130) implementato. Nuovo helper `authglow/core/pii.py` con `hash_pii`/`mask_ip`/`truncate`, riusato da `AuditService` + `LoginHistoryService`/`SecurityEventService`/`AdminActionService` (metodo `to_masked_dict` su ogni service). `passkey_login_success` audit log ora tronca `credential_id[:8]`. `change_email` self-service ora chiama `audit_service.log_event(event_type="user_email_changed", severity="warning")`. +3 item chiusi, 1 partial fix (VAPT-081: serve ancora `purge_user_pii` per GDPR Art. 17 → 🅰️.3). +14 nuovi test (10 in `test_pii.py` + 2 in `test_passkey.py` + 1 in `test_user_profile.py`).
 - **2026-06-28** — **Block 🅰️.1 PII/Audit** (VAPT-079, 080, 131) implementato: `_mask_ip` /24 (v4) / /48 (v6), `_truncate` 256 char con marker, default `audit_email_log_level=hash` con guard `none` in production, `AuditLogEntry.request_id` field. +3 item chiusi. +18 nuovi test in `test_audit.py`.

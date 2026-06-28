@@ -211,6 +211,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Require special chars",
         "restart_required": False,
     },
+    "bcrypt_rounds": {
+        "category": "password_policy",
+        "label": "Bcrypt cost factor (VAPT-038)",
+        "restart_required": True,
+    },
     # --- Registration ---
     "allow_public_registration": {
         "category": "registration",
