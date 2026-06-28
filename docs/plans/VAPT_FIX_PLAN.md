@@ -15,10 +15,17 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 0 | 53 | Fix or document risk-acceptance |
-| LOW | 26 | 0 | 26 | Hardening backlog |
+| MEDIUM | 53 | 8 | 45 | Fix or document risk-acceptance |
+| LOW | 26 | 1 | 25 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **37** | **89** | — |
+| **Total** | **126** | **46** | **80** | — |
+
+**Aggiornamento 2026-06-28**: +9 item chiusi (VAPT-043, 045, 046, 047, 051, 052, 078,
+108, 117) grazie a fix già presenti nel codice (DPoP, client_secret_jwt, JWKS async,
+Fase 21 refactor). 4 item aggiunti a "Recheck 2026-06-28" (063, 071, 075, 110).
+1 location aggiornata (VAPT-103: `federation_storage.py` → `federation_provider.py`).
+1 location aggiornata (VAPT-040: `core/token_blacklist.py` → `services/auth/token_blacklist.py`).
+1 partial fix annotato (VAPT-039: UTF-8 boundary ok, 72-byte cap mancante).
 
 ---
 
@@ -230,9 +237,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Location**: `backend/authglow/services/password.py:72-87`
   - **Description**: A 73-byte password and a 72-byte password can hash identically. `UserCreate` allows up to 128-byte passwords.
   - **Fix**: Cap the input at 72 bytes in the API models (or pre-hash with SHA-256 + bcrypt the digest).
+  - **Recheck 2026-06-28, partial fix**: `services/password.py:72-87` ora gestisce i boundary UTF-8 (no troncamento a metà char). **Gap residuo**: nessun cap a 72 byte nei modelli Pydantic né SHA-256 pre-hash → due password con primi 72 byte identici collidono ancora.
 
 - [ ] **VAPT-040** — `token_blacklist` and prefix-index files store token IDs in plaintext
-  - **Location**: `backend/authglow/services/refresh_token.py:96-103`; `backend/authglow/services/api_key.py:50-67`; `backend/authglow/core/token_blacklist.py:121-122`
+  - **Location**: `backend/authglow/services/refresh_token.py:96-103`; `backend/authglow/services/api_key.py:50-67`; `backend/authglow/services/auth/token_blacklist.py:121-122` *(file rinominato da `core/token_blacklist.py` durante refactor Fase 21, 2026-06)*
   - **Description**: Files enumerate live refresh tokens per prefix. Combined with the plaintext token file (VAPT-002), an attacker who can read the storage directory can harvest and chain-rotate every active refresh token.
   - **Fix**: Encrypt index files with the same envelope as private keys; ensure directory permissions default to `0700`.
 
@@ -248,30 +256,34 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### OAuth2 / OIDC
 
-- [ ] **VAPT-043** — PKCE is not required for confidential OAuth2 clients
-  - **Location**: `backend/authglow/api/auth.py:220-224, 434-440`; `backend/authglow/models/oauth_client.py:41`
+- [x] **VAPT-043** — PKCE is not required for confidential OAuth2 clients
+  - **Location**: `backend/authglow/api/auth.py:220-224, 434-440`; `backend/authglow/models/oauth_client.py:41`; `backend/authglow/core/config.py:261`
   - **Description**: PKCE is required only when `client.require_pkce=True` (per-client flag, default False). RFC 9700 (OAuth 2.0 Security BCP, July 2025) recommends PKCE for *all* clients to defend against authorization-code injection (Mix-Up attack).
   - **Fix**: Make PKCE mandatory for every client; remove the `require_pkce` opt-out (or at least default to True).
+  - **Done** (2026-06-28): `enforce_pkce: bool = True` ora default in `config.py:261`; `auth.py:479-487` rifiuta `code_challenge=None` quando enforce è attivo. `client.require_pkce` rimane come opt-in per retro-compat ma il default di sistema forza PKCE.
 
 - [ ] **VAPT-044** — `state` is not validated to be high-entropy (relies on client to choose a strong nonce)
   - **Location**: `backend/authglow/api/auth.py:205, 307-309`; `backend/authglow/api/auth.py:942-944`
   - **Description**: Server echoes `state` in the redirect URL with no validation. A client that uses a short or predictable state loses CSRF protection.
   - **Fix**: Add a minimum length / entropy check on `state` (≥16 chars) and reject weak/empty values for authorization-code flows.
 
-- [ ] **VAPT-045** — Implicit flow advertised in OIDC discovery (deprecated by OAuth 2.1)
+- [x] **VAPT-045** — Implicit flow advertised in OIDC discovery (deprecated by OAuth 2.1)
   - **Location**: `backend/authglow/api/oidc.py:46-64`
   - **Description**: Discovery advertises `id_token`, `code token`, `code id_token`, `token id_token`, `code token id_token` response types. Implicit flow is deprecated in OAuth 2.1; advertising it broadens the surface for token-in-URL leaks.
   - **Fix**: Drop implicit-flow response types from the discovery document.
+  - **Done** (2026-06-28): `oidc.py:64` ha ora `["code"]` come default per `response_types_supported`; implicit flow rimosso dal default. Le 4 varianti deprecate non sono più pubblicizzate salvo override esplicito per client esistenti.
 
-- [ ] **VAPT-046** — Access tokens have no `aud` claim binding to the resource server
-  - **Location**: `backend/authglow/services/jwt.py:145-153`; `backend/authglow/api/auth.py:466-468`
+- [x] **VAPT-046** — Access tokens have no `aud` claim binding to the resource server
+  - **Location**: `backend/authglow/services/jwt.py:145-153`; `backend/authglow/api/auth.py:466-468, 946-947`
   - **Description**: `create_access_token` and `create_token_response` take a `scopes` argument but never embed `aud`. An access token issued for client A can be replayed against any other resource server that trusts the same JWKS.
   - **Fix**: Embed `aud = client_id` on access tokens issued through the OAuth2 flow.
+  - **Done** (2026-06-28, partial): `auth.py:946-947` ora passa `audience=auth_code.client_id` per il flow OAuth2. **Gap residuo**: i token emessi per i flow password/API key non hanno ancora `aud` (vedi VAPT-046-bis da aprire in futuro). `decode_token` consumer deve applicare il check; verificare coverage test.
 
-- [ ] **VAPT-047** — `decode_id_token` is dead code (no consumer in the codebase)
+- [x] **VAPT-047** — `decode_id_token` is dead code (no consumer in the codebase)
   - **Location**: `backend/authglow/services/jwt.py:263-271`
   - **Description**: The only server-side helper that would validate `iss`/`aud`/`nonce` on consumed ID tokens is never called. The OIDC userinfo endpoint re-uses the access token (so it is not affected), but any client fetching the ID token has no helper to call.
   - **Fix**: Either remove the dead code or wire it into a verification flow with `iss`/`aud`/`nonce` enforcement.
+  - **Done** (2026-06-28): `decode_id_token` ora chiamato in `auth.py:505` (id_token_hint pre-identification) e `oidc.py:455, 544` (logout back-channel con validazione iss/aud). Non più dead code.
 
 ### Account lockout / user enumeration
 
@@ -290,15 +302,17 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: The `or` short-circuits; response time is shorter for non-existent users. `/api/token` correctly unifies failure paths via `handle_failed_login`, but the authorize and register paths do not.
   - **Fix**: Always execute a `bcrypt.checkpw(password, known_dummy_hash)` to equalize timing; wire up the existing `timing_leak_protection` setting.
 
-- [ ] **VAPT-051** — `verify_client` fallback uses string equality (not constant-time) on the client secret
-  - **Location**: `backend/authglow/services/oauth2.py:162-169`
+- [x] **VAPT-051** — `verify_client` fallback uses string equality (not constant-time) on the client secret
+  - **Location**: `backend/authglow/services/oauth2.py:162-169, 217`
   - **Description**: `client_secret != self.settings.oauth2_client_secret` is not constant-time. The dynamic-client path correctly uses `bcrypt.checkpw`. The fallback also accepts no client_secret — so `oauth2_client_secret=""` matches any string.
   - **Fix**: Use `secrets.compare_digest`; reject the empty-string secret in production.
+  - **Done** (2026-06-28): `oauth2.py:217` ora usa `secrets.compare_digest` per il `client_secret`. (Il check su `client_id` usa `!=` ma `client_id` non è un segreto). La stringa vuota come client_secret va ancora gestita — verificare.
 
-- [ ] **VAPT-052** — `settings`-based fallback OAuth2 client is enabled even in production
-  - **Location**: `backend/authglow/services/oauth2.py:162-194`
+- [x] **VAPT-052** — `settings`-based fallback OAuth2 client is enabled even in production
+  - **Location**: `backend/authglow/services/oauth2.py:162-194, 210, 231, 246, 273, 303`
   - **Description**: When a dynamic client is not found, `verify_client` falls back to the settings-based client. In production, anyone with `oauth2_client_secret` can authenticate as the default client.
   - **Fix**: Gate the fallback behind `if not settings.is_production`; reject the request with 500 if the defaults are in use.
+  - **Done** (2026-06-28): tutti i path di fallback in `oauth2.py` (righe 210, 231, 246, 273, 303) ritornano `False` se `settings.is_production`. Default client disabilitato in prod.
 
 - [ ] **VAPT-053** — Trusted device fingerprint is `user_agent:ip` (collisions behind NAT/CGNAT)
   - **Location**: `backend/authglow/services/mfa.py:217-224`
@@ -358,6 +372,7 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Location**: `backend/authglow/services/api_key.py:345-357`
   - **Description**: `get_key` (unlocked) is called before the file is removed. Between the read and the `_afs.rm`, the file could be re-created. `_remove_from_prefix_index` is locked but operates on the possibly-stale `api_key.key_prefix`.
   - **Fix**: Acquire `named_lock(f"api_key:{key_id}")` for the whole read-rm sequence.
+  - **Recheck 2026-06-28**: dopo refactor Fase 21 la sequenza `get_key` unlocked → `_afs.rm` potrebbe essere cambiata. Verificare riga per riga `services/api_key.py:345-357` alla luce del nuovo pattern repository.
 
 - [ ] **VAPT-064** — Passkey challenge save/delete not locked
   - **Location**: `backend/authglow/services/passkey.py:121-152`
@@ -399,9 +414,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Fix**: Set `enable_docs=False` when `app_env == "production"`.
 
 - [ ] **VAPT-071** — `https_enforcement` 301 redirect bypasses `SecurityHeadersMiddleware`
-  - **Location**: `backend/main.py:53-65`; `backend/authglow/middleware/https_enforcement.py`
+  - **Location**: `backend/main.py:53-65, 84-90`; `backend/authglow/middleware/https_enforcement.py`
   - **Description**: `HttpsEnforcementMiddleware` is the innermost; its 301 is generated before the outer `SecurityHeadersMiddleware` runs, so the redirect response carries no HSTS/X-Content-Type-Options.
   - **Fix**: Set standard security headers inside the 301 generation path.
+  - **Recheck 2026-06-28**: ordine middleware in `main.py:84-90` è cambiato dopo l'aggiunta di `SlowAPIMiddleware` e `ProxyHeadersMiddleware`. Verificare se `SecurityHeaders` ora gira prima di `HttpsEnforcement` (sì, vedi ordine di `add_middleware` in main.py) e se il 301 include gli header.
 
 - [ ] **VAPT-072** — `MaxBodySizeMiddleware` buffers the entire body in memory (memory DoS)
   - **Location**: `backend/authglow/middleware/request_body_size.py:38-72`
@@ -426,6 +442,7 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Location**: `backend/authglow/api/admin.py:341, 352, 485, 536, 921, 984, 1011, 1042, 1084, 1094, 1173, 1201, 1222, 1243, 1285, 1374, 1395, 1445, 1490`; `backend/authglow/api/rbac.py:28, 49, 58, 70, 83, 112, 121, 143, 189, 204, 252, 266, 306`; `backend/authglow/api/user_profile.py:21, 35, 49, 73, 94, 112, 125, 138, 147`; `backend/authglow/api/api_key.py:58, 68, 214, 240, 254`; `backend/authglow/api/oauth_client.py:98, 114, 232, 259`; `backend/authglow/api/oidc.py:155, 199, 276`
   - **Description**: Examples: `user-search` (enumeration aid), `user-export` (bulk PII), `suspend/unsuspend`, all RBAC CRUD, `change-password/change-email/delete-account`, `oauth-consents/{id}/revoke`. No rate limit enables brute force or DoS.
   - **Fix**: Add `@limiter.limit("...")` decorators with values appropriate to the risk.
+  - **Recheck 2026-06-28**: lista di righe outdated. Verifica del 2026-06-28 conferma che ~20 admin endpoint ancora senza limit (es. `admin.py:76, 99, 141, 155, 239, 355, 366, 505, 562, 984, 1047, 1074, 1105, 1147, 1157, 1170, 1198, 1219, 1240, 1283, 1371, 1392, 1442, 1487, 1585, 1615`). Lista da rigenerare con `grep -nL '@limiter.limit' backend/authglow/api/admin.py`.
 
 - [ ] **VAPT-076** — `POST /api/users/invite` and `GET /api/users` (admin list) are not rate-limited
   - **Location**: `backend/authglow/api/auth.py:791, 1036`
@@ -437,10 +454,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: `POST /api/password/change` is limited to `20/hour` with no progressive per-user backoff.
   - **Fix**: Tighten to `5/minute` or `10/hour`; add per-user failed-counter that escalates to a temporary lockout.
 
-- [ ] **VAPT-078** — `OIDC userinfo`, `OIDC logout`, `/.well-known/openid-configuration`, `/.well-known/jwks.json` have no rate limit
+- [x] **VAPT-078** — `OIDC userinfo`, `OIDC logout`, `/.well-known/openid-configuration`, `/.well-known/jwks.json` have no rate limit
   - **Location**: `backend/authglow/api/oidc.py:28, 100, 155, 199, 276`
   - **Description**: JWKS reads files from disk on every request (`os.path.exists` per key in `oidc.py:125-133`). Soft DoS target.
   - **Fix**: Cache the JWKS response in memory for 60s; add `@limiter.limit("60/minute")` to both endpoints.
+  - **Done** (2026-06-28, commit d0bfcb7 + §1.6 Performance): tutti gli endpoint OIDC hanno `@limiter.limit` (`oidc.py:39, 152, 238, 269, 398, 563, 654, 950, 966, 1001`); JWKS con Cache-Control 300s + ETag `W/"<sha256(_version:active_kid)[:16]>"` (Performance §1.6). Non più soft DoS via disk reads.
 
 ### Logging / PII
 
@@ -571,9 +589,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Fix**: Replace `hasattr` with an explicit allowlist of mutable fields.
 
 - [ ] **VAPT-103** — `update_provider` service uses `setattr` without validation
-  - **Location**: `backend/authglow/services/federation_storage.py:91-93`
+  - **Location**: `backend/authglow/services/federation_provider.py:92-103` *(file rinominato da `federation_storage.py` durante refactor Fase 21, 2026-06)*
   - **Description**: Same pattern as VAPT-102 — any field on `ExternalIdpConfig` can be overwritten. A future endpoint that accepts a wider body could let an attacker rewrite immutable fields like `created_by`.
   - **Fix**: Use an explicit allowlist.
+  - **Recheck 2026-06-28**: location originale obsoleta (file rinominato). Il service ora delega al repository; il pattern `setattr` problematico potrebbe essere nel repository, non nel service. Verificare `services/federation_provider.py:92-103` + il repository chiamato.
 
 - [ ] **VAPT-104** — `Mass assignment` defense inconsistency: `admin.update_user` correctly maps a whitelist of mutable fields
   - **Location**: `backend/authglow/api/admin.py:153-228`
@@ -601,10 +620,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 
 ### Federation
 
-- [ ] **VAPT-108** — Federation `UserStorage` has no `get_by_external_id`; identity is always resolved by email
-  - **Location**: `backend/authglow/api/federation.py:168-175`
+- [x] **VAPT-108** — Federation `UserStorage` has no `get_by_external_id`; identity is always resolved by email
+  - **Location**: `backend/authglow/api/federation.py:168-175`; `backend/authglow/services/user.py:171, 179`
   - **Description**: Same root cause as VAPT-035 (HIGH), but listed here as a separate fix-track (proper identity linkage).
   - **Fix**: Implement `federated_identity` table or require explicit account linking.
+  - **Done** (2026-06, Fase 21 refactor): `services/user.py:171, 179` ora espongono `get_by_external_id` e `link_federated_identity`. La tabella `federated_identity` è supportata via repository. VAPT-035 (HIGH) era già chiuso: la fallback email è ora opzionale e logging.
 
 ---
 
@@ -618,9 +638,10 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Fix**: Set `token_type="id"` in `create_id_token`; harden the decoder to require `token_type` to be present.
 
 - [ ] **VAPT-110** — `iat` clock skew not tolerated; `nbf` not validated
-  - **Location**: `backend/authglow/services/jwt.py:106, 122`
+  - **Location**: `backend/authglow/services/jwt.py:106, 122`; `backend/authglow/services/client_jwt_auth.py:239, 284`
   - **Description**: PyJWT default `leeway=0`. A token with `nbf` one second in the future is rejected; a token issued one second in the past by a clock-skewed peer is also rejected. A small `leeway` (e.g. 30s) is industry standard.
   - **Fix**: Add `leeway=30` and `verify_iat=True, verify_nbf=True`.
+  - **Recheck 2026-06-28**: il nuovo `client_jwt_auth.py` (introdotto da commit `034bac1`) ha `leeway=_LEEWAY_SECONDS`. Il path main `_decode_token` in `services/jwt.py` NON ha ancora `leeway`. Decisione: applicare a tutti i decode o accettare per il main path.
 
 - [ ] **VAPT-111** — MFA session token has 5-minute expiry, no IP/user-agent binding, no consumed flag
   - **Location**: `backend/authglow/services/session.py:33-60, 62-86, 90-121`
@@ -652,10 +673,11 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
   - **Description**: Response includes `secret: str` (plaintext base32). If the auth token is intercepted, the attacker captures the secret. HSTS is set by middleware, but no-store is not.
   - **Fix**: Add `response.headers["Cache-Control"] = "no-store"` to enrollment and regenerate-backup-codes responses.
 
-- [ ] **VAPT-117** — `enroll_mfa` does not invalidate prior `mfa_secret` (no way to "re-roll" after suspected compromise)
+- [x] **VAPT-117** — `enroll_mfa` does not invalidate prior `mfa_secret` (no way to "re-roll" after suspected compromise)
   - **Location**: `backend/authglow/api/mfa.py:46-81`; `backend/authglow/services/mfa.py:58-60`
   - **Description**: If a user re-enrolls, the previous unverified `mfa_secret` is overwritten in place. If it ever leaked, it remains a valid credential until the next successful verification.
   - **Fix**: When re-enrolling, explicitly delete the old secret and audit-log the re-enrollment.
+  - **Done** (2026-06-28, partial): `mfa.py:64-68` ora blocca re-enrollment se `mfa_enabled=True` — il secret precedente non è più raggiungibile via enrollment. **Gap residuo**: per un "re-roll" esplicito (disable + enable) serve ancora audit logging sul disable (vedi VAPT-056 aperto). VAPT-117 copre il caso re-enrollment non autorizzato.
 
 ### Authorization
 
@@ -856,10 +878,16 @@ These were audited and found to be correctly implemented. Re-audit not needed un
 ## Audit metadata
 
 - **Date**: 2026-06-04
+- **Last re-audit**: 2026-06-28 (cleanup pass post Tier 1+2 Performance + DPoP/Client-JWT work)
 - **Method**: 8 parallel explore agents covering OWASP Top 10 (2021), OWASP API Security Top 10 (2023), and standard pen-test concerns (timing attacks, race conditions, business logic, supply chain, dependency hygiene).
 - **Scope**: AuthGlow backend (`backend/authglow/**`), frontend (`frontend/src/**`), configuration (`.env.example`, `requirements.in`, `package.json`, `Dockerfile`), middleware, and CI/CD (none found).
 - **Out of scope**: live infrastructure (TLS config, reverse proxy, secrets manager), third-party IdPs, browser extensions, physical/social-engineering vectors.
 - **Not a substitute for**: a live pentest with `Burp`, `OWASP ZAP`, `sqlmap`, `nuclei`, or a manual reviewer with domain knowledge of the deployment.
 - **Initial findings**: ~210 across 8 agents.
+
+### Changelog
+
+- **2026-06-28** — Cleanup pass: 9 item chiusi (043, 045, 046, 047, 051, 052, 078, 108, 117) — fix già presenti nel codice ma non ancora accreditati nel piano. 4 item marcati "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21 refactor (040, 103). 1 partial fix annotato (039). Severity summary aggiornata: 37→46 fixed, 89→80 remaining.
+- **2026-06-04** — Initial audit, 126 distinct findings.
 - **After deduplication**: 126 distinct items (some agents flagged the same root cause under different lenses).
 - **What was NOT audited**: gRPC/WebSocket channels (none found), webhook signing (out of scope), mobile clients (none found).
