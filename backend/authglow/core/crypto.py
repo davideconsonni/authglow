@@ -5,19 +5,35 @@ import functools
 import hashlib
 import hmac
 import os
-from typing import Optional
+from typing import Iterable, Optional
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 _PREFIX = "ag1:"
 _INFO = b"authglow-totp-encryption-v1"
-_AAD = b"authglow-totp"
+
+# VAPT-041: TOTP-secret AAD is now versioned to align with the
+# other envelopes in this module. The legacy unversioned AAD
+# is kept as a decryption-only fallback so existing on-disk
+# ciphertexts (encrypted before this change) continue to
+# decrypt transparently. The encryption path always uses the
+# versioned AAD.
+_AAD = b"authglow-totp-v1"
+_AAD_LEGACY = b"authglow-totp"
 
 _KEY_PREFIX = "agk1:"
 _KEY_INFO = b"authglow-key-encryption-v1"
-_KEY_AAD = b"authglow-private-key"
+
+# VAPT-041: same pattern for the RSA-private-key AAD. Legacy
+# value kept for backward-compatible decryption of any
+# pre-versioning ciphertext (the keyring was added in Fase 20
+# with the unversioned AAD and may still be on disk in
+# long-lived deployments).
+_KEY_AAD = b"authglow-private-key-v1"
+_KEY_AAD_LEGACY = b"authglow-private-key"
 
 _USER_INFO = b"authglow-user-field-v1"
 _FEDERATION_STATE_INFO = b"authglow-federation-state-v1"
@@ -66,7 +82,39 @@ def derive_federation_state_key(secret_key: Optional[str] = None) -> bytes:
     )
 
 
+def _try_decrypt_with_aads(iv: bytes, encrypted: bytes, aads: Iterable[bytes], key: bytes) -> bytes:
+    """VAPT-041: try each AAD candidate and return the first successful decrypt.
+
+    Used by the AAD-versioned helpers (``decrypt_totp_secret``,
+    ``decrypt_private_key``) so a deployment that has a mix of
+    pre-versioning and post-versioning ciphertexts on disk can
+    read both. ``InvalidTag`` is swallowed because every
+    AES-GCM tag-mismatch is just "wrong AAD" in this context
+    (the key is the same, the IV is the same, the ciphertext
+    is the same — only the AAD varies).
+
+    If every candidate fails, the last exception is re-raised
+    so the caller can log / surface the original error.
+    """
+    last_exc: Optional[Exception] = None
+    for aad in aads:
+        try:
+            return AESGCM(key).decrypt(iv, encrypted, aad)
+        except InvalidTag as exc:
+            last_exc = exc
+    # No AAD matched — surface the underlying AES-GCM error
+    # so the caller can treat it as a tamper / corruption
+    # signal rather than a "version not supported" error.
+    assert last_exc is not None  # the loop above runs at least once
+    raise last_exc
+
+
 def encrypt_totp_secret(plaintext: str) -> str:
+    """Encrypt a TOTP secret with the versioned AAD (VAPT-041).
+
+    Always uses ``_AAD`` (``b"authglow-totp-v1"``). The
+    pre-versioning AAD is decrypt-only.
+    """
     if not plaintext:
         return plaintext
     iv = os.urandom(12)
@@ -77,6 +125,13 @@ def encrypt_totp_secret(plaintext: str) -> str:
 
 
 def decrypt_totp_secret(ciphertext: str) -> str:
+    """Decrypt a TOTP secret, tolerating the legacy AAD (VAPT-041).
+
+    Order matters: the versioned AAD is tried first because
+    every freshly-written ciphertext uses it, so the happy
+    path stays single-try. The legacy AAD is a fallback for
+    pre-VAPT-041 on-disk data only.
+    """
     if not ciphertext:
         return ciphertext
     if not ciphertext.startswith(_PREFIX):
@@ -85,12 +140,16 @@ def decrypt_totp_secret(ciphertext: str) -> str:
     iv = raw[:12]
     encrypted = raw[12:]
     key = _derive_key()
-    aesgcm = AESGCM(key)
-    plaintext = aesgcm.decrypt(iv, encrypted, _AAD)
-    return plaintext.decode()
+    plaintext_bytes = _try_decrypt_with_aads(iv, encrypted, (_AAD, _AAD_LEGACY), key)
+    return plaintext_bytes.decode()
 
 
 def encrypt_private_key(plaintext: bytes, secret_key: Optional[str] = None) -> bytes:
+    """Encrypt an RSA private key with the versioned AAD (VAPT-041).
+
+    Always uses ``_KEY_AAD`` (``b"authglow-private-key-v1"``).
+    The pre-versioning AAD is decrypt-only.
+    """
     iv = os.urandom(12)
     key = _derive_key(
         secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
@@ -102,6 +161,12 @@ def encrypt_private_key(plaintext: bytes, secret_key: Optional[str] = None) -> b
 
 
 def decrypt_private_key(encrypted: bytes, secret_key: Optional[str] = None) -> bytes:
+    """Decrypt an RSA private key, tolerating the legacy AAD (VAPT-041).
+
+    Mirrors :func:`decrypt_totp_secret` — the versioned AAD is
+    tried first (the hot path), the legacy AAD is a fallback
+    for pre-versioning keyring data.
+    """
     if not encrypted.startswith(_KEY_PREFIX.encode()):
         return encrypted
     raw = base64.b64decode(encrypted[len(_KEY_PREFIX) :])
@@ -111,8 +176,7 @@ def decrypt_private_key(encrypted: bytes, secret_key: Optional[str] = None) -> b
         secret_key=secret_key if secret_key is not None else _DEFAULT_SECRET_SENTINEL,
         info=_KEY_INFO,
     )
-    aesgcm = AESGCM(key)
-    return aesgcm.decrypt(iv, ciphertext, _KEY_AAD)
+    return _try_decrypt_with_aads(iv, ciphertext, (_KEY_AAD, _KEY_AAD_LEGACY), key)
 
 
 def encrypt_index_value(plaintext: str, secret_key: Optional[str] = None) -> str:
