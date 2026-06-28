@@ -196,6 +196,17 @@ class TestServiceRevokeAndCheck:
             async def cleanup_expired(self):
                 return 0
 
+            def exists(self, jti):
+                # SYNC hot-path primitive (VAPT-082 refactor):
+                # ``is_revoked`` on a cache miss hits the repo
+                # before falling back to ``False``. The pre-fix
+                # implementation also used ``os.path``; the
+                # post-fix goes through the repo.
+                return False
+
+            def delete(self, jti):
+                return False
+
         svc = TokenBlacklist(repository=NeverLoad())  # type: ignore[arg-type]
         assert svc.is_revoked("anything") is False
 

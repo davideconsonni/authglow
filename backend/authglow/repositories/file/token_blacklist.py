@@ -79,3 +79,39 @@ class FileTokenBlacklistRepository(BaseFileRepository, TokenBlacklistRepository)
                 await self._delete(path)
                 removed += 1
         return removed
+
+    # ------------------------------------------------------------------
+    # Protocol: exists / delete (SYNC hot-path primitives)
+    # ------------------------------------------------------------------
+
+    def exists(self, jti: str) -> bool:
+        """Hot-path check: is the JTI file present on disk?
+
+        Implemented with ``os.path`` because the service calls this
+        on every cache miss. The cost is one ``stat()`` per
+        unknown JTI (typically rare after the in-memory cache
+        warms up).
+        """
+        import os
+
+        return os.path.isfile(self._path(self._filename(jti)))
+
+    def delete(self, jti: str) -> bool:
+        """Delete a single JTI file. Returns ``True`` if it existed.
+
+        SYNC — paired with :meth:`exists` for the lazy cleanup
+        of expired entries on the hot path.
+        """
+        import os
+
+        path = self._path(self._filename(jti))
+        try:
+            os.remove(path)
+            return True
+        except FileNotFoundError:
+            return False
+
+    # ------------------------------------------------------------------
+    # Protocol: cleanup_expired (async bulk)
+    # ------------------------------------------------------------------
+    # (defined above, alongside ``save`` / ``load_all``)

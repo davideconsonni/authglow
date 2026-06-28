@@ -389,8 +389,11 @@ class TokenBlacklistRepository(Protocol):
 
     One file per revoked JTI so multi-instance deployments sharing a
     single filesystem see each other's revocations without restart.
-    Hot-path reads (``is_revoked``) are sync via ``os.path``; the
-    repository handles async hydration, writes, and cleanup.
+    The service layer handles the in-memory cache; the repository
+    is responsible for async hydration, writes, periodic cleanup
+    and the *sync* hot-path primitives (``exists`` / ``delete``)
+    that ``is_revoked`` calls on a cache miss without yielding the
+    event loop.
     """
 
     async def save(self, jti: str, expires_at: float) -> None:
@@ -399,6 +402,22 @@ class TokenBlacklistRepository(Protocol):
     async def load_all(self) -> Dict[str, float]:
         """Return every persisted jti -> expires_at mapping. Expired
         entries may be included; the service layer filters on read."""
+
+    def exists(self, jti: str) -> bool:
+        """Hot-path check: is the JTI file present?
+
+        SYNC — the service calls this on a cache miss without
+        yielding the event loop. The File impl uses ``os.path``
+        (fast); a SQL impl would need to expose a sync primitive
+        (e.g. a sync driver) or change the service to async.
+        """
+
+    def delete(self, jti: str) -> bool:
+        """Delete a single JTI file. Returns ``True`` if it existed.
+
+        SYNC — paired with :meth:`exists` for the lazy cleanup
+        of expired entries on the hot path.
+        """
 
     async def cleanup_expired(self) -> int:
         """Delete expired entries. Returns the count of removed files."""

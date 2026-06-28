@@ -165,6 +165,15 @@ class OAuth2ConsentService:
         cutoff = (utcnow() - timedelta(days=self.RETENTION_DAYS)).isoformat()
         return await self._repository.cleanup_expired(cutoff=cutoff)
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """Drop **every** OAuth2 consent belonging to ``user_id``.
+
+        VAPT-082 / GDPR right-to-erasure. Service-layer wrapper
+        so callers stay out of ``self._repository``. Returns
+        the deletion count.
+        """
+        return await self._repository.delete_for_user(user_id)
+
     async def list_all_for_admin(
         self,
         *,

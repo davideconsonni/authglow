@@ -150,6 +150,15 @@ class SecurityEventService:
         )
         return event
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """Drop **every** security event for ``user_id``.
+
+        VAPT-082 / GDPR right-to-erasure. Service-layer wrapper
+        around the repository so callers stay out of ``self._repo``.
+        Returns the deletion count.
+        """
+        return await self._repo.delete_for_user(user_id)
+
     async def get_security_events(
         self,
         user_id: str,

@@ -187,6 +187,16 @@ class LoginHistoryService:
         (newest first) plus the total count."""
         return await self._repo.list_for_user(user_id, limit=limit, offset=offset)
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """Drop **every** login-history record for ``user_id``.
+
+        Used by the GDPR right-to-erasure path (VAPT-082). The
+        service layer is the single point of access to the
+        repository — callers must not reach into ``self._repo``
+        directly. Returns the deletion count.
+        """
+        return await self._repo.delete_for_user(user_id)
+
     async def _cleanup_old_entries(self, user_id: str) -> None:
         """Sweep records older than :attr:`RETENTION_DAYS` for one
         user. Delegates to the repository (which uses the

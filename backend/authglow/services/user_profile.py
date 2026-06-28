@@ -121,7 +121,7 @@ class UserProfileService:
             # ``_write_user`` shortcut on the service is no longer
             # the canonical path; the repository is responsible
             # for PII encryption + atomic write).
-            await self.user_storage._user_repo.update(user)
+            await self.user_storage.update_user(user)
 
         return await self.get_user_profile(user_id)
 
@@ -152,7 +152,7 @@ class UserProfileService:
             user.hashed_password = await hash_password_async(new_password)
             user.updated_at = utcnow()
 
-            await self.user_storage._user_repo.update(user)
+            await self.user_storage.update_user(user)
 
         # Send security notification
         await self.security_service.send_password_changed_alert(user, ip_address)
@@ -194,7 +194,7 @@ class UserProfileService:
             user.email_verified = False
             user.updated_at = utcnow()
 
-            await self.user_storage._user_repo.update(user)
+            await self.user_storage.update_user(user)
 
         # Send verification email to new address
         token = await self.email_service.create_verification_token(user)
@@ -291,10 +291,16 @@ class UserProfileService:
 
         Drops every PII-bearing record we own for ``user_id``:
         login history, security events, admin actions against
-        the user, OAuth2 consents, federated identities. Runs
-        in parallel so a single failing repo does not block
-        the others. Returns a per-repo deletion count for
-        observability.
+        the user, OAuth2 consents. Runs in parallel so a single
+        failing service does not block the others. Returns a
+        per-service deletion count for observability.
+
+        Calls go through the *public* ``delete_for_user`` method
+        on each service (never ``self._repo.*`` directly) so the
+        service layer stays the single point of access to the
+        repository. When the persistence backend swaps from
+        File to Postgres, only the service / repository change —
+        this method does not.
         """
         import asyncio
 
@@ -309,10 +315,10 @@ class UserProfileService:
         consent_svc = OAuth2ConsentService()
 
         results = await asyncio.gather(
-            login_svc._repo.delete_for_user(user_id),
-            security_svc._repo.delete_for_user(user_id),
-            admin_svc._repo.delete_for_user(user_id),
-            consent_svc.repository.delete_for_user(user_id),
+            login_svc.delete_for_user(user_id),
+            security_svc.delete_for_user(user_id),
+            admin_svc.delete_for_user(user_id),
+            consent_svc.delete_for_user(user_id),
             return_exceptions=True,
         )
 
@@ -381,7 +387,7 @@ class UserProfileService:
             user.is_active = False
             user.updated_at = utcnow()
 
-            await self.user_storage._user_repo.update(user)
+            await self.user_storage.update_user(user)
 
         return True, "Account deactivated successfully"
 
@@ -395,6 +401,6 @@ class UserProfileService:
             user.is_active = True
             user.updated_at = utcnow()
 
-            await self.user_storage._user_repo.update(user)
+            await self.user_storage.update_user(user)
 
         return True, "Account reactivated successfully"

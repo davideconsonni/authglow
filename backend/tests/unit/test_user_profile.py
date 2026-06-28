@@ -47,7 +47,7 @@ class TestUpdateUserProfile:
     def test_update_user_profile(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
 
         update = UserProfileUpdate(first_name="Updated")
@@ -59,7 +59,7 @@ class TestChangePassword:
     def test_change_password_success(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock(
             return_value=True
         )
@@ -102,7 +102,7 @@ class TestChangePassword:
 
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
@@ -117,7 +117,7 @@ class TestChangePassword:
         """S7 regression: ip_address defaults to None when not provided."""
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
         user_profile_service.security_service.send_password_changed_alert = AsyncMock()
 
         asyncio_run(
@@ -133,7 +133,7 @@ class TestChangeEmail:
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
         user_profile_service.user_storage.get_user_by_email = AsyncMock(return_value=None)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
         mock_token = MagicMock()
         mock_token.verification_code = "ABCD-EFGH-JKMN"
         user_profile_service.email_service.create_verification_token = AsyncMock(
@@ -263,10 +263,10 @@ class TestDeleteAccount:
             patch("authglow.services.admin_action.AdminActionService") as mock_admin_cls,
             patch("authglow.services.oauth_consent.OAuth2ConsentService") as mock_consent_cls,
         ):
-            mock_login_cls.return_value._repo.delete_for_user = AsyncMock(return_value=3)
-            mock_sec_cls.return_value._repo.delete_for_user = AsyncMock(return_value=1)
-            mock_admin_cls.return_value._repo.delete_for_user = AsyncMock(return_value=2)
-            mock_consent_cls.return_value.repository.delete_for_user = AsyncMock(return_value=4)
+            mock_login_cls.return_value.delete_for_user = AsyncMock(return_value=3)
+            mock_sec_cls.return_value.delete_for_user = AsyncMock(return_value=1)
+            mock_admin_cls.return_value.delete_for_user = AsyncMock(return_value=2)
+            mock_consent_cls.return_value.delete_for_user = AsyncMock(return_value=4)
 
             counts = asyncio_run(user_profile_service._purge_user_pii("user-x"))
 
@@ -276,12 +276,10 @@ class TestDeleteAccount:
                 "admin_action": 2,
                 "oauth_consent": 4,
             }
-            mock_login_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
-            mock_sec_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
-            mock_admin_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
-            mock_consent_cls.return_value.repository.delete_for_user.assert_awaited_once_with(
-                "user-x"
-            )
+            mock_login_cls.return_value.delete_for_user.assert_awaited_once_with("user-x")
+            mock_sec_cls.return_value.delete_for_user.assert_awaited_once_with("user-x")
+            mock_admin_cls.return_value.delete_for_user.assert_awaited_once_with("user-x")
+            mock_consent_cls.return_value.delete_for_user.assert_awaited_once_with("user-x")
 
     def test_purge_user_pii_continues_on_partial_failure(self, user_profile_service):
         """VAPT-082 — GDPR right-to-erasure should not abort the
@@ -294,12 +292,12 @@ class TestDeleteAccount:
             patch("authglow.services.admin_action.AdminActionService") as mock_admin_cls,
             patch("authglow.services.oauth_consent.OAuth2ConsentService") as mock_consent_cls,
         ):
-            mock_login_cls.return_value._repo.delete_for_user = AsyncMock(
+            mock_login_cls.return_value.delete_for_user = AsyncMock(
                 side_effect=OSError("disk full")
             )
-            mock_sec_cls.return_value._repo.delete_for_user = AsyncMock(return_value=1)
-            mock_admin_cls.return_value._repo.delete_for_user = AsyncMock(return_value=0)
-            mock_consent_cls.return_value.repository.delete_for_user = AsyncMock(return_value=2)
+            mock_sec_cls.return_value.delete_for_user = AsyncMock(return_value=1)
+            mock_admin_cls.return_value.delete_for_user = AsyncMock(return_value=0)
+            mock_consent_cls.return_value.delete_for_user = AsyncMock(return_value=2)
 
             counts = asyncio_run(user_profile_service._purge_user_pii("user-x"))
 
@@ -313,7 +311,7 @@ class TestAccountStatus:
     def test_deactivate_account(self, user_profile_service):
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
 
         success, msg = asyncio_run(user_profile_service.deactivate_account("profile-user-1"))
         assert success is True
@@ -329,7 +327,7 @@ class TestAccountStatus:
         user = _make_user()
         user.is_active = False
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
-        user_profile_service.user_storage._user_repo.update = AsyncMock()
+        user_profile_service.user_storage.update_user = AsyncMock()
 
         success, msg = asyncio_run(user_profile_service.reactivate_account("profile-user-1"))
         assert success is True

@@ -86,6 +86,24 @@ def test_settings(tmp_path, test_keys_dir):
 
 @pytest.fixture(autouse=True)
 def _override_settings(test_settings):
+    """Patch ``authglow.core.config.get_settings`` and ``Settings``
+    to return the per-test ``test_settings`` instance, and clear the
+    ``@lru_cache`` on the module-level ``get_settings`` so cached
+    production Settings from a previous test (or test file) does
+    not leak into this one.
+
+    Without the ``cache_clear()`` call, the very first test in a
+    worker that calls ``get_settings()`` (or any service that does
+    so at ``__init__``) populates the cache with a production
+    Settings instance. Subsequent tests in the same worker that
+    call ``get_settings`` via a local ``from authglow.core.config
+    import get_settings`` binding see the cached value — the
+    ``with patch`` block does not invalidate an existing cache
+    entry, it only intercepts future lookups by name.
+    """
+    from authglow.core import config as _config
+
+    _config.get_settings.cache_clear()
     with patch("authglow.core.config.get_settings", return_value=test_settings):
         with patch("authglow.core.config.Settings", return_value=test_settings):
             yield
@@ -117,6 +135,30 @@ def _reset_http_client():
 
     yield
     asyncio.run(reset_http_client())
+
+
+@pytest.fixture(autouse=True)
+def _clear_crypto_caches():
+    """Drop the process-wide ``lru_cache`` on the four crypto
+    primitives between tests so each case reloads the key
+    derivation / lookup hashes against the ``test_settings``
+    patched by :func:`_override_settings`.
+
+    Without this, a test that calls e.g.
+    :func:`authglow.core.crypto.reset_code_lookup_key` with one
+    secret will pollute the cache for every other test in the
+    same worker — including parallel workers. The pre-existing
+    ``test_password_reset_service::TestVapt022ResetCodeFlow``
+    tests were failing in ``-n auto`` because the cache was
+    populated by an earlier test (e.g. ``test_cache.py`` with
+    ``secret_key="a" * 32``) and never reset between workers.
+    """
+    from authglow.core import crypto
+
+    crypto._derive_key.cache_clear()
+    crypto.hash_index_key.cache_clear()
+    crypto.reset_code_lookup_key.cache_clear()
+    crypto.verification_code_lookup_key.cache_clear()
 
 
 @pytest.fixture
@@ -176,8 +218,7 @@ def mfa_service(test_settings):
     from authglow.services.mfa import MFAService
 
     with patch("authglow.services.mfa.get_settings", return_value=test_settings):
-        svc = MFAService()
-        return svc
+        yield MFAService()
 
 
 @pytest.fixture
@@ -236,10 +277,23 @@ def session_service(test_settings):
 
 @pytest.fixture
 def password_reset_service(test_settings):
+    """Fixture for ``PasswordResetService``.
+
+    VAPT-022 cleanup: must use ``yield`` (not ``return``) so the
+    ``patch`` on ``authglow.services.password_reset.get_settings``
+    stays active for the whole test. ``password_reset.py:47``
+    imports ``get_settings`` at module level, so the function
+    ``_reset_code_lookup_key`` binds to the local name. The
+    ``_override_settings`` autouse fixture patches
+    ``authglow.core.config.get_settings`` but does NOT reach
+    the per-service local binding — without this yield-based
+    patch, the test fails with ``found is None`` because the
+    HMAC is computed with the production ``SECRET_KEY``.
+    """
     from authglow.services.password_reset import PasswordResetService
 
     with patch("authglow.services.password_reset.get_settings", return_value=test_settings):
-        return PasswordResetService()
+        yield PasswordResetService()
 
 
 @pytest.fixture
@@ -256,7 +310,7 @@ def oauth_consent_service(test_settings):
     from authglow.services.oauth_consent import OAuth2ConsentService
 
     with patch("authglow.services.oauth_consent.get_settings", return_value=test_settings):
-        return OAuth2ConsentService()
+        yield OAuth2ConsentService()
 
 
 @pytest.fixture
@@ -264,10 +318,10 @@ def email_verification_service(test_settings):
     from authglow.services.email_verification import EmailVerificationService
 
     with patch("authglow.services.email_verification.get_settings", return_value=test_settings):
-        with patch("authglow.services.email_verification.UserStorage") as mock_cls:
+        with patch("authglow.services.email_verification.UserStorage"):
             svc = EmailVerificationService()
             svc.user_storage = MagicMock()
-            return svc
+            yield svc
 
 
 @pytest.fixture
@@ -275,7 +329,7 @@ def rbac_service(test_settings):
     from authglow.services.rbac import RBACService
 
     with patch("authglow.services.rbac.get_settings", return_value=test_settings):
-        return RBACService()
+        yield RBACService()
 
 
 @pytest.fixture

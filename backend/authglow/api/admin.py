@@ -1,6 +1,5 @@
 """Admin portal API endpoints."""
 
-import os
 from datetime import datetime, timedelta
 from typing import Optional, TypedDict
 
@@ -1492,16 +1491,27 @@ async def get_jwk_keys(
     info = jwt_service.get_keyring_info()
 
     keys_list = []
+    # Refactor (repository pattern): route the keyring read
+    # through ``KeyStoreRepository.read_public_key`` instead of
+    # ``os.path`` + ``open()`` so a future Postgres impl does
+    # not have to mimic the file-system PEM layout.
+    from authglow.repositories.dependencies import (
+        get_keystore_repository,
+    )
+
+    keystore = get_keystore_repository(settings=get_settings())
     for kid, meta in info["keys"].items():
-        pub_path = os.path.join(get_settings().keys_dir, kid, "public_key.pem")
-        has_file = os.path.exists(pub_path)
+        pub_pem = await keystore.read_public_key(kid)
+        has_file = pub_pem is not None
         try:
-            with open(pub_path, "rb") as f:
+            if pub_pem is not None:
                 from cryptography.hazmat.backends import default_backend
                 from cryptography.hazmat.primitives import serialization
 
-                pub_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+                pub_key = serialization.load_pem_public_key(pub_pem, backend=default_backend())
                 key_size = getattr(pub_key, "key_size", None)
+            else:
+                key_size = meta.get("key_size", None)
         except Exception:
             key_size = meta.get("key_size", None)
 

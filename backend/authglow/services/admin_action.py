@@ -163,6 +163,16 @@ class AdminActionService:
         )
         return action
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """Drop **every** admin-action record targeting ``user_id``.
+
+        VAPT-082 / GDPR right-to-erasure. The repository key
+        for admin actions is ``target_user_id`` (the user that
+        the action was performed against); the GDPR purge path
+        passes the user that was deleted.
+        """
+        return await self._repo.delete_for_user(target_user_id=user_id)
+
     async def get_admin_actions(
         self,
         target_user_id: str,
