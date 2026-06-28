@@ -1,5 +1,8 @@
 """Main FastAPI application for AuthGlow."""
 
+import asyncio
+import os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -33,9 +36,27 @@ from authglow.services.auth.token_blacklist import token_blacklist
 
 settings = get_settings()
 
+# Default ``ThreadPoolExecutor`` size used by ``asyncio.to_thread`` for
+# off-loading blocking I/O (bcrypt, fsspec, PII decrypt, sync RSA parse).
+# CPython's default is ``min(32, cpu+4)`` workers; we widen it to
+# ``min(32, cpu*4)`` (Tier 2.1) so that bursts of concurrent
+# ``/oauth2/token`` requests — each doing bcrypt + 5 PII decrypts — do
+# not queue behind an undersized pool. Capped at 32 to stay within
+# the documented asyncio ``ThreadPoolExecutor`` ceiling.
+_DEFAULT_EXECUTOR_WORKERS = min(32, (os.cpu_count() or 1) * 4)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Widen the default ``ThreadPoolExecutor`` for this event loop. Must run
+    # before the first ``asyncio.to_thread`` call so the new pool is used
+    # by the subsequent ``startup_hydrate`` and all request handling.
+    # No explicit shutdown — Python >=3.9 (``asyncio.Runner``) closes the
+    # default executor when the loop closes, so HUP/SIGTERM cleans up
+    # automatically.
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(max_workers=_DEFAULT_EXECUTOR_WORKERS),
+    )
     await token_blacklist().startup_hydrate()
     yield
 

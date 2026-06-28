@@ -1,8 +1,8 @@
-"""Micro-benchmark for ``asyncio.to_thread`` concurrency (Tier 2.5).
+"""Micro-benchmark for ``asyncio.to_thread`` concurrency (Tier 2.1).
 
 Measures how the asyncio event loop handles a burst of blocking
 operations when the underlying ``ThreadPoolExecutor`` is sized
-differently. Tier 2.5 of ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md``
+differently. Tier 2.1 of ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md``
 widens the default executor from CPython's
 ``min(32, cpu_count + 4)`` workers to ``min(32, cpu_count * 4)``;
 this benchmark exists to decide whether that change actually moves
@@ -23,8 +23,13 @@ Two runs are performed back-to-back:
 The headline comparison is the ``n=64`` case (8 batches on
 the baseline, 2 batches on the widened pool → 4× speed-up
 is the headline). If the actual speed-up is < 20%, the plan
-documents that §2.5 is reverted (see the rollback section in
+documents that §2.1 is reverted (see the rollback section in
 the plan).
+
+The production wiring is in ``main.py:_DEFAULT_EXECUTOR_WORKERS``
+and applied in ``main.py:lifespan``. The regression test that
+verifies the production wiring (executor actually widened after
+lifespan starts) lives in ``tests/unit/test_main_lifespan.py``.
 
 Run with: ``pytest -m performance`` from the ``backend/`` directory.
 """
@@ -50,12 +55,7 @@ _OP_DURATION_SECONDS = 0.05
 async def _bench(n: int) -> float:
     """Return wall time (seconds) for *n* concurrent ``to_thread`` calls."""
     start = time.perf_counter()
-    await asyncio.gather(
-        *[
-            asyncio.to_thread(time.sleep, _OP_DURATION_SECONDS)
-            for _ in range(n)
-        ]
-    )
+    await asyncio.gather(*[asyncio.to_thread(time.sleep, _OP_DURATION_SECONDS) for _ in range(n)])
     return time.perf_counter() - start
 
 
@@ -69,9 +69,9 @@ def _print(label: str, n: int, trials: list[float], pool_size: int) -> None:
     median = statistics.median(trials)
     print(
         f"\n[threadpool bench] {label}: pool={pool_size} n={n} "
-        f"best={best*1000:.1f}ms (ratio={_ratio(n, best):.2f}x op) "
-        f"median={median*1000:.1f}ms "
-        f"trials={[f'{t*1000:.1f}ms' for t in trials]}"
+        f"best={best * 1000:.1f}ms (ratio={_ratio(n, best):.2f}x op) "
+        f"median={median * 1000:.1f}ms "
+        f"trials={[f'{t * 1000:.1f}ms' for t in trials]}"
     )
 
 
@@ -101,7 +101,7 @@ class TestThreadPoolBenchmark:
         _print("baseline burst 8", 8, trials, default_pool)
         assert min(trials) < _OP_DURATION_SECONDS * 2.0, (
             f"8 ops should be near-1× op duration "
-            f"({_OP_DURATION_SECONDS*1000:.0f}ms); got {min(trials)*1000:.1f}ms"
+            f"({_OP_DURATION_SECONDS * 1000:.0f}ms); got {min(trials) * 1000:.1f}ms"
         )
 
     async def test_baseline_default_pool_burst_64(self):
@@ -115,12 +115,10 @@ class TestThreadPoolBenchmark:
         """Same as ``test_baseline_default_pool_burst_8`` but with the
         widened ``ThreadPoolExecutor`` installed via
         ``loop.set_default_executor`` — this mirrors the
-        Tier 2.5 production setup.
+        Tier 2.1 production setup.
         """
         loop = asyncio.get_running_loop()
-        widened = ThreadPoolExecutor(
-            max_workers=min(32, (os.cpu_count() or 1) * 4)
-        )
+        widened = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
         loop.set_default_executor(widened)
         try:
             trials = await _bench_n_times(8)
@@ -135,15 +133,13 @@ class TestThreadPoolBenchmark:
         **This is the headline comparison.** If the widened
         pool (32 workers) cuts the wall time by >=20% vs
         the default pool (~28 workers on this machine), the
-        §2.5 change is worth keeping. Otherwise, the
-        PERFORMANCE_OPTIMIZATION_PLAN §2.5 rollback procedure
+        §2.1 change is worth keeping. Otherwise, the
+        PERFORMANCE_OPTIMIZATION_PLAN §2.1 rollback procedure
         applies and the ``set_default_executor`` line in
         ``main.py`` is reverted.
         """
         loop = asyncio.get_running_loop()
-        widened = ThreadPoolExecutor(
-            max_workers=min(32, (os.cpu_count() or 1) * 4)
-        )
+        widened = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
         loop.set_default_executor(widened)
         try:
             trials = await _bench_n_times(64)
@@ -158,9 +154,7 @@ class TestThreadPoolBenchmark:
         Stress test: 200/32 = 7 batches × 50ms ≈ 350ms expected.
         """
         loop = asyncio.get_running_loop()
-        widened = ThreadPoolExecutor(
-            max_workers=min(32, (os.cpu_count() or 1) * 4)
-        )
+        widened = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
         loop.set_default_executor(widened)
         try:
             trials = await _bench_n_times(200)
@@ -176,7 +170,7 @@ class TestThreadPoolConfig:
     def test_proposed_pool_size_is_within_plan_bounds(self):
         proposed = min(32, (os.cpu_count() or 1) * 4)
         default = min(32, (os.cpu_count() or 1) + 4)
-        assert proposed <= 32, "Tier 2.5 caps the pool at 32"
+        assert proposed <= 32, "Tier 2.1 caps the pool at 32"
         assert proposed >= 1
         print(
             f"\n[threadpool config] cpu_count={os.cpu_count()} "
