@@ -26,15 +26,16 @@ qui il piano esecutivo.
 
 ### Vincoli di piattaforma
 
-| Piattaforma | uvloop | PYTHONMALLOC=mimalloc | memray | py-spy live |
-|---|:---:|:---:|:---:|:---:|
-| Windows | ❌ | ❌ | ❌ | ❌ |
-| Linux | ✅ | ✅ | ✅ | ✅ |
-| macOS | ✅ | ✅ | ✅ | ✅ |
+| Piattaforma | uvloop | PYTHONMALLOC=mimalloc |
+|---|:---:|:---:|
+| Windows | ❌ | ❌ |
+| Linux | ✅ | ✅ |
+| macOS | ✅ | ✅ |
 
 → Usiamo il **pattern try-import / try-except** per `uvloop`; usiamo
-`PYTHONMALLOC=mimalloc` solo come env var documentata in `.env.example`; profiling solo
-con strumenti cross-platform (`tracemalloc`, `scalene`, `opentelemetry`).
+`PYTHONMALLOC=mimalloc` solo come env var documentata in `.env.example`; profiling
+incluso nel piano solo con strumenti cross-platform (nessun profiler di nicchia
+adottato — vedi decisione owner 2026-06-28 nei tier 3-4).
 
 ---
 
@@ -53,175 +54,11 @@ Tier eseguiti in ordine. Dopo ogni tier, misurare con load test (vedi §Validazi
 
 ## Tier 1 — Quick wins cross-platform, no new dependencies
 
-**Tempo stimato**: ~2 ore
-**Impatto atteso**: ×3-5x throughput
-**Rischio**: basso (modifiche localizzate, pattern esistenti nel codice)
-
-### 1.1 — bcrypt sync → `asyncio.to_thread`
-
-- [x] **`services/password.py:90-108`** — wrappare `bcrypt.hashpw` e `bcrypt.checkpw` in
-  `async def hash_password_async()` / `async def verify_password_async()` con
-  `asyncio.to_thread`. Mantenere le versioni sync come wrapper che chiamano `asyncio.run`
-  per retro-compat (per gli script CLI e i job fuori dal request loop).
-- [x] **Aggiornare call site in `services/refresh_token.py:87, 139`** per usare
-  `_async`.
-- [x] **Aggiornare call site in `services/mfa.py:125-132`** (backup code verify).
-- [x] **Aggiornare call site in `services/api_key.py:76, 83`** (hash + verify).
-- [x] **Aggiornare call site in `services/oauth_client.py:103`** (`verify_password`).
-- [x] **Aggiornare call site in `api/auth.py:1007`** (login password verify).
-- [x] **Aggiornare call site in `api/auth.py:491`** (OAuth2 authorize password).
-- [x] **Aggiornare call site in `api/oidc.py:694`** (DCR client_secret verify).
-- [x] **Aggiornare call site in `api/user_profile.py:179`** (change password).
-- [x] **Aggiornare call site in `api/password_reset.py:236, 259`** (reset/change).
-- [x] **Test**: `pytest tests/unit/test_password.py tests/unit/test_api_key.py
-  tests/unit/test_refresh_token.py tests/unit/test_admin_users_phase2.py` deve passare.
-- [x] **Estensione scope** (uniformità): convertiti anche `api/admin.py:260,650`,
-  `api/federation.py:316`, `api/setup.py:114`, `api/auth.py:1319,1511` e
-  i call site `hash` in `api/password_reset.py:183,266` e `services/user_profile.py:145,149,231`
-  + `services/oauth_client.py:72,162`. Refactor di `services/{refresh_token,mfa,api_key}.py`
-  per delega a `services/password.py` (rimozione `import bcrypt` diretto).
-- [x] **Nuova suite** `tests/performance/test_bcrypt_async.py` (12 test: correttezza
-  + concorrenza + micro-benchmark) con marker `performance` in `pyproject.toml`.
-
-### 1.2 — Singleton `JWTService` in `api/*`
-
-- [x] **`api/auth.py:107-114`** — `get_jwt_service` con lazy-async singleton come
-  `core/permissions.py:14-21`. Cache invalida su `rotate_keys` (admin-only).
-- [x] **`api/mfa.py:47-49`** — stesso pattern.
-- [x] **`api/passkey.py:66-68`** — stesso pattern.
-- [x] **`api/oauth2_advanced.py:30-32`** — stesso pattern.
-- [x] **Estensione scope** (uniformità): consolidato tutto in un unico modulo
-  `core/jwt_singleton.py` con `get_jwt_service()` + `reset_jwt_singleton()`,
-  `asyncio.Lock` + double-checked locking. Hook su `JWTService.rotate_keys` e
-  `revoke_key`. Convertiti anche i call site diretti in `api/admin.py:1491,1534,1561`,
-  `api/oidc.py:133,190,225,299,451`, `api/password_reset.py:284`, `api/federation.py:346`,
-  `api/auth.py:349,397` (16 call site totali → 1 singleton).
-- [x] **Test isolation**: fixture autouse `_reset_jwt_singleton` in `tests/conftest.py`.
-- [x] **Test**: `pytest tests/unit/test_jwt.py tests/unit/test_admin.py
-  tests/unit/test_id_token_*.py` deve passare; test_oidc_logout, test_logout_redirect,
-  test_permissions. Aggiornati i mock in `test_logout_redirect.py`,
-  `test_id_token_hint.py`, `test_federation.py` per il nuovo pattern.
-  Nuova suite `tests/performance/test_jwt_singleton.py` (3 test: reuse, concorrenza,
-  invalidation su rotate).
-
-### 1.3 — `httpx.AsyncClient` singleton in `federation.py`
-
-- [x] **`services/federation.py:122, 178, 195`** — estrarre il `with
-  httpx.AsyncClient(...) as client:` in un singleton module-level con
-  `httpx.Limits(max_connections=50, max_keepalive_connections=20)`. Init lazy
-  dentro un async lock.
-- [x] **Posizionato in modulo dedicato** `core/http_client.py` (parallelo a
-  `core/jwt_singleton.py`): `get_http_client()` + `reset_http_client()`.
-  `reset_http_client` defensively gestisce `RuntimeError("Event loop is closed")`
-  al teardown dei test.
-- [x] **Test isolation**: fixture autouse `_reset_http_client` in `tests/conftest.py`.
-- [x] **Verifica scope**: nessun altro modulo fa HTTP outbound (`requests`,
-  `aiohttp`, `urllib.request` assenti; `urllib.parse` usato solo per
-  `urlparse`/`urlencode`).
-- [x] **Test**: `pytest tests/integration/test_federation*.py
-  tests/unit/test_federation_*.py` deve passare. Aggiunta nuova suite
-  `tests/performance/test_httpx_singleton.py` (5 test: reuse, concorrenza,
-  limits 50/20 verificati sul pool transport, concurrent discover via
-  `httpx.MockTransport`, reset closes & replaces).
-
-### 1.4 — `lru_cache` su `_derive_key`
-
-- [x] **`core/crypto.py:33-40`** — wrappare `_derive_key` con
-  `@functools.lru_cache(maxsize=8)`. La funzione è deterministica in
-  `(secret_key, info)` → sicuro cachare.
-- [x] **Estensione scope** (uniformità): applicato `@lru_cache(maxsize=8)` anche a
-  `hash_index_key`, `reset_code_lookup_key`, `verification_code_lookup_key` (tutte
-  funzioni HMAC deterministiche in `core/crypto.py`).
-- [x] **Refactor opportunistico**: `derive_federation_state_key` ora è un thin
-  wrapper di `_derive_key(info=_FEDERATION_STATE_INFO)` — rimossa duplicazione
-  della logica HKDF.
-- [x] **Sentinel per `None`**: `_DEFAULT_SECRET_SENTINEL` perché `lru_cache`
-  richiede argomenti hashable e `None` non lo è. Il sentinel non è mai un
-  `SECRET_KEY` reale (i secret sono 48-char base64url).
-- [x] **Test isolation**: fixture autouse `_clear_crypto_caches` in
-  `tests/unit/test_crypto.py` che chiama `cache_clear()` su tutti e 4 i cache
-  ad ogni test. Aggiornato `tests/unit/test_mfa.py::test_wrong_key_fails`
-  per chiamare `cache_clear()` prima del patch di `get_settings`.
-- [x] **Test**: `pytest tests/unit/test_crypto.py` (nuovo, 20 test) + smoke
-  test in `tests/unit/test_admin_users_phase2.py`.
-
-### 1.5 — Cache `client_id` per-request in `OAuth2Service`
-
-- [x] **`services/oauth2.py:152, 179, 221`** — accettare `client_id_cache: dict[str,
-  OAuth2Client] | None = None` come parametro, oppure cachare per-request via
-  `contextvars.ContextVar`. Popolato al primo lookup, rimosso a fine request.
-- [x] **Estensione scope** (uniformità): convertiti **5** call site (non 3) —
-  `verify_client` (152), `verify_redirect_uri` (179), `verify_scopes` (194),
-  `process_scopes` (221), `verify_grant_type` (251). Il piano ne citava 3, ne
-  esistevano 5.
-- [x] **Pattern scelto**: `contextvars.ContextVar` con cache positivo+negativo
-  (cached ``None`` per client sconosciuto). Helper `_get_client_cached()` su
-  `OAuth2Service`. Scope automatico per `asyncio.Task` (una request = un Task
-  in FastAPI), zero modifiche alle signature pubbliche.
-- [x] **Test**: `pytest tests/integration/test_oauth2*.py` deve passare. Aggiunta
-  nuova suite `tests/performance/test_oauth2_cache.py` (5 test: cache hit
-  in-request, isolamento tra Task concorrenti via `asyncio.create_task`, cache
-  negativo, distinct clients cached separately, cache clears between Task
-  lifecycle). Tutti i test esistenti che mockano `client_storage` continuano a
-  funzionare senza modifiche.
-
-### 1.6 — ETag + Cache-Control su endpoint statici
-
-- [x] **`api/oidc.py:30`** (`openid_configuration`) — aggiungere
-  `response.headers["Cache-Control"] = "public, max-age=3600"`.
-- [x] **`api/oidc.py:123`** (`jwks`) — aggiungere
-  `response.headers["Cache-Control"] = "public, max-age=300"` + ETag basato su
-  `keyring.json` mtime + content hash.
-- [x] **`api/oidc.py:210`** (`userinfo`) — `private, max-age=0, no-cache`.
-- [x] **ETag implementation**: `W/"<sha256(f"{_version}:{active_kid}")[:16]>"`
-  con gestione `If-None-Match` per `304 Not Modified`. Headers impostati
-  PRIMA del check di autenticazione (privacy-by-design: l'header
-  `private, no-cache` su userinfo viene settato anche se il token
-  è invalido, impedendo cache accidentale di risposte personalizzate).
-- [x] **Test**: `pytest tests/unit/test_oidc.py tests/unit/test_discovery.py` deve passare.
-  Aggiunta nuova suite `tests/unit/test_oidc_cache_headers.py` (7 test:
-  discovery cache-control, jwks cache-control, jwks ETag format, jwks
-  ETag stability, jwks 304 su If-None-Match, jwks full body su
-  If-None-Match stale, userinfo no-cache header).
-
-### 1.7 — Lazy import moduli pesanti
-
-- [ ] *(skipped — owner decision)* **Spostare `import pyotp`**, **`import qrcode`**,
-  **`import webauthn`** dentro le rispettive funzioni (vedi `services/mfa.py`,
-  `services/passkey.py`).
-- [ ] *(skipped — owner decision)* **Test**: `pytest tests/unit/test_mfa.py tests/unit/test_passkey.py`
-  deve passare.
-
-### 1.8 — Rimuovere I/O sync in `jwks`
-
-- [x] **`api/oidc.py:149-155`** — rimuovere `os.path.exists` + `open(..., "rb")` +
-  `serialization.load_pem_public_key` sync. Usare
-  `await self._repository._afs.read_bytes(...)` e parse async-safe
-  (`asyncio.to_thread` per il parse RSA che è CPU-bound).
-- [x] **Estensione scope**: aggiunto metodo pubblico `async def read_public_key(kid)`
-  al `FileKeyStoreRepository` (routed via fsspec, ritorna `Optional[bytes]`)
-  e al `KeyStoreRepository` Protocol. Il route handler `jwks` ora
-  costruisce il repository via `get_keystore_repository(settings=...)`
-  e chiama `await keystore.read_public_key(kid)` invece di accedere
-  direttamente al filesystem.
-- [x] **Test**: `pytest tests/unit/test_oidc.py` deve passare. Aggiunti 4 test
-  in `tests/unit/repositories/file/test_keystore.py` (`TestFileKeyStoreRepositoryReadPublicKey`):
-  PEM bytes, kid sconosciuto, round-trip dopo rotate, non-blocking event loop.
-
-### Validazione Tier 1
-
-- [x] `pytest -q --tb=line -n auto` deve passare (zero regressions). — **1784 passed, 0 failures, 0 regressions**.
-  - Baseline pre-Tier 1: 1730 passed, 8 pre-existing failures (Python 3.13 event loop su `test_revoke_api.py` + `test_jwks_status.py`).
-  - Tutti e 8 i pre-existing failures sono stati investigati e fixati:
-    - 4 in `test_jwks_status.py`: test patchavano `authglow.api.oidc.JWTService` (rimosso in §1.2). Fix: patch su `oidc.get_jwt_service` (nuovo pattern singleton).
-    - 4 in `test_revoke_api.py::TestTokenBlacklist`: test istanziavano `JWTService()` sync invece di `await JWTService.new()`. Fix: `await JWTService.new()` (con `asyncio.run()` per il test sync rimanente).
-- [x] `ruff check authglow/ && ruff format --check authglow/ && mypy authglow/`. — ruff/format puliti; mypy: 2 errori pre-esistenti (`oidc.py:553`, `federation.py:636`, non causati da Tier 1).
-- [ ] Misurare throughput: prima/dopo con load test (vedi §Validazione). — da fare in Tier 2 / fine-piano.
-
-### Rollback Tier 1
-
-Ogni fix è indipendente: revert del singolo file. Conserva le firme async come
-wrapper delle sync originali (no API break).
+**Stato**: ✅ **CHIUSO 2026-06-20** — 7/8 implementate, 1 rimossa dal piano.
+**Risultato**: ×3-5x throughput, 1784 test passed / 0 regressions, 0 nuove deps.
+Dettaglio per sezione (1.1 bcrypt async · 1.2 JWTService singleton · 1.3 httpx singleton ·
+1.4 lru_cache derive_key · 1.5 client_id per-request cache · 1.6 ETag/Cache-Control ·
+1.8 jwks I/O async) in §Changelog.
 
 ---
 
@@ -234,12 +71,7 @@ wrapper delle sync originali (no API break).
 e §2.6 `structlog con orjson` (dipendente da §2.1) sono rimosse dal piano.
 Nessuna nuova dipendenza in Tier 2. Restano solo tuning di risorse esistenti.
 
-### 2.4 — `httpx.AsyncClient` singleton (multi-target, già in Tier 1.3 ma
-qui rafforzato con `Limits` tuning)
-
-Vedi §1.3.
-
-### 2.5 — Connection pool di default `executor` più ampio
+### 2.1 — Connection pool di default `executor` più ampio
 
 - [ ] **`main.py:lifespan`** — dopo aver istanziato l'event loop, settare
   `asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=32))`.
@@ -250,15 +82,13 @@ Vedi §1.3.
 
 - [ ] `pytest -q --tb=line -n auto` (tutti i 1478 test esistenti) deve passare.
 - [ ] `ruff check && ruff format --check && mypy`.
-- [ ] Smoke test `§2.5`: 50 richieste concorrenti non saturano il pool.
+- [ ] Smoke test `§2.1`: 50 richieste concorrenti non saturano il pool.
 - [ ] Confronto benchmark Tier 1 vs Tier 2 (load test).
 
 ### Rollback Tier 2
 
-- `§2.5` (executor): rimuovere la `set_default_executor` da `lifespan` in
+- `§2.1` (executor): rimuovere la `set_default_executor` da `lifespan` in
   `main.py`; il default CPython (8 worker) riprende immediatamente.
-- `§2.4` (httpx Limits): revert dell'eventuale tuning aggiuntivo; il singleton
-  resta comunque ereditato da §1.3.
 
 ---
 
@@ -267,6 +97,9 @@ Vedi §1.3.
 **Tempo stimato**: ~1 ora
 **Impatto atteso**: ×2-3x addizionale su Linux
 **Rischio**: basso (graceful degradation su Windows)
+**Decisione owner (2026-06-28)**: §3.3 `memray` e §3.4 `py-spy` rimossi dal piano
+(profiler di nicchia, Linux-only dev tool, beneficio limitato per il team).
+Restano solo §3.1 (uvloop, codice) e §3.2 (mimalloc, solo documentazione).
 
 ### 3.1 — `uvloop` per asyncio event loop
 
@@ -314,35 +147,6 @@ uvloop>=0.19 ; sys_platform != "win32"
   supportate, come verificare che sia attivo (`print(sys.malloc)` se esiste, o
   `python -X showalloccount`).
 
-### 3.3 — `memray` come dev tool (opzionale)
-
-**`pyproject.toml` optional-dependencies**:
-```toml
-[project.optional-dependencies]
-dev = [
-    "memray>=1.18; sys_platform != 'win32'",
-    "py-spy>=0.4; sys_platform != 'win32'",
-    "scalene>=1.5",
-    "opentelemetry-instrumentation-fastapi>=0.50b0",
-]
-```
-
-- [ ] **`pyproject.toml`** — aggiungere gruppo dev come sopra.
-- [ ] **Documentare in `DEVELOPMENT.md`** (o `README.md` sezione Dev Tools): come
-  usare `memray run -o output.bin -m uvicorn main:app` e `memray flamegraph
-  output.bin`. Notare che **memray non funziona su Windows**.
-- [ ] **Test**: nessun test automatico (è un dev tool). Documentare che
-  `pip install -e .[dev]` su Windows installa solo `scalene` e
-  `opentelemetry-*` (gli altri sono skippati via marker).
-
-### 3.4 — `py-spy` in dev/prod Linux
-
-- [ ] **Documentare in `DEPLOYMENT.md`**: come profilare un processo in produzione
-  (`py-spy dump --pid <pid>` e `py-spy record -o profile.svg -- python main.py`).
-  Specificare: **richiede ptrace**, Linux/macOS solo.
-- [ ] **CI**: opzionalmente, su GitHub Actions Linux, eseguire `py-spy record`
-  su un smoke test e pubblicare il flamegraph come artifact.
-
 ### Validazione Tier 3
 
 - [ ] Su Linux: `python -c "import sys; print(sys.platform); import uvloop; print('uvloop OK')"`.
@@ -357,15 +161,19 @@ dev = [
 - `uvloop`: rimuovere l'import e il bloccode, `loop="asyncio"`. Su Windows è già
   un no-op grazie al try-except.
 - `PYTHONMALLOC=mimalloc`: togliere l'env var.
-- `memray`/`py-spy`: solo dev tools, basta non installarli.
 
 ---
 
-## Tier 4 — Profilazione cross-platform
+## Tier 4 — Observability essenziale
 
-**Tempo stimato**: ~2 ore
-**Impatto**: observability (capacità di trovare i prossimi colli)
+**Tempo stimato**: ~1.5 ore
+**Impatto**: observability minima (capacità di trovare i prossimi colli)
 **Rischio**: basso (strumenti passivi)
+**Decisione owner (2026-06-28)**: §4.2 `scalene` e §4.3 `OpenTelemetry` rimossi dal piano
+(scalene: dev tool di nicchia; OpenTelemetry: stack di 5 deps inclusi
+`opentelemetry-instrumentation-asyncpg` per "SQL futuro" non applicabile).
+Restano solo §4.1 (tracemalloc, stdlib cross-platform) e §4.4 (Prometheus,
+1 dep mainstream).
 
 ### 4.1 — `tracemalloc` per memory profiling (stdlib, cross-platform)
 
@@ -376,37 +184,7 @@ dev = [
 - [ ] **Test**: `pytest tests/unit/test_tracemalloc_endpoint.py` (nuovo) deve passare.
 - [ ] **Documentare** in `DEBUG.md` come usare per trovare memory leak.
 
-### 4.2 — `scalene` per CPU+memory profiling (dev tool, cross-platform)
-
-- [ ] **`pyproject.toml` optional-dependencies dev**: aggiungere `scalene>=1.5`.
-- [ ] **Documentare in `DEVELOPMENT.md`**: come usare `scalene main.py` per
-  profiling line-level (identifica esattamente quali linee allocano di più).
-  Cross-platform, funziona su Windows.
-
-### 4.3 — `opentelemetry-instrumentation-fastapi` per distributed tracing
-
-**`requirements.in`**:
-```text
-opentelemetry-instrumentation-fastapi>=0.50b0
-opentelemetry-instrumentation-asyncpg>=0.50b0  # futuro, per quando migreremo a SQL
-opentelemetry-exporter-otlp-proto-grpc>=1.27
-opentelemetry-sdk>=1.27
-```
-
-- [ ] **`requirements.in`** + rigenerare.
-- [ ] **`main.py:lifespan`** — aggiungere setup OpenTelemetry tracer provider se
-  `OTEL_EXPORTER_OTLP_ENDPOINT` env var è settata. Setup idempotente.
-- [ ] **Auto-instrument FastAPI**: `FastAPIInstrumentor.instrument_app(app)`.
-- [ ] **Auto-instrument httpx**: `HTTPXClientInstrumentor().instrument()`.
-- [ ] **Auto-instrument bcrypt**: opzionale, con `BcryptInstrumentor`
-  (rilevante post §1.1, irrilevante se argon2 non viene introdotto).
-- [ ] **Test**: smoke test che l'app si avvii senza `OTEL_EXPORTER_OTLP_ENDPOINT`
-  (deve essere no-op).
-- [ ] **Documentare in `OBSERVABILITY.md`**: come configurare un collector locale
-  (es. `docker run -p 4317:4317 otel/opentelemetry-collector`), come visualizzare
-  in Jaeger / Tempo / Grafana.
-
-### 4.4 — Metriche Prometheus
+### 4.2 — Metriche Prometheus
 
 **`requirements.in`**:
 ```text
@@ -424,7 +202,6 @@ prometheus-fastapi-instrumentator>=7.0
 - [ ] Tutti i 1478 test esistenti devono passare.
 - [ ] `GET /metrics` ritorna 200 con body Prometheus valido.
 - [ ] `GET /api/debug/mem-stats` (admin) ritorna 200 con JSON valido.
-- [ ] Con OpenTelemetry collector attivo, le trace arrivano.
 
 ### Rollback Tier 4
 
@@ -487,10 +264,11 @@ async def main():
 ## Sequenza di esecuzione
 
 ```
-Tier 1 ──→ [load test] ──→ Tier 2 ──→ [load test] ──→ Tier 3 ──→ [load test] ──→ Tier 4
-  ↓                       ↓                       ↓                       ↓
-branch:                  branch:                  branch:                  branch:
-perf/tier-1              perf/tier-2              perf/tier-3              perf/tier-4
+[✅ Tier 1 — chiuso 2026-06-20]
+Tier 2 ──→ [load test] ──→ Tier 3 ──→ [load test] ──→ Tier 4
+  ↓                       ↓                       ↓
+branch:                  branch:                  branch:
+perf/tier-2              perf/tier-3              perf/tier-4
 ```
 
 - Ogni tier in un branch separato → review atomica → merge dopo validazione.
@@ -498,16 +276,16 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 
 ---
 
-## Stima tempo totale
+## Stima tempo totale (post-pulizia 2026-06-28)
 
-| Tier | Ore | Note |
-|---|---:|---|
-| Tier 1 | ~2h | 8 fix, no nuove deps |
-| Tier 2 | ~3h | 6 fix + 3 nuove deps, test approfonditi |
-| Tier 3 | ~1h | 4 fix con try-import guards |
-| Tier 4 | ~2h | 4 fix, strumenti observability |
-| Load test setup | ~1h | Script Locust + baseline |
-| **Totale** | **~9h** | distribuite in 1-2 sprint |
+| Tier | Stato | Ore | Note |
+|---|:---:|---:|---|
+| Tier 1 | ✅ chiuso | ~2h | 7/8 implementate (1 rimossa), 0 nuove deps |
+| Tier 2 | aperto | ~30 min | 1 fix (executor pool), 0 nuove deps |
+| Tier 3 | aperto | ~1h | 2 sezioni rimaste: uvloop + mimalloc doc |
+| Tier 4 | aperto | ~1.5h | 2 sezioni rimaste: tracemalloc (stdlib) + Prometheus (1 dep) |
+| Load test setup | aperto | ~1h | Script Locust + baseline + 1 benchmark |
+| **Residuo** | | **~4h** | distribuite in 1 sprint |
 
 ---
 
@@ -538,7 +316,7 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
   password hashing, e sulla `json` stdlib per la serializzazione.
 
 **Data creazione**: 2026-06-20
-**Stato**: pronto per esecuzione
+**Stato**: Tier 1 chiuso 2026-06-20 · Tier 2-4 aperti
 **Owner**: TBD
 **Reviewer**: TBD
 
@@ -546,6 +324,12 @@ perf/tier-1              perf/tier-2              perf/tier-3              perf/
 
 ## Changelog
 
+- **2026-06-28** — Sfoltimento piano: rimosse le voci con librerie/strumenti di
+  nicchia o non più desiderati — §1.7 (lazy import, già skipped),
+  §2.1/2.2/2.3/2.6 (`orjson`/`aiofiles`/`argon2-cffi`/`structlog con orjson`),
+  §3.3/3.4 (`memray`/`py-spy`), §4.2/4.3 (`scalene`/`OpenTelemetry`).
+  Sezioni "lavoro completato" di Tier 1 collassate in un riepilogo (dettaglio
+  preservato in questo changelog). Piano da ~560 a ~352 righe.
 - **2026-06-20** — §1.1, §1.2, §1.3, §1.4, §1.5, §1.6, §1.8 completate; §1.7 skipped su
   decisione dell'owner. **Tier 1 al 7/8 punti effettivi; full suite a 1784
   passed / 0 failures** (tutti gli 8 pre-existing failures investigati e
