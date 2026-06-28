@@ -31,6 +31,7 @@ from authglow.core.rate_limit import limiter
 from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
+from authglow.middleware.request_id import RequestIDMiddleware
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.services.auth.token_blacklist import token_blacklist
 
@@ -88,6 +89,14 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(HttpsEnforcementMiddleware)
+# VAPT-042: RequestIDMiddleware is added LAST so it is the
+# outermost wrapper. The contextvar is set before any other
+# middleware or the app code runs, so every structlog
+# log line emitted during the request lifecycle
+# (including the audit service) carries the correlation
+# ID. The response header is appended to ``http.response.start``
+# on the way out, after the downstream stack has run.
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(setup_router, tags=["Setup"])
 app.include_router(auth_router, tags=["Authentication"])

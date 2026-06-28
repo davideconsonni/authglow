@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import re
 from datetime import timedelta
 from typing import Annotated, Any, Dict, List, NoReturn, Optional, Tuple
 
@@ -123,6 +124,56 @@ def _extract_bearer_auth(request: Request) -> Optional[str]:
         return None
     token = auth_header[len("Bearer ") :].strip()
     return token or None
+
+
+# VAPT-044: minimum length + character set for the OAuth 2.0
+# ``state`` parameter. RFC 6819 §4.4.1.8 + RFC 9700 (OAuth 2.0
+# Security BCP, July 2025) require the server to validate
+# ``state`` is high-entropy to defend against CSRF on the
+# authorization-code flow. A short or predictable state is the
+# classic Mix-Up / authorization-code-injection vector.
+#
+# Constants:
+#   * ``_MIN_STATE_LEN`` — 16 printable chars. The OAuth 2.0
+#     Security BCP recommends ≥ 128 bits of entropy; a 16-char
+#     base64url nonce already provides 96 bits and the
+#     recommended implementation pattern is a 32-byte
+#     ``secrets.token_urlsafe(32)`` which produces 43 chars
+#     (192 bits). 16 is the floor — anything shorter is almost
+#     certainly a misconfiguration.
+#   * ``_MAX_STATE_LEN`` — 512 chars. Defensive cap to prevent
+#     a malicious client from forcing the server to
+#     URL-encode megabytes of state into the redirect.
+#   * ``_STATE_OK`` — printable ASCII excluding whitespace
+#     and shell metacharacters. The character set is a
+#     superset of "anything a UUID, hex digest, base64url, or
+#     ULID might look like" so legitimate clients are never
+#     blocked, while the no-whitespace rule protects the
+#     audit log + redirect URL from log-injection attacks.
+_MIN_STATE_LEN = 16
+_MAX_STATE_LEN = 512
+_STATE_OK = re.compile(r"^[A-Za-z0-9_\-.:~+/=]{16,512}\Z")
+
+
+def _validate_state(state: Optional[str]) -> Optional[str]:
+    """VAPT-044: enforce minimum length + character set on ``state``.
+
+    Returns the state unchanged when it is a valid opaque nonce
+    (16-512 chars, safe character set). Returns ``None`` when
+    the state is missing, too short, too long, or contains
+    characters that could break the redirect URL or the audit
+    log (whitespace, control chars, shell metacharacters).
+
+    The function never raises — callers are expected to map
+    ``None`` to a 400 response with a clear error message
+    (the redirect-URL echo path is the public surface, so
+    refusing to echo a tainted state is the secure default).
+    """
+    if not state:
+        return None
+    if not _STATE_OK.match(state):
+        return None
+    return state
 
 
 async def _require_dpop_proof_if_bound(
@@ -490,6 +541,24 @@ async def authorize_post(
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
+    # VAPT-044: validate the ``state`` parameter. A short or
+    # predictable state loses CSRF protection on the
+    # authorization-code flow (RFC 6819 §4.4.1.8, RFC 9700
+    # OAuth 2.0 Security BCP). The check happens after the
+    # client_id + redirect_uri + PKCE validation so the error
+    # goes back to the legitimate caller (rather than a
+    # crafted redirect).
+    if _validate_state(state) is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "state parameter is required and must be an opaque nonce of "
+                f"at least {_MIN_STATE_LEN} characters (RFC 6819 §4.4.1.8, "
+                "RFC 9700 OAuth 2.0 Security BCP). Generate a fresh value "
+                "with secrets.token_urlsafe(32) and retry."
+            ),
+        )
+
     requested_scopes = scope.split() if scope else []
     try:
         processed_scopes = await oauth2_service.process_scopes(client_id, requested_scopes)
@@ -529,17 +598,12 @@ async def authorize_post(
                 detail="'none' cannot be combined with other prompt values.",
             )
 
-    # --- Security: state parameter absent warning (Q.1) ---
-    if not state:
-        from structlog import get_logger
-
-        _logger = get_logger("authglow.audit")
-        _logger.warning(
-            "oauth2_authorize_no_state",
-            client_id=client_id,
-            redirect_uri=redirect_uri,
-            note="State parameter is absent — vulnerable to CSRF (RFC 6819 §4.4.1.8).",
-        )
+    # --- Security: state parameter validation (VAPT-044) ---
+    # The earlier ``_validate_state`` call rejects weak or
+    # absent state outright (RFC 6819 §4.4.1.8, RFC 9700 OAuth
+    # 2.0 Security BCP). The legacy "warn and continue" path
+    # was removed because it left the deployment exposed to
+    # CSRF on the authorization-code flow.
 
     # --- Authentication (cookie-first, then email/password) ---
     user = None

@@ -18,6 +18,13 @@ from authglow.models.admin import AuditLogEntry
 if not structlog.is_configured():
     structlog.configure(
         processors=[
+            # VAPT-042: ``merge_contextvars`` propagates the
+            # ``request_id`` (and any other contextvar-bound
+            # field) set by :class:`RequestIDMiddleware` into
+            # every JSON log line, so any structlog logger
+            # (not just the audit service) carries the
+            # correlation ID without explicit threading.
+            structlog.contextvars.merge_contextvars,
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
             structlog.processors.JSONRenderer(),
