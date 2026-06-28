@@ -4,9 +4,10 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from authglow.core.datetime import utcnow
+from authglow.core.password import check_password_byte_length
 
 
 class PasswordResetToken(BaseModel):
@@ -44,6 +45,11 @@ class PasswordResetConfirm(BaseModel):
     reset_code: str = Field(min_length=14, max_length=20)
     new_password: str = Field(min_length=8, max_length=128)
 
+    @field_validator("new_password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
+
     @model_validator(mode="before")
     @classmethod
     def _accept_legacy_token_field(cls, data: Any) -> Any:
@@ -57,6 +63,11 @@ class PasswordChange(BaseModel):
 
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
 
 
 class PasswordResetResponse(BaseModel):

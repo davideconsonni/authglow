@@ -4,9 +4,10 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from authglow.core.datetime import utcnow
+from authglow.core.password import check_password_byte_length
 
 
 class User(BaseModel):
@@ -82,6 +83,11 @@ class UserCreate(BaseModel):
     scopes: List[str] = Field(default_factory=lambda: ["read"])
     email_verified: bool = False
 
+    @field_validator("password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
+
 
 class UserLogin(BaseModel):
     """Schema for user login."""
@@ -115,6 +121,11 @@ class RegisterUser(BaseModel):
     password: str = Field(..., min_length=8)
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
 
 
 class InviteUser(BaseModel):

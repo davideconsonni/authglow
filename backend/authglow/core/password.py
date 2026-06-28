@@ -3,6 +3,39 @@
 import re
 from typing import Tuple
 
+# VAPT-039: bcrypt's hard limit on the input it processes. The
+# bcrypt algorithm only consumes the first 72 bytes; everything
+# past that is silently dropped, which means two distinct
+# passwords that share the first 72 bytes would map to the
+# same hash. We reject anything longer at the API boundary
+# (Pydantic models) so the user is told the limit instead of
+# believing they have a stronger password than they do.
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def check_password_byte_length(password: str) -> str:
+    """VAPT-039: enforce bcrypt's 72-byte UTF-8 limit at the API boundary.
+
+    Use as a ``@field_validator`` on Pydantic password models.
+    The check is on the UTF-8 byte length, not the character
+    count: ``"ü"`` is one character but two bytes, so a string
+    of 36 ``"ü"`` is already at the limit.
+
+    The original password is returned unchanged so the validator
+    composes naturally with other ``@field_validator`` rules
+    (strength, character classes, etc.).
+    """
+    if not isinstance(password, str):
+        raise TypeError("password must be a string")
+    if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"password must be {BCRYPT_MAX_PASSWORD_BYTES} bytes or less when "
+            "UTF-8 encoded (bcrypt only processes the first 72 bytes; "
+            "longer inputs would be silently truncated and create "
+            "collision risk)"
+        )
+    return password
+
 
 def validate_password_strength(password: str) -> Tuple[bool, str]:
     """Validate password strength.

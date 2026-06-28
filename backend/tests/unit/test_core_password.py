@@ -2,6 +2,8 @@ import pytest
 from authglow.core.password import (
     validate_password_strength,
     calculate_password_strength,
+    check_password_byte_length,
+    BCRYPT_MAX_PASSWORD_BYTES,
 )
 
 
@@ -103,3 +105,61 @@ class TestCalculatePasswordStrength:
     def test_mixed_case(self):
         score = calculate_password_strength("AaAaAaAa1!")
         assert score >= 3
+
+
+class TestVapt039PasswordByteLengthCap:
+    """VAPT-039: bcrypt's 72-byte hard limit is enforced at the API boundary."""
+
+    def test_ascii_at_limit_accepted(self):
+        pw = "A" * BCRYPT_MAX_PASSWORD_BYTES
+        assert check_password_byte_length(pw) == pw
+
+    def test_ascii_below_limit_accepted(self):
+        pw = "A" * (BCRYPT_MAX_PASSWORD_BYTES - 1)
+        assert check_password_byte_length(pw) == pw
+
+    def test_ascii_above_limit_rejected(self):
+        pw = "A" * (BCRYPT_MAX_PASSWORD_BYTES + 1)
+        with pytest.raises(ValueError) as excinfo:
+            check_password_byte_length(pw)
+        assert "72 bytes" in str(excinfo.value)
+
+    def test_unicode_measured_in_bytes_not_chars(self):
+        # "ü" is 2 bytes in UTF-8. 36 * "ü" = 72 bytes (at the limit).
+        pw_36 = "ü" * 36
+        assert len(pw_36.encode("utf-8")) == 72
+        assert check_password_byte_length(pw_36) == pw_36
+
+        # 37 * "ü" = 74 bytes — over the limit, must be rejected.
+        pw_37 = "ü" * 37
+        assert len(pw_37.encode("utf-8")) == 74
+        with pytest.raises(ValueError):
+            check_password_byte_length(pw_37)
+
+    def test_emoji_4bytes_measured_correctly(self):
+        # "🔑" is 4 bytes in UTF-8. 18 * "🔑" = 72 bytes (at the limit).
+        pw_18 = "🔑" * 18
+        assert len(pw_18.encode("utf-8")) == 72
+        assert check_password_byte_length(pw_18) == pw_18
+
+        # 19 * "🔑" = 76 bytes — over the limit, must be rejected.
+        pw_19 = "🔑" * 19
+        assert len(pw_19.encode("utf-8")) == 76
+        with pytest.raises(ValueError):
+            check_password_byte_length(pw_19)
+
+    def test_empty_string_accepted(self):
+        # The byte-cap is an upper bound; lower bounds are the
+        # responsibility of the strength validator.
+        assert check_password_byte_length("") == ""
+
+    def test_non_string_rejected(self):
+        with pytest.raises(TypeError):
+            check_password_byte_length(12345)  # type: ignore[arg-type]
+
+    def test_validator_returns_input_unchanged_on_pass(self):
+        # Compose-friendly: the validator is supposed to be a
+        # pass-through on the happy path so other validators
+        # downstream can still consume the original value.
+        pw = "MyP@ssword1!"
+        assert check_password_byte_length(pw) is pw

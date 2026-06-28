@@ -3,9 +3,10 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from authglow.core.datetime import utcnow
+from authglow.core.password import check_password_byte_length
 
 if TYPE_CHECKING:
     from authglow.models.user import User
@@ -109,6 +110,11 @@ class SetPasswordRequest(BaseModel):
 
     password: str = Field(..., min_length=8)
     require_change: bool = False
+
+    @field_validator("password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
 
 
 class SuspendRequest(BaseModel):

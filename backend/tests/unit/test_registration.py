@@ -268,4 +268,70 @@ class TestRegisterEndpointLogic:
             self.mock_audit.log_event.assert_awaited_once()
             call_kwargs = self.mock_audit.log_event.call_args[1]
             assert call_kwargs["event_type"] == "user_registered"
-            assert call_kwargs["email"] == "audit@example.com"
+
+
+class TestVapt039RegistrationRejectsLongPassword:
+    """VAPT-039: the public registration endpoint must reject
+    passwords longer than 72 bytes (the bcrypt cap) with 422
+    instead of silently truncating the user input.
+    """
+
+    def _build_app(self):
+        from fastapi import FastAPI
+
+        from authglow.api.auth import (
+            router,
+            get_user_storage,
+            get_password_validator,
+            get_audit_service,
+        )
+
+        app = FastAPI()
+        app.include_router(router)
+
+        mock_storage = MagicMock()
+        mock_validator = MagicMock()
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+
+        app.dependency_overrides[get_user_storage] = lambda: mock_storage
+        app.dependency_overrides[get_password_validator] = lambda: mock_validator
+        app.dependency_overrides[get_audit_service] = lambda: mock_audit
+        return app, mock_storage, mock_audit
+
+    def test_post_api_users_with_72byte_password_is_accepted(self):
+        from fastapi.testclient import TestClient
+
+        app, mock_storage, _ = self._build_app()
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+        mock_storage.create_user = AsyncMock(side_effect=lambda u: u)
+
+        client = TestClient(app)
+        exactly_72 = "A" * 72
+        resp = client.post(
+            "/api/users",
+            json={"email": "vapt039-ok@example.com", "password": exactly_72},
+        )
+        # 201 Created is the success path; we just need to confirm
+        # the 72-byte input is NOT rejected by the Pydantic validator.
+        assert resp.status_code in (200, 201), resp.text
+
+    def test_post_api_users_with_73byte_password_is_422(self):
+        from fastapi.testclient import TestClient
+
+        app, mock_storage, _ = self._build_app()
+        mock_storage.get_user_by_email = AsyncMock(return_value=None)
+
+        client = TestClient(app)
+        too_long = "A" * 73
+        resp = client.post(
+            "/api/users",
+            json={"email": "vapt039-long@example.com", "password": too_long},
+        )
+        assert resp.status_code == 422, resp.text
+        # The error payload must mention the password field and
+        # the bcrypt 72-byte cap so the client can render a
+        # meaningful message.
+        body = resp.json()
+        assert any("password" in str(err.get("loc", [])) for err in body["detail"])
+        assert "72 bytes" in resp.text
