@@ -1,7 +1,7 @@
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock, AsyncMock
-from authglow.models.email import EmailMessage, EmailSendResult, EmailPriority
+from unittest.mock import MagicMock, patch
+
+from authglow.models.email import EmailMessage
 
 
 class TestConsoleEmailProvider:
@@ -47,11 +47,100 @@ class TestConsoleEmailProvider:
         provider = ConsoleEmailProvider()
         assert provider.get_provider_name() == "console"
 
+    def test_send_writes_body_to_stderr_vapt_084(self):
+        """VAPT-084 — the email body (which may contain reset /
+        verification tokens) is split onto ``body_stream``
+        (default ``sys.stderr``) while the header (subject,
+        recipients, message id) stays on ``output_stream``
+        (default ``sys.stdout``). This keeps the JSON audit
+        log stream clean.
+        """
+        import asyncio
+
+        from authglow.services.email.console import ConsoleEmailProvider
+
+        header_output = StringIO()
+        body_output = StringIO()
+        provider = ConsoleEmailProvider(
+            output_stream=header_output,
+            body_stream=body_output,
+            colorize=False,
+        )
+        message = EmailMessage(
+            to=["recipient@example.com"],
+            subject="Reset your password",
+            body_text="Click https://app.example.com/reset?token=SECRET123",
+        )
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(provider.send(message))
+        assert result.success is True
+
+        header_str = header_output.getvalue()
+        body_str = body_output.getvalue()
+
+        # Subject + recipient + id land in the header stream.
+        assert "Reset your password" in header_str
+        assert "recipient@example.com" in header_str
+
+        # The actual body (which contains the token) is on the
+        # body stream, NOT the header stream.
+        assert "SECRET123" not in header_str
+        assert "SECRET123" in body_str
+
+    def test_format_header_and_body_are_separate(self):
+        """VAPT-084 — ``format_header`` and ``format_body`` are
+        independent helpers. ``format_email_display`` is kept
+        for back-compat and combines both.
+        """
+        from authglow.services.email.console import ConsoleEmailProvider
+
+        provider = ConsoleEmailProvider(colorize=False)
+        message = EmailMessage(
+            to=["x@example.com"],
+            subject="Subject X",
+            body_text="Body Content",
+        )
+
+        header = provider._format_header(message, "msg-1")
+        body = provider._format_body(message)
+
+        assert "Subject X" in header
+        assert "Body Content" not in header
+        assert "Subject X" not in body
+        assert "Body Content" in body
+
+    def test_default_body_stream_is_stderr(self):
+        """VAPT-084 — the default ``body_stream`` is
+        ``sys.stderr`` (not ``sys.stdout``) so the JSON audit
+        log stream is not polluted with token-bearing bodies.
+        """
+        import sys
+
+        from authglow.services.email.console import ConsoleEmailProvider
+
+        provider = ConsoleEmailProvider()
+        assert provider.body_stream is sys.stderr
+        assert provider.output is sys.stdout
+
     def test_send_with_html_body(self):
+        """VAPT-084 — the HTML body lands on ``body_stream`` (not
+        the header stream). This test wires both to the same
+        StringIO so the assertion is unchanged; the dedicated
+        stderr-split test exercises the new behaviour directly.
+        """
         from authglow.services.email.console import ConsoleEmailProvider
 
         output = StringIO()
-        provider = ConsoleEmailProvider(output_stream=output, colorize=False)
+        provider = ConsoleEmailProvider(output_stream=output, body_stream=output, colorize=False)
         message = EmailMessage(
             to=["html@example.com"],
             subject="HTML Email",
@@ -124,6 +213,7 @@ class TestFileStorageEmailProvider:
 
     def test_send_preserves_metadata(self, tmp_path):
         import json
+
         from authglow.services.email.file_storage import FileStorageEmailProvider
 
         storage_path = str(tmp_path / "emails_meta")
@@ -187,8 +277,8 @@ class TestEmailTemplateRenderer:
 
 class TestCreateEmailProvider:
     def test_console_provider_by_default(self):
-        from authglow.services.email.factory import create_email_provider
         from authglow.services.email.console import ConsoleEmailProvider
+        from authglow.services.email.factory import create_email_provider
 
         with patch("authglow.services.email.factory.get_settings") as mock_settings:
             mock_settings.return_value.email_backend = "console"
@@ -206,8 +296,8 @@ class TestCreateEmailProvider:
             assert isinstance(provider, FileStorageEmailProvider)
 
     def test_unknown_provider_defaults_to_console(self):
-        from authglow.services.email.factory import create_email_provider
         from authglow.services.email.console import ConsoleEmailProvider
+        from authglow.services.email.factory import create_email_provider
 
         with patch("authglow.services.email.factory.get_settings") as mock_settings:
             mock_settings.return_value.email_backend = "smtp"
@@ -222,9 +312,7 @@ class TestEmailService:
 
         provider = ConsoleEmailProvider(output_stream=StringIO(), colorize=False)
         mock_renderer = MagicMock()
-        mock_renderer.render_both = MagicMock(
-            return_value=("HTML content", "Text content")
-        )
+        mock_renderer.render_both = MagicMock(return_value=("HTML content", "Text content"))
 
         service = EmailService(provider=provider, template_renderer=mock_renderer)
 

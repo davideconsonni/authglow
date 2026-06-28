@@ -2,10 +2,19 @@
 
 from typing import Optional
 
+import structlog
+
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.user import User
 from authglow.services.email.factory import get_email_service
+
+# VAPT-083: ``print(...)`` for email-send failures bypasses
+# structlog (no JSON, no timestamp, no level, no masking).
+# Plaintext on the same stream as the JSON audit log makes
+# ingest messy. All send-failure paths now go through
+# ``authglow.email.warning``.
+_email_log = structlog.get_logger("authglow.email")
 
 
 class SecurityNotificationService:
@@ -59,8 +68,14 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send login alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="login_alert",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False
 
     async def send_password_changed_alert(
@@ -93,8 +108,14 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send password changed alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="password_changed",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False
 
     async def send_email_changed_alert(
@@ -143,8 +164,14 @@ class SecurityNotificationService:
             )
 
             return result1.success and result2.success
-        except Exception as e:
-            print(f"Failed to send email changed alert: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="email_changed",
+                user_id=None,
+                exc_info=True,
+            )
             return False
 
     async def send_mfa_enabled_alert(self, user: User, ip_address: Optional[str] = None) -> bool:
@@ -175,8 +202,14 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send MFA enabled alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="mfa_enabled",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False
 
     async def send_mfa_disabled_alert(self, user: User, ip_address: Optional[str] = None) -> bool:
@@ -207,8 +240,14 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send MFA disabled alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="mfa_disabled",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False
 
     async def send_api_key_created_alert(
@@ -242,8 +281,14 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send API key created alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="api_key_created",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False
 
     async def send_account_locked_alert(
@@ -280,6 +325,12 @@ class SecurityNotificationService:
                 context=context,
             )
             return result.success
-        except Exception as e:
-            print(f"Failed to send account locked alert email: {e}")
+        except Exception:
+            _email_log.warning(
+                "send_email_failed",
+                template="security_alert",
+                alert_type="account_locked",
+                user_id=user.id,
+                exc_info=True,
+            )
             return False

@@ -37,6 +37,13 @@ from authglow.services.user import UserService as UserStorage
 class OAuth2ConsentService:
     """Service for managing OAuth2 user consents."""
 
+    # VAPT-086: explicit retention constant. The cleanup path
+    # uses ``utcnow() - RETENTION_DAYS`` to drop consents that
+    # have been revoked or expired for longer than this. Match
+    # the other persistent services (security_event,
+    # admin_action) at 365 days.
+    RETENTION_DAYS = 365
+
     def __init__(
         self,
         repository: Optional[OAuth2ConsentRepository] = None,
@@ -143,8 +150,20 @@ class OAuth2ConsentService:
         return await self._repository.list_for_user(user_id)
 
     async def cleanup_expired_consents(self) -> int:
-        """Delete all expired consents. Returns the deletion count."""
-        return await self._repository.cleanup_expired()
+        """Delete consents that have been expired *or revoked*
+        for more than :attr:`RETENTION_DAYS` days. Returns the
+        deletion count.
+
+        VAPT-086: without a retention window the on-disk
+        consent set grows without bound. A scheduled job
+        (not in scope of this plan) should call this method
+        periodically; ``delete_account`` also calls it
+        inline for the deleted user.
+        """
+        from datetime import timedelta
+
+        cutoff = (utcnow() - timedelta(days=self.RETENTION_DAYS)).isoformat()
+        return await self._repository.cleanup_expired(cutoff=cutoff)
 
     async def list_all_for_admin(
         self,

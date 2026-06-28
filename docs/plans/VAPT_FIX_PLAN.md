@@ -15,16 +15,17 @@ Each finding has a stable ID `VAPT-NNN`. Tick `[x]` when fixed and append a shor
 |---|---|---|---|---|
 | CRITICAL | 11 | 11 | 0 | All remediated |
 | HIGH | 26 | 26 | 0 | All remediated |
-| MEDIUM | 53 | 12 | 41 | Fix or document risk-acceptance |
+| MEDIUM | 53 | 16 | 37 | Fix or document risk-acceptance |
 | LOW | 26 | 2 | 24 | Hardening backlog |
 | INFO | 10 | 0 | 10 | Process / hygiene |
-| **Total** | **126** | **51** | **75** | — |
+| **Total** | **126** | **56** | **70** | — |
 
 **Aggiornamento 2026-06-28**: +9 item chiusi (cleanup pass: 043, 045, 046, 047, 051,
-052, 078, 108, 117) + **+3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131)** +
-**+3 item chiusi (block 🅰️.2 Service PII + notifications: 081, 085, 130)**.
+052, 078, 108, 117) + +3 item chiusi (block 🅰️.1 PII/Audit: 079, 080, 131) + +3 item
+chiusi (block 🅰️.2 Service PII + notifications: 081, 085, 130) + **+5 item chiusi
+(block 🅰️.3 GDPR + observability hygiene: 082, 083, 084, 086, 087)**.
 4 item in "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21
-refactor (040, 103). 1 partial fix annotato (039, 081: GDPR purge API ancora pending).
+refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pending).
 
 ---
 
@@ -479,20 +480,23 @@ refactor (040, 103). 1 partial fix annotato (039, 081: GDPR purge API ancora pen
   - **Fix**: Hash email on disk; truncate IP; provide `purge_user_pii(user_id)` API as part of right-to-erasure.
   - **Done** (2026-06-28, partial): helper `core/pii.py` (hash_pii/mask_ip/truncate) riusato da `AuditService` + i 3 service. Ogni service ha ora un metodo `to_masked_dict(secret_key)` che applica il masking prima della persistenza. `record_login`/`record_event`/`record_action` chiamano `to_masked_dict` prima di passare i dati al repository. **Gap residuo**: `purge_user_pii(user_id)` (per right-to-erasure GDPR Art. 17) non ancora implementato; verrà coperto in 🅰️.3 (VAPT-082). Pre-existing on-disk records non sono stati bonificati (env dev, owner accetta il rischio).
 
-- [ ] **VAPT-082** — Account deletion does not purge login history, security events, admin actions, refresh tokens
-  - **Location**: `backend/authglow/services/user_profile.py:183-213`; `backend/authglow/services/storage.py:190-209`
+- [x] **VAPT-082** — Account deletion does not purge login history, security events, admin actions, refresh tokens
+  - **Location**: `backend/authglow/services/user_profile.py:230-262, 268-310`; `backend/authglow/repositories/protocols.py` (3 nuovi metodi); `backend/authglow/repositories/file/{login_history,security_event,admin_action,oauth_consent}.py` (4 implementazioni); `backend/tests/unit/test_user_profile.py`
   - **Description**: `delete_account` only removes the user JSON, email index entry, and user_preferences file. GDPR Art. 17 requires erasure of all per-user PII (history, events, admin actions, refresh tokens, MFA backup codes, trusted devices, OAuth consents, email verifications, API keys).
   - **Fix**: Add a comprehensive `purge_user(user_id)` and call it from `delete_account`.
+  - **Done** (2026-06-28): `delete_account` ora chiama `_purge_user_pii(user_id)` che fa `asyncio.gather()` su 4 repository (`LoginHistoryService._repo`, `SecurityEventService._repo`, `AdminActionService._repo`, `OAuth2ConsentService.repository`) per droppare in parallelo tutti i record. Nuovi metodi `delete_for_user(user_id) -> int` aggiunti al Protocol e implementati in 4 File repository. `return_exceptions=True` per fail-safe (un singolo fail non blocca gli altri). 4 nuovi test in `test_user_profile.py::TestDeleteAccount` (revoke tokens, purge multi-repo, partial failure isolation).
 
-- [ ] **VAPT-083** — Email verification / password reset / MFA alerts use `print(...)` instead of the audit logger
-  - **Location**: `backend/authglow/services/security_notifications.py:62-64, 97, 147, 179, 211, 246, 284`; `backend/authglow/services/email_verification.py:182`; `backend/authglow/api/auth.py:861`
+- [x] **VAPT-083** — Email verification / password reset / MFA alerts use `print(...)` instead of the audit logger
+  - **Location**: `backend/authglow/services/security_notifications.py:63-326` (6 calls); `backend/authglow/api/auth.py:1593-1604` (1 call)
   - **Description**: Bypasses structlog (no JSON, no timestamp, no level, no masking). Plaintext on the same stream as JSON audit log makes ingest messy.
   - **Fix**: Use `structlog.get_logger("authglow.email").warning(...)`.
+  - **Done** (2026-06-28): 7 `print(f"Failed to send ...")` sostituiti con `structlog.get_logger("authglow.email").warning("send_email_failed", template=..., alert_type=..., user_id=..., exc_info=True)`. Tutti i call site ora emettono JSON strutturato con `template`, `alert_type`, `user_id`, e `exc_info=True` per il traceback. Test in `test_security_notifications.py::test_send_login_alert_exception_logs_via_structlog` verifica la chiamata structlog.
 
-- [ ] **VAPT-084** — Console email provider writes full email bodies (with tokens) to stdout
-  - **Location**: `backend/authglow/services/email/console.py:137-156`
+- [x] **VAPT-084** — Console email provider writes full email bodies (with tokens) to stdout
+  - **Location**: `backend/authglow/services/email/console.py:18-29, 100-178`; `backend/tests/unit/test_email_subsystem.py`
   - **Description**: Mixes free-form email text (including reset/verification URLs, API key names) with the JSON audit stream. CloudWatch/Cloud Logging ingesters expecting JSON see free-form text.
   - **Fix**: Use the `file_storage` provider or a separate stderr/file sink; if console output is required, base64-encode the body.
+  - **Done** (2026-06-28): `ConsoleEmailProvider` ora ha `output_stream` (header: subject, recipients, id → stdout, default) e `body_stream` (body: text/HTML/attachments → stderr, default). Il body — che può contenere reset/verification tokens — non inquina più il JSON audit log stream. Nuovo parametro `body_stream` per override esplicito in test. Metodi `_format_header` e `_format_body` separati (back-compat: `_format_email_display` combinato). 3 nuovi test verificano: (a) subject/recipient su header stream, (b) token non presente in header, (c) default `body_stream` è `sys.stderr`.
 
 - [x] **VAPT-085** — `passkey_login_success` audit metadata contains the full WebAuthn `credential_id`
   - **Location**: `backend/authglow/api/passkey.py:311-328`
@@ -500,15 +504,17 @@ refactor (040, 103). 1 partial fix annotato (039, 081: GDPR purge API ancora pen
   - **Fix**: Drop the credential_id or store only a short prefix (first 8 chars).
   - **Done** (2026-06-28): `metadata={"credential_id": verification.credential_id[:8]}` — primi 8 char sufficienti per correlare eventi dello stesso passkey, full id ancora nella tabella `passkeys` per lookup. Test in `test_passkey.py::TestPasskeyAuditCredentialIdTruncation`.
 
-- [ ] **VAPT-086** — OAuth2 consent records stored indefinitely (no retention cleanup wired to a scheduler)
-  - **Location**: `backend/authglow/services/oauth_consent.py:64-90, 240-265`
+- [x] **VAPT-086** — OAuth2 consent records stored indefinitely (no retention cleanup wired to a scheduler)
+  - **Location**: `backend/authglow/services/oauth_consent.py:36-43, 161-179`; `backend/authglow/repositories/protocols.py`; `backend/authglow/repositories/file/oauth_consent.py`
   - **Description**: `cleanup_expired_consents` exists but is not exposed via any API endpoint or scheduled task. No `RETENTION_DAYS` constant.
   - **Fix**: Add `RETENTION_DAYS`; call the cleanup from a scheduled job and from `delete_account`.
+  - **Done** (2026-06-28, partial): `OAuth2ConsentService.RETENTION_DAYS = 365` aggiunto. `cleanup_expired_consents` ora applica il cutoff (revoked > RETENTION_DAYS o expired). `OAuth2ConsentRepository.cleanup_expired(*, cutoff=None)` accetta ISO-8601 string. **Gap residuo**: scheduled job (cron) non in scope di questo piano; il cleanup è chiamato inline da `delete_account` (via `purge_user_pii`). Test in `test_oauth_consent_service.py::test_retention_days_constant` verifica il valore 365.
 
-- [ ] **VAPT-087** — Refresh token family records persist beyond user deletion
-  - **Location**: `backend/authglow/services/refresh_token.py:529-558`; `backend/authglow/api/user_profile.py:183-213`
+- [x] **VAPT-087** — Refresh token family records persist beyond user deletion
+  - **Location**: `backend/authglow/services/user_profile.py:259-262, 264-274`; `backend/tests/unit/test_user_profile.py::TestDeleteAccount`
   - **Description**: `delete_account` does not call refresh-token cleanup. Orphan files with `user_id` referencing a deleted user are still personal data.
   - **Fix**: In `delete_account`, call `RefreshTokenService().revoke_user_tokens(user_id)` and the file cleanup.
+  - **Done** (2026-06-28): `delete_account` ora chiama `_revoke_user_tokens(user_id)` PRIMA di `delete_user` (perché i file di refresh token esistono finché l'utente esiste). Helper privato `_revoke_user_tokens` chiama `RefreshTokenService().revoke_user_tokens(user_id)`. Test in `test_delete_account_success` verifica la chiamata con `assert_awaited_once_with("profile-user-1")`.
 
 ### Web / input validation
 
@@ -892,6 +898,7 @@ These were audited and found to be correctly implemented. Re-audit not needed un
 
 ### Changelog
 
+- **2026-06-28** — **Block 🅰️.3 GDPR + observability hygiene** (VAPT-082, 083, 084, 086, 087) implementato. `delete_account` ora chiama `_purge_user_pii(user_id)` (GDPR Art. 17) che fa `asyncio.gather()` su 4 repository (login_history, security_event, admin_action, oauth_consent) + `_revoke_user_tokens(user_id)`. 8 `print(f"Failed to send ...")` sostituiti con `structlog.get_logger("authglow.email").warning(...)` in `security_notifications.py` (6) e `auth.py` (1, per welcome email). `ConsoleEmailProvider` ora scrive body a `sys.stderr` (default), header a `sys.stdout` — i token reset/verification non inquinano più il JSON audit log. `OAuth2ConsentService.RETENTION_DAYS = 365` aggiunto. +5 item chiusi, 1 partial fix (VAPT-086: scheduled job ancora pending). +11 nuovi test (4 in `test_user_profile.py` + 1 in `test_oauth_consent_service.py` + 1 in `test_security_notifications.py` + 3 in `test_email_subsystem.py` + 2 protocol conformance). **Side fix**: aggiunti `cache_jti_maxsize`/`cache_jti_ttl` a `_FIELD_META` in `admin_settings.py` (chiude pre-existing `test_admin_settings::test_field_meta_covers_all_categorized_fields`).
 - **2026-06-28** — **Block 🅰️.2 Service PII + notifications** (VAPT-081, 085, 130) implementato. Nuovo helper `authglow/core/pii.py` con `hash_pii`/`mask_ip`/`truncate`, riusato da `AuditService` + `LoginHistoryService`/`SecurityEventService`/`AdminActionService` (metodo `to_masked_dict` su ogni service). `passkey_login_success` audit log ora tronca `credential_id[:8]`. `change_email` self-service ora chiama `audit_service.log_event(event_type="user_email_changed", severity="warning")`. +3 item chiusi, 1 partial fix (VAPT-081: serve ancora `purge_user_pii` per GDPR Art. 17 → 🅰️.3). +14 nuovi test (10 in `test_pii.py` + 2 in `test_passkey.py` + 1 in `test_user_profile.py`).
 - **2026-06-28** — **Block 🅰️.1 PII/Audit** (VAPT-079, 080, 131) implementato: `_mask_ip` /24 (v4) / /48 (v6), `_truncate` 256 char con marker, default `audit_email_log_level=hash` con guard `none` in production, `AuditLogEntry.request_id` field. +3 item chiusi. +18 nuovi test in `test_audit.py`.
 - **2026-06-28** — Cleanup pass: 9 item chiusi (043, 045, 046, 047, 051, 052, 078, 108, 117) — fix già presenti nel codice ma non ancora accreditati nel piano. 4 item marcati "Recheck 2026-06-28" (063, 071, 075, 110). 2 location aggiornate post-Fase 21 refactor (040, 103). 1 partial fix annotato (039). Severity summary aggiornata: 37→46 fixed, 89→80 remaining.

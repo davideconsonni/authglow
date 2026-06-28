@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Annotated, Any, Dict, List, NoReturn, Optional, Tuple
 
 import jwt
+import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -1591,8 +1592,16 @@ async def invite_user(
         # Also send verification email
         await verification_service.send_verification_email(user, token.verification_code)
 
-    except Exception as e:
-        print(f"Failed to send welcome email: {e}")
+    except Exception:
+        # VAPT-083: route email-send failures through structlog so
+        # the JSON audit stream is not polluted with plaintext
+        # Python ``print()``.
+        structlog.get_logger("authglow.email").warning(
+            "send_email_failed",
+            template="welcome_email",
+            user_id=user.id if user else None,
+            exc_info=True,
+        )
 
     # Log user creation
     await audit_service.log_event(

@@ -160,3 +160,32 @@ class FileLoginHistoryRepository(BaseFileRepository, LoginHistoryRepository):
                 if await self._delete(file_path):
                     deleted += 1
         return deleted
+
+    # ------------------------------------------------------------------
+    # Protocol: delete_for_user (VAPT-082, GDPR Art. 17)
+    # ------------------------------------------------------------------
+
+    async def delete_for_user(self, user_id: str) -> int:
+        """Delete **every** record belonging to ``user_id``.
+
+        Called from ``UserProfileService.delete_account`` after
+        the user record has been removed. Drops the per-user
+        directory and all ``*.json`` files in it.
+        """
+        user_dir = self._user_dir(user_id)
+        pattern = f"{user_dir}/*.json"
+        files = await self._glob(pattern)
+        deleted = 0
+        for file_path in files:
+            if await self._delete(file_path):
+                deleted += 1
+        # Also remove the per-user directory itself if it is now
+        # empty (best-effort: not all fsspec backends support
+        # directory removal, so we silently ignore failures).
+        try:
+            remaining = await self._glob(f"{user_dir}/*.json")
+            if not remaining:
+                await self._afs.rm(user_dir, recursive=False)
+        except Exception:
+            pass
+        return deleted

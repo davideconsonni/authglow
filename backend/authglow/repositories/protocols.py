@@ -459,18 +459,30 @@ class OAuth2ConsentRepository(Protocol):
     async def update(self, consent: OAuth2Consent) -> None:
         """Persist changes (e.g. revocation)."""
 
-    async def delete_for_user_client(self, user_id: str, client_id: str) -> bool:
-        """Delete the consent for the (user, client) pair."""
-
     async def list_for_user(self, user_id: str) -> List[OAuth2Consent]:
-        """Return every consent granted by the user (sorted by
+        """Return every consent granted by *user_id* (sorted by
         ``granted_at`` desc)."""
 
     async def list_all(self, *, limit: int = 100, offset: int = 0) -> List[OAuth2Consent]:
-        """Admin: return a paginated slice of every consent. Cold path."""
+        """Admin-only: scan every consent record on disk. Cold path."""
 
-    async def cleanup_expired(self) -> int:
-        """Delete every consent whose ``expires_at`` is in the past."""
+    async def delete_for_user_client(self, user_id: str, client_id: str) -> bool:
+        """Delete the consent for the (user, client) pair."""
+
+    async def delete_for_user(self, user_id: str) -> int:
+        """VAPT-082: drop **every** consent belonging to a user
+        (across all client_ids). Returns the deletion count.
+        Used by the GDPR right-to-erasure path."""
+
+    async def cleanup_expired(self, *, cutoff: Optional[str] = None) -> int:
+        """Delete every consent whose ``expires_at`` is in the
+        past, or whose ``revoked_at`` is older than ``cutoff``.
+
+        VAPT-086: ``cutoff`` is an ISO-8601 string; if supplied,
+        revoked consents older than ``cutoff`` are also
+        dropped (drives the retention sweep). ``expires_at``
+        dropping is independent of the cutoff and runs on the
+        natural expiry."""
 
 
 # ---------------------------------------------------------------------------
@@ -879,6 +891,15 @@ class LoginHistoryRepository(Protocol):
         used by ``LoginHistoryEntry.to_dict()`` and
         ``datetime.isoformat()``). Returns the deletion count."""
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """VAPT-082: GDPR Art. 17 right-to-erasure hook.
+
+        Drop **every** record belonging to ``user_id`` regardless
+        of age. Returns the deletion count. Called from
+        ``UserProfileService.delete_account`` after the user
+        record itself has been removed.
+        """
+
 
 @runtime_checkable
 class AdminActionRepository(Protocol):
@@ -903,6 +924,11 @@ class AdminActionRepository(Protocol):
         """Return a paginated slice of actions against a user, plus
         the total count."""
 
+    async def delete_for_user(self, target_user_id: str) -> int:
+        """VAPT-082: drop **every** admin-action record whose
+        ``target_user_id`` matches. Used by the GDPR
+        right-to-erasure path. Returns the deletion count."""
+
 
 @runtime_checkable
 class SecurityEventRepository(Protocol):
@@ -925,6 +951,10 @@ class SecurityEventRepository(Protocol):
     ) -> tuple[List[Record], int]:
         """Return a paginated slice of security events for a user,
         plus the total count."""
+
+    async def delete_for_user(self, user_id: str) -> int:
+        """VAPT-082: drop **every** security event for a user.
+        Returns the deletion count."""
 
 
 # ---------------------------------------------------------------------------

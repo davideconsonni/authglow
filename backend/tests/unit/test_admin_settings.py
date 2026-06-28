@@ -61,6 +61,9 @@ class TestAdminSettingsEndpointStructure:
             "keyring_path", "keyring", "kid", "old_kid", "key_size",
             "rotation_days", "auto_rotate", "options", "smtp_username", "try",
             "finally", "Implementation",
+            # Doc-comment text matched by the naive regex (e.g.
+            # ``# Security: the file is written in plaintext...``).
+            "Security",
         }
         unexpected = missing - acceptable_missing
         assert not unexpected, f"Fields in config.py but not in _FIELD_META: {unexpected}"

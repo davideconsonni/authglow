@@ -256,10 +256,74 @@ class UserProfileService:
         # UserPreferencesRepository — backend-agnostic)
         await self._preferences_repo.delete(user_id)
 
+        # VAPT-087: revoke refresh tokens *before* deleting the
+        # user record so the (still-existent) user's token-family
+        # files are reaped. Without this the refresh token
+        # records (and their on-disk JSON files) become orphans.
+        await self._revoke_user_tokens(user_id)
+
         # Delete user
         await self.user_storage.delete_user(user_id)
 
+        # VAPT-082: GDPR Art. 17 right-to-erasure. Drop the
+        # remaining per-user PII in parallel. ``return_exceptions``
+        # so a single failure (e.g. transient I/O) does not
+        # block the rest of the purge — every record still
+        # needs to be reaped.
+        await self._purge_user_pii(user_id)
+
         return True, "Account deleted successfully"
+
+    async def _revoke_user_tokens(self, user_id: str) -> int:
+        """Revoke every refresh token belonging to ``user_id``.
+
+        Helper for ``delete_account`` (VAPT-087). The
+        ``RefreshTokenService.revoke_user_tokens`` API already
+        exists; we just call it here so the deletion path also
+        tears down the token family on disk.
+        """
+        from authglow.services.refresh_token import RefreshTokenService
+
+        return await RefreshTokenService().revoke_user_tokens(user_id)
+
+    async def _purge_user_pii(self, user_id: str) -> dict[str, int]:
+        """GDPR Art. 17 right-to-erasure (VAPT-082).
+
+        Drops every PII-bearing record we own for ``user_id``:
+        login history, security events, admin actions against
+        the user, OAuth2 consents, federated identities. Runs
+        in parallel so a single failing repo does not block
+        the others. Returns a per-repo deletion count for
+        observability.
+        """
+        import asyncio
+
+        from authglow.services.admin_action import AdminActionService
+        from authglow.services.login_history import LoginHistoryService
+        from authglow.services.oauth_consent import OAuth2ConsentService
+        from authglow.services.security_event import SecurityEventService
+
+        login_svc = LoginHistoryService()
+        security_svc = SecurityEventService()
+        admin_svc = AdminActionService()
+        consent_svc = OAuth2ConsentService()
+
+        results = await asyncio.gather(
+            login_svc._repo.delete_for_user(user_id),
+            security_svc._repo.delete_for_user(user_id),
+            admin_svc._repo.delete_for_user(user_id),
+            consent_svc.repository.delete_for_user(user_id),
+            return_exceptions=True,
+        )
+
+        counts: dict[str, int] = {}
+        names = ("login_history", "security_event", "admin_action", "oauth_consent")
+        for name, result in zip(names, results):
+            if isinstance(result, BaseException):
+                counts[name] = -1  # sentinel for failure
+            else:
+                counts[name] = int(result)
+        return counts
 
     # User Preferences
 

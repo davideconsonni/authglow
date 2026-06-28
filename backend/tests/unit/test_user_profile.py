@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferencesUpdate, UserProfileUpdate
@@ -193,12 +193,23 @@ class TestDeleteAccount:
         user = _make_user()
         user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
         user_profile_service.user_storage.delete_user = AsyncMock()
+        # VAPT-087 + VAPT-082: ``delete_account`` must revoke
+        # refresh tokens AND trigger the GDPR purge. We mock the
+        # internal ``_purge_user_pii`` to keep the test focused
+        # on the VAPT-087 behaviour; the dedicated purge tests
+        # below exercise the multi-repo path in detail.
+        with (
+            patch("authglow.services.refresh_token.RefreshTokenService") as mock_rts,
+            patch.object(user_profile_service, "_purge_user_pii", new=AsyncMock()),
+        ):
+            mock_rts.return_value.revoke_user_tokens = AsyncMock(return_value=0)
 
-        success, msg = asyncio_run(
-            user_profile_service.delete_account("profile-user-1", "TestP@ss123!", "DELETE")
-        )
-        assert success is True
-        assert "deleted" in msg.lower()
+            success, msg = asyncio_run(
+                user_profile_service.delete_account("profile-user-1", "TestP@ss123!", "DELETE")
+            )
+            assert success is True
+            assert "deleted" in msg.lower()
+            mock_rts.return_value.revoke_user_tokens.assert_awaited_once_with("profile-user-1")
 
     def test_delete_account_wrong_confirmation(self, user_profile_service):
         user = _make_user()
@@ -219,6 +230,83 @@ class TestDeleteAccount:
         )
         assert success is False
         assert "incorrect" in msg.lower()
+
+    def test_delete_account_triggers_purge_pii(self, user_profile_service):
+        """VAPT-082 — ``delete_account`` must trigger the
+        ``_purge_user_pii`` GDPR right-to-erasure path after
+        the user record is dropped.
+        """
+        user = _make_user()
+        user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
+        user_profile_service.user_storage.delete_user = AsyncMock()
+        with patch("authglow.services.refresh_token.RefreshTokenService") as mock_rts:
+            mock_rts.return_value.revoke_user_tokens = AsyncMock(return_value=0)
+            with patch.object(
+                user_profile_service, "_purge_user_pii", new=AsyncMock()
+            ) as mock_purge:
+                success, _ = asyncio_run(
+                    user_profile_service.delete_account("profile-user-1", "TestP@ss123!", "DELETE")
+                )
+                assert success is True
+                mock_purge.assert_awaited_once_with("profile-user-1")
+
+    def test_purge_user_pii_calls_all_repositories(self, user_profile_service):
+        """VAPT-082 — ``_purge_user_pii`` must drop login history,
+        security events, admin actions, and OAuth2 consents
+        for the user.
+        """
+        # All four delete_for_user calls are awaited in parallel;
+        # patch them with AsyncMocks that return a count.
+        with (
+            patch("authglow.services.login_history.LoginHistoryService") as mock_login_cls,
+            patch("authglow.services.security_event.SecurityEventService") as mock_sec_cls,
+            patch("authglow.services.admin_action.AdminActionService") as mock_admin_cls,
+            patch("authglow.services.oauth_consent.OAuth2ConsentService") as mock_consent_cls,
+        ):
+            mock_login_cls.return_value._repo.delete_for_user = AsyncMock(return_value=3)
+            mock_sec_cls.return_value._repo.delete_for_user = AsyncMock(return_value=1)
+            mock_admin_cls.return_value._repo.delete_for_user = AsyncMock(return_value=2)
+            mock_consent_cls.return_value.repository.delete_for_user = AsyncMock(return_value=4)
+
+            counts = asyncio_run(user_profile_service._purge_user_pii("user-x"))
+
+            assert counts == {
+                "login_history": 3,
+                "security_event": 1,
+                "admin_action": 2,
+                "oauth_consent": 4,
+            }
+            mock_login_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
+            mock_sec_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
+            mock_admin_cls.return_value._repo.delete_for_user.assert_awaited_once_with("user-x")
+            mock_consent_cls.return_value.repository.delete_for_user.assert_awaited_once_with(
+                "user-x"
+            )
+
+    def test_purge_user_pii_continues_on_partial_failure(self, user_profile_service):
+        """VAPT-082 — GDPR right-to-erasure should not abort the
+        whole purge if one repo raises. Failures are recorded
+        as -1 in the count dict.
+        """
+        with (
+            patch("authglow.services.login_history.LoginHistoryService") as mock_login_cls,
+            patch("authglow.services.security_event.SecurityEventService") as mock_sec_cls,
+            patch("authglow.services.admin_action.AdminActionService") as mock_admin_cls,
+            patch("authglow.services.oauth_consent.OAuth2ConsentService") as mock_consent_cls,
+        ):
+            mock_login_cls.return_value._repo.delete_for_user = AsyncMock(
+                side_effect=OSError("disk full")
+            )
+            mock_sec_cls.return_value._repo.delete_for_user = AsyncMock(return_value=1)
+            mock_admin_cls.return_value._repo.delete_for_user = AsyncMock(return_value=0)
+            mock_consent_cls.return_value.repository.delete_for_user = AsyncMock(return_value=2)
+
+            counts = asyncio_run(user_profile_service._purge_user_pii("user-x"))
+
+            assert counts["login_history"] == -1
+            assert counts["security_event"] == 1
+            assert counts["admin_action"] == 0
+            assert counts["oauth_consent"] == 2
 
 
 class TestAccountStatus:

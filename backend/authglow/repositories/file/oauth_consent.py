@@ -109,6 +109,27 @@ class FileOAuth2ConsentRepository(BaseFileRepository, OAuth2ConsentRepository):
         """Delete the consent for the ``(user_id, client_id)`` pair."""
         return await self._delete(self._path_for(user_id, client_id))
 
+    async def delete_for_user(self, user_id: str) -> int:
+        """Delete every consent belonging to ``user_id``.
+
+        VAPT-082: GDPR right-to-erasure. Drops the
+        ``{user_id}/`` subdirectory and every ``*.json`` file in
+        it. Best-effort: if the directory removal fails, the
+        file deletions still happened.
+        """
+        paths = await self._glob(f"{self._storage_path}/{user_id}/*.json")
+        deleted = 0
+        for path in paths:
+            if await self._delete(path):
+                deleted += 1
+        try:
+            remaining = await self._glob(f"{self._storage_path}/{user_id}/*.json")
+            if not remaining:
+                await self._afs.rm(f"{self._storage_path}/{user_id}", recursive=False)
+        except Exception:
+            pass
+        return deleted
+
     # ------------------------------------------------------------------
     # Listing
     # ------------------------------------------------------------------
@@ -146,11 +167,22 @@ class FileOAuth2ConsentRepository(BaseFileRepository, OAuth2ConsentRepository):
         consents.sort(key=lambda c: c.granted_at, reverse=True)
         return consents[offset : offset + limit]
 
-    async def cleanup_expired(self) -> int:
-        """Delete every consent whose ``expires_at`` is in the past."""
+    async def cleanup_expired(self, *, cutoff: Optional[str] = None) -> int:
+        """Delete every consent whose ``expires_at`` is in the
+        past, or whose ``revoked_at`` is older than ``cutoff``.
+
+        VAPT-086: ``cutoff`` is an ISO-8601 string; if supplied,
+        revoked consents older than ``cutoff`` are also
+        dropped (drives the retention sweep). ``expires_at``
+        dropping is independent of the cutoff and runs on the
+        natural expiry.
+        """
+        from datetime import datetime as dt
+
         paths = await self._glob(f"{self._storage_path}/**/*.json")
         deleted = 0
         now = utcnow()
+        cutoff_dt = dt.fromisoformat(cutoff) if cutoff else None
         for path in paths:
             data = await self._read_json(path)
             if data is None:
@@ -159,7 +191,17 @@ class FileOAuth2ConsentRepository(BaseFileRepository, OAuth2ConsentRepository):
                 consent = OAuth2Consent(**data)
             except Exception:
                 continue
+            should_drop = False
             if consent.expires_at and now > consent.expires_at:
+                should_drop = True
+            elif (
+                cutoff_dt
+                and consent.revoked
+                and consent.revoked_at
+                and consent.revoked_at < cutoff_dt
+            ):
+                should_drop = True
+            if should_drop:
                 await self._delete(path)
                 deleted += 1
         return deleted

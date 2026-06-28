@@ -343,6 +343,17 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Max request body size (MB)",
         "restart_required": True,
     },
+    # --- Client JWT auth replay-protection cache (T.2) ---
+    "cache_jti_maxsize": {
+        "category": "cache",
+        "label": "JTI replay-protection cache max entries",
+        "restart_required": True,
+    },
+    "cache_jti_ttl": {
+        "category": "cache",
+        "label": "JTI replay-protection cache TTL (seconds)",
+        "restart_required": True,
+    },
     # fmt: on
 }
 

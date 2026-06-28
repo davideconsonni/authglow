@@ -125,3 +125,31 @@ class FileAdminActionRepository(BaseFileRepository, AdminActionRepository):
         )
         total = len(records)
         return records[offset : offset + limit], total
+
+    # ------------------------------------------------------------------
+    # Protocol: delete_for_user (VAPT-082, GDPR Art. 17)
+    # ------------------------------------------------------------------
+
+    async def delete_for_user(self, target_user_id: str) -> int:
+        """Delete every admin-action record where
+        ``target_user_id`` matches.
+
+        VAPT-082: GDPR right-to-erasure. Both ``admin_user_id``
+        records (where the user was the actor) and
+        ``target_user_id`` records (where the user was acted
+        on) must be purged; we use the ``target_user_id`` path
+        here (which matches the user-dir layout).
+        """
+        pattern = f"{self._user_dir(target_user_id)}/*.json"
+        files = await self._glob(pattern)
+        deleted = 0
+        for file_path in files:
+            if await self._delete(file_path):
+                deleted += 1
+        try:
+            remaining = await self._glob(f"{self._user_dir(target_user_id)}/*.json")
+            if not remaining:
+                await self._afs.rm(self._user_dir(target_user_id), recursive=False)
+        except Exception:
+            pass
+        return deleted

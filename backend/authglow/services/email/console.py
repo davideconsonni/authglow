@@ -16,14 +16,30 @@ class ConsoleEmailProvider(EmailProvider):
     in a readable way with headers and content.
     """
 
-    def __init__(self, output_stream: TextIO | None = None, colorize: bool = True):
+    def __init__(
+        self,
+        output_stream: TextIO | None = None,
+        colorize: bool = True,
+        body_stream: TextIO | None = None,
+    ):
         """Initialize console email provider.
 
         Args:
-            output_stream: Output stream (default: sys.stdout)
-            colorize: Use ANSI colors for better readability (default: True)
+            output_stream: Header stream (default: ``sys.stdout``).
+                Receives one short line per email: the message id,
+                the recipients, the subject, and any custom
+                headers. Safe to mix with the JSON audit log
+                stream (VAPT-084).
+            colorize: Use ANSI colors for better readability (default: True).
+            body_stream: Body stream (default: ``sys.stderr``).
+                Receives the full text / HTML body — which may
+                contain reset / verification tokens. Splitting
+                the body onto ``stderr`` keeps the audit log
+                stream clean and gives container log shippers a
+                single place to filter out the body if they want.
         """
         self.output = output_stream or sys.stdout
+        self.body_stream = body_stream or sys.stderr
         self.colorize = colorize
 
     def _colorize(self, text: str, color_code: str) -> str:
@@ -41,15 +57,14 @@ class ConsoleEmailProvider(EmailProvider):
         reset = "\033[0m"
         return f"{color_code}{text}{reset}"
 
-    def _format_email_display(self, message: EmailMessage, message_id: str) -> str:
-        """Format email for console display.
+    def _format_header(self, message: EmailMessage, message_id: str) -> str:
+        """Format the email header (safe to mix with the JSON
+        audit log stream). VAPT-084.
 
-        Args:
-            message: EmailMessage to format
-            message_id: Generated message ID
-
-        Returns:
-            Formatted email string
+        Contains the message id, recipients, subject, custom
+        headers and priority. **Does not** include the body
+        — that goes to ``self.body_stream`` (default
+        ``sys.stderr``) so the audit stream is not polluted.
         """
         lines = []
 
@@ -59,19 +74,16 @@ class ConsoleEmailProvider(EmailProvider):
         col_white_bold = "\033[1;37m"
         col_cyan_bold = "\033[1;36m"
 
-        # Header with colors (use simple text for Windows compatibility)
         lines.append("=" * 80)
-        lines.append(self._colorize("[EMAIL MESSAGE]", col_cyan_bold))  # Cyan bold
+        lines.append(self._colorize("[EMAIL MESSAGE]", col_cyan_bold))
         lines.append("=" * 80)
 
-        # Metadata
-        lines.append(f"Message ID: {self._colorize(message_id, col_yellow)}")  # Yellow
+        lines.append(f"Message ID: {self._colorize(message_id, col_yellow)}")
         lines.append(f"Timestamp:  {utcnow().isoformat()}Z")
-        lines.append(f"Provider:   {self._colorize('console', col_magenta)}")  # Magenta
+        lines.append(f"Provider:   {self._colorize('console', col_magenta)}")
         lines.append("")
 
-        # Headers
-        lines.append(self._colorize("HEADERS:", "\033[1;32m"))  # Green bold
+        lines.append(self._colorize("HEADERS:", "\033[1;32m"))
         lines.append("-" * 80)
 
         from_display = message.from_email or "noreply@authglow.local"
@@ -93,34 +105,44 @@ class ConsoleEmailProvider(EmailProvider):
         if message.reply_to:
             lines.append(f"Reply-To: {message.reply_to}")
 
-        lines.append(f"Subject:  {self._colorize(message.subject, col_white_bold)}")  # White bold
+        lines.append(f"Subject:  {self._colorize(message.subject, col_white_bold)}")
 
         if message.priority.value != "normal":
             lines.append(f"Priority: {message.priority.value.upper()}")
 
-        # Custom headers
         if message.headers:
             for key, value in message.headers.items():
                 lines.append(f"{key}: {value}")
 
+        lines.append("=" * 80)
         lines.append("")
 
-        # Body content
+        return "\n".join(lines)
+
+    def _format_body(self, message: EmailMessage) -> str:
+        """Format the email body (sent to ``body_stream``). VAPT-084.
+
+        Contains the text / HTML body and attachment metadata.
+        The body is the part most likely to contain reset
+        / verification tokens, so it is split onto
+        ``stderr`` to keep the audit log stream clean.
+        """
+        lines = []
+
         if message.body_text:
-            lines.append(self._colorize("TEXT VERSION:", "\033[1;34m"))  # Blue bold
+            lines.append(self._colorize("TEXT VERSION:", "\033[1;34m"))
             lines.append("-" * 80)
             lines.append(message.body_text)
             lines.append("")
 
         if message.body_html:
-            lines.append(self._colorize("HTML VERSION:", "\033[1;34m"))  # Blue bold
+            lines.append(self._colorize("HTML VERSION:", "\033[1;34m"))
             lines.append("-" * 80)
             lines.append(message.body_html)
             lines.append("")
 
-        # Attachments
         if message.attachments:
-            lines.append(self._colorize("ATTACHMENTS:", "\033[1;33m"))  # Yellow bold
+            lines.append(self._colorize("ATTACHMENTS:", "\033[1;33m"))
             lines.append("-" * 80)
             for attachment in message.attachments:
                 size_kb = len(attachment.content) / 1024
@@ -129,28 +151,37 @@ class ConsoleEmailProvider(EmailProvider):
                 )
             lines.append("")
 
-        lines.append("=" * 80)
-        lines.append("")
+        return "\n".join(lines) if lines else ""
 
-        return "\n".join(lines)
+    def _format_email_display(self, message: EmailMessage, message_id: str) -> str:
+        """Backwards-compatible single-string format.
+
+        VAPT-084: kept for callers that rely on the combined
+        header+body string (e.g. tests). New code should use
+        ``format_header`` + ``format_body`` separately.
+        """
+        return self._format_header(message, message_id) + self._format_body(message)
 
     async def send(self, message: EmailMessage) -> EmailSendResult:
         """Send email by printing to console.
 
-        Args:
-            message: EmailMessage to "send"
-
-        Returns:
-            EmailSendResult with success=True and generated message_id
+        VAPT-084: header (subject, recipients, id) goes to
+        ``self.output`` (default ``sys.stdout``); body
+        (text / HTML, attachments) goes to ``self.body_stream``
+        (default ``sys.stderr``). The split keeps the JSON
+        audit log stream clean.
         """
         try:
-            # Generate unique message ID
             message_id = f"console-{uuid4()}"
 
-            # Format and print
-            formatted = self._format_email_display(message, message_id)
-            self.output.write(formatted)
+            header = self._format_header(message, message_id)
+            self.output.write(header)
             self.output.flush()
+
+            body = self._format_body(message)
+            if body:
+                self.body_stream.write(body)
+                self.body_stream.flush()
 
             return EmailSendResult(success=True, message_id=message_id, provider="console")
 

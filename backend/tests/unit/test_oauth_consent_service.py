@@ -1,6 +1,6 @@
-import pytest
 import asyncio
 from datetime import timedelta
+
 from authglow.core.datetime import utcnow
 from authglow.models.oauth_consent import OAuth2Consent
 
@@ -66,16 +66,12 @@ class TestGetUserConsent:
                 user_id="user-uc", client_id="client-uc", scopes=["read"]
             )
         )
-        result = asyncio_run(
-            oauth_consent_service.get_user_consent("user-uc", "client-uc")
-        )
+        result = asyncio_run(oauth_consent_service.get_user_consent("user-uc", "client-uc"))
         assert result is not None
         assert result.user_id == "user-uc"
 
     def test_get_user_consent_not_found(self, oauth_consent_service):
-        result = asyncio_run(
-            oauth_consent_service.get_user_consent("nouser", "noclient")
-        )
+        result = asyncio_run(oauth_consent_service.get_user_consent("nouser", "noclient"))
         assert result is None
 
     def test_get_user_consent_skips_revoked(self, oauth_consent_service):
@@ -85,9 +81,7 @@ class TestGetUserConsent:
             )
         )
         asyncio_run(oauth_consent_service.revoke_consent(consent.consent_id))
-        result = asyncio_run(
-            oauth_consent_service.get_user_consent("user-rev", "client-rev")
-        )
+        result = asyncio_run(oauth_consent_service.get_user_consent("user-rev", "client-rev"))
         assert result is None
 
 
@@ -111,9 +105,7 @@ class TestCheckConsent:
             )
         )
         has, consent = asyncio_run(
-            oauth_consent_service.check_consent(
-                "user-check2", "client-check2", ["read", "admin"]
-            )
+            oauth_consent_service.check_consent("user-check2", "client-check2", ["read", "admin"])
         )
         assert has is False
 
@@ -153,9 +145,7 @@ class TestRevokeConsent:
         assert result is True
 
     def test_revoke_user_client_consent_not_found(self, oauth_consent_service):
-        result = asyncio_run(
-            oauth_consent_service.revoke_user_client_consent("nouser", "noclient")
-        )
+        result = asyncio_run(oauth_consent_service.revoke_user_client_consent("nouser", "noclient"))
         assert result is False
 
 
@@ -189,9 +179,7 @@ class TestCleanupExpiredConsents:
             )
         )
         repo = oauth_consent_service.repository
-        path = (
-            f"{repo._storage_path}/{consent.user_id}/{consent.client_id}.json"
-        )
+        path = f"{repo._storage_path}/{consent.user_id}/{consent.client_id}.json"
         data = consent.model_dump(mode="json")
         data["expires_at"] = (utcnow() - timedelta(days=1)).isoformat()
         with repo._filesystem.open(path, "w") as f:
@@ -200,22 +188,31 @@ class TestCleanupExpiredConsents:
         deleted = asyncio_run(oauth_consent_service.cleanup_expired_consents())
         assert deleted >= 1
 
+    def test_retention_days_constant(self, oauth_consent_service):
+        """VAPT-086 — ``OAuth2ConsentService.RETENTION_DAYS`` is
+        the contract that drives the retention sweep. Match the
+        other persistent services (``security_event``,
+        ``admin_action``) at 365 days.
+        """
+        from authglow.services.oauth_consent import OAuth2ConsentService
+
+        assert OAuth2ConsentService.RETENTION_DAYS == 365
+        assert oauth_consent_service.RETENTION_DAYS == 365
+
 
 class TestP5DeterministicConsentLookup:
     """P5: get_user_consent() uses O(1) direct path, not glob."""
 
     def test_get_user_consent_uses_deterministic_path(self, oauth_consent_service):
         """get_user_consent builds path as {user_id}/{client_id}.json."""
-        consent = asyncio_run(
+        asyncio_run(
             oauth_consent_service.create_consent(
                 user_id="user-p5", client_id="client-p5", scopes=["read"]
             )
         )
         repo = oauth_consent_service.repository
         expected_path = repo._path_for("user-p5", "client-p5")
-        result = asyncio_run(
-            oauth_consent_service.get_user_consent("user-p5", "client-p5")
-        )
+        result = asyncio_run(oauth_consent_service.get_user_consent("user-p5", "client-p5"))
         assert result is not None
         assert result.user_id == "user-p5"
         assert result.client_id == "client-p5"
@@ -225,12 +222,11 @@ class TestP5DeterministicConsentLookup:
     def test_get_user_consent_no_glob_on_hit(self, oauth_consent_service):
         """On a match, get_user_consent does NOT call glob."""
         asyncio_run(
-            oauth_consent_service.create_consent(
-                user_id="p5-hit", client_id="c1", scopes=["read"]
-            )
+            oauth_consent_service.create_consent(user_id="p5-hit", client_id="c1", scopes=["read"])
         )
-        import authglow.repositories.file.base as mod
         from unittest.mock import patch
+
+        import authglow.repositories.file.base as mod
 
         with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
             result = asyncio_run(oauth_consent_service.get_user_consent("p5-hit", "c1"))
@@ -239,19 +235,18 @@ class TestP5DeterministicConsentLookup:
 
     def test_get_user_consent_no_glob_on_miss(self, oauth_consent_service):
         """On a miss, get_user_consent does NOT call glob either."""
-        import authglow.repositories.file.base as mod
         from unittest.mock import patch
 
+        import authglow.repositories.file.base as mod
+
         with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
-            result = asyncio_run(
-                oauth_consent_service.get_user_consent("nouser", "noclient")
-            )
+            result = asyncio_run(oauth_consent_service.get_user_consent("nouser", "noclient"))
             assert result is None
             mock_glob.assert_not_called()
 
     def test_create_consent_deterministic_path(self, oauth_consent_service):
         """create_consent saves to {user_id}/{client_id}.json."""
-        consent = asyncio_run(
+        asyncio_run(
             oauth_consent_service.create_consent(
                 user_id="p5-create", client_id="c2", scopes=["read", "write"]
             )
@@ -267,12 +262,12 @@ class TestP5DeterministicConsentLookup:
 
     def test_create_consent_overwrites_same_user_client(self, oauth_consent_service):
         """Second create_consent for same user+client overwrites."""
-        first = asyncio_run(
+        asyncio_run(
             oauth_consent_service.create_consent(
                 user_id="p5-ov", client_id="c-ov", scopes=["read"]
             )
         )
-        second = asyncio_run(
+        asyncio_run(
             oauth_consent_service.create_consent(
                 user_id="p5-ov", client_id="c-ov", scopes=["read", "write"]
             )
@@ -288,8 +283,9 @@ class TestP5DeterministicConsentLookup:
                 user_id="p5-rev", client_id="c-rev", scopes=["read"]
             )
         )
-        import authglow.repositories.file.base as mod
         from unittest.mock import patch
+
+        import authglow.repositories.file.base as mod
 
         with patch.object(mod.BaseFileRepository, "_glob", wraps=None) as mock_glob:
             success = asyncio_run(

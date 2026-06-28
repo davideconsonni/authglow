@@ -123,3 +123,29 @@ class FileSecurityEventRepository(BaseFileRepository, SecurityEventRepository):
         )
         total = len(records)
         return records[offset : offset + limit], total
+
+    # ------------------------------------------------------------------
+    # Protocol: delete_for_user (VAPT-082, GDPR Art. 17)
+    # ------------------------------------------------------------------
+
+    async def delete_for_user(self, user_id: str) -> int:
+        """Delete every security event for ``user_id``.
+
+        VAPT-082: GDPR right-to-erasure. Best-effort: if the
+        directory removal fails (e.g. on a backend that does
+        not support it), the individual file deletions still
+        happen.
+        """
+        pattern = f"{self._user_dir(user_id)}/*.json"
+        files = await self._glob(pattern)
+        deleted = 0
+        for file_path in files:
+            if await self._delete(file_path):
+                deleted += 1
+        try:
+            remaining = await self._glob(f"{self._user_dir(user_id)}/*.json")
+            if not remaining:
+                await self._afs.rm(self._user_dir(user_id), recursive=False)
+        except Exception:
+            pass
+        return deleted

@@ -1,7 +1,7 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
+
+from authglow.models.email import EmailSendResult
 from authglow.models.user import User
-from authglow.models.email import EmailMessage, EmailSendResult
 
 
 class TestSendLoginAlert:
@@ -13,9 +13,7 @@ class TestSendLoginAlert:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-1", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-1", provider="console")
         )
         result = asyncio_run(
             security_notification_service.send_login_alert(user, ip_address="1.2.3.4")
@@ -49,6 +47,31 @@ class TestSendLoginAlert:
         result = asyncio_run(security_notification_service.send_login_alert(user))
         assert result is False
 
+    def test_send_login_alert_exception_logs_via_structlog(self, security_notification_service):
+        """VAPT-083 — email-send failures must go through
+        structlog, not ``print()``. Patch the email logger and
+        verify it receives a ``warning`` call with the expected
+        event name and structured fields.
+        """
+        from authglow.services.security_notifications import _email_log
+
+        user = User(
+            id="user-log",
+            email="log@example.com",
+            hashed_password="$2b$12$placeholder",
+            is_active=True,
+        )
+        security_notification_service.email_service.send_template = AsyncMock(
+            side_effect=Exception("SMTP down")
+        )
+        with patch.object(_email_log, "warning", wraps=_email_log.warning) as mock_warn:
+            asyncio_run(security_notification_service.send_login_alert(user))
+            mock_warn.assert_called_once()
+            kwargs = mock_warn.call_args[1]
+            assert kwargs["template"] == "security_alert"
+            assert kwargs["alert_type"] == "login_alert"
+            assert kwargs["user_id"] == "user-log"
+
 
 class TestSendPasswordChangedAlert:
     def test_send_password_changed_alert(self, security_notification_service):
@@ -59,14 +82,10 @@ class TestSendPasswordChangedAlert:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-pw", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-pw", provider="console")
         )
         result = asyncio_run(
-            security_notification_service.send_password_changed_alert(
-                user, ip_address="5.6.7.8"
-            )
+            security_notification_service.send_password_changed_alert(user, ip_address="5.6.7.8")
         )
         assert result is True
         call_args = security_notification_service.email_service.send_template.call_args
@@ -74,13 +93,9 @@ class TestSendPasswordChangedAlert:
 
 
 class TestSendEmailChangedAlert:
-    def test_send_email_changed_alert_both_addresses(
-        self, security_notification_service
-    ):
+    def test_send_email_changed_alert_both_addresses(self, security_notification_service):
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-ec", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-ec", provider="console")
         )
         result = asyncio_run(
             security_notification_service.send_email_changed_alert(
@@ -99,9 +114,7 @@ class TestSendEmailChangedAlert:
         async def side_effect(**kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                return EmailSendResult(
-                    success=True, message_id="msg-1", provider="console"
-                )
+                return EmailSendResult(success=True, message_id="msg-1", provider="console")
             return EmailSendResult(success=False, error="fail")
 
         security_notification_service.email_service.send_template = AsyncMock(
@@ -125,9 +138,7 @@ class TestSendMFAAlerts:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-mfa-en", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-mfa-en", provider="console")
         )
         result = asyncio_run(security_notification_service.send_mfa_enabled_alert(user))
         assert result is True
@@ -140,13 +151,9 @@ class TestSendMFAAlerts:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-mfa-dis", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-mfa-dis", provider="console")
         )
-        result = asyncio_run(
-            security_notification_service.send_mfa_disabled_alert(user)
-        )
+        result = asyncio_run(security_notification_service.send_mfa_disabled_alert(user))
         assert result is True
 
 
@@ -159,9 +166,7 @@ class TestSendAPIKeyCreatedAlert:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-api", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-api", provider="console")
         )
         result = asyncio_run(
             security_notification_service.send_api_key_created_alert(
@@ -180,13 +185,9 @@ class TestSendAccountLockedAlert:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-lock", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-lock", provider="console")
         )
-        result = asyncio_run(
-            security_notification_service.send_account_locked_alert(user)
-        )
+        result = asyncio_run(security_notification_service.send_account_locked_alert(user))
         assert result is True
 
     def test_send_account_locked_custom_reason(self, security_notification_service):
@@ -197,9 +198,7 @@ class TestSendAccountLockedAlert:
             is_active=True,
         )
         security_notification_service.email_service.send_template = AsyncMock(
-            return_value=EmailSendResult(
-                success=True, message_id="msg-lock2", provider="console"
-            )
+            return_value=EmailSendResult(success=True, message_id="msg-lock2", provider="console")
         )
         result = asyncio_run(
             security_notification_service.send_account_locked_alert(
