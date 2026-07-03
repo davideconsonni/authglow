@@ -19,6 +19,7 @@ interface ApiKeyData {
   created_at: string
   is_active: boolean
   expires_at: string | null
+  allowed_ips: string[]
 }
 
 interface CreateForm {
@@ -26,12 +27,17 @@ interface CreateForm {
   name: string
   scopes: string
   expires_in_days: string
+  allowed_ips: string
 }
 
 interface CreatedKey {
   key_id: string
   api_key: string
   name: string
+  key_prefix?: string
+  requested_scopes: string[]
+  granted_scopes: string[]
+  filtered_scopes: string[]
 }
 
 const initialForm: CreateForm = {
@@ -39,6 +45,7 @@ const initialForm: CreateForm = {
   name: '',
   scopes: '',
   expires_in_days: '',
+  allowed_ips: '',
 }
 
 export function AdminApiKeysPage() {
@@ -126,10 +133,14 @@ export function AdminApiKeysPage() {
       const scopes = form.scopes
         ? form.scopes.split(',').map((s) => s.trim()).filter(Boolean)
         : []
+      const allowed_ips = form.allowed_ips
+        ? form.allowed_ips.split(',').map((s) => s.trim()).filter(Boolean)
+        : []
       const body: Record<string, unknown> = {
         name: form.name,
         scopes,
         user_email: form.user_email,
+        allowed_ips,
       }
       const days = parseInt(form.expires_in_days, 10)
       if (!isNaN(days) && days > 0) {
@@ -142,6 +153,10 @@ export function AdminApiKeysPage() {
         key_id: result.key_id,
         api_key: result.api_key,
         name: result.name || form.name,
+        key_prefix: result.key_prefix,
+        requested_scopes: result.requested_scopes || [],
+        granted_scopes: result.granted_scopes || [],
+        filtered_scopes: result.filtered_scopes || [],
       })
       setCopied(false)
       await refetch()
@@ -230,17 +245,18 @@ export function AdminApiKeysPage() {
       ) : (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-surface-2">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
+              <thead className="border-b border-surface-2">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">IP Restriction</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
             <tbody className="divide-y divide-surface-2">
               {keys.map((k, i) => (
                 <tr key={k.key_id || `key-${i}`} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`}>
@@ -260,6 +276,18 @@ export function AdminApiKeysPage() {
                         </span>
                       ))}
                     </div>
+                  </td>
+                  <td className="hidden md:table-cell px-6 py-3" data-testid="key-ips-display">
+                    {k.allowed_ips && k.allowed_ips.length > 0 ? (
+                      <span
+                        className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
+                        title={k.allowed_ips.join(', ')}
+                      >
+                        {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-text-muted">—</span>
+                    )}
                   </td>
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">
@@ -390,6 +418,17 @@ export function AdminApiKeysPage() {
               />
             </div>
 
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Restrict to IPs (comma-separated, optional)</label>
+              <input
+                value={form.allowed_ips}
+                onChange={(e) => setForm({ ...form, allowed_ips: e.target.value })}
+                placeholder="203.0.113.5, 198.51.100.0/24"
+                data-testid="key-allowed-ips-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setShowCreate(false); setForm(initialForm); setFormError(null) }}
@@ -442,6 +481,28 @@ export function AdminApiKeysPage() {
                 </button>
               </div>
             </div>
+
+            {createdKey.filtered_scopes && createdKey.filtered_scopes.length > 0 && (
+              <div
+                role="alert"
+                data-testid="scope-filter-warning"
+                className="rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 p-3 text-left"
+              >
+                <p className="text-xs font-medium text-semantic-warning">Some scopes were filtered</p>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Requested: <code className="font-mono">{createdKey.requested_scopes.join(', ') || '(none)'}</code>
+                </p>
+                <p className="text-xs text-text-secondary">
+                  Granted: <code className="font-mono">{createdKey.granted_scopes.join(', ') || '(none)'}</code>
+                </p>
+                <p className="text-xs text-text-secondary">
+                  Filtered: <code className="font-mono">{createdKey.filtered_scopes.join(', ')}</code>
+                </p>
+                <p className="mt-1 text-[11px] text-text-muted">
+                  These scopes were not granted because they are not available on the calling admin&apos;s account.
+                </p>
+              </div>
+            )}
 
             <button
               onClick={closeCreatedKey}

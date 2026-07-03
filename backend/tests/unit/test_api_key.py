@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from authglow.core.datetime import utcnow
-from authglow.models.api_key import APIKeyCreate
+from authglow.models.api_key import APIKeyCreate, APIKeyCreateResponse
+from authglow.services.api_key import APIKeyLockedException, _enforce_scope_subset
 
 
 def _run(coro):
@@ -644,3 +645,411 @@ class TestAdminCreatesKeyForOtherUser:
         assert response.status_code == 201, response.text
         body = response.json()
         assert body["user_id"] == "regular-user-2"
+
+
+class TestEnforceScopeSubset:
+    def test_admin_bypasses_filter(self):
+        result = _enforce_scope_subset(["admin", "read"], ["read"], is_admin=True)
+        assert result == ["admin", "read"]
+
+    def test_non_admin_filtered_to_subset(self):
+        result = _enforce_scope_subset(["admin", "read"], ["read"], is_admin=False)
+        assert result == ["read"]
+
+    def test_non_admin_no_overlap_returns_empty(self):
+        result = _enforce_scope_subset(["admin", "delete"], ["read"], is_admin=False)
+        assert result == []
+
+    def test_none_caller_scopes_returns_empty_for_non_admin(self):
+        result = _enforce_scope_subset(["admin", "read"], None, is_admin=False)
+        assert result == []
+
+    def test_admin_with_none_caller_scopes_returns_all(self):
+        result = _enforce_scope_subset(["admin", "read"], None, is_admin=True)
+        assert result == ["admin", "read"]
+
+    def test_preserves_requested_order_for_non_admin(self):
+        result = _enforce_scope_subset(
+            ["write", "admin", "read"], ["read", "write"], is_admin=False
+        )
+        assert result == ["write", "read"]
+
+
+class TestCreateKeyScopeFilter:
+    def test_non_admin_create_with_unauthorized_scope_filtered(self, api_key_service):
+        key_data = APIKeyCreate(name="BOPLA Create", scopes=["admin", "read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-c-1",
+                key_data=key_data,
+                created_by="user-bopla-c-1",
+                caller_scopes=["read"],
+                is_admin=False,
+            )
+        )
+        assert api_key.scopes == ["read"]
+
+    def test_admin_create_passes_all_scopes(self, api_key_service):
+        key_data = APIKeyCreate(name="Admin Create", scopes=["admin", "read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-c-2",
+                key_data=key_data,
+                created_by="admin-1",
+                caller_scopes=["read", "admin"],
+                is_admin=True,
+            )
+        )
+        assert sorted(api_key.scopes) == sorted(["admin", "read"])
+
+    def test_create_without_caller_scopes_keeps_legacy_behavior(self, api_key_service):
+        key_data = APIKeyCreate(name="Legacy Create", scopes=["admin", "read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-c-3",
+                key_data=key_data,
+                created_by="user-bopla-c-3",
+            )
+        )
+        assert sorted(api_key.scopes) == sorted(["admin", "read"])
+
+    def test_create_non_admin_no_overlap_creates_empty_scopes(self, api_key_service):
+        key_data = APIKeyCreate(name="Empty Scopes", scopes=["admin"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-c-4",
+                key_data=key_data,
+                created_by="user-bopla-c-4",
+                caller_scopes=["read"],
+                is_admin=False,
+            )
+        )
+        assert api_key.scopes == []
+
+
+class TestUpdateKeyScopeFilter:
+    def test_non_admin_update_with_unauthorized_scope_filtered(self, api_key_service):
+        key_data = APIKeyCreate(name="BOPLA Update", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-u-1", key_data=key_data, created_by="user-bopla-u-1"
+            )
+        )
+        updated = _run(
+            api_key_service.update_key(
+                api_key.key_id,
+                {"scopes": ["admin", "read"]},
+                caller_scopes=["read"],
+                is_admin=False,
+            )
+        )
+        assert updated is not None
+        assert updated.scopes == ["read"]
+
+    def test_admin_update_can_elevate_scopes(self, api_key_service):
+        key_data = APIKeyCreate(name="Admin Update", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-u-2", key_data=key_data, created_by="user-bopla-u-2"
+            )
+        )
+        updated = _run(
+            api_key_service.update_key(
+                api_key.key_id,
+                {"scopes": ["admin", "read"]},
+                caller_scopes=["read", "admin"],
+                is_admin=True,
+            )
+        )
+        assert sorted(updated.scopes) == sorted(["admin", "read"])
+
+    def test_update_other_fields_still_works(self, api_key_service):
+        key_data = APIKeyCreate(name="Other Fields", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-u-3", key_data=key_data, created_by="user-bopla-u-3"
+            )
+        )
+        updated = _run(
+            api_key_service.update_key(
+                api_key.key_id,
+                {"name": "Renamed", "is_active": False},
+                caller_scopes=["read"],
+                is_admin=False,
+            )
+        )
+        assert updated.name == "Renamed"
+        assert updated.is_active is False
+
+    def test_update_without_caller_scopes_keeps_legacy_behavior(self, api_key_service):
+        key_data = APIKeyCreate(name="Legacy Update", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-bopla-u-4", key_data=key_data, created_by="user-bopla-u-4"
+            )
+        )
+        updated = _run(api_key_service.update_key(api_key.key_id, {"scopes": ["admin", "read"]}))
+        assert sorted(updated.scopes) == sorted(["admin", "read"])
+
+
+class TestValidateAndTrack:
+    def test_validate_and_track_success(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Success", scopes=["read"], never_expires=True)
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-vat-1", key_data=key_data, created_by="user-vat-1"
+            )
+        )
+        result = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="10.0.0.1", user_agent="ua")
+        )
+        assert result is not None
+        assert result.key_id == api_key.key_id
+        assert result.last_used_ip == "10.0.0.1"
+        assert result.last_used_ua == "ua"
+        assert result.total_requests == 1
+
+    def test_validate_and_track_records_ip_and_ua(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Tracking", scopes=["read"], never_expires=True)
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-vat-2", key_data=key_data, created_by="user-vat-2"
+            )
+        )
+        _run(
+            api_key_service.validate_and_track(
+                plaintext, ip_address="203.0.113.5", user_agent="Mozilla/5.0"
+            )
+        )
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="203.0.113.5"))
+        assert result.last_used_ip == "203.0.113.5"
+        assert result.last_used_ua == "Mozilla/5.0"
+        assert result.total_requests == 2
+
+    def test_validate_and_track_wrong_key_returns_none(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Wrong", scopes=["read"], never_expires=True)
+        _run(
+            api_key_service.create_key(
+                user_id="user-vat-3", key_data=key_data, created_by="user-vat-3"
+            )
+        )
+        result = _run(
+            api_key_service.validate_and_track(
+                "ak_wrongkey1234567890123456789", ip_address="10.0.0.1"
+            )
+        )
+        assert result is None
+
+    def test_validate_and_track_revoked_returns_none(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Revoked", scopes=["read"], never_expires=True)
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-vat-4", key_data=key_data, created_by="user-vat-4"
+            )
+        )
+        _run(api_key_service.revoke_key(api_key.key_id, "user-vat-4"))
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="10.0.0.1"))
+        assert result is None
+
+    def test_validate_and_track_locked_raises_exception(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Locked", scopes=["read"], never_expires=True)
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-vat-5", key_data=key_data, created_by="user-vat-5"
+            )
+        )
+        wrong_key = plaintext[:-4] + "xxxx"
+        for _ in range(5):
+            _run(api_key_service.validate_and_track(wrong_key, ip_address="10.0.0.1"))
+        with pytest.raises(APIKeyLockedException):
+            _run(api_key_service.validate_and_track(wrong_key, ip_address="10.0.0.1"))
+
+    def test_validate_and_track_resets_on_success(self, api_key_service):
+        key_data = APIKeyCreate(name="VAT Reset", scopes=["read"], never_expires=True)
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-vat-6", key_data=key_data, created_by="user-vat-6"
+            )
+        )
+        wrong_key = plaintext[:-4] + "xxxx"
+        for _ in range(3):
+            _run(api_key_service.validate_and_track(wrong_key, ip_address="10.0.0.1"))
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="10.0.0.1"))
+        assert result is not None
+        assert result.failed_validation_attempts == 0
+        assert result.locked_until is None
+
+
+class TestValidateAndTrackIPEnforcement:
+    def test_allowlisted_ip_passes(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="IP Allowed",
+            scopes=["read"],
+            never_expires=True,
+            allowed_ips=["203.0.113.5"],
+        )
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-ip-vat-1", key_data=key_data, created_by="user-ip-vat-1"
+            )
+        )
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="203.0.113.5"))
+        assert result is not None
+        assert result.key_prefix == plaintext[:12]
+
+    def test_non_allowlisted_ip_rejected(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="IP Blocked",
+            scopes=["read"],
+            never_expires=True,
+            allowed_ips=["203.0.113.5"],
+        )
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-ip-vat-2", key_data=key_data, created_by="user-ip-vat-2"
+            )
+        )
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="198.51.100.7"))
+        assert result is None
+
+    def test_no_allowlist_accepts_any_ip(self, api_key_service):
+        key_data = APIKeyCreate(name="No IP Rule", scopes=["read"], never_expires=True)
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-ip-vat-3", key_data=key_data, created_by="user-ip-vat-3"
+            )
+        )
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address="198.51.100.7"))
+        assert result is not None
+
+    def test_allowlist_with_no_ip_argument_rejected(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="IP Required",
+            scopes=["read"],
+            never_expires=True,
+            allowed_ips=["203.0.113.5"],
+        )
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-ip-vat-4", key_data=key_data, created_by="user-ip-vat-4"
+            )
+        )
+        result = _run(api_key_service.validate_and_track(plaintext, ip_address=None))
+        assert result is None
+
+    def test_allowlist_enforcement_does_not_increment_failed_counter(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="IP Counter",
+            scopes=["read"],
+            never_expires=True,
+            allowed_ips=["203.0.113.5"],
+        )
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-ip-vat-5", key_data=key_data, created_by="user-ip-vat-5"
+            )
+        )
+        for _ in range(3):
+            _run(api_key_service.validate_and_track(plaintext, ip_address="198.51.100.7"))
+        stored = _run(api_key_service.get_key(api_key.key_id))
+        assert stored.failed_validation_attempts == 0
+        assert stored.locked_until is None
+
+
+class TestAPIKeyCreateResponse:
+    def test_response_with_no_filtered_scopes(self):
+        resp = APIKeyCreateResponse(
+            key_id="k1",
+            user_id="u1",
+            name="Test",
+            description=None,
+            key_prefix="ak_abc12345",
+            key_hash="hash",
+            scopes=["read"],
+            is_active=True,
+            expires_at=None,
+            never_expires=True,
+            last_used_at=None,
+            total_requests=0,
+            created_at=datetime(2026, 1, 1),
+            allowed_ips=[],
+            api_key="ak_plaintext",
+            requested_scopes=["read"],
+            granted_scopes=["read"],
+            filtered_scopes=[],
+        )
+        assert resp.requested_scopes == ["read"]
+        assert resp.granted_scopes == ["read"]
+        assert resp.filtered_scopes == []
+        assert resp.api_key == "ak_plaintext"
+
+    def test_response_with_filtered_scopes(self):
+        resp = APIKeyCreateResponse(
+            key_id="k2",
+            user_id="u2",
+            name="Filtered",
+            description=None,
+            key_prefix="ak_xyz67890",
+            key_hash="hash",
+            scopes=["read"],
+            is_active=True,
+            expires_at=None,
+            never_expires=True,
+            last_used_at=None,
+            total_requests=0,
+            created_at=datetime(2026, 1, 1),
+            allowed_ips=[],
+            api_key="ak_plaintext",
+            requested_scopes=["admin", "read", "write"],
+            granted_scopes=["read"],
+            filtered_scopes=["admin", "write"],
+        )
+        assert sorted(resp.filtered_scopes) == sorted(["admin", "write"])
+        assert resp.granted_scopes == ["read"]
+
+    def test_response_default_scope_lists_empty(self):
+        resp = APIKeyCreateResponse(
+            key_id="k3",
+            user_id="u3",
+            name="Defaults",
+            description=None,
+            key_prefix="ak_default000",
+            key_hash="hash",
+            scopes=[],
+            is_active=True,
+            expires_at=None,
+            never_expires=True,
+            last_used_at=None,
+            total_requests=0,
+            created_at=datetime(2026, 1, 1),
+            allowed_ips=[],
+            api_key="ak_plaintext",
+        )
+        assert resp.requested_scopes == []
+        assert resp.granted_scopes == []
+        assert resp.filtered_scopes == []
+
+    def test_create_key_response_includes_filtered_scopes_through_service(self, api_key_service):
+        key_data = APIKeyCreate(name="BOPLA Response", scopes=["admin", "read"], never_expires=True)
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-resp-1",
+                key_data=key_data,
+                created_by="user-resp-1",
+                caller_scopes=["read"],
+                is_admin=False,
+            )
+        )
+        requested = list(key_data.scopes)
+        granted = list(api_key.scopes)
+        filtered = sorted(set(requested) - set(granted))
+        response = APIKeyCreateResponse(
+            **api_key.model_dump(),
+            api_key=plaintext,
+            requested_scopes=requested,
+            granted_scopes=granted,
+            filtered_scopes=filtered,
+        )
+        assert response.filtered_scopes == ["admin"]
+        assert response.granted_scopes == ["read"]
+        assert response.requested_scopes == ["admin", "read"]

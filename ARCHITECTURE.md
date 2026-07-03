@@ -131,6 +131,17 @@ Page component
 
 6. **CPU-bound work off the event loop** — bcrypt (`services/password.py:hash_password_async` / `verify_password_async`) and fsspec I/O (`core/async_io.py:AsyncFileSystem`) are offloaded to the default thread pool via `asyncio.to_thread`. All async request handlers must use the `*_async` variants of these helpers — see Tier 1.1 of `docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md` for the rollout. The sync `hash_password` / `verify_password` remain available for CLI scripts and offline jobs.
 
+7. **Default-safe enforcement** — AuthGlow is hardened at the framework layer, not at the call site. Examples: PKCE enforced for every authorization-code flow (`enforce_pkce=True`), implicit grant rejected at the model layer, ROPC rejected at the token endpoint, refresh-token rotation with reuse-detection family-revocation, and **API-key BOPLA + IP allowlist enforced by default** (see "API Key Hardening" below). New features must follow the same pattern: declare a policy, enforce it in the service, not in the route handler.
+
+## API Key Hardening
+
+Two material gaps were closed in a single hardening pass:
+
+- **BOPLA scope-subset enforcement** (OWASP API3:2023) — `services/api_key.py:_enforce_scope_subset(requested, caller_scopes, is_admin)` is invoked from `create_key` and `update_key`. Admins bypass; non-admin callers can only mint or update a key with scopes that are a strict subset of their own. Filtered scopes are logged at `warning` severity and surfaced in the create response as `requested_scopes / granted_scopes / filtered_scopes` so the SPA can render a UX warning.
+- **IP allowlist enforced on the real-auth path** — `services/api_key.py:validate_and_track(key, ip, ua)` is the single, race-safe entry point for API-key authentication. It replaces the old `validate_key` + `record_usage` pair (which only the second one updated stats and neither one enforced `allowed_ips`). Both `get_current_user` and `/api/token/api-key` route through it. An empty `allowed_ips` list means "no restriction"; any non-empty list is **fail-closed** (an `ip_address=None` request is rejected).
+
+The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with the three scope-transparency fields. The wire format is backward-compatible: existing clients that ignore the new fields continue to work.
+
 ## Key Files
 
 | File                                            | Why important                                                         |

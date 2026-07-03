@@ -22,6 +22,8 @@ import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import structlog
+
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
@@ -30,6 +32,26 @@ from authglow.repositories.protocols import APIKeyRepository
 from authglow.services.password import hash_password, verify_password
 
 PREFIX_LENGTH = 12
+
+logger = structlog.get_logger("authglow.audit")
+
+
+def _enforce_scope_subset(
+    requested: List[str],
+    caller_scopes: Optional[List[str]],
+    is_admin: bool,
+) -> List[str]:
+    """Return a scope list that is a subset of the caller's own scopes.
+
+    Admins bypass the filter (full delegation). Non-admin callers get
+    the intersection of ``requested`` with their own scopes. This is
+    the BOPLA guard (OWASP API3:2023): a user can never mint or
+    update a key with scopes they do not already possess.
+    """
+    if is_admin:
+        return list(requested)
+    allowed = set(caller_scopes or [])
+    return [s for s in (requested or []) if s in allowed]
 
 
 class APIKeyLockedException(Exception):
@@ -89,12 +111,22 @@ class APIKeyService:
     # ------------------------------------------------------------------
 
     async def create_key(
-        self, user_id: str, key_data: APIKeyCreate, created_by: str
+        self,
+        user_id: str,
+        key_data: APIKeyCreate,
+        created_by: str,
+        caller_scopes: Optional[List[str]] = None,
+        is_admin: bool = False,
     ) -> tuple[APIKey, str]:
         """Create a new API key.
 
         Returns:
             tuple: (APIKey, plaintext_key)
+
+        When ``caller_scopes`` is provided, the requested scopes are
+        filtered to be a strict subset of the caller's own scopes
+        (unless ``is_admin`` is True). This is the BOPLA guard against
+        privilege escalation via API key creation.
         """
         full_key, prefix, key_hash = self._generate_api_key()
 
@@ -102,13 +134,34 @@ class APIKeyService:
         if not key_data.never_expires and key_data.expires_in_days:
             expires_at = utcnow() + timedelta(days=key_data.expires_in_days)
 
+        effective_scopes: List[str]
+        if caller_scopes is not None:
+            effective_scopes = _enforce_scope_subset(
+                requested=key_data.scopes,
+                caller_scopes=caller_scopes,
+                is_admin=is_admin,
+            )
+            filtered = sorted(set(key_data.scopes or []) - set(effective_scopes))
+            if filtered:
+                logger.warning(
+                    "api_key_scope_filtered",
+                    key_name=key_data.name,
+                    requested_scopes=key_data.scopes,
+                    granted_scopes=effective_scopes,
+                    filtered_scopes=filtered,
+                    created_by=created_by,
+                    is_admin=is_admin,
+                )
+        else:
+            effective_scopes = list(key_data.scopes)
+
         api_key = APIKey(
             user_id=user_id,
             name=key_data.name,
             description=key_data.description,
             key_prefix=prefix,
             key_hash=key_hash,
-            scopes=key_data.scopes,
+            scopes=effective_scopes,
             expires_at=expires_at,
             never_expires=key_data.never_expires,
             created_by=created_by,
@@ -175,6 +228,92 @@ class APIKeyService:
 
                 await self.reset_failed_validations(key_id)
                 return api_key
+
+        for key_id in candidate_ids:
+            await self.record_failed_validation(key_id)
+
+        return None
+
+    async def validate_and_track(
+        self,
+        provided_key: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Optional[APIKey]:
+        """Unified entry point: validate an API key and atomically record
+        its usage in a single, race-safe pipeline.
+
+        Order of checks (all in-process ``named_lock`` for cross-method
+        atomicity):
+
+        1. Prefix lookup (O(1) via the secondary index).
+        2. Brute-force lockout check (raises :class:`APIKeyLockedException`).
+        3. bcrypt verification against each candidate.
+        4. ``is_active`` + ``expires_at`` checks.
+        5. **IP allowlist enforcement** (was missing from
+           ``record_usage`` and ``get_current_user`` — VAPT gap).
+        6. Reset the failed-attempt counter on success, otherwise
+           increment it on every candidate.
+        7. On success, atomically update ``last_used_at``,
+           ``last_used_ip``, ``last_used_ua``, and ``total_requests``.
+
+        Returns the matching :class:`APIKey` or ``None`` if no candidate
+        matched (or the only match was blocked by IP allowlist, expiry,
+        or revocation).
+        """
+        if not provided_key or not provided_key.startswith("ak_"):
+            return None
+
+        prefix = provided_key[:PREFIX_LENGTH]
+        candidate_ids = await self._repo.load_prefix_index(prefix)
+
+        if not candidate_ids:
+            return None
+
+        for key_id in candidate_ids:
+            if await self.is_key_locked(key_id):
+                api_key = await self._repo.get_by_id(key_id)
+                if api_key and api_key.locked_until:
+                    raise APIKeyLockedException(key_id, api_key.locked_until)
+
+        for key_id in candidate_ids:
+            api_key = await self._repo.get_by_id(key_id)
+            if api_key is None:
+                continue
+
+            if not await asyncio.to_thread(self._verify_api_key, api_key.key_hash, provided_key):
+                continue
+
+            if not api_key.is_active:
+                return None
+
+            if api_key.expires_at and api_key.expires_at < utcnow():
+                return None
+
+            if api_key.allowed_ips:
+                if not ip_address or ip_address not in api_key.allowed_ips:
+                    logger.warning(
+                        "api_key_ip_blocked",
+                        key_id=key_id,
+                        key_name=api_key.name,
+                        client_ip=ip_address,
+                    )
+                    return None
+
+            async with self._lock(f"api_key:{key_id}"):
+                api_key = await self._repo.get_by_id(key_id)
+                if not api_key:
+                    return None
+                api_key.failed_validation_attempts = 0
+                api_key.locked_until = None
+                api_key.last_used_at = utcnow()
+                api_key.total_requests += 1
+                if ip_address:
+                    api_key.last_used_ip = ip_address
+                if user_agent:
+                    api_key.last_used_ua = user_agent
+                await self._repo.update(api_key)
+            return api_key
 
         for key_id in candidate_ids:
             await self.record_failed_validation(key_id)
@@ -250,8 +389,39 @@ class APIKeyService:
             await self._repo.update(api_key)
             return api_key
 
-    async def update_key(self, key_id: str, updates: dict) -> Optional[APIKey]:
-        """Update an API key's metadata."""
+    async def update_key(
+        self,
+        key_id: str,
+        updates: dict,
+        caller_scopes: Optional[List[str]] = None,
+        is_admin: bool = False,
+    ) -> Optional[APIKey]:
+        """Update an API key's metadata.
+
+        When ``updates`` contains ``scopes`` and ``caller_scopes`` is
+        provided, the requested scopes are filtered to be a strict
+        subset of the caller's own scopes (unless ``is_admin`` is True).
+        BOPLA guard against privilege escalation via PATCH.
+        """
+        if "scopes" in updates and caller_scopes is not None:
+            requested = updates.get("scopes") or []
+            effective = _enforce_scope_subset(
+                requested=requested,
+                caller_scopes=caller_scopes,
+                is_admin=is_admin,
+            )
+            filtered = sorted(set(requested) - set(effective))
+            if filtered:
+                logger.warning(
+                    "api_key_scope_filtered",
+                    key_id=key_id,
+                    requested_scopes=requested,
+                    granted_scopes=effective,
+                    filtered_scopes=filtered,
+                    is_admin=is_admin,
+                )
+            updates = {**updates, "scopes": effective}
+
         async with self._lock(f"api_key:{key_id}"):
             api_key = await self._repo.get_by_id(key_id)
             if not api_key:

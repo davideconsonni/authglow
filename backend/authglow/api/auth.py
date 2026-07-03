@@ -391,17 +391,12 @@ async def get_current_user(
         token = bearer_token
 
     if api_key:
-        api_key_obj = await api_key_service.validate_key(api_key)
+        client_ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        api_key_obj = await api_key_service.validate_and_track(
+            api_key, ip_address=client_ip, user_agent=user_agent
+        )
         if api_key_obj:
-            # Track usage
-            client_ip = request.client.host if request.client else None
-            await api_key_service.record_usage(
-                key_id=api_key_obj.key_id,
-                ip_address=client_ip,
-                user_agent=request.headers.get("user-agent"),
-            )
-
-            # Log API key usage
             await audit_service.log_event(
                 event_type="api_key_used",
                 user_id=api_key_obj.user_id,
@@ -409,14 +404,11 @@ async def get_current_user(
                 ip_address=client_ip,
             )
 
-            # Get user
             user = await storage.get_user(api_key_obj.user_id)
             if user and user.is_active:
-                # Attach API key info to user for scope checking
                 user.api_key_scopes = api_key_obj.scopes
                 return user
 
-        # If API key is provided but invalid, raise an error
         raise credentials_exception
 
     # Fall back to JWT authentication if no valid API key was processed
@@ -1465,12 +1457,16 @@ async def exchange_api_key_for_token(
     api_key = auth_header.replace("Bearer ", "")
 
     # Validate and get API key data
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     try:
-        key_data = await api_key_service.validate_key(api_key)
+        key_data = await api_key_service.validate_and_track(
+            api_key, ip_address=client_ip, user_agent=user_agent
+        )
     except APIKeyLockedException as e:
         await audit_service.log_event(
             event_type="api_key_locked",
-            ip_address=request.client.host if request.client else None,
+            ip_address=client_ip,
             severity="warning",
             metadata={"key_id": e.key_id},
         )
@@ -1481,7 +1477,7 @@ async def exchange_api_key_for_token(
     if not key_data:
         await audit_service.log_event(
             event_type="api_key_invalid",
-            ip_address=request.client.host if request.client else None,
+            ip_address=client_ip,
             severity="warning",
         )
         raise HTTPException(
@@ -1496,13 +1492,6 @@ async def exchange_api_key_for_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
-
-    # Record usage
-    await api_key_service.record_usage(
-        key_id=key_data.key_id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
 
     # Log successful authentication
     await audit_service.log_event(

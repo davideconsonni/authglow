@@ -8,9 +8,9 @@ from authglow.api.auth import get_api_key_service, get_audit_service, get_curren
 from authglow.core.rate_limit import limiter
 from authglow.models.api_key import (
     APIKeyCreate,
+    APIKeyCreateResponse,
     APIKeyResponse,
     APIKeyUpdate,
-    APIKeyWithSecret,
 )
 from authglow.models.user import User
 from authglow.services.api_key import APIKeyService
@@ -23,7 +23,7 @@ UserStorage = UserService
 router = APIRouter()
 
 
-@router.post("/api/keys", response_model=APIKeyWithSecret, status_code=status.HTTP_201_CREATED)
+@router.post("/api/keys", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/hour")  # Limit API key creation
 async def create_api_key(
     request: Request,
@@ -58,7 +58,11 @@ async def create_api_key(
 
     # Create the key
     api_key, plaintext_key = await api_key_service.create_key(
-        user_id=owner_id, key_data=key_data, created_by=current_user.id
+        user_id=owner_id,
+        key_data=key_data,
+        created_by=current_user.id,
+        caller_scopes=current_user.scopes,
+        is_admin="admin" in current_user.scopes,
     )
 
     # Log the creation
@@ -75,8 +79,17 @@ async def create_api_key(
         ip_address=request.client.host if request.client else None,
     )
 
-    # Return response with plaintext key
-    return APIKeyWithSecret(**api_key.model_dump(), api_key=plaintext_key)
+    # Return response with plaintext key + scope-filter transparency
+    requested_scopes = list(key_data.scopes or [])
+    granted_scopes = list(api_key.scopes)
+    filtered_scopes = sorted(set(requested_scopes) - set(granted_scopes))
+    return APIKeyCreateResponse(
+        **api_key.model_dump(),
+        api_key=plaintext_key,
+        requested_scopes=requested_scopes,
+        granted_scopes=granted_scopes,
+        filtered_scopes=filtered_scopes,
+    )
 
 
 @router.get("/api/keys", response_model=List[APIKeyResponse])
@@ -136,7 +149,12 @@ async def update_api_key(
 
     # Update
     updates = update_data.model_dump(exclude_none=True)
-    updated_key = await api_key_service.update_key(key_id, updates)
+    updated_key = await api_key_service.update_key(
+        key_id,
+        updates,
+        caller_scopes=current_user.scopes,
+        is_admin="admin" in current_user.scopes,
+    )
     if not updated_key:
         raise HTTPException(status_code=404, detail="API key not found after update")
 

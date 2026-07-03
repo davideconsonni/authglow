@@ -17,6 +17,17 @@ interface ApiKeyData {
   expires_at: string | null
   last_used_at: string | null
   created_at: string
+  allowed_ips: string[]
+}
+
+interface CreatedKey {
+  key_id: string
+  api_key: string
+  name: string
+  key_prefix?: string
+  requested_scopes: string[]
+  granted_scopes: string[]
+  filtered_scopes: string[]
 }
 
 export function ApiKeysPage() {
@@ -25,7 +36,9 @@ export function ApiKeysPage() {
   const [newName, setNewName] = useState('')
   const [newScopes, setNewScopes] = useState('read')
   const [newExpires, setNewExpires] = useState('')
+  const [newAllowedIps, setNewAllowedIps] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
+  const [createdKeyInfo, setCreatedKeyInfo] = useState<CreatedKey | null>(null)
   const [copied, setCopied] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
@@ -44,12 +57,17 @@ export function ApiKeysPage() {
   const handleCreate = async () => {
     setCreating(true)
     try {
-      const data = await api.post<{ key_id: string; api_key: string; key_prefix: string }>('/api/keys', {
+      const data = await api.post<CreatedKey>('/api/keys', {
         name: newName || 'My Key',
         scopes: newScopes.split(',').map((s: string) => s.trim()).filter(Boolean),
         expires_in_days: newExpires ? parseInt(newExpires) : null,
+        allowed_ips: newAllowedIps
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean),
       })
       setNewKey(data.api_key)
+      setCreatedKeyInfo(data)
       setNewName('')
       await refetch()
     } catch (err: unknown) {
@@ -105,9 +123,11 @@ export function ApiKeysPage() {
   const closeCreate = () => {
     setShowCreate(false)
     setNewKey(null)
+    setCreatedKeyInfo(null)
     setNewName('')
     setNewScopes('read')
     setNewExpires('')
+    setNewAllowedIps('')
   }
 
   return (
@@ -156,6 +176,27 @@ export function ApiKeysPage() {
                     {copied ? <Check size={16} className="text-semantic-success" /> : <Copy size={16} />}
                   </button>
                 </div>
+                {createdKeyInfo && createdKeyInfo.filtered_scopes.length > 0 && (
+                  <div
+                    role="alert"
+                    data-testid="scope-filter-warning"
+                    className="rounded-xl border border-semantic-warning/30 bg-semantic-warning/10 p-3 text-left"
+                  >
+                    <p className="text-xs font-medium text-semantic-warning">Some scopes were filtered</p>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Requested: <code className="font-mono">{createdKeyInfo.requested_scopes.join(', ') || '(none)'}</code>
+                    </p>
+                    <p className="text-xs text-text-secondary">
+                      Granted: <code className="font-mono">{createdKeyInfo.granted_scopes.join(', ') || '(none)'}</code>
+                    </p>
+                    <p className="text-xs text-text-secondary">
+                      Filtered: <code className="font-mono">{createdKeyInfo.filtered_scopes.join(', ')}</code>
+                    </p>
+                    <p className="mt-1 text-[11px] text-text-muted">
+                      These scopes were not granted because they are not available on your account.
+                    </p>
+                  </div>
+                )}
                 <button onClick={closeCreate} data-testid="key-created-done" className="rounded-xl bg-gradient-cta px-6 py-2 text-sm font-semibold text-white">
                   Done
                 </button>
@@ -166,6 +207,13 @@ export function ApiKeysPage() {
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" data-testid="key-name-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input value={newScopes} onChange={(e) => setNewScopes(e.target.value)} placeholder="Scopes (comma-separated)" data-testid="key-scopes-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <input
+                  value={newAllowedIps}
+                  onChange={(e) => setNewAllowedIps(e.target.value)}
+                  placeholder="Restrict to IPs (comma-separated, optional)"
+                  data-testid="key-allowed-ips-input"
+                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                />
                 <div className="flex gap-3">
                   <button onClick={closeCreate} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
                   <button onClick={handleCreate} disabled={creating} data-testid="key-create-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
@@ -188,6 +236,7 @@ export function ApiKeysPage() {
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Name</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Restriction</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Used</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Status</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
@@ -207,6 +256,18 @@ export function ApiKeysPage() {
                           <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">{s}</span>
                         ))}
                       </div>
+                    </td>
+                    <td className="px-4 py-2.5" data-testid="key-ips-display">
+                      {k.allowed_ips && k.allowed_ips.length > 0 ? (
+                        <span
+                          className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
+                          title={k.allowed_ips.join(', ')}
+                        >
+                          {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-text-muted">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-text-muted">
                       {k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}

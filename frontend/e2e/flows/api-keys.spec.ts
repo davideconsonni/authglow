@@ -16,6 +16,13 @@ test.describe('API Keys — Create → Copy → Revoke', () => {
     const keyText = await page.locator('[data-testid="key-created-display"] code').textContent()
     expect(keyText).toBeTruthy()
 
+    const warning = page.locator('[data-testid="scope-filter-warning"]')
+    if (await warning.isVisible()) {
+      await expect(warning).toContainText('Requested')
+      await expect(warning).toContainText('Granted')
+      await expect(warning).toContainText('Filtered')
+    }
+
     await page.click('[data-testid="key-created-done"]')
 
     await page.waitForSelector('[data-testid="api-key-row"]', { timeout: 5000 })

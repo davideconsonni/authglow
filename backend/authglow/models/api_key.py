@@ -16,7 +16,7 @@ class APIKey(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    key_prefix: str  # First 8 chars for display (e.g., "ak_12345678")
+    key_prefix: str  # First 12 chars used as O(1) lookup prefix (e.g., "ak_ABCDEFGHIJ")
     key_hash: str  # Hashed full key
     scopes: List[str] = Field(default_factory=list)
     is_active: bool = True
@@ -92,6 +92,21 @@ class APIKeyWithSecret(APIKeyResponse):
     """Response model including the plaintext key (only returned on creation)."""
 
     api_key: str  # Full plaintext key, only shown once
+
+
+class APIKeyCreateResponse(APIKeyWithSecret):
+    """Response model for ``POST /api/keys`` with scope-filter transparency.
+
+    Exposes the requested vs granted scopes so the caller can show a
+    UX warning when a non-admin user asked for scopes they do not
+    possess (OWASP API3:2023 BOPLA guard). ``filtered_scopes`` is the
+    set difference ``requested - granted``; empty when the request
+    was fully granted.
+    """
+
+    requested_scopes: List[str] = Field(default_factory=list)
+    granted_scopes: List[str] = Field(default_factory=list)
+    filtered_scopes: List[str] = Field(default_factory=list)
 
 
 class APIKeyUpdate(BaseModel):

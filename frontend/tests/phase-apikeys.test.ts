@@ -102,5 +102,45 @@ describe('Fase API Keys — Frontend', () => {
       expect(source).toContain('api-key-row')
       expect(source).toContain('revoke-key-btn')
     })
+
+    it('campo allowed_ips esposto nel create modal', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-allowed-ips-input')
+      expect(source).toContain('allowed_ips')
+    })
+
+    it('warning scope-filter nel success modal', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('scope-filter-warning')
+      expect(source).toContain('filtered_scopes')
+      expect(source).toContain('requested_scopes')
+      expect(source).toContain('granted_scopes')
+    })
+
+    it('colonna IP Restriction presente', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('IP Restriction')
+      expect(source).toContain('key-ips-display')
+    })
+  })
+
+  describe('AdminApiKeysPage — hardening 2026-07', () => {
+    it('campo allowed_ips esposto nel create modal admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-allowed-ips-input')
+      expect(source).toContain('Restrict to IPs')
+    })
+
+    it('warning scope-filter nel success modal admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('scope-filter-warning')
+      expect(source).toContain('filtered_scopes')
+    })
+
+    it('colonna IP Restriction presente in admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('IP Restriction')
+      expect(source).toContain('key-ips-display')
+    })
   })
 })
