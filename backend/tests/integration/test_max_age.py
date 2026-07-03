@@ -5,6 +5,7 @@ Validates that ``max_age`` forces re-authentication when the user's
 """
 
 import asyncio
+import secrets
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -106,6 +107,7 @@ class TestMaxAge:
                 "code_challenge": "challenge123",
                 "code_challenge_method": "S256",
                 "max_age": "0",
+                "state": secrets.token_urlsafe(32),
             },
         )
 
@@ -149,6 +151,7 @@ class TestMaxAge:
                 "code_challenge": "challenge123",
                 "code_challenge_method": "S256",
                 "max_age": "3600",
+                "state": secrets.token_urlsafe(32),
             },
         )
 
@@ -191,6 +194,7 @@ class TestMaxAge:
                 "code_challenge": "challenge123",
                 "code_challenge_method": "S256",
                 "max_age": "3600",
+                "state": secrets.token_urlsafe(32),
             },
         )
 

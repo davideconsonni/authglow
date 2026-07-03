@@ -42,7 +42,6 @@ from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
 from authglow.services.auth.token_blacklist import token_blacklist
 
-
 # VAPT-046: audience identifier for tokens issued on the
 # internal first-party flows (password login, API-key
 # exchange, refresh-token rotation, passkey login). The OAuth2

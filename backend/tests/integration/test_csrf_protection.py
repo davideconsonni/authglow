@@ -7,6 +7,7 @@ Validates that:
 """
 
 import asyncio
+import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
@@ -205,6 +206,7 @@ class TestAuthorizePostCsrfEnforcement:
                     "scope": "read",
                     "code_challenge": "test-challenge-abc",
                     "code_challenge_method": "S256",
+                    "state": secrets.token_urlsafe(32),
                 },
             )
 
