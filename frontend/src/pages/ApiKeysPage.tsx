@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle, Pencil, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -11,6 +11,7 @@ import { notify } from '@/stores/toastStore'
 interface ApiKeyData {
   key_id: string
   name: string
+  description: string | null
   scopes: string[]
   key_prefix: string
   is_active: boolean
@@ -30,10 +31,18 @@ interface CreatedKey {
   filtered_scopes: string[]
 }
 
+interface EditForm {
+  name: string
+  description: string
+  scopes: string
+  allowed_ips: string
+}
+
 export function ApiKeysPage() {
   useDocumentTitle('API Keys')
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [newScopes, setNewScopes] = useState('read')
   const [newExpires, setNewExpires] = useState('')
   const [newAllowedIps, setNewAllowedIps] = useState('')
@@ -44,6 +53,9 @@ export function ApiKeysPage() {
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', scopes: '', allowed_ips: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const { data: keys, refetch } = useApiQuery<ApiKeyData[]>(['my-keys'], '/api/keys')
 
@@ -59,6 +71,7 @@ export function ApiKeysPage() {
     try {
       const data = await api.post<CreatedKey>('/api/keys', {
         name: newName || 'My Key',
+        description: newDescription.trim() || null,
         scopes: newScopes.split(',').map((s: string) => s.trim()).filter(Boolean),
         expires_in_days: newExpires ? parseInt(newExpires) : null,
         allowed_ips: newAllowedIps
@@ -69,11 +82,50 @@ export function ApiKeysPage() {
       setNewKey(data.api_key)
       setCreatedKeyInfo(data)
       setNewName('')
+      setNewDescription('')
       await refetch()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const openEdit = (k: ApiKeyData) => {
+    setEditingId(k.key_id)
+    setEditForm({
+      name: k.name,
+      description: k.description || '',
+      scopes: k.scopes.join(', '),
+      allowed_ips: (k.allowed_ips || []).join(', '),
+    })
+  }
+
+  const closeEdit = () => {
+    setEditingId(null)
+    setEditForm({ name: '', description: '', scopes: '', allowed_ips: '' })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+    setSavingEdit(true)
+    try {
+      await api.patch(`/api/keys/${editingId}`, {
+        name: editForm.name,
+        description: editForm.description.trim() || null,
+        scopes: editForm.scopes.split(',').map((s: string) => s.trim()).filter(Boolean),
+        allowed_ips: editForm.allowed_ips
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean),
+      })
+      closeEdit()
+      notify.success('Key updated.')
+      await refetch()
+    } catch (err: unknown) {
+      notify.error(err instanceof Error ? err.message : 'Failed to update key')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -125,6 +177,7 @@ export function ApiKeysPage() {
     setNewKey(null)
     setCreatedKeyInfo(null)
     setNewName('')
+    setNewDescription('')
     setNewScopes('read')
     setNewExpires('')
     setNewAllowedIps('')
@@ -205,6 +258,14 @@ export function ApiKeysPage() {
               <div className="space-y-4" data-testid="create-key-modal">
                 <h3 className="text-lg font-semibold text-text-primary">Create API Key</h3>
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" data-testid="key-name-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Description (optional) — e.g. Production server backup automation, rotated 2026-Q3"
+                  rows={2}
+                  data-testid="key-description-input"
+                  className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                />
                 <input value={newScopes} onChange={(e) => setNewScopes(e.target.value)} placeholder="Scopes (comma-separated)" data-testid="key-scopes-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input
@@ -246,7 +307,18 @@ export function ApiKeysPage() {
               <tbody className="divide-y divide-surface-2">
                 {keys.map((k, i) => (
                   <tr key={k.key_id || i} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
-                    <td className="px-4 py-2.5 text-sm font-medium text-text-primary">{k.name}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-text-primary">
+                      <div>{k.name}</div>
+                      {k.description && (
+                        <p
+                          className="mt-0.5 max-w-md truncate text-xs text-text-muted"
+                          title={k.description}
+                          data-testid="key-description-display"
+                        >
+                          {k.description}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
                     </td>
@@ -282,6 +354,15 @@ export function ApiKeysPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => openEdit(k)}
+                          data-testid="key-edit-btn"
+                          className="text-text-muted hover:text-brand-violet transition-colors"
+                          aria-label="Edit key"
+                          title="Edit"
+                        >
+                          <Pencil size={14} />
+                        </button>
                         {k.is_active ? (
                           <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">
                             <Ban size={14} />
@@ -313,6 +394,71 @@ export function ApiKeysPage() {
       <ConfirmDialog open={!!revokeId} title="Deactivate API Key" message="The key will stop working immediately but you can reactivate it later." confirmLabel="Deactivate" variant="danger" onConfirm={handleRevoke} onCancel={() => setRevokeId(null)} />
       <ConfirmDialog open={!!restoreId} title="Reactivate API Key" message="This will make the key active again." confirmLabel="Reactivate" variant="danger" onConfirm={handleRestore} onCancel={() => setRestoreId(null)} />
       <ConfirmDialog open={!!deleteId} title="Delete API Key" message="This permanently removes the key. Use Deactivate if you might need it later." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
+
+      {editingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeEdit} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="key-edit-modal">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">Edit API Key</h3>
+              <button onClick={closeEdit} className="text-text-muted hover:text-text-primary" aria-label="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
+              <input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                data-testid="key-edit-name-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Description</label>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="e.g. Production server backup automation, rotated 2026-Q3"
+                rows={2}
+                data-testid="key-edit-description-input"
+                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label>
+              <input
+                value={editForm.scopes}
+                onChange={(e) => setEditForm({ ...editForm, scopes: e.target.value })}
+                data-testid="key-edit-scopes-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Allowed IPs (comma-separated)</label>
+              <input
+                value={editForm.allowed_ips}
+                onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
+                placeholder="203.0.113.5, 198.51.100.0/24"
+                data-testid="key-edit-allowed-ips-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={closeEdit} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                data-testid="key-edit-submit"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {savingEdit ? <Loader2 size={16} className="animate-spin" /> : null}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

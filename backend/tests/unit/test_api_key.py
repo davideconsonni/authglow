@@ -1053,3 +1053,81 @@ class TestAPIKeyCreateResponse:
         assert response.filtered_scopes == ["admin"]
         assert response.granted_scopes == ["read"]
         assert response.requested_scopes == ["admin", "read"]
+
+
+class TestAPIKeyDescription:
+    def test_create_with_description_round_trips(self, api_key_service):
+        from authglow.models.api_key import APIKeyResponse
+
+        key_data = APIKeyCreate(
+            name="With Description",
+            scopes=["read"],
+            never_expires=True,
+            description="Production server backup automation, rotated 2026-Q3",
+        )
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-desc-1", key_data=key_data, created_by="user-desc-1"
+            )
+        )
+        assert api_key.description == "Production server backup automation, rotated 2026-Q3"
+        response = APIKeyResponse(**api_key.model_dump())
+        assert response.description == "Production server backup automation, rotated 2026-Q3"
+
+    def test_create_without_description_defaults_to_none(self, api_key_service):
+        key_data = APIKeyCreate(name="No Description", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-desc-2", key_data=key_data, created_by="user-desc-2"
+            )
+        )
+        assert api_key.description is None
+
+    def test_update_description_round_trips(self, api_key_service):
+        key_data = APIKeyCreate(name="Updatable Desc", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-desc-3", key_data=key_data, created_by="user-desc-3"
+            )
+        )
+        assert api_key.description is None
+
+        updated = _run(
+            api_key_service.update_key(
+                api_key.key_id,
+                {"description": "Now I remember: staging worker"},
+            )
+        )
+        assert updated is not None
+        assert updated.description == "Now I remember: staging worker"
+
+    def test_update_without_description_keeps_existing(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="Keep Desc",
+            scopes=["read"],
+            never_expires=True,
+            description="Original context",
+        )
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-desc-4", key_data=key_data, created_by="user-desc-4"
+            )
+        )
+        updated = _run(api_key_service.update_key(api_key.key_id, {"name": "Renamed"}))
+        assert updated.description == "Original context"
+        assert updated.name == "Renamed"
+
+    def test_update_can_clear_description_with_null(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="Clear Desc",
+            scopes=["read"],
+            never_expires=True,
+            description="Will be cleared",
+        )
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-desc-5", key_data=key_data, created_by="user-desc-5"
+            )
+        )
+        updated = _run(api_key_service.update_key(api_key.key_id, {"description": None}))
+        assert updated.description is None

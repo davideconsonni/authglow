@@ -122,6 +122,31 @@ describe('Fase API Keys — Frontend', () => {
       expect(source).toContain('IP Restriction')
       expect(source).toContain('key-ips-display')
     })
+
+    it('campo description in create modal', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-description-input')
+      expect(source).toContain('description: newDescription.trim() || null')
+    })
+
+    it('description mostrata come sub-text sotto il Name', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-description-display')
+      expect(source).toContain('k.description')
+    })
+
+    it('edit button e edit modal presenti', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-edit-btn')
+      expect(source).toContain('key-edit-modal')
+      expect(source).toContain('key-edit-description-input')
+      expect(source).toContain('key-edit-submit')
+    })
+
+    it('interfaccia ApiKeyData include description', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('description: string | null')
+    })
   })
 
   describe('AdminApiKeysPage — hardening 2026-07', () => {
@@ -141,6 +166,26 @@ describe('Fase API Keys — Frontend', () => {
       const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
       expect(source).toContain('IP Restriction')
       expect(source).toContain('key-ips-display')
+    })
+
+    it('campo description in create modal admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-description-input')
+      expect(source).toContain("description: form.description.trim() || null")
+    })
+
+    it('description mostrata come sub-text nel Name admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-description-display')
+      expect(source).toContain('k.description')
+    })
+
+    it('edit button e edit modal presenti admin', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('key-edit-btn')
+      expect(source).toContain('key-edit-modal')
+      expect(source).toContain('key-edit-description-input')
+      expect(source).toContain('key-edit-submit')
     })
   })
 })
