@@ -44,6 +44,14 @@ class APIKey(BaseModel):
     # IP restrictions (optional)
     allowed_ips: List[str] = Field(default_factory=list)
 
+    # Free-form tier label (``"production"``, ``"staging"``,
+    # ``"internal"``, ...). Surfaced as a namespaced JWT claim
+    # by the API key claim policy. Optional because most keys
+    # do not need a tier; the field is here to support the
+    # common "production vs staging" distinction without a
+    # custom user field round-trip.
+    tier: Optional[str] = None
+
 
 class APIKeyCreate(BaseModel):
     """Request model for creating an API key.
@@ -59,6 +67,7 @@ class APIKeyCreate(BaseModel):
     expires_in_days: Optional[int] = Field(None, ge=1, le=365)
     never_expires: bool = False
     allowed_ips: List[str] = Field(default_factory=list)
+    tier: Optional[str] = Field(None, max_length=64)
     user_email: Optional[str] = Field(None, max_length=254)
 
 
@@ -79,6 +88,7 @@ class APIKeyResponse(BaseModel):
     total_requests: int
     created_at: datetime
     allowed_ips: List[str]
+    tier: Optional[str] = None
     last_used_ip: Optional[str] = None
     last_used_ua: Optional[str] = None
 
@@ -117,6 +127,7 @@ class APIKeyUpdate(BaseModel):
     scopes: Optional[List[str]] = None
     is_active: Optional[bool] = None
     allowed_ips: Optional[List[str]] = None
+    tier: Optional[str] = Field(None, max_length=64)
 
 
 class APIKeyUsageStats(BaseModel):

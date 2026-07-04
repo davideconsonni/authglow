@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye } from 'lucide-react'
+import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye, KeyRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { FieldError } from '@/components/shared/FieldError'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyButton } from '@/components/shared/CopyButton'
 import { ConsentScreen } from '@/components/oauth/ConsentScreen'
+import { TokenClaimsTab } from '@/components/admin/TokenClaimsTab'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { notify } from '@/stores/toastStore'
 
@@ -139,6 +140,10 @@ export function AdminOAuthClientsPage() {
   useDocumentTitle('OAuth Clients')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  // Token Claims policy editor modal — opened from the row
+  // actions. Tracks the client so the modal can call the
+  // /api/admin/oauth-clients/{id}/claim-policy endpoint.
+  const [claimsClient, setClaimsClient] = useState<{ id: string; name: string } | null>(null)
 
   // Form fields
   const [name, setName] = useState('')
@@ -497,6 +502,14 @@ export function AdminOAuthClientsPage() {
                       {c.require_consent !== false && (
                         <button onClick={() => setPreviewClient(c)} className="text-text-muted hover:text-text-secondary" title="Preview consent screen"><Eye size={14} /></button>
                       )}
+                      <button
+                        onClick={() => setClaimsClient({ id: c.client_id, name: clientDisplayName(c) })}
+                        data-testid="open-claims-btn"
+                        className="text-text-muted hover:text-brand-violet"
+                        title="Token Claims (customize JWT claims)"
+                      >
+                        <KeyRound size={14} />
+                      </button>
                       <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
                       <button onClick={() => handleRotate(c.client_id)} data-testid="rotate-secret-btn" className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
                       {/* T.2: rotate the JWT key for client_secret_jwt clients. */}
@@ -949,6 +962,18 @@ export function AdminOAuthClientsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Token Claims policy editor — opened from the per-row
+          KeyRound button. Renders above the OAuth-client form
+          (z-50 modal) so the admin can move between editing
+          identity and editing claims. */}
+      {claimsClient && (
+        <TokenClaimsTab
+          clientId={claimsClient.id}
+          clientName={claimsClient.name}
+          onClose={() => setClaimsClient(null)}
+        />
       )}
     </div>
   )

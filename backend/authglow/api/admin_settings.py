@@ -287,6 +287,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Device poll interval (seconds)",
         "restart_required": True,
     },
+    "claim_namespace": {
+        "category": "oauth2",
+        "label": "OIDC claim namespace",
+        "restart_required": True,
+    },
     # --- Email ---
     "email_backend": {"category": "email", "label": "Email backend", "restart_required": True},
     "email_provider": {"category": "email", "label": "Email provider", "restart_required": True},

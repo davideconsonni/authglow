@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useApiQuery } from '@/hooks/useApi'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Banner } from '@/components/shared/Banner'
+import { ApiKeyClaimsTab } from '@/components/admin/ApiKeyClaimsTab'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -81,6 +82,10 @@ export function AdminApiKeysPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>(initialEdit)
   const [savingEdit, setSavingEdit] = useState(false)
+  // Token Claims policy editor modal — opened from the per-row
+  // KeyRound button. Tracks the key so the modal can call the
+  // /api/admin/api-keys/{id}/claim-policy endpoint.
+  const [claimsKey, setClaimsKey] = useState<{ id: string; name: string } | null>(null)
 
   const queryParam = search ? `?q=${encodeURIComponent(search)}` : ''
   const { data, refetch, isLoading } = useApiQuery<ApiKeyData[] | { items?: ApiKeyData[]; keys?: ApiKeyData[] }>(
@@ -372,6 +377,14 @@ export function AdminApiKeysPage() {
                         title="Edit key"
                       >
                         <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => setClaimsKey({ id: k.key_id, name: k.name })}
+                        data-testid="open-claims-btn"
+                        className="text-text-muted hover:text-brand-violet transition-colors"
+                        title="Token Claims (customize JWT claims)"
+                      >
+                        <Key size={14} />
                       </button>
                       {k.is_active ? (
                         <button
@@ -667,6 +680,18 @@ export function AdminApiKeysPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Token Claims policy editor - opened from the per-row
+          KeyRound button. Renders above the create/edit form
+          (z-50 modal) so the admin can move between editing
+          the key metadata and its claim policy. */}
+      {claimsKey && (
+        <ApiKeyClaimsTab
+          keyId={claimsKey.id}
+          keyName={claimsKey.name}
+          onClose={() => setClaimsKey(null)}
+        />
       )}
     </div>
   )

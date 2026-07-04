@@ -16,6 +16,7 @@ from authglow.core.crypto import decrypt_totp_secret
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.claim_policy import ClaimTarget
 from authglow.models.oauth_client import OAuth2Client
 from authglow.models.token import Token
 from authglow.models.user import (
@@ -26,11 +27,16 @@ from authglow.models.user import (
 )
 from authglow.services.api_key import APIKeyLockedException, APIKeyService
 from authglow.services.audit import AuditService
+from authglow.services.claim_policy import ClaimPolicyService
 from authglow.services.email.factory import get_email_service
 from authglow.services.email_verification import EmailVerificationService
-from authglow.services.jwt import JWTService, resolve_rbac_permissions
+from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
+from authglow.services.oidc_claims import (
+    ClaimsParameterError,
+    parse_claims_parameter,
+)
 from authglow.services.password import (
     PasswordValidator,
     hash_password_async,
@@ -504,6 +510,12 @@ async def authorize_post(
     prompt: Optional[str] = Form(None),
     max_age: Optional[int] = Form(None),
     id_token_hint: Optional[str] = Form(None),
+    # OIDC Core §5.5 — ``claims`` request parameter, JSON-encoded
+    # string. When present, the token endpoint applies the
+    # ``id_token`` sub-dict to filter the ID token, and the
+    # UserInfo endpoint applies the ``userinfo`` sub-dict to
+    # filter the UserInfo response.
+    claims: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -590,6 +602,19 @@ async def authorize_post(
                 detail="'none' cannot be combined with other prompt values.",
             )
 
+    # --- OIDC Core §5.5 — ``claims`` request parameter ---
+    # JSON-encoded object the client uses to ask for specific
+    # claims in the ID token / UserInfo response. Parsed once
+    # here and stored on the AuthorizationCode so the token
+    # endpoint + UserInfo endpoint can apply the filter.
+    try:
+        parsed_claims = parse_claims_parameter(claims)
+    except ClaimsParameterError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
     # --- Security: state parameter validation (VAPT-044) ---
     # The earlier ``_validate_state`` call rejects weak or
     # absent state outright (RFC 6819 §4.4.1.8, RFC 9700 OAuth
@@ -639,6 +664,7 @@ async def authorize_post(
             code_challenge_method=code_challenge_method,
             nonce=nonce,
             state=state,
+            requested_claims=parsed_claims,
         )
         redirect_url = f"{redirect_uri}?code={auth_code.code}"
         if state:
@@ -795,6 +821,7 @@ async def authorize_post(
                 acr=auth_acr,
                 amr=auth_amr,
                 state=state,
+                requested_claims=parsed_claims,
             )
             redirect_url = f"{redirect_uri}?code={auth_code.code}"
             if state:
@@ -822,6 +849,7 @@ async def authorize_post(
                 acr=auth_acr,
                 amr=auth_amr,
                 state=state,
+                requested_claims=parsed_claims,
             )
             redirect_url = f"{redirect_uri}?code={auth_code.code}"
             if state:
@@ -1007,19 +1035,28 @@ async def token_endpoint(
         oidc_standard_scopes = {"openid", "profile", "email", "phone", "address"}
         scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
 
-        # Generate JWT access token
-        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+        # Generate JWT access token. The claim policy for this
+        # client (or the default first-party policy if the
+        # client has none) is consulted to build the extra
+        # claims — see ``services/claim_policy.py`` for the
+        # namespacing rules per OIDC §5.1.2.
+        claim_policy_service = ClaimPolicyService()
+        extra_claims = await claim_policy_service.build_claims(
+            user,
+            client_id=auth_code.client_id,
+            scopes=scopes,
+            target=ClaimTarget.ACCESS_TOKEN,
+        )
         access_token_response = jwt_service.create_token_response(
             user.id,
             user.email,
             scopes,
             include_refresh=False,
-            permissions=rbac_perms,
-            roles=rbac_roles,
             audience=auth_code.client_id,
             azp=auth_code.client_id,
             cnf=dpop_cnf,
             token_type="DPoP" if dpop_cnf else "Bearer",
+            extra_claims=extra_claims,
         )
 
         # Create persistent refresh token with rotation
@@ -1037,11 +1074,73 @@ async def token_endpoint(
         # Add ID token if OpenID Connect flow (openid scope requested)
         if "openid" in scopes:
             from authglow.services.oidc import OIDCService
+            from authglow.services.oidc_claims import (
+                ClaimsEssentialMissingError,
+                apply_claims_request,
+            )
 
             oidc_service = OIDCService()
 
             # Build user claims for ID token
             user_claims = oidc_service.build_user_claims(user, scopes)
+
+            # Namespaced custom claims for the ID token (RBAC,
+            # tenant, etc.) — only the rules with
+            # ``include_in=[ID_TOKEN]`` apply.
+            id_extra_claims = await claim_policy_service.build_claims(
+                user,
+                client_id=auth_code.client_id,
+                scopes=scopes,
+                target=ClaimTarget.ID_TOKEN,
+            )
+
+            # OIDC §5.5 — apply the ``id_token`` portion of the
+            # ``claims`` request parameter the client sent on
+            # the authorization request. The standard claims
+            # come from ``user_claims``; the namespaced custom
+            # claims come from ``id_extra_claims``. The two
+            # dicts are merged, then filtered to the
+            # intersection of what the client asked for and
+            # what the server can provide.
+            try:
+                available_id_token_claims = {**user_claims, **id_extra_claims}
+                filtered, missing_essential = apply_claims_request(
+                    "id_token",
+                    getattr(auth_code, "requested_claims", None),
+                    available_id_token_claims,
+                )
+                user_claims = {
+                    k: v for k, v in user_claims.items() if k in filtered
+                }
+                id_extra_claims = {
+                    k: v for k, v in id_extra_claims.items() if k in filtered
+                }
+                if missing_essential:
+                    # OIDC §5.5: the server MUST refuse when an
+                    # essential claim cannot be provided.
+                    from fastapi.responses import JSONResponse
+
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "claims_request_invalid",
+                            "error_description": (
+                                "Essential claims requested by the client "
+                                "are not available: "
+                                + ", ".join(sorted(missing_essential))
+                            ),
+                        },
+                    )
+            except ClaimsEssentialMissingError as exc:
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "claims_request_invalid",
+                        "error_description": str(exc),
+                    },
+                )
 
             # Create ID token
             id_token = jwt_service.create_id_token(
@@ -1054,6 +1153,7 @@ async def token_endpoint(
                 acr=auth_code.acr,
                 amr=auth_code.amr,
                 access_token=access_token_response.access_token,
+                extra_claims=id_extra_claims,
             )
 
             # Add to response
@@ -1108,7 +1208,18 @@ async def token_endpoint(
         if dpop_bound_client is not None and getattr(dpop_bound_client, "dpop_bound", None) is True:
             cc_dpop_cnf = await _require_dpop_proof_if_bound(request, dpop_bound_client, "POST")
 
-        # Create token for client (no specific user)
+        # Create token for client (no specific user). The claim
+        # policy is consulted with ``user=None`` so RBAC and
+        # USER_FIELD rules produce no value (no subject to look
+        # up) — only STATIC and JWT_META rules can contribute.
+        claim_policy_service = ClaimPolicyService()
+        extra_claims = await claim_policy_service.build_claims(
+            user=None,
+            client_id=resolved_client_id,
+            scopes=validated_scopes,
+            target=ClaimTarget.ACCESS_TOKEN,
+        )
+
         return jwt_service.create_token_response(
             user_id=resolved_client_id,
             email=f"{resolved_client_id}@client.internal",
@@ -1116,6 +1227,7 @@ async def token_endpoint(
             include_refresh=False,
             cnf=cc_dpop_cnf,
             token_type="DPoP" if cc_dpop_cnf else "Bearer",
+            extra_claims=extra_claims,
         )
 
     elif grant_type == "refresh_token":
@@ -1142,17 +1254,26 @@ async def token_endpoint(
             raise HTTPException(status_code=401, detail="Invalid user")
         assert user is not None  # help mypy narrow after raise
 
-        # Generate new JWT access token
-        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+        # Generate new JWT access token — the claim policy for
+        # the originating OAuth client (or the default
+        # first-party policy if the refresh token was issued on
+        # a first-party flow) decides which custom claims are
+        # embedded.
+        claim_policy_service = ClaimPolicyService()
+        extra_claims = await claim_policy_service.build_claims(
+            user,
+            client_id=client_id,
+            scopes=list(new_rt.scopes),
+            target=ClaimTarget.ACCESS_TOKEN,
+        )
         access_token_response = jwt_service.create_token_response(
             user.id,
             user.email,
             new_rt.scopes,
             include_refresh=False,
-            permissions=rbac_perms,
-            roles=rbac_roles,
             audience=client_id,
             azp=client_id,
+            extra_claims=extra_claims,
         )
 
         # Add new refresh token to response
@@ -1213,16 +1334,21 @@ async def token_endpoint(
                 raise HTTPException(status_code=401, detail="Invalid user")
 
             scopes_list = auth.scope.split()
-            rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+            claim_policy_service = ClaimPolicyService()
+            extra_claims = await claim_policy_service.build_claims(
+                user,
+                client_id=client_id,
+                scopes=scopes_list,
+                target=ClaimTarget.ACCESS_TOKEN,
+            )
             access_token_response = jwt_service.create_token_response(
                 user.id,
                 user.email,
                 scopes_list,
                 include_refresh=True,
-                permissions=rbac_perms,
-                roles=rbac_roles,
                 audience=client_id,
                 azp=client_id,
+                extra_claims=extra_claims,
             )
 
             await device_service.cleanup_expired()
@@ -1395,21 +1521,27 @@ async def login_for_access_token(
     )
 
     # Generate JWT token response (without refresh token from JWT service)
-    rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
     # VAPT-046: tag the access token with the internal-flow
     # audience so a future resource server that wants to
     # accept only federated OAuth2 traffic can reject tokens
     # minted by the first-party login flow.
     from authglow.services.jwt import INTERNAL_AUDIENCE
 
+    claim_policy_service = ClaimPolicyService()
+    extra_claims = await claim_policy_service.build_claims(
+        user,
+        client_id=None,  # first-party flow
+        scopes=list(user.scopes),
+        target=ClaimTarget.ACCESS_TOKEN,
+    )
+
     token_response = jwt_service.create_token_response(
         user.id,
         user.email,
         user.scopes,
         include_refresh=False,
-        permissions=rbac_perms,
-        roles=rbac_roles,
         audience=INTERNAL_AUDIENCE,
+        extra_claims=extra_claims,
     )
 
     # Check if password is expired
@@ -1503,20 +1635,32 @@ async def exchange_api_key_for_token(
     )
 
     # Return access token with API key scopes
-    rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
     # VAPT-046: tag the access token with the internal-flow
     # audience so a future resource server that wants to
     # accept only federated OAuth2 traffic can reject tokens
-    # minted by the first-party API-key exchange.
+    # minted by the first-party API-key exchange. Claim policy
+    # is consulted with ``api_key_id=key_data.key_id`` so a
+    # saved API key claim policy is applied. The service
+    # merges the saved policy on top of the default first-party
+    # rule set (RBAC roles + permissions) — the merge is the
+    # whole point of the API key policy.
     from authglow.services.jwt import INTERNAL_AUDIENCE
+
+    claim_policy_service = ClaimPolicyService()
+    extra_claims = await claim_policy_service.build_claims(
+        user,
+        api_key_id=key_data.key_id,
+        api_key=key_data,
+        scopes=list(key_data.scopes),
+        target=ClaimTarget.ACCESS_TOKEN,
+    )
 
     return jwt_service.create_token_response(
         user.id,
         user.email,
         key_data.scopes,
-        permissions=rbac_perms,
-        roles=rbac_roles,
         audience=INTERNAL_AUDIENCE,
+        extra_claims=extra_claims,
     )
 
 
@@ -1559,14 +1703,25 @@ async def cookie_refresh(
 
     # VAPT-046: tag the rotated access token with the
     # internal-flow audience (same convention as the password
-    # login + API-key paths).
+    # login + API-key paths). The claim policy is consulted
+    # with ``client_id=None`` so the default first-party rule
+    # set (namespaced RBAC roles + permissions) is applied.
     from authglow.services.jwt import INTERNAL_AUDIENCE
+
+    claim_policy_service = ClaimPolicyService()
+    extra_claims = await claim_policy_service.build_claims(
+        user,
+        client_id=None,  # first-party cookie-based flow
+        scopes=list(new_rt.scopes),
+        target=ClaimTarget.ACCESS_TOKEN,
+    )
 
     access_token = jwt_service.create_access_token(
         user.id,
         user.email,
         new_rt.scopes,
         audience=INTERNAL_AUDIENCE,
+        extra_claims=extra_claims,
     )
     _set_auth_cookies(response, access_token, new_rt.token, settings)
 
@@ -1794,6 +1949,7 @@ async def oauth2_mfa_verify(
         acr="2",
         amr=["pwd", "mfa"],
         state=mfa_session.state,
+        requested_claims=getattr(mfa_session, "requested_claims", None),
     )
 
     redirect_url = f"{mfa_session.redirect_uri}?code={auth_code.code}"

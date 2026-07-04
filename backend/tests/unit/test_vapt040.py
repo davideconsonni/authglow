@@ -16,6 +16,7 @@ Each test exercises one invariant on real file storage.
 import json
 import os
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -318,7 +319,12 @@ class TestVapt040DirectoryPermissions:
 
         from authglow.repositories.file.user import FileUserRepository
 
-        storage_path = str(tmp_path / "data" / "users")
+        # Use a sub-path that the test_settings fixture does not
+        # pre-create, so this test exercises a true fresh-creation
+        # scenario (VAPT-040).
+        storage_path = str(tmp_path / "fresh" / "users")
+        if os.path.exists(storage_path):
+            shutil.rmtree(os.path.dirname(storage_path))
         custom = test_settings.model_copy(update={"storage_path": storage_path})
         # Force the path not to exist yet.
         assert not os.path.exists(storage_path)
@@ -339,7 +345,8 @@ class TestVapt040DirectoryPermissions:
         from authglow.repositories.file.user import FileUserRepository
 
         storage_path = str(tmp_path / "data" / "users")
-        os.makedirs(storage_path, mode=0o755)
+        os.makedirs(storage_path, mode=0o755, exist_ok=True)
+        os.chmod(storage_path, 0o755)
         # Sanity: the dir is currently 0o755.
         assert (os.stat(storage_path).st_mode & 0o777) == 0o755
 

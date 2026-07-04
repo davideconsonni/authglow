@@ -1,4 +1,10 @@
-"""Integration tests for RBAC permissions/roles injection in JWT tokens."""
+"""Integration tests for the Claim Policy → JWT pipeline.
+
+Tests the namespaced RBAC claim injection (per OIDC §5.1.2
+namespacing requirement) and the ``extra_claims`` plumbing
+between :class:`ClaimPolicyService` and
+:class:`JWTService`.
+"""
 
 import asyncio
 import json
@@ -8,120 +14,194 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from authglow.models.oauth_client import OAuth2Client
 from authglow.models.user import User
 from authglow.services.password import hash_password
 
 
-@pytest.fixture
-def rbac_test_app():
-    app = FastAPI()
-    from authglow.api.auth import router
+def _decode_payload(token: str) -> dict:
+    """Decode a JWT payload without signature verification — the
+    test signature uses the project test keyring so the wire
+    format can be inspected directly."""
+    import base64
 
-    app.include_router(router)
-    return TestClient(app)
+    parts = token.split(".")
+    payload = parts[1]
+    # Base64url padding
+    payload += "=" * (4 - len(payload) % 4)
+    return json.loads(base64.urlsafe_b64decode(payload))
 
 
-class TestPermissionsInJwt:
-    def test_access_token_contains_permissions_and_roles(self, test_settings, jwt_service):
+class TestClaimPolicyEndToEnd:
+    def test_default_policy_emits_namespaced_rbac(self, test_settings, jwt_service):
+        """No saved policy → the default first-party rule set
+        (namespaced RBAC roles + permissions, into the access
+        token) is applied."""
+        from authglow.models.claim_policy import ClaimTarget
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        svc = ClaimPolicyService()
+        user = User(
+            id="u-default",
+            email="default@test.com",
+            hashed_password=hash_password("TestP@ss123!"),
+            is_active=True,
+            scopes=["openid", "read"],
+        )
+        claims = asyncio.run(
+            svc.build_claims(user, client_id=None, scopes=["read"], target=ClaimTarget.ACCESS_TOKEN)
+        )
+        assert "https://authglow.example.com/claims/roles" in claims
+        assert "https://authglow.example.com/claims/permissions" in claims
+        assert claims["https://authglow.example.com/claims/roles"] == []
+        assert claims["https://authglow.example.com/claims/permissions"] == []
+
+    def test_extra_claims_merged_into_access_token(self, test_settings, jwt_service):
+        """``extra_claims`` are merged into the access token
+        payload under the resolved (namespaced) claim name."""
+        extra_claims = {
+            "https://authglow.example.com/claims/tenant_id": "acme",
+            "https://authglow.example.com/claims/roles": ["admin", "developer"],
+        }
         token = jwt_service.create_access_token(
-            user_id="u1",
+            user_id="u-1",
             email="u1@test.com",
             scopes=["openid", "read"],
-            permissions=["users.read", "users.write"],
-            roles=["developer"],
+            extra_claims=extra_claims,
         )
+        payload = _decode_payload(token)
+        assert payload["https://authglow.example.com/claims/tenant_id"] == "acme"
+        assert payload["https://authglow.example.com/claims/roles"] == ["admin", "developer"]
 
-        decoded = jwt_service.decode_token(token)
-        assert decoded is not None
-        assert decoded.permissions == ["users.read", "users.write"]
-        assert decoded.roles == ["developer"]
+    def test_extra_claims_cannot_override_reserved(self, test_settings, jwt_service):
+        """``iss``, ``sub``, ``exp``, ``iat``, ``jti``, ``aud``
+        cannot be overridden by ``extra_claims`` — the JWT
+        service owns the cryptographic anchors.
 
-    def test_access_token_without_rbac_has_none_fields(self, test_settings, jwt_service):
+        The contract is enforced by silently filtering: try
+        to override ``sub`` and confirm the token's ``sub``
+        is still the real user_id.
+        """
         token = jwt_service.create_access_token(
-            user_id="u1",
-            email="u1@test.com",
+            user_id="u-real-sub",
+            email="u@test.com",
             scopes=["openid"],
+            extra_claims={
+                "sub": "FAKE-SUB",  # must be ignored
+                "https://authglow/claims/tenant_id": "acme",
+            },
         )
+        payload = _decode_payload(token)
+        assert payload["sub"] == "u-real-sub"
+        assert payload["https://authglow/claims/tenant_id"] == "acme"
 
+    def test_extra_claims_merged_into_id_token(self, test_settings, jwt_service):
+        """The ID token accepts the same ``extra_claims``
+        parameter and the namespaced RBAC claims land in the
+        OIDC ID token payload as well."""
+        extra_claims = {
+            "https://authglow.example.com/claims/tenant_id": "tenant-42",
+        }
+        token = jwt_service.create_id_token(
+            user_id="u-id",
+            client_id="client-1",
+            scopes=["openid"],
+            user_claims={},
+            extra_claims=extra_claims,
+        )
+        payload = _decode_payload(token)
+        assert payload["https://authglow.example.com/claims/tenant_id"] == "tenant-42"
+        # Standard OIDC claims still in place
+        assert payload["iss"] == test_settings.issuer
+        assert payload["sub"] == "u-id"
+        assert payload["aud"] == "client-1"
+
+    def test_decoded_extra_claims_round_trip(self, test_settings, jwt_service):
+        """``decode_token`` exposes namespaced custom claims via
+        :attr:`TokenData.extra_claims` (a free-form dict)."""
+        token = jwt_service.create_access_token(
+            user_id="u-rt",
+            email="rt@test.com",
+            scopes=["openid"],
+            extra_claims={
+                "https://authglow/claims/tenant_id": "acme",
+                "https://authglow/claims/roles": ["admin"],
+            },
+        )
         decoded = jwt_service.decode_token(token)
         assert decoded is not None
-        assert decoded.permissions is None
-        assert decoded.roles is None
+        assert decoded.extra_claims is not None
+        assert decoded.extra_claims["https://authglow/claims/tenant_id"] == "acme"
+        assert decoded.extra_claims["https://authglow/claims/roles"] == ["admin"]
+        # Reserved / typed fields are NOT in extra_claims
+        assert "iss" not in decoded.extra_claims
+        assert "sub" not in decoded.extra_claims
+        assert "email" not in decoded.extra_claims
 
-    def test_create_token_response_passes_permissions(self, test_settings, jwt_service):
-        response = jwt_service.create_token_response(
-            user_id="u1",
-            email="u1@test.com",
-            scopes=["openid"],
-            permissions=["users.read"],
-            roles=["admin"],
+
+class TestClaimPolicyScopeGating:
+    def test_required_scope_filters_claim_out(self, test_settings, jwt_service):
+        """A rule with ``required_scope`` is skipped when the
+        requested scope is not in the granted set."""
+        from authglow.models.claim_policy import (
+            BUILTIN_TEMPLATES,
+            ClaimRule,
+            ClaimSource,
+            ClaimTarget,
         )
+        from authglow.services.claim_policy import ClaimPolicyService
 
-        decoded = jwt_service.decode_token(response.access_token)
-        assert decoded is not None
-        assert decoded.permissions == ["users.read"]
-        assert decoded.roles == ["admin"]
-
-    def test_resolve_rbac_permissions_returns_empty_for_no_roles(self, test_settings):
-        from authglow.services.jwt import resolve_rbac_permissions
+        # Build a one-rule policy that requires scope "roles".
+        rule = ClaimRule(
+            claim_name="https://authglow/claims/roles",
+            source=ClaimSource.RBAC_ROLES,
+            include_in=[ClaimTarget.ACCESS_TOKEN],
+            required_scope="roles",
+        )
+        policy_service = ClaimPolicyService()
+        # Patch the repository to return our custom policy
+        policy_service._repository = MagicMock()
+        policy_service._repository.get_by_client = AsyncMock(
+            return_value=MagicMock(rules=[rule])
+        )
 
         async def _run():
-            perms, roles = await resolve_rbac_permissions("nonexistent")
-            return perms, roles
-
-        perms, roles = asyncio.run(_run())
-        assert perms == []
-        assert roles == []
-
-    def test_rbac_permissions_are_json_serializable(self, test_settings, jwt_service):
-        token = jwt_service.create_access_token(
-            user_id="u1",
-            email="u1@test.com",
-            scopes=["openid"],
-            permissions=["users.read", "users.write"],
-            roles=["developer"],
-        )
-
-        import json
-
-        decoded = jwt_service.decode_token(token)
-        assert decoded is not None
-        assert isinstance(decoded.permissions, list)
-        assert isinstance(decoded.roles, list)
-        json.dumps({"permissions": decoded.permissions, "roles": decoded.roles})
-
-    def test_full_login_flow_rbac_serializable(self, test_settings, jwt_service):
-        from authglow.services.jwt import resolve_rbac_permissions
-        from authglow.services.rbac import RBACService
-        from authglow.models.rbac import Role, UserRole
-
-        async def _run():
-            rbac = RBACService()
-            role = await rbac.create_role(
-                Role(
-                    name="flow-test",
-                    permissions=["users.read"],
-                    is_system=False,
-                )
+            user = User(
+                id="u-scope",
+                email="s@test.com",
+                hashed_password=hash_password("TestP@ss123!"),
+                is_active=True,
+                scopes=["read"],
             )
-            await rbac.assign_role_to_user(
-                UserRole(user_id="u-flow", role_id=role.role_id, assigned_by="test")
+            # Without "roles" scope → claim excluded
+            claims = await policy_service.build_claims(
+                user, client_id="x", scopes=["read"], target=ClaimTarget.ACCESS_TOKEN
             )
-            perms, roles = await resolve_rbac_permissions("u-flow")
-            token = jwt_service.create_access_token(
-                user_id="u-flow",
-                email="u-flow@test.com",
-                scopes=["openid"],
-                permissions=list(perms),
-                roles=roles,
+            assert "https://authglow/claims/roles" not in claims
+            # With "roles" scope → claim included (empty list,
+            # because the user has no roles assigned in this
+            # test)
+            claims = await policy_service.build_claims(
+                user, client_id="x", scopes=["roles"], target=ClaimTarget.ACCESS_TOKEN
             )
-            return token
+            assert "https://authglow/claims/roles" in claims
 
-        import json
+        asyncio.run(_run())
 
-        token = asyncio.run(_run())
-        decoded = jwt_service.decode_token(token)
-        assert decoded is not None
-        assert "users.read" in decoded.permissions
-        json.dumps({"permissions": decoded.permissions, "roles": decoded.roles})
+
+class TestClaimPolicyBuiltinTemplates:
+    def test_templates_resolve_against_namespace(self, test_settings, jwt_service):
+        """The relative claim name of a template is expanded
+        against ``settings.claim_namespace`` at apply time."""
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        svc = ClaimPolicyService()
+        rule = svc.apply_template("rbac-roles")
+        assert rule.claim_name == f"{test_settings.claim_namespace}/roles"
+        assert rule.source.value == "rbac_roles"
+
+    def test_unknown_template_id_raises(self, test_settings):
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        svc = ClaimPolicyService()
+        with pytest.raises(ValueError):
+            svc.apply_template("does-not-exist")

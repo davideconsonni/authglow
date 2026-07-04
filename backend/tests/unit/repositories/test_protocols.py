@@ -33,8 +33,14 @@ import pytest
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferences
 from authglow.repositories.file.api_key import FileAPIKeyRepository
+from authglow.repositories.file.api_key_claim_policy import (
+    FileAPIKeyClaimPolicyRepository,
+)
 from authglow.repositories.file.authorization_code import (
     FileAuthorizationCodeRepository,
+)
+from authglow.repositories.file.claim_policy import (
+    FileClientClaimPolicyRepository,
 )
 from authglow.repositories.file.csrf import FileCSRFTokenRepository
 from authglow.repositories.file.email_index import (
@@ -78,7 +84,9 @@ from authglow.repositories.file.user_preferences import (
 )
 from authglow.repositories.protocols import (
     APIKeyRepository,
+    APIKeyClaimPolicyRepository,
     AuthorizationCodeRepository,
+    ClientClaimPolicyRepository,
     CSRFTokenRepository,
     EmailIndexRepository,
     EmailVerificationRepository,
@@ -129,6 +137,16 @@ _IMPL_TABLE = [
         FileAuthorizationCodeRepository,
         AuthorizationCodeRepository,
         "AuthorizationCode",
+    ),
+    (
+        FileClientClaimPolicyRepository,
+        ClientClaimPolicyRepository,
+        "ClientClaimPolicy",
+    ),
+    (
+        FileAPIKeyClaimPolicyRepository,
+        APIKeyClaimPolicyRepository,
+        "APIKeyClaimPolicy",
     ),
     (
         FileOAuth2ClientRepository,

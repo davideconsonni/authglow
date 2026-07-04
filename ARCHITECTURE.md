@@ -23,6 +23,7 @@ For code style, naming, and test commands see `AGENTS.md`.
 | New UI primitive                       | `frontend/src/components/ui/<name>.tsx` (shadcn/ui pattern)                                            |
 | New state store                        | `frontend/src/stores/<name>Store.ts` → Zustand                                                         |
 | New API hook                           | `frontend/src/hooks/use<Name>.ts` → wraps `useApiQuery`/`useApiMutation`                               |
+| New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)          |
 | New API constant / route path          | `frontend/src/lib/constants.ts`                                                                        |
 | HTTP client change                     | `frontend/src/lib/api.ts`                                                                              |
 
@@ -43,10 +44,10 @@ authglow/
 │       ├── api/               # 16 FastAPI routers (HTTP layer, one per domain)
 │       ├── services/          # 27 service classes (business logic, cross-entity coordination)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
-│       │   ├── protocols.py   # 25 Protocol contracts (@runtime_checkable)
+│       │   ├── protocols.py   # 26 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
 │       │   ├── dependencies.py# Factory functions: get_<entity>_repository()
-│       │   └── file/          # 23 File*Repository impls (JSON on disk via fsspec)
+│       │   └── file/          # 24 File*Repository impls (JSON on disk via fsspec)
 │       ├── models/            # Pydantic request/response/domain models
 │       ├── core/              # config.py, crypto.py, cache.py, concurrency.py, permissions.py
 │       └── middleware/        # Security headers, HTTPS enforcement, request size, proxy
@@ -148,12 +149,61 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 |-------------------------------------------------|-----------------------------------------------------------------------|
 | `backend/main.py`                               | All middleware registration and router mounts                         |
 | `backend/authglow/core/config.py`               | `Settings` class — all env vars read here                             |
-| `backend/authglow/repositories/protocols.py`    | All storage contracts (25 Protocols)                                  |
+| `backend/authglow/repositories/protocols.py`    | All storage contracts (26 Protocols)                                  |
 | `backend/authglow/repositories/dependencies.py` | Factory functions (one per entity)                                    |
 | `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                  |
+| `backend/authglow/services/claim_policy.py`     | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
+| `backend/authglow/models/claim_policy.py`       | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)  |
 | `frontend/src/App.tsx`                          | All routes, providers, guards                                         |
 | `frontend/src/lib/api.ts`                       | HTTP client with auto-refresh, 429 handling, session-expired dispatch |
 | `frontend/src/lib/constants.ts`                 | `ROUTES` object and `API_URL`                                         |
+
+## Claim Policy System (OIDC §5.1.2 namespacing)
+
+Per-OAuth2-client declarative rules that decide which custom
+claims (RBAC roles, RBAC permissions, user attributes, static
+values) are embedded in access tokens / ID tokens / UserInfo
+responses, and where the values come from.
+
+**Layout**
+
+* Model: `authglow/models/claim_policy.py` — `ClaimRule`,
+  `ClientClaimPolicy`, `BUILTIN_TEMPLATES`,
+  `OIDC_STANDARD_CLAIMS` whitelist.
+* Repository: `authglow/repositories/file/claim_policy.py` —
+  one JSON file per `client_id` under
+  `<storage_path>/client_claim_policies/<client_id>.json`.
+* Service: `authglow/services/claim_policy.py` —
+  `ClaimPolicyService.build_claims(user, client_id, scopes,
+  target) -> dict`. Reads RBAC roles + permissions for the
+  user, applies the saved policy rules, filters by
+  `target` (`ACCESS_TOKEN` / `ID_TOKEN` / `USERINFO`) and
+  `required_scope`, returns the extra-claims dict to merge
+  into the token payload.
+* JWT plumbing: `authglow/services/jwt.py` —
+  `create_access_token` and `create_id_token` accept
+  `extra_claims: Optional[Dict[str, Any]]`. The JWT service
+  silently filters reserved claims (`iss`, `sub`, `aud`,
+  `exp`, `iat`, `jti`, `azp`, `cnf`, `token_type`) to keep
+  the cryptographic anchors under its sole control.
+  `decode_token` populates `TokenData.extra_claims` with
+  every non-reserved payload key.
+
+**Default behaviour** (no saved policy, no `client_id` —
+applies to first-party flows: password login, API-key
+exchange, refresh, passkey, federation, MFA): the
+namespaced RBAC roles + permissions claim pair is emitted
+into the access token, against
+`settings.claim_namespace` (default
+`https://authglow.example.com/claims`).
+
+**Reserved-claim namespacing rule** (OIDC §5.1.2): every
+non-OIDC-standard claim name MUST be a URI. Enforced at
+the model layer by `_validate_claim_name` — plain claim
+names like `roles`, `tenant_id`, `subscription_level` are
+rejected unless they are in the `OIDC_STANDARD_CLAIMS`
+whitelist (which only contains the OIDC Core / RFC 9068 /
+RFC 9449 standard names).
 
 ## Maintenance
 

@@ -344,14 +344,7 @@ async def federation_callback(
         oauth2_ctx = FederationStateToken.get_oauth2_context(state_claims)
 
         jwt_service = await get_jwt_service()
-        auth_tokens = jwt_service.create_token_response(
-            user_id=user.id,
-            email=user.email,
-            scopes=user.scopes,
-            include_refresh=True,
-        )
 
-        from authglow.services.jwt import resolve_rbac_permissions
         from authglow.services.refresh_token import RefreshTokenService
 
         refresh_svc = RefreshTokenService()
@@ -364,14 +357,27 @@ async def federation_callback(
         )
         assert stored_rt.token is not None  # narrowed: always set on creation
 
-        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
+        # Federation callbacks always hit the default first-party
+        # policy (the federation IdP is the caller, the AuthGlow
+        # session is the user). Pass ``client_id=None`` to fall
+        # back to the default rule set.
+        from authglow.models.claim_policy import ClaimTarget
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        claim_policy_service = ClaimPolicyService()
+        extra_claims = await claim_policy_service.build_claims(
+            user,
+            client_id=None,
+            scopes=list(user.scopes),
+            target=ClaimTarget.ACCESS_TOKEN,
+        )
+
         auth_tokens = jwt_service.create_token_response(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
             include_refresh=True,
-            permissions=rbac_perms,
-            roles=rbac_roles,
+            extra_claims=extra_claims,
         )
         assert auth_tokens.refresh_token is not None  # narrowed: include_refresh=True
 

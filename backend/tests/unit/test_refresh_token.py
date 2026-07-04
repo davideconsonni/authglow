@@ -257,6 +257,8 @@ class TestRefreshTokenActiveIndex:
     """Tests for active token index (P4 performance fix)."""
 
     def test_active_index_created_on_create(self, refresh_token_service):
+        from authglow.core.crypto import decrypt_index_value
+
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
                 user_id="user-ai-1",
@@ -267,7 +269,8 @@ class TestRefreshTokenActiveIndex:
         )
         assert os.path.exists(refresh_token_service._repo._active_index_path)
         with open(refresh_token_service._repo._active_index_path, "r") as f:
-            idx = json.load(f)
+            raw = f.read()
+        idx = json.loads(decrypt_index_value(raw))
         assert rt.token_id in idx["token_ids"]
 
     def test_revoked_token_removed_from_active_index(self, refresh_token_service):

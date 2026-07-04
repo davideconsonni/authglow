@@ -42,6 +42,24 @@ from authglow.models.oidc import SCOPE_TO_CLAIMS, IDTokenClaims
 from authglow.models.token import Token, TokenData
 from authglow.services.auth.token_blacklist import token_blacklist
 
+
+def _extract_extra_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Pull every claim that is not reserved / typed into a free-form dict.
+
+    Used by :meth:`JWTService.decode_token` to populate
+    :attr:`TokenData.extra_claims`. The returned dict holds
+    exactly the namespaced custom claims the claim policy
+    emitted (RBAC roles, permissions, tenant id, etc.) so
+    the consumer can iterate over them without the JWT layer
+    modelling each one.
+    """
+    excluded = _RESERVED_CLAIMS | {
+        "scopes",
+        "email",
+        "token_version",  # internal sentinel
+    }
+    return {k: v for k, v in payload.items() if k not in excluded}
+
 # VAPT-046: audience identifier for tokens issued on the
 # internal first-party flows (password login, API-key
 # exchange, refresh-token rotation, passkey login). The OAuth2
@@ -55,27 +73,26 @@ from authglow.services.auth.token_blacklist import token_blacklist
 # from federated OAuth2 traffic.
 INTERNAL_AUDIENCE = "authglow-internal"
 
-
-async def resolve_rbac_permissions(user_id: str) -> tuple:
-    """Resolve RBAC permissions and roles for a user.
-
-    Returns (permissions, roles) tuples of lists, both may be empty.
-    Uses lazy imports to avoid circular dependencies.
-    """
-    try:
-        from authglow.services.rbac import RBACService
-
-        rbac = RBACService()
-        perms = list(await rbac.get_user_permissions(user_id))
-        user_roles = await rbac.get_user_roles(user_id)
-        role_names: list[str] = []
-        for ur in user_roles or []:
-            role = await rbac.get_role(ur.role_id)
-            if role:
-                role_names.append(role.name)
-        return perms, role_names
-    except Exception:
-        return [], []
+# Claims the JWT service bakes in itself. The ``extra_claims``
+# parameter cannot override them — the claim policy can only
+# add new claims. The set is duplicated from
+# ``services.claim_policy.RESERVED_CLAIMS`` so the contract
+# is enforced even if the claim policy service is bypassed
+# (e.g. in tests).
+_RESERVED_CLAIMS: frozenset[str] = frozenset(
+    {
+        "iss",
+        "sub",
+        "aud",
+        "exp",
+        "iat",
+        "nbf",
+        "jti",
+        "azp",
+        "cnf",
+        "token_type",
+    }
+)
 
 
 class JWTService:
@@ -278,11 +295,10 @@ class JWTService:
         email: str,
         scopes: List[str],
         expires_delta: Optional[timedelta] = None,
-        permissions: Optional[List[str]] = None,
-        roles: Optional[List[str]] = None,
         audience: Optional[str] = None,
         azp: Optional[str] = None,
         cnf: Optional[Dict[str, Any]] = None,
+        extra_claims: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Create an access token with a unique jti for revocation support.
 
@@ -291,9 +307,9 @@ class JWTService:
                 client, pass the client_id. The ``aud`` claim is then
                 bound to that client, enabling OIDC Core §3.1.3.7
                 audience validation on the resource server. When
-                ``None`` (cookie-first / password grant flows) no
-                ``aud`` claim is set, preserving the legacy
-                back-compat path.
+                ``None`` (cookie-first / password grant flows) the
+                INTERNAL_AUDIENCE is set so a future resource server
+                can opt to reject internal traffic.
             azp: Authorized party (OIDC Core §2). When ``audience`` is
                 set, ``azp`` defaults to the same value if not
                 explicitly provided. Following the AuthGlow
@@ -303,6 +319,15 @@ class JWTService:
                 the token to a specific key (e.g. ``{"jkt": "<thumbprint>"}``
                 for DPoP-bound tokens). The resource server enforces
                 the binding. ``None`` for legacy bearer tokens.
+            extra_claims: Per-client claim policy output (see
+                :class:`ClaimPolicyService.build_claims`). The dict
+                is merged into the payload last; reserved claims
+                (``iss``, ``sub``, ``aud``, ``exp``, ``iat``,
+                ``jti``, ``azp``, ``cnf``, ``token_type``) are
+                silently filtered to keep the JWT service the
+                single source of truth for the cryptographic
+                anchors. ``None`` for callers that have not yet
+                been migrated to the claim-policy flow.
         """
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
@@ -321,15 +346,18 @@ class JWTService:
             "iat": datetime.now(timezone.utc),
             "token_type": "access",
         }
-        if permissions:
-            token_data["permissions"] = permissions
-        if roles:
-            token_data["roles"] = roles
         if audience is not None:
             token_data["aud"] = audience
             token_data["azp"] = azp if azp is not None else audience
         if cnf is not None:
             token_data["cnf"] = cnf
+        if extra_claims:
+            for claim_name, value in extra_claims.items():
+                if claim_name in _RESERVED_CLAIMS:
+                    continue
+                if value is None:
+                    continue
+                token_data[claim_name] = value
         return self._encode_token(token_data)
 
     def create_refresh_token(
@@ -415,9 +443,14 @@ class JWTService:
             # VAPT-046: expose ``azp`` so resource servers can
             # check the "authorized party" claim alongside ``aud``.
             azp=payload.get("azp") if isinstance(payload.get("azp"), str) else None,
-            permissions=payload.get("permissions"),
-            roles=payload.get("roles"),
             cnf=payload.get("cnf") if isinstance(payload.get("cnf"), dict) else None,
+            # Per-client claim policy output: any payload key
+            # that is not a reserved / typed claim ends up here
+            # as a free-form dict so the consumer (resource
+            # server, UI) can iterate over the namespaced custom
+            # claims without the JWT layer having to model each
+            # one.
+            extra_claims=_extract_extra_claims(payload),
         )
 
         if token_data.exp < datetime.now(timezone.utc):
@@ -441,6 +474,7 @@ class JWTService:
         amr: Optional[List[str]] = None,
         access_token: Optional[str] = None,
         authorization_code: Optional[str] = None,
+        extra_claims: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Create an OpenID Connect ID Token (OIDC Core §2).
 
@@ -450,6 +484,14 @@ class JWTService:
 
         The hash algorithm is left-half SHA-256, base64url-encoded
         with no padding.
+
+        ``extra_claims`` is the per-client claim policy output
+        (see :class:`ClaimPolicyService.build_claims`). Merged
+        last so it can add namespaced custom claims (e.g.
+        ``https://authglow.example.com/claims/tenant_id``) to
+        the ID token. Reserved claims are filtered — the ID
+        token's ``iss`` / ``sub`` / ``aud`` / ``azp`` are owned
+        by the JWT service.
         """
         iat = datetime.now(timezone.utc)
         if expires_delta:
@@ -488,6 +530,14 @@ class JWTService:
                     if claim in user_claims and user_claims[claim] is not None:
                         id_token_data[claim] = user_claims[claim]
 
+        if extra_claims:
+            for claim_name, value in extra_claims.items():
+                if claim_name in _RESERVED_CLAIMS:
+                    continue
+                if value is None:
+                    continue
+                id_token_data[claim_name] = value
+
         return self._encode_token(id_token_data)
 
     def decode_id_token(
@@ -522,12 +572,11 @@ class JWTService:
         email: str,
         scopes: List[str],
         include_refresh: bool = True,
-        permissions: Optional[List[str]] = None,
-        roles: Optional[List[str]] = None,
         audience: Optional[str] = None,
         azp: Optional[str] = None,
         cnf: Optional[Dict[str, Any]] = None,
         token_type: str = "Bearer",
+        extra_claims: Optional[Dict[str, Any]] = None,
     ) -> Token:
         """Create a complete token response (OAuth2 §4.1.4 / §5.1).
 
@@ -536,16 +585,21 @@ class JWTService:
         client_id. ``cnf`` is forwarded to bind the token to a
         specific key (T.3 DPoP). ``token_type`` is ``"Bearer"`` by
         default and ``"DPoP"`` for DPoP-bound responses.
+
+        ``extra_claims`` is the per-client claim policy output
+        (see :class:`ClaimPolicyService.build_claims`); the
+        access token is the target — the ID token receives the
+        same dict (minus reserved claims) via
+        :meth:`create_id_token` if the caller also passes one.
         """
         access_token = self.create_access_token(
             user_id,
             email,
             scopes,
-            permissions=permissions,
-            roles=roles,
             audience=audience,
             azp=azp,
             cnf=cnf,
+            extra_claims=extra_claims,
         )
         token_response = Token(
             access_token=access_token,

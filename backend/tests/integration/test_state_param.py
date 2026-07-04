@@ -10,7 +10,21 @@ with HTTP 400 before any session is created.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from authglow.models.token import AuthorizationCode
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiter_storage():
+    """Reset the module-level slowapi limiter so rate-limit counters
+    from previous test files do not bleed into this module's
+    10-per-minute authorize endpoint budget."""
+    from authglow.core.rate_limit import limiter
+
+    limiter._storage.storage.clear()
+    yield
+    limiter._storage.storage.clear()
 
 
 class TestStateStoredInAuthorizationCode:

@@ -11,6 +11,7 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.claim_policy import ClaimTarget
 from authglow.models.passkey import (
     PasskeyAuthenticationVerification,
     PasskeyChallenge,
@@ -19,7 +20,8 @@ from authglow.models.passkey import (
 )
 from authglow.models.user import User
 from authglow.services.audit import AuditService
-from authglow.services.jwt import JWTService, resolve_rbac_permissions
+from authglow.services.claim_policy import ClaimPolicyService
+from authglow.services.jwt import JWTService
 from authglow.services.passkey import PasskeyService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.user import UserService
@@ -289,20 +291,29 @@ async def complete_authentication(
 
         await storage.update_last_login(user.id)
 
-        # Generate access token
-        rbac_perms, rbac_roles = await resolve_rbac_permissions(user.id)
-        # VAPT-046: tag the passkey-minted access token with
-        # the internal-flow audience (same convention as the
-        # password login + API-key + refresh paths).
+        # Generate access token. VAPT-046: tag the
+        # passkey-minted access token with the internal-flow
+        # audience (same convention as the password login +
+        # API-key + refresh paths). The claim policy is
+        # consulted with ``client_id=None`` so the default
+        # first-party rule set (namespaced RBAC roles +
+        # permissions) is applied.
         from authglow.services.jwt import INTERNAL_AUDIENCE
+
+        claim_policy_service = ClaimPolicyService()
+        extra_claims = await claim_policy_service.build_claims(
+            user,
+            client_id=None,  # first-party flow
+            scopes=list(user.scopes),
+            target=ClaimTarget.ACCESS_TOKEN,
+        )
 
         access_token = jwt_service.create_access_token(
             user_id=user.id,
             email=user.email,
             scopes=user.scopes,
-            permissions=rbac_perms,
-            roles=rbac_roles,
             audience=INTERNAL_AUDIENCE,
+            extra_claims=extra_claims,
         )
 
         # Create persistent refresh token for session tracking

@@ -132,6 +132,7 @@ class OAuth2Service:
         acr: Optional[str] = None,
         amr: Optional[List[str]] = None,
         state: Optional[str] = None,
+        requested_claims: Optional[dict] = None,
     ) -> AuthorizationCode:
         """Create a new authorization code."""
         expires_at = utcnow() + timedelta(
@@ -150,6 +151,7 @@ class OAuth2Service:
             acr=acr,
             amr=amr,
             state=state,
+            requested_claims=requested_claims,
         )
 
         await self._repository.create(auth_code)

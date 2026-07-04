@@ -31,6 +31,13 @@ class User(BaseModel):
     avatar_url: Optional[str] = None
     address: Optional[dict] = None
 
+    # Tenant / org / subscription — surfaced as namespaced JWT
+    # claims via the Claim Policy system. Optional because not
+    # every AuthGlow installation is multi-tenant.
+    tenant_id: Optional[str] = None
+    organization: Optional[str] = None
+    subscription_level: Optional[str] = None
+
     # OAuth2 related
     scopes: List[str] = Field(default_factory=list)
     api_key_scopes: Optional[List[str]] = None

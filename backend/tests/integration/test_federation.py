@@ -622,8 +622,8 @@ class TestVapt026FederationRateLimits:
                                     return_value=mock_rt
                                 )
                                 with patch(
-                                    "authglow.services.jwt.resolve_rbac_permissions",
-                                    AsyncMock(return_value=([], [])),
+                                    "authglow.services.claim_policy.ClaimPolicyService.build_claims",
+                                    AsyncMock(return_value={}),
                                 ):
                                     client = self._make_limited_app()
                                     for _ in range(10):

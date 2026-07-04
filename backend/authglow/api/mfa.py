@@ -345,7 +345,26 @@ async def verify_mfa_login(
         expires_in_days=settings.refresh_token_expire_days,
     )
 
-    token_response = jwt_service.create_token_response(user.id, user.email, user.scopes)
+    # Issue the access token with the claim policy applied —
+    # first-party MFA completion uses the default rule set
+    # (namespaced RBAC roles + permissions).
+    from authglow.models.claim_policy import ClaimTarget
+    from authglow.services.claim_policy import ClaimPolicyService
+
+    claim_policy_service = ClaimPolicyService()
+    extra_claims = await claim_policy_service.build_claims(
+        user,
+        client_id=None,
+        scopes=list(user.scopes),
+        target=ClaimTarget.ACCESS_TOKEN,
+    )
+
+    token_response = jwt_service.create_token_response(
+        user.id,
+        user.email,
+        user.scopes,
+        extra_claims=extra_claims,
+    )
     token_response.refresh_token = rt.token
     _set_auth_cookies(response, token_response.access_token, rt.token, settings)
 

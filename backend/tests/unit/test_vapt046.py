@@ -180,7 +180,6 @@ class TestVapt046InternalFlowsHaveAudience:
         # verify + re-hash to ``storage.verify_and_maybe_rehash_password``.
         storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, user))
         storage.reset_failed_login_attempts = AsyncMock()
-        storage.resolve_rbac_permissions = AsyncMock(return_value=([], []))
 
         # Stubbed refresh-token service: returns a synthetic
         # in-memory token so the route handler can include
@@ -215,6 +214,15 @@ class TestVapt046InternalFlowsHaveAudience:
         audit = MagicMock()
         audit.log_event = AsyncMock()
         app.dependency_overrides[get_audit_service] = lambda: audit
+        # Claim policy: stub the build_claims call so the route
+        # handler does not need the RBAC service to be
+        # initialised in the test_settings storage. The VAPT-046
+        # test only cares about the ``aud`` claim, not the
+        # namespaced RBAC claims.
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        original_build = ClaimPolicyService.build_claims
+        ClaimPolicyService.build_claims = AsyncMock(return_value={})
         # Patch the inline ``RefreshTokenService()`` factory by
         # replacing the symbol on the auth module so the route
         # handlers' ``lambda: RefreshTokenService()`` picks up
@@ -227,6 +235,7 @@ class TestVapt046InternalFlowsHaveAudience:
             yield app, jwt_svc
         finally:
             auth_module.RefreshTokenService = original  # type: ignore[assignment]
+            ClaimPolicyService.build_claims = original_build
 
     def test_password_login_audience_is_internal(self, test_settings, _mocked_app):
         from fastapi.testclient import TestClient

@@ -114,8 +114,12 @@ async def create_oauth_client(
     # Return client with plaintext secret (only shown once). The JWT key
     # is returned in the same envelope when applicable so the admin
     # can hand it to the client operator through the established
-    # "show-once" UI flow.
-    response_kwargs = client.model_dump(exclude={"client_secret"})
+    # "show-once" UI flow. ``client_secret_jwt_key`` is excluded
+    # from the dump because the response model re-receives the
+    # PLAINTEXT key below (the dump carries the encrypted copy).
+    response_kwargs = client.model_dump(
+        exclude={"client_secret", "client_secret_jwt_key"}
+    )
     response = OAuth2ClientWithSecret(
         **response_kwargs,
         client_secret=plaintext_secret,

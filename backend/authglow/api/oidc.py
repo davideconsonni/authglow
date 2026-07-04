@@ -387,10 +387,8 @@ async def userinfo(
 
     # Return user info excluding None values
     result = user_info.model_dump(exclude_none=True)
-    if token_data.permissions:
-        result["permissions"] = token_data.permissions
-    if token_data.roles:
-        result["roles"] = token_data.roles
+    if token_data.extra_claims:
+        result.update(token_data.extra_claims)
     return result
 
 

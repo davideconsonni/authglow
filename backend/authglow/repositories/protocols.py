@@ -36,6 +36,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from authglow.models.api_key import APIKey
+from authglow.models.api_key_claim_policy import APIKeyClaimPolicy
+from authglow.models.claim_policy import ClientClaimPolicy
 from authglow.models.email_verification import EmailVerificationToken
 from authglow.models.federation import ExternalIdpConfig
 from authglow.models.mfa import BackupCodeAttempt, BackupCodes, TrustedDevice
@@ -1024,6 +1026,72 @@ class UserPreferencesRepository(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Claim policy domain
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ClientClaimPolicyRepository(Protocol):
+    """Persistence for the per-OAuth2-client claim policy.
+
+    A claim policy is a list of declarative rules that decide
+    which custom claims (RBAC roles, RBAC permissions, user
+    attributes, static values, JWT metadata) are embedded in
+    access tokens / ID tokens / UserInfo responses, and where
+    the values come from. See
+    ``authglow.models.claim_policy.ClientClaimPolicy`` for the
+    payload schema and ``authglow.services.claim_policy`` for
+    the interpretation.
+
+    The policy is looked up at token-issuance time by
+    ``client_id`` (one policy per client, replaced on
+    update). Missing policies are not an error — the
+    ``ClaimPolicyService`` falls back to the built-in default
+    (the namespaced RBAC roles + permissions claim pair).
+    """
+
+    async def get_by_client(self, client_id: str) -> Optional[ClientClaimPolicy]:
+        """Return the policy for *client_id*, or ``None`` if no
+        policy is configured for that client."""
+
+    async def save(self, policy: ClientClaimPolicy) -> None:
+        """Persist the policy. Overwrites any prior policy for the
+        same ``client_id`` (the repository owns the
+        client_id → policy mapping)."""
+
+    async def delete(self, client_id: str) -> bool:
+        """Remove the policy for *client_id*. Returns ``True`` on
+        success, ``False`` if no policy was configured."""
+
+
+@runtime_checkable
+class APIKeyClaimPolicyRepository(Protocol):
+    """Persistence for the per-API-key claim policy.
+
+    API key counterpart of :class:`ClientClaimPolicyRepository`.
+    The payload is the same ``rules`` list; the owner key is
+    ``api_key_id`` instead of ``client_id``.
+
+    Missing policies are not an error — the
+    ``ClaimPolicyService`` falls back to the built-in default
+    (the namespaced RBAC roles + permissions claim pair).
+    """
+
+    async def get_by_api_key(self, api_key_id: str) -> Optional[APIKeyClaimPolicy]:
+        """Return the policy for *api_key_id*, or ``None`` if no
+        policy is configured for that key."""
+
+    async def save(self, policy: APIKeyClaimPolicy) -> None:
+        """Persist the policy. Overwrites any prior policy for the
+        same ``api_key_id`` (the repository owns the
+        api_key_id → policy mapping)."""
+
+    async def delete(self, api_key_id: str) -> bool:
+        """Remove the policy for *api_key_id*. Returns ``True`` on
+        success, ``False`` if no policy was configured."""
+
+
+# ---------------------------------------------------------------------------
 # KeyStore domain
 # ---------------------------------------------------------------------------
 
@@ -1089,9 +1157,11 @@ class KeyStoreRepository(Protocol):
 _ALL_PROTOCOLS: tuple[type, ...] = (
     APIKeyRepository,
     AdminActionRepository,
+    APIKeyClaimPolicyRepository,
     AuthorizationCodeRepository,
     BackupCodeAttemptRepository,
     BackupCodeRepository,
+    ClientClaimPolicyRepository,
     CSRFTokenRepository,
     EmailIndexRepository,
     EmailVerificationRepository,

@@ -11,10 +11,12 @@ if TYPE_CHECKING:
     from authglow.core.config import Settings
     from authglow.repositories.protocols import (
         AdminActionRepository,
+        APIKeyClaimPolicyRepository,
         APIKeyRepository,
         AuthorizationCodeRepository,
         BackupCodeAttemptRepository,
         BackupCodeRepository,
+        ClientClaimPolicyRepository,
         CSRFTokenRepository,
         DeviceAuthorizationRepository,
         EmailIndexRepository,
@@ -568,3 +570,54 @@ def get_device_authorization_repository(
     )
 
     return FileDeviceAuthorizationRepository(settings=settings)
+
+
+def get_claim_policy_repository(
+    settings: "Settings | None" = None,
+) -> "ClientClaimPolicyRepository":
+    """FastAPI factory for the per-client claim policy repository.
+
+    Returns a fresh ``FileClientClaimPolicyRepository`` per
+    request — the repository holds no mutable state, only
+    fsspec handles. The :class:`ClaimPolicyService` (in
+    ``services/claim_policy.py``) creates its own default
+    repository by default; this factory is exposed for FastAPI
+    route handlers or tests that want to inject the repository
+    directly.
+
+    The optional ``settings`` argument lets the caller (typically
+    the service constructor) propagate an already-resolved
+    ``Settings`` instance — same ``lru_cache`` bypass rationale
+    as :func:`get_refresh_token_repository` /
+    :func:`get_user_repository`.
+    """
+    from authglow.repositories.file.claim_policy import (
+        FileClientClaimPolicyRepository,
+    )
+
+    return FileClientClaimPolicyRepository(settings=settings)
+
+
+def get_api_key_claim_policy_repository(
+    settings: "Settings | None" = None,
+) -> "APIKeyClaimPolicyRepository":
+    """FastAPI factory for the per-API-key claim policy repository.
+
+    API key counterpart of :func:`get_claim_policy_repository`.
+    Returns a fresh ``FileAPIKeyClaimPolicyRepository`` per
+    request — the repository holds no mutable state, only
+    fsspec handles. The :class:`ClaimPolicyService` creates
+    its own default repository by default; this factory is
+    exposed for FastAPI route handlers or tests that want to
+    inject the repository directly.
+
+    The optional ``settings`` argument lets the caller (typically
+    the service constructor) propagate an already-resolved
+    ``Settings`` instance — same ``lru_cache`` bypass rationale
+    as the other factory functions.
+    """
+    from authglow.repositories.file.api_key_claim_policy import (
+        FileAPIKeyClaimPolicyRepository,
+    )
+
+    return FileAPIKeyClaimPolicyRepository(settings=settings)

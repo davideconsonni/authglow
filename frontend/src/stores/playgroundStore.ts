@@ -11,6 +11,7 @@ export type PlaygroundFlow =
   | 'oidc-discovery'
   | 'userinfo'
   | 'device-code'
+  | 'token-preview'
   | 'generic'
 
 export interface PlaygroundState {

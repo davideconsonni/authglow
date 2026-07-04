@@ -10,6 +10,7 @@ import {
   User,
   Braces,
   Smartphone,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import type { PlaygroundFlow } from '@/stores/playgroundStore'
@@ -81,6 +82,12 @@ export const FLOWS: FlowDef[] = [
     label: 'Device Code',
     icon: Smartphone,
     description: 'RFC 8628 — TV/CLI device authorization flow',
+  },
+  {
+    id: 'token-preview',
+    label: 'Token Preview',
+    icon: Sparkles,
+    description: 'Preview the namespaced custom claims a client will receive',
   },
   {
     id: 'generic',

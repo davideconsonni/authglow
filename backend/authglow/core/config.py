@@ -284,6 +284,16 @@ class Settings(BaseSettings):
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
 
+    # Default URI namespace for custom JWT claims emitted by the
+    # Claim Policy system. Per OIDC Core §5.1.2, any claim not
+    # in the OIDC standard list MUST be namespaced. The built-in
+    # templates ("rbac-roles", "rbac-permissions", "user-tenant",
+    # ...) resolve their relative claim names against this
+    # prefix at apply time. Operators should set this to a URI
+    # they control (e.g. "https://authglow.example.com/claims")
+    # so the namespacing satisfies §5.1.2 in production.
+    claim_namespace: str = "https://authglow.example.com/claims"
+
     # OIDC Discovery customization (None = use built-in defaults)
     oidc_claims_supported: Optional[str] = None  # Comma-separated, e.g. "sub,email,name"
     oidc_scopes_supported: Optional[str] = None  # Comma-separated, e.g. "openid,profile,email"

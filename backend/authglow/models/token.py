@@ -35,12 +35,16 @@ class TokenData(BaseModel):
     azp: Optional[str] = (
         None  # authorized party (OIDC Core §2) — the OAuth2 client that requested the token
     )
-    permissions: Optional[List[str]] = None  # RBAC permissions from assigned roles
-    roles: Optional[List[str]] = None  # RBAC role names
     # T.3 / RFC 9449 / RFC 7800: ``cnf`` confirmation claim binds the
     # token to a specific key. Present for DPoP-bound tokens
     # (e.g. ``{"jkt": "<thumbprint>"}``). ``None`` for legacy bearer.
     cnf: Optional[dict] = None
+    # All other claims emitted by the claim policy land here as
+    # a free-form dict so the consumer (resource server, UI)
+    # can iterate over them without the JWT layer having to
+    # model each one. Reserved claims (iss, sub, exp, ...) are
+    # kept on the typed fields above and never duplicated.
+    extra_claims: Optional[dict] = None
 
 
 class AuthorizationCode(BaseModel):
@@ -66,6 +70,14 @@ class AuthorizationCode(BaseModel):
     # acr/amr — OIDC authentication context
     acr: Optional[str] = None
     amr: Optional[List[str]] = None
+
+    # OIDC Core §5.5 — ``claims`` request parameter, stored as the
+    # parsed JSON object. The token endpoint applies the
+    # ``id_token`` portion when minting the ID token, and the
+    # ``/oauth2/userinfo`` endpoint applies the ``userinfo``
+    # portion. ``None`` when the client did not send a
+    # ``claims`` parameter (the legacy / common case).
+    requested_claims: Optional[dict] = None
 
 
 class DeviceAuthorization(BaseModel):
