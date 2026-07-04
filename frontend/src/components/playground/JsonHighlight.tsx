@@ -37,7 +37,7 @@ function highlight(json: string): string {
         html += '<span class="text-brand-violet">"' + content + '"</span>:'
         i = j + 1
       } else {
-        html += '<span class="text-emerald-300">"' + content + '"</span>'
+        html += '<span class="text-semantic-success">"' + content + '"</span>'
       }
       continue
     }
@@ -48,22 +48,22 @@ function highlight(json: string): string {
         num += json[i]
         i++
       }
-      html += '<span class="text-emerald-400">' + num + '</span>'
+      html += '<span class="text-brand-blue">' + num + '</span>'
       continue
     }
 
     if (json.slice(i, i + 4) === 'true') {
-      html += '<span class="text-amber-400">true</span>'
+      html += '<span class="text-semantic-warning">true</span>'
       i += 4
       continue
     }
     if (json.slice(i, i + 5) === 'false') {
-      html += '<span class="text-amber-400">false</span>'
+      html += '<span class="text-semantic-warning">false</span>'
       i += 5
       continue
     }
     if (json.slice(i, i + 4) === 'null') {
-      html += '<span class="text-amber-400">null</span>'
+      html += '<span class="text-semantic-warning">null</span>'
       i += 4
       continue
     }

@@ -70,7 +70,7 @@ export function AdminPlaygroundPage() {
     <div>
       <PageHeader title="API Playground" description="Step-by-step OAuth2 / OIDC flow debugger. Tokens are automatically shared between flows." />
 
-      <div className="flex flex-col md:flex-row rounded-2xl border border-surface-2 overflow-hidden">
+      <div className="flex flex-col md:flex-row rounded-2xl border border-surface-2 overflow-hidden bg-surface-1">
         <div className="hidden md:block">
           <FlowSidebar currentFlow={currentFlow} onSelect={setCurrentFlow} />
         </div>
