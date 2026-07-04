@@ -15,8 +15,6 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from main import _DEFAULT_EXECUTOR_WORKERS
-
 
 class TestLifespanExecutorPool:
     """Verify the default executor is widened in production (Tier 2.1)."""
@@ -30,7 +28,7 @@ class TestLifespanExecutorPool:
         """
         # Import inside the test so the autouse ``_override_settings``
         # fixture patches ``get_settings`` before ``main`` is loaded.
-        from main import app
+        from main import _DEFAULT_EXECUTOR_WORKERS, app
 
         async with app.router.lifespan_context(app):
             loop = asyncio.get_running_loop()
@@ -56,7 +54,7 @@ class TestLifespanExecutorPool:
         check. The precise regression lives in
         ``tests/performance/test_threadpool.py``.
         """
-        from main import app
+        from main import _DEFAULT_EXECUTOR_WORKERS, app
 
         async with app.router.lifespan_context(app):
             start = time.perf_counter()

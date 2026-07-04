@@ -10,6 +10,7 @@ Tested prompt values:
 """
 
 import asyncio
+import secrets
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import FastAPI
@@ -63,6 +64,7 @@ def _build_authorize_app_with_mocks(test_settings):
     storage.reset_failed_login_attempts = AsyncMock()
     storage.record_failed_login = AsyncMock()
     storage.update_last_login = AsyncMock()
+    storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, None))
 
     app = FastAPI()
     app.include_router(router)
@@ -117,6 +119,7 @@ class TestPromptNone:
                 "code_challenge": "challenge123",
                 "code_challenge_method": "S256",
                 "prompt": "none",
+                "state": secrets.token_urlsafe(32),
             },
         )
 
@@ -139,6 +142,7 @@ class TestPromptNone:
                 "code_challenge": "challenge123",
                 "code_challenge_method": "S256",
                 "prompt": "none",
+                "state": secrets.token_urlsafe(32),
             },
         )
 
@@ -227,6 +231,7 @@ class TestPromptConsent:
                 "prompt": "consent",
                 "email": "test@example.com",
                 "password": "GoodP@ss1!",
+                "state": secrets.token_urlsafe(32),
             },
         )
 

@@ -8,6 +8,7 @@ See ``docs/plans/CONFORMANCE_REMEDIATION_PLAN.md`` for context
 (OAuth 2.0 Security BCP §4.8.1, RFC 7636).
 """
 
+import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
@@ -193,6 +194,7 @@ class TestAuthorizePostGlobalPkceGate:
                 "code_challenge_method": "S256",
                 "email": "test@example.com",
                 "password": "BadP@ss1!",
+                "state": secrets.token_urlsafe(32),
             },
         )
 
