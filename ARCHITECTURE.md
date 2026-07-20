@@ -41,13 +41,13 @@ authglow/
 │   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
-│       ├── api/               # 16 FastAPI routers (HTTP layer, one per domain)
+│       ├── api/               # 18 FastAPI routers (HTTP layer, one per domain)
 │       ├── services/          # 27 service classes (business logic, cross-entity coordination)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
-│       │   ├── protocols.py   # 26 Protocol contracts (@runtime_checkable)
+│       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
 │       │   ├── dependencies.py# Factory functions: get_<entity>_repository()
-│       │   └── file/          # 24 File*Repository impls (JSON on disk via fsspec)
+│       │   └── file/          # 26 File*Repository impls (JSON on disk via fsspec)
 │       ├── models/            # Pydantic request/response/domain models
 │       ├── core/              # config.py, crypto.py, cache.py, concurrency.py, permissions.py
 │       └── middleware/        # Security headers, HTTPS enforcement, request size, proxy
@@ -149,7 +149,7 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 |-------------------------------------------------|-------------------------------------------------------------------------------------------|
 | `backend/main.py`                               | All middleware registration and router mounts                                             |
 | `backend/authglow/core/config.py`               | `Settings` class — all env vars read here                                                 |
-| `backend/authglow/repositories/protocols.py`    | All storage contracts (26 Protocols)                                                      |
+| `backend/authglow/repositories/protocols.py`    | All storage contracts (30 Protocols)                                                      |
 | `backend/authglow/repositories/dependencies.py` | Factory functions (one per entity)                                                        |
 | `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                                      |
 | `backend/authglow/services/claim_policy.py`     | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |

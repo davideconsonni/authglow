@@ -280,20 +280,19 @@ backend/
     models/       # Pydantic data models
     services/     # Business logic (thin facade over repositories)
     repositories/ # ⭐ NEW: Repository pattern abstraction
-      protocols.py        # 22 Protocol contracts (runtime_checkable)
+      protocols.py        # 30 Protocol contracts (runtime_checkable)
       exceptions.py       # EntityNotFoundError, EntityAlreadyExistsError
       dependencies.py     # FastAPI factory functions (one per entity)
       file/              # File-based impls (current backend)
         base.py           # BaseFileRepository (fsspec + AsyncFileSystem)
         <entity>.py       # 1 per entity (token_blacklist, csrf, user, ...)
-    api/          # FastAPI routers
   tests/
     unit/
       repositories/
-        test_protocols.py   # ⭐ 39 conformance tests (parametrized)
+        test_protocols.py   # ⭐ 20+ parametrized conformance checks
         test_in_memory.py    # ⭐ 7 in-memory smoke tests
         file/                # Per-impl File tests
-          test_<entity>.py   # 1 per entity (15 entities)
+          test_<entity>.py   # 1 per entity (20+ entities)
       test_<service>.py
     integration/  # Cross-module tests
     conftest.py   # Shared fixtures (incl. _override_settings autouse)
