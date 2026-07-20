@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Smartphone, Loader2, ShieldBan, Plus } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { formatDateTime } from '@/lib/utils'
-import { ROUTES } from '@/lib/constants'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { notify } from '@/stores/toastStore'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { formatDateTime } from '../../lib/utils'
+import { ROUTES } from '../../lib/constants'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { notify } from '../../stores/toastStore'
 
 interface DeviceAuth {
   device_code: string

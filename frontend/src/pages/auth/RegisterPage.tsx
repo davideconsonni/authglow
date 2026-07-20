@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import { AuthLayout } from '@/components/auth/AuthLayout'
-import { RegisterForm } from '@/components/auth/RegisterForm'
-import { ROUTES } from '@/lib/constants'
+import { AuthLayout } from '../../components/auth/AuthLayout'
+import { RegisterForm } from '../../components/auth/RegisterForm'
+import { ROUTES } from '../../lib/constants'
 
 export function RegisterPage() {
   return (

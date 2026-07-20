@@ -3,9 +3,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Mail, ArrowLeft } from 'lucide-react'
-import { api } from '@/lib/api'
-import { Banner } from '@/components/shared/Banner'
-import { FieldError } from '@/components/shared/FieldError'
+import { api } from '../../lib/api'
+import { Banner } from '../../components/shared/Banner'
+import { FieldError } from '../../components/shared/FieldError'
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),

@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
+import { EmailVerifiedPage } from '../../pages/auth/EmailVerifiedPage'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     post: vi.fn(),
   },
@@ -19,7 +19,7 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 const apiPostMock = api.post as ReturnType<typeof vi.fn>
 

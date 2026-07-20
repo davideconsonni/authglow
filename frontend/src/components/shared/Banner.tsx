@@ -1,6 +1,6 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '../../lib/utils'
 
 export type BannerVariant = 'error' | 'success' | 'warning' | 'info'
 export type BannerSize = 'sm' | 'md'

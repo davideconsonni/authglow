@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { Banner } from '@/components/shared/Banner'
+import { Banner } from '../../components/shared/Banner'
 
 describe('Banner', () => {
   it('renders children for the error variant with role="alert"', () => {

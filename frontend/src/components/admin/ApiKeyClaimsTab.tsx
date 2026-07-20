@@ -43,11 +43,11 @@ import {
   Database, KeyRound, Loader2, Lock, Plus, Save, Shield, Sparkles,
   Trash2, User, X, type LucideIcon,
 } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { cn } from '@/lib/utils'
-import { Banner } from '@/components/shared/Banner'
-import { notify } from '@/stores/toastStore'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { cn } from '../../lib/utils'
+import { Banner } from '../../components/shared/Banner'
+import { notify } from '../../stores/toastStore'
 
 // ---------------------------------------------------------------------------
 // Types - mirror the backend Pydantic models (with the new

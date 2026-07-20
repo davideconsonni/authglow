@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, CheckCircle, XCircle, Smartphone } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useAuth } from '@/hooks/useAuth'
-import { ROUTES } from '@/lib/constants'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { api } from '../lib/api'
+import { useAuth } from '../hooks/useAuth'
+import { ROUTES } from '../lib/constants'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 interface DeviceInfo {
   client_id: string

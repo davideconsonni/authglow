@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { Users, Shield, Loader2, Monitor, Key } from 'lucide-react'
-import { useApiQuery } from '@/hooks/useApi'
-import { ROUTES } from '@/lib/constants'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useApiQuery } from '../../hooks/useApi'
+import { ROUTES } from '../../lib/constants'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 interface AdminStats {
   total_users: number

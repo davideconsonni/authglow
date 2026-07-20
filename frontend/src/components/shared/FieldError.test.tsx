@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { FieldError } from '@/components/shared/FieldError'
+import { FieldError } from '../../components/shared/FieldError'
 
 describe('FieldError', () => {
   it('renders children with role="alert"', () => {

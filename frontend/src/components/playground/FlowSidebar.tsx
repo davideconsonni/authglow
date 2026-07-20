@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils'
-import type { PlaygroundFlow } from '@/stores/playgroundStore'
+import { cn } from '../../lib/utils'
+import type { PlaygroundFlow } from '../../stores/playgroundStore'
 import { FLOWS } from './flows'
 
 interface FlowSidebarProps {

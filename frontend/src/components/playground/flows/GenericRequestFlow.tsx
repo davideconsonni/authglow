@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Send, Loader2, Globe } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../../lib/api'
 import { ResponsePanel } from '../ResponsePanel'
 
 export function GenericRequestFlow() {

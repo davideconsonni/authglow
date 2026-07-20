@@ -1,6 +1,6 @@
 import { CheckCircle, XCircle, Info, X } from 'lucide-react'
-import { useToastStore, type ToastType } from '@/stores/toastStore'
-import { cn } from '@/lib/utils'
+import { useToastStore, type ToastType } from '../../stores/toastStore'
+import { cn } from '../../lib/utils'
 
 const ICONS: Record<ToastType, typeof CheckCircle> = {
   success: CheckCircle,

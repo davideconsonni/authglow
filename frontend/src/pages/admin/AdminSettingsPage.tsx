@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Loader2, Save, RotateCcw, AlertTriangle, SlidersHorizontal } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { notify } from '@/stores/toastStore'
-import { cn } from '@/lib/utils'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { notify } from '../../stores/toastStore'
+import { cn } from '../../lib/utils'
 
 interface SettingField {
   key: string

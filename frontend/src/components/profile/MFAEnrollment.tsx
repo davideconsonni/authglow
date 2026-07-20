@@ -13,7 +13,7 @@ import {
   Shield,
   RefreshCw,
 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 const verifySchema = z.object({
   code: z.string().length(6, 'Enter the 6-digit code from your app'),

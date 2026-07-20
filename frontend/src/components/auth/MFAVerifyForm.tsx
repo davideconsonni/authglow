@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, Timer } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/authStore'
+import { api } from '../../lib/api'
+import { useAuthStore } from '../../stores/authStore'
 import { useNavigate } from 'react-router-dom'
-import { ROUTES } from '@/lib/constants'
-import { Banner } from '@/components/shared/Banner'
+import { ROUTES } from '../../lib/constants'
+import { Banner } from '../../components/shared/Banner'
 
 export function MFAVerifyForm() {
   const [searchParams] = useSearchParams()

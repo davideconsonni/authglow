@@ -3,8 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Eye, EyeOff, Lock } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useAuth } from '@/hooks/useAuth'
+import { api } from '../../lib/api'
+import { useAuth } from '../../hooks/useAuth'
 
 const changePasswordSchema = z
   .object({

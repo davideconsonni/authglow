@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Fingerprint, Loader2 } from 'lucide-react'
 import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
-import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/authStore'
-import { getSavedEmail } from '@/lib/loginStorage'
-import { Banner } from '@/components/shared/Banner'
+import { api } from '../../lib/api'
+import { useAuthStore } from '../../stores/authStore'
+import { getSavedEmail } from '../../lib/loginStorage'
+import { Banner } from '../../components/shared/Banner'
 
 export function PasskeyLoginButton() {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated)

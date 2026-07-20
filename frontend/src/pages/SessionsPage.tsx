@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Monitor, Globe, Loader2, Trash2 } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { formatDateTime } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { notify } from '@/stores/toastStore'
+import { api } from '../lib/api'
+import { useApiQuery } from '../hooks/useApi'
+import { ConfirmDialog } from '../components/shared/ConfirmDialog'
+import { PageHeader } from '../components/layout/PageHeader'
+import { formatDateTime } from '../lib/utils'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { notify } from '../stores/toastStore'
 
 interface Session {
   id: string

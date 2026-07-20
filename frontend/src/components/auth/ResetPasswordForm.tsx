@@ -4,10 +4,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import { Loader2, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react'
-import { api } from '@/lib/api'
-import { ROUTES } from '@/lib/constants'
-import { Banner } from '@/components/shared/Banner'
-import { FieldError } from '@/components/shared/FieldError'
+import { api } from '../../lib/api'
+import { ROUTES } from '../../lib/constants'
+import { Banner } from '../../components/shared/Banner'
+import { FieldError } from '../../components/shared/FieldError'
 
 const resetPasswordSchema = z
   .object({

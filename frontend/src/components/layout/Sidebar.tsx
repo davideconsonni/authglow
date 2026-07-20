@@ -21,9 +21,9 @@ import {
   Gauge,
   type LucideIcon,
 } from 'lucide-react'
-import { ROUTES } from '@/lib/constants'
-import { cn } from '@/lib/utils'
-import { useAuth } from '@/hooks/useAuth'
+import { ROUTES } from '../../lib/constants'
+import { cn } from '../../lib/utils'
+import { useAuth } from '../../hooks/useAuth'
 
 interface NavSection {
   label: string

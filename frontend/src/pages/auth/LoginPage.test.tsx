@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { LoginPage } from '@/pages/auth/LoginPage'
+import { LoginPage } from '../../pages/auth/LoginPage'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     post: vi.fn(),
   },
@@ -19,23 +19,23 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-vi.mock('@/components/auth/LoginForm', () => ({
+vi.mock('../../components/auth/LoginForm', () => ({
   LoginForm: () => <div data-testid="login-form">LoginForm</div>,
 }))
 
-vi.mock('@/components/auth/PasskeyLoginButton', () => ({
+vi.mock('../../components/auth/PasskeyLoginButton', () => ({
   PasskeyLoginButton: () => <div data-testid="passkey-btn">Passkey</div>,
 }))
 
-vi.mock('@/components/auth/FederationLoginButtons', () => ({
+vi.mock('../../components/auth/FederationLoginButtons', () => ({
   FederationLoginButtons: () => <div data-testid="federation-btns">Federation</div>,
 }))
 
-vi.mock('@/hooks/useDocumentTitle', () => ({
+vi.mock('../../hooks/useDocumentTitle', () => ({
   useDocumentTitle: vi.fn(),
 }))
 
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 const apiPostMock = api.post as ReturnType<typeof vi.fn>
 

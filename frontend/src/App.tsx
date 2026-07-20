@@ -1,80 +1,80 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AppShell } from '@/components/layout/AppShell'
-import { LoadingState } from '@/components/shared/LoadingState'
-import { ROUTES } from '@/lib/constants'
-import { useAuth } from '@/hooks/useAuth'
-import { useAuthStore } from '@/stores/authStore'
-import { useTheme } from '@/hooks/useTheme'
-import { CommandPalette } from '@/components/admin/CommandPalette'
-import { api } from '@/lib/api'
+import { AppShell } from './components/layout/AppShell'
+import { LoadingState } from './components/shared/LoadingState'
+import { ROUTES } from './lib/constants'
+import { useAuth } from './hooks/useAuth'
+import { useAuthStore } from './stores/authStore'
+import { useTheme } from './hooks/useTheme'
+import { CommandPalette } from './components/admin/CommandPalette'
+import { api } from './lib/api'
 
-import { LoginPage } from '@/pages/auth/LoginPage'
-import { RegisterPage } from '@/pages/auth/RegisterPage'
-import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
-import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
-import { EmailVerifiedPage } from '@/pages/auth/EmailVerifiedPage'
-import { OAuthAuthorizePage } from '@/pages/OAuthAuthorizePage'
-import { DeviceVerificationPage } from '@/pages/DeviceVerificationPage'
-import { MFAVerifyPage } from '@/pages/auth/MFAVerifyPage'
-import { DashboardPage } from '@/pages/DashboardPage'
-import { ProfilePage } from '@/pages/ProfilePage'
-import { SessionsPage } from '@/pages/SessionsPage'
-import { ApiKeysPage } from '@/pages/ApiKeysPage'
-import { DeviceAuthorizationsPage } from '@/pages/DeviceAuthorizationsPage'
-import { SetupPage } from '@/pages/SetupPage'
-import { NotFoundPage } from '@/pages/NotFoundPage'
-import { ToastContainer } from '@/components/shared/Toast'
+import { LoginPage } from './pages/auth/LoginPage'
+import { RegisterPage } from './pages/auth/RegisterPage'
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage'
+import { EmailVerifiedPage } from './pages/auth/EmailVerifiedPage'
+import { OAuthAuthorizePage } from './pages/OAuthAuthorizePage'
+import { DeviceVerificationPage } from './pages/DeviceVerificationPage'
+import { MFAVerifyPage } from './pages/auth/MFAVerifyPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { ProfilePage } from './pages/ProfilePage'
+import { SessionsPage } from './pages/SessionsPage'
+import { ApiKeysPage } from './pages/ApiKeysPage'
+import { DeviceAuthorizationsPage } from './pages/DeviceAuthorizationsPage'
+import { SetupPage } from './pages/SetupPage'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { ToastContainer } from './components/shared/Toast'
 
 const SecurityPage = lazy(() =>
-  import('@/pages/SecurityPage').then((m) => ({ default: m.SecurityPage })),
+  import('./pages/SecurityPage').then((m) => ({ default: m.SecurityPage })),
 )
 
 const AdminDashboardPage = lazy(() =>
-  import('@/pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
+  import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
 )
 const AdminUsersPage = lazy(() =>
-  import('@/pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
+  import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
 )
 const AdminOAuthClientsPage = lazy(() =>
-  import('@/pages/admin/AdminOAuthClientsPage').then((m) => ({ default: m.AdminOAuthClientsPage })),
+  import('./pages/admin/AdminOAuthClientsPage').then((m) => ({ default: m.AdminOAuthClientsPage })),
 )
 const AdminSessionsPage = lazy(() =>
-  import('@/pages/admin/AdminSessionsPage').then((m) => ({ default: m.AdminSessionsPage })),
+  import('./pages/admin/AdminSessionsPage').then((m) => ({ default: m.AdminSessionsPage })),
 )
 const AdminConsentsPage = lazy(() =>
-  import('@/pages/admin/AdminConsentsPage').then((m) => ({ default: m.AdminConsentsPage })),
+  import('./pages/admin/AdminConsentsPage').then((m) => ({ default: m.AdminConsentsPage })),
 )
 const AdminApiKeysPage = lazy(() =>
-  import('@/pages/admin/AdminApiKeysPage').then((m) => ({ default: m.AdminApiKeysPage })),
+  import('./pages/admin/AdminApiKeysPage').then((m) => ({ default: m.AdminApiKeysPage })),
 )
 const AdminRbacPage = lazy(() =>
-  import('@/pages/admin/AdminRbacPage').then((m) => ({ default: m.AdminRbacPage })),
+  import('./pages/admin/AdminRbacPage').then((m) => ({ default: m.AdminRbacPage })),
 )
 const AdminJwkKeysPage = lazy(() =>
-  import('@/pages/admin/AdminJwkKeysPage').then((m) => ({ default: m.AdminJwkKeysPage })),
+  import('./pages/admin/AdminJwkKeysPage').then((m) => ({ default: m.AdminJwkKeysPage })),
 )
 const AdminPasswordResetsPage = lazy(() =>
-  import('@/pages/admin/AdminPasswordResetsPage').then((m) => ({ default: m.AdminPasswordResetsPage })),
+  import('./pages/admin/AdminPasswordResetsPage').then((m) => ({ default: m.AdminPasswordResetsPage })),
 )
 const AdminPlaygroundPage = lazy(() =>
-  import('@/pages/admin/AdminPlaygroundPage').then((m) => ({ default: m.AdminPlaygroundPage })),
+  import('./pages/admin/AdminPlaygroundPage').then((m) => ({ default: m.AdminPlaygroundPage })),
 )
 const AdminFederationPage = lazy(() =>
-  import('@/pages/admin/AdminFederationPage').then((m) => ({ default: m.AdminFederationPage })),
+  import('./pages/admin/AdminFederationPage').then((m) => ({ default: m.AdminFederationPage })),
 )
 const AdminDeviceAuthsPage = lazy(() =>
-  import('@/pages/admin/AdminDeviceAuthsPage').then((m) => ({ default: m.AdminDeviceAuthsPage })),
+  import('./pages/admin/AdminDeviceAuthsPage').then((m) => ({ default: m.AdminDeviceAuthsPage })),
 )
 const DeviceAuthNewTool = lazy(() =>
-  import('@/pages/admin/DeviceAuthNewTool').then((m) => ({ default: m.DeviceAuthNewTool })),
+  import('./pages/admin/DeviceAuthNewTool').then((m) => ({ default: m.DeviceAuthNewTool })),
 )
 const AdminSettingsPage = lazy(() =>
-  import('@/pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
+  import('./pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
 )
 const AdminRateLimitsPage = lazy(() =>
-  import('@/pages/admin/AdminRateLimitsPage').then((m) => ({ default: m.AdminRateLimitsPage })),
+  import('./pages/admin/AdminRateLimitsPage').then((m) => ({ default: m.AdminRateLimitsPage })),
 )
 
 const queryClient = new QueryClient({

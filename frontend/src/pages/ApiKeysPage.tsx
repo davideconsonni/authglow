@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle, Pencil, X } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { formatDateTime } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { notify } from '@/stores/toastStore'
+import { api } from '../lib/api'
+import { useApiQuery } from '../hooks/useApi'
+import { ConfirmDialog } from '../components/shared/ConfirmDialog'
+import { PageHeader } from '../components/layout/PageHeader'
+import { formatDateTime } from '../lib/utils'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { notify } from '../stores/toastStore'
 
 interface ApiKeyData {
   key_id: string

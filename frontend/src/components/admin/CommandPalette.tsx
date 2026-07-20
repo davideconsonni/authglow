@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, Key, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/lib/api'
-import { ROUTES } from '@/lib/constants'
+import { api } from '../../lib/api'
+import { ROUTES } from '../../lib/constants'
 
 interface UserResult {
   id: string

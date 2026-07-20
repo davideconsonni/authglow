@@ -18,11 +18,11 @@ const mockQueryData = vi.hoisted(() => ({
   policy: null as unknown,
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../../lib/api', () => ({
   api: mockApi,
 }))
 
-vi.mock('@/hooks/useApi', () => ({
+vi.mock('../../../hooks/useApi', () => ({
   useApiQuery: (key: string[]) => {
     if (key[0] === 'admin-oauth-clients') {
       return { data: mockQueryData.clients, isLoading: false }
@@ -37,7 +37,7 @@ vi.mock('@/hooks/useApi', () => ({
   },
 }))
 
-vi.mock('@/hooks/useAuth', () => ({
+vi.mock('../../../hooks/useAuth', () => ({
   useAuth: () => ({ user: { email: 'admin@test.com' } }),
 }))
 

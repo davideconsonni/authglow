@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Mail, Loader2, RefreshCw } from 'lucide-react'
-import { AuthLayout } from '@/components/auth/AuthLayout'
-import { LoginForm } from '@/components/auth/LoginForm'
-import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
-import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { ROUTES } from '@/lib/constants'
-import { api } from '@/lib/api'
+import { AuthLayout } from '../../components/auth/AuthLayout'
+import { LoginForm } from '../../components/auth/LoginForm'
+import { PasskeyLoginButton } from '../../components/auth/PasskeyLoginButton'
+import { FederationLoginButtons } from '../../components/auth/FederationLoginButtons'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { ROUTES } from '../../lib/constants'
+import { api } from '../../lib/api'
 
 export function LoginPage() {
   useDocumentTitle('Sign In')

@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { Shield } from 'lucide-react'
-import { MFAVerifyForm } from '@/components/auth/MFAVerifyForm'
+import { MFAVerifyForm } from '../../components/auth/MFAVerifyForm'
 
 export function MFAVerifyPage() {
   const [searchParams] = useSearchParams()

@@ -3,8 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
-import { ROUTES } from '@/lib/constants'
+import { api } from '../../lib/api'
+import { ROUTES } from '../../lib/constants'
 
 const setupSchema = z.object({
   email: z.string().email('Invalid email address'),

@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { LogOut, User, ChevronDown, Sun, Moon } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
-import { useTheme } from '@/hooks/useTheme'
-import { ROUTES } from '@/lib/constants'
+import { useAuth } from '../../hooks/useAuth'
+import { useTheme } from '../../hooks/useTheme'
+import { ROUTES } from '../../lib/constants'
 import { useEffect, useState } from 'react'
 
 export function TopBar() {

@@ -26,11 +26,11 @@ const mockQueryData = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   api: mockApi,
 }))
 
-vi.mock('@/hooks/useApi', () => ({
+vi.mock('../../hooks/useApi', () => ({
   useApiQuery: (key: string[]) => {
     if (key[0] === 'admin-users') {
       return { data: mockQueryData.users, refetch: mockQueryData.refetch, isLoading: false }
@@ -48,7 +48,7 @@ vi.mock('@/hooks/useApi', () => ({
   },
 }))
 
-vi.mock('@/hooks/useDocumentTitle', () => ({
+vi.mock('../../hooks/useDocumentTitle', () => ({
   useDocumentTitle: vi.fn(),
 }))
 

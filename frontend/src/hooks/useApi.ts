@@ -1,5 +1,5 @@
 import { useQuery, useMutation, type UseQueryOptions, type UseMutationOptions } from '@tanstack/react-query'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError } from '../lib/api'
 
 export function useApiQuery<T>(
   key: string[],

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
-import { api } from '@/lib/api'
-import { usePlaygroundStore, generateState } from '@/stores/playgroundStore'
+import { api } from '../../../lib/api'
+import { usePlaygroundStore, generateState } from '../../../stores/playgroundStore'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 

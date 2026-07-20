@@ -11,12 +11,12 @@ const mockStore = vi.hoisted(() => ({
   persistTokens: vi.fn(),
 }))
 
-vi.mock('@/stores/playgroundStore', () => ({
+vi.mock('../../../stores/playgroundStore', () => ({
   usePlaygroundStore: () => mockStore,
   generateState: () => 'random-state',
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../../lib/api', () => ({
   api: {
     postForm: vi.fn(),
     post: vi.fn(),

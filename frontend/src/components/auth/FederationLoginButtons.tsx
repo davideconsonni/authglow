@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Shield } from 'lucide-react'
-import { api } from '@/lib/api'
-import { API_URL } from '@/lib/constants'
+import { api } from '../../lib/api'
+import { API_URL } from '../../lib/constants'
 
 interface FedProvider {
   id: string

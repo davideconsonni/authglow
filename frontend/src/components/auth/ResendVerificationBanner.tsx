@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Mail, Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 export function ResendVerificationBanner() {
   const [loading, setLoading] = useState(false)

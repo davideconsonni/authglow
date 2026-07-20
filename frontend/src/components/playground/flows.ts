@@ -13,7 +13,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
-import type { PlaygroundFlow } from '@/stores/playgroundStore'
+import type { PlaygroundFlow } from '../../stores/playgroundStore'
 
 export interface FlowDef {
   id: PlaygroundFlow

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BookOpen, Loader2, RefreshCw } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../../lib/api'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 

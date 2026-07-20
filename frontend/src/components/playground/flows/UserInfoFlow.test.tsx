@@ -8,11 +8,11 @@ const mockStore = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
 }))
 
-vi.mock('@/stores/playgroundStore', () => ({
+vi.mock('../../../stores/playgroundStore', () => ({
   usePlaygroundStore: () => mockStore,
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../../lib/api', () => ({
   api: {
     get: vi.fn(),
   },

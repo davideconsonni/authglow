@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Shield, Globe, Mail, User, Lock, Key, ExternalLink, type LucideIcon } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 const SCOPE_ICONS: Record<string, LucideIcon> = {
   'openid': Key,

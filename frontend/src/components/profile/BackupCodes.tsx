@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { RefreshCw, Download, Copy, Check } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 interface BackupCodesProps {
   codes: string[]

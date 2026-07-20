@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Shield, Loader2, LogIn } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useAuth } from '@/hooks/useAuth'
-import { ConsentScreen } from '@/components/oauth/ConsentScreen'
-import { FederationLoginButtons } from '@/components/auth/FederationLoginButtons'
-import { PasskeyLoginButton } from '@/components/auth/PasskeyLoginButton'
-import { Banner } from '@/components/shared/Banner'
-import { LOGIN_EMAIL_KEY } from '@/lib/loginStorage'
+import { api } from '../lib/api'
+import { useAuth } from '../hooks/useAuth'
+import { ConsentScreen } from '../components/oauth/ConsentScreen'
+import { FederationLoginButtons } from '../components/auth/FederationLoginButtons'
+import { PasskeyLoginButton } from '../components/auth/PasskeyLoginButton'
+import { Banner } from '../components/shared/Banner'
+import { LOGIN_EMAIL_KEY } from '../lib/loginStorage'
 
 interface ClientInfo {
   client_name: string

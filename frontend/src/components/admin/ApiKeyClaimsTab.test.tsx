@@ -21,11 +21,11 @@ const mockQueryData = vi.hoisted(() => ({
   templates: [] as Array<Record<string, unknown>>,
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   api: mockApi,
 }))
 
-vi.mock('@/hooks/useApi', () => ({
+vi.mock('../../hooks/useApi', () => ({
   useApiQuery: (key: string[]) => {
     if (key[0] === 'claim-policy-api-key') {
       return { data: mockQueryData.policy, refetch: vi.fn(), isLoading: false }
@@ -40,7 +40,7 @@ vi.mock('@/hooks/useApi', () => ({
   },
 }))
 
-vi.mock('@/stores/toastStore', () => ({
+vi.mock('../../stores/toastStore', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 

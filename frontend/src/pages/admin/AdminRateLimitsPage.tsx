@@ -1,7 +1,7 @@
 import { Gauge, Route, Shield } from 'lucide-react'
-import { useApiQuery } from '@/hooks/useApi'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useApiQuery } from '../../hooks/useApi'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 interface RateLimitEntry {
   route: string

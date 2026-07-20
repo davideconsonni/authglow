@@ -4,11 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
-import { ROUTES } from '@/lib/constants'
-import { getSavedEmail, saveEmail } from '@/lib/loginStorage'
-import { Banner } from '@/components/shared/Banner'
-import { FieldError } from '@/components/shared/FieldError'
+import { useAuth } from '../../hooks/useAuth'
+import { ROUTES } from '../../lib/constants'
+import { getSavedEmail, saveEmail } from '../../lib/loginStorage'
+import { Banner } from '../../components/shared/Banner'
+import { FieldError } from '../../components/shared/FieldError'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Monitor, Globe, Trash2, Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { formatDateTime } from '@/lib/utils'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { formatDateTime } from '../../lib/utils'
 
 interface TrustedDevice {
   id: string

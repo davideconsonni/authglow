@@ -1,6 +1,6 @@
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 export function NotFoundPage() {
   const navigate = useNavigate()

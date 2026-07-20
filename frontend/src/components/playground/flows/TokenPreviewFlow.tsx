@@ -12,9 +12,9 @@
 
 import { useMemo, useState } from 'react'
 import { Check, Loader2, Sparkles, User, Building2, Key } from 'lucide-react'
-import { useApiQuery } from '@/hooks/useApi'
-import { useAuth } from '@/hooks/useAuth'
-import { cn } from '@/lib/utils'
+import { useApiQuery } from '../../../hooks/useApi'
+import { useAuth } from '../../../hooks/useAuth'
+import { cn } from '../../../lib/utils'
 import { FlowStepper } from '../FlowStepper'
 
 interface ClaimSourceConfig {

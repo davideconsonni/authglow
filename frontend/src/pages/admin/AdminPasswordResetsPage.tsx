@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Ban, Loader2, Trash2, KeyRound } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { CopyButton } from '@/components/shared/CopyButton'
-import { formatDateTime } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { notify } from '@/stores/toastStore'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { CopyButton } from '../../components/shared/CopyButton'
+import { formatDateTime } from '../../lib/utils'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { notify } from '../../stores/toastStore'
 
 interface ResetToken {
   token_id: string

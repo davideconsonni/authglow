@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
+import { AdminSettingsPage } from '../../pages/admin/AdminSettingsPage'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     get: vi.fn(),
     patch: vi.fn(),
@@ -21,11 +21,11 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-vi.mock('@/hooks/useAuth', () => ({
+vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({ user: { scopes: ['admin'], email: 'admin@test.com' }, isAuthenticated: true }),
 }))
 
-import { api } from '@/lib/api'
+import { api } from '../../lib/api'
 
 const apiGetMock = api.get as ReturnType<typeof vi.fn>
 

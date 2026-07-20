@@ -4,10 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { MailCheck, AlertCircle, Loader2, RefreshCw, KeyRound } from 'lucide-react'
-import { ApiError, api } from '@/lib/api'
-import { ROUTES } from '@/lib/constants'
-import { Banner } from '@/components/shared/Banner'
-import { FieldError } from '@/components/shared/FieldError'
+import { ApiError, api } from '../../lib/api'
+import { ROUTES } from '../../lib/constants'
+import { Banner } from '../../components/shared/Banner'
+import { FieldError } from '../../components/shared/FieldError'
 
 const verificationCodeSchema = z.object({
   verification_code: z

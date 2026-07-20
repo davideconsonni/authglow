@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Plus, Loader2, Save, Trash2, Edit, Power, PowerOff } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useApiQuery } from '@/hooks/useApi'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { Banner } from '@/components/shared/Banner'
-import { notify } from '@/stores/toastStore'
-import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { api } from '../../lib/api'
+import { useApiQuery } from '../../hooks/useApi'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { Banner } from '../../components/shared/Banner'
+import { notify } from '../../stores/toastStore'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 interface FederationProvider {
   id: string

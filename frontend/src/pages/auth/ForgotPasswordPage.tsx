@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import { AuthLayout } from '@/components/auth/AuthLayout'
-import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm'
-import { ROUTES } from '@/lib/constants'
+import { AuthLayout } from '../../components/auth/AuthLayout'
+import { ForgotPasswordForm } from '../../components/auth/ForgotPasswordForm'
+import { ROUTES } from '../../lib/constants'
 
 export function ForgotPasswordPage() {
   return (

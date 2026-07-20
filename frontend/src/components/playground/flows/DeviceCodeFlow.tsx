@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowRight, Loader2, RefreshCw, Copy, Check } from 'lucide-react'
-import { api } from '@/lib/api'
-import { usePlaygroundStore } from '@/stores/playgroundStore'
+import { api } from '../../../lib/api'
+import { usePlaygroundStore } from '../../../stores/playgroundStore'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 
