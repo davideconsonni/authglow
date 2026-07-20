@@ -760,7 +760,7 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
 // API_KEY_FIELD source + the dedicated API key context)
 // ---------------------------------------------------------------------------
 
-function PayloadPreview({ payload, reserved }: { payload: Record<string, unknown>; reserved: Set<string> }) {
+function PayloadPreview({ payload, reserved: _reserved }: { payload: Record<string, unknown>; reserved: Set<string> }) {
   const keys = Object.keys(payload)
   return (
     <div className="rounded-lg border border-surface-2 bg-bg-primary p-3" data-testid="api-key-claim-policy-preview">

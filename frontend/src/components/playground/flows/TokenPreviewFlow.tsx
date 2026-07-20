@@ -11,8 +11,7 @@
 // output of the rule that produces it.
 
 import { useMemo, useState } from 'react'
-import { Check, KeyRound, Loader2, Sparkles, User, Building2, Key } from 'lucide-react'
-import { api } from '@/lib/api'
+import { Check, Loader2, Sparkles, User, Building2, Key } from 'lucide-react'
 import { useApiQuery } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
@@ -64,16 +63,6 @@ interface ApiKey {
 }
 
 type TokenKind = 'client' | 'api_key'
-
-const OIDC_STANDARD_CLAIMS = new Set<string>([
-  'iss', 'sub', 'aud', 'exp', 'iat', 'jti', 'nbf', 'azp', 'cnf',
-  'name', 'given_name', 'family_name', 'middle_name', 'nickname',
-  'preferred_username', 'profile', 'picture', 'website', 'gender',
-  'birthdate', 'zoneinfo', 'locale', 'updated_at',
-  'email', 'email_verified', 'phone_number', 'phone_number_verified',
-  'address', 'nonce', 'auth_time', 'acr', 'amr', 'sid', 'at_hash', 'c_hash',
-  'client_id', 'scope', 'scp', 'token_type',
-])
 
 const RESERVED_CLAIMS = new Set<string>([
   'iss', 'sub', 'aud', 'exp', 'iat', 'jti', 'nbf', 'azp', 'cnf', 'token_type',

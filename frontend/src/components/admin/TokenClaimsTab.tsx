@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronRight, Copy,
+  AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronRight,
   Database, KeyRound, Loader2, Lock, Plus, Save, Sparkles, Trash2, User, X,
   type LucideIcon,
 } from 'lucide-react'
@@ -687,7 +687,7 @@ function buildPreviewPayload(rules: ClaimRulePayload[]): Record<string, unknown>
   return out
 }
 
-function PayloadPreview({ payload, reserved }: { payload: Record<string, unknown>; reserved: Set<string> }) {
+function PayloadPreview({ payload, reserved: _reserved }: { payload: Record<string, unknown>; reserved: Set<string> }) {
   const keys = Object.keys(payload)
   const formatted = JSON.stringify(payload, null, 2)
   return (
