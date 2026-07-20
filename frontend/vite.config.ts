@@ -5,12 +5,15 @@ import { join } from 'node:path'
 
 function resolveAtAlias() {
   const src = join(process.cwd(), 'src')
+  console.error('[resolve-at-alias] cwd:', process.cwd())
+  console.error('[resolve-at-alias] src:', src)
   return {
     name: 'resolve-at-alias',
     async resolveId(id: string, importer: string | undefined, opts: { skipSelf?: boolean }) {
       if (!id.startsWith('@/')) return null
       const absolute = join(src, id.slice(2))
       const result = await this.resolve(absolute, importer, { ...opts, skipSelf: true })
+      if (!result) console.error('[resolve-at-alias] FAILED:', id, '->', absolute)
       return result || null
     },
   }
