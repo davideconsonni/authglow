@@ -257,6 +257,7 @@ npm run test:e2e   # Playwright end-to-end
 - [ARCHITECTURE.md](ARCHITECTURE.md) — directory map, request lifecycle, where to add what
 - [DESIGN.md](DESIGN.md) — design system and visual language
 - [AGENTS.md](AGENTS.md) — developer guide for AI coding agents
+- [docs/QUICK_SETUP.md](docs/QUICK_SETUP.md) — zero-to-signed-in setup guide (local + deployed)
 - [docs/CIE.md](docs/CIE.md) — Italian Electronic Identity Card (CIE) integration guide
 - [docs/GOOGLE.md](docs/GOOGLE.md) — Google OIDC integration guide
 - [SECURITY.md](SECURITY.md) — vulnerability reporting and scope

@@ -23,7 +23,7 @@ For code style, naming, and test commands see `AGENTS.md`.
 | New UI primitive                       | `frontend/src/components/ui/<name>.tsx` (shadcn/ui pattern)                                            |
 | New state store                        | `frontend/src/stores/<name>Store.ts` → Zustand                                                         |
 | New API hook                           | `frontend/src/hooks/use<Name>.ts` → wraps `useApiQuery`/`useApiMutation`                               |
-| New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)          |
+| New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)         |
 | New API constant / route path          | `frontend/src/lib/constants.ts`                                                                        |
 | HTTP client change                     | `frontend/src/lib/api.ts`                                                                              |
 
@@ -145,18 +145,18 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 
 ## Key Files
 
-| File                                            | Why important                                                         |
-|-------------------------------------------------|-----------------------------------------------------------------------|
-| `backend/main.py`                               | All middleware registration and router mounts                         |
-| `backend/authglow/core/config.py`               | `Settings` class — all env vars read here                             |
-| `backend/authglow/repositories/protocols.py`    | All storage contracts (26 Protocols)                                  |
-| `backend/authglow/repositories/dependencies.py` | Factory functions (one per entity)                                    |
-| `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                  |
+| File                                            | Why important                                                                             |
+|-------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `backend/main.py`                               | All middleware registration and router mounts                                             |
+| `backend/authglow/core/config.py`               | `Settings` class — all env vars read here                                                 |
+| `backend/authglow/repositories/protocols.py`    | All storage contracts (26 Protocols)                                                      |
+| `backend/authglow/repositories/dependencies.py` | Factory functions (one per entity)                                                        |
+| `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                                      |
 | `backend/authglow/services/claim_policy.py`     | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
-| `backend/authglow/models/claim_policy.py`       | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)  |
-| `frontend/src/App.tsx`                          | All routes, providers, guards                                         |
-| `frontend/src/lib/api.ts`                       | HTTP client with auto-refresh, 429 handling, session-expired dispatch |
-| `frontend/src/lib/constants.ts`                 | `ROUTES` object and `API_URL`                                         |
+| `backend/authglow/models/claim_policy.py`       | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
+| `frontend/src/App.tsx`                          | All routes, providers, guards                                                             |
+| `frontend/src/lib/api.ts`                       | HTTP client with auto-refresh, 429 handling, session-expired dispatch                     |
+| `frontend/src/lib/constants.ts`                 | `ROUTES` object and `API_URL`                                                             |
 
 ## Claim Policy System (OIDC §5.1.2 namespacing)
 
