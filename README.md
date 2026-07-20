@@ -178,6 +178,40 @@ authglow/
 
 ## ☁️ Deployment
 
+### Required Environment Variables
+
+These have **no default value** — the app refuses to start if they're missing:
+
+| Variable | Purpose | Min Length |
+|---|---|---|
+| `SECRET_KEY` | Encrypts sessions, signed cookies, and the JWT keyring at rest | 32 chars |
+
+Generate a production-safe secret:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Set it as an environment variable on your platform (Docker `--env-file`, Render dashboard, Cloud Run secrets, etc.).
+
+### Recommended for Production
+
+These have defaults that work locally but **must be changed** before going live:
+
+| Variable | Default | Production Value |
+|---|---|---|
+| `APP_ENV` | `development` | `production` |
+| `BASE_URL` | `http://localhost:8000` | Your public URL (e.g. `https://auth.example.com`) |
+| `ISSUER` | `http://localhost:8000` | Same as `BASE_URL` |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,...` | Your frontend URL(s) |
+| `OAUTH2_CLIENT_ID` | `change-me-in-production` | A unique identifier |
+| `OAUTH2_CLIENT_SECRET` | `change-me-in-production` | At least 32 random chars |
+| `PASSKEY_RP_ID` | `localhost` | Your domain (e.g. `example.com`) |
+| `PASSKEY_ORIGIN` | `http://localhost:8000` | Your public URL |
+
+Copy `backend/.env.example` as a starting point, then override every value above.
+
+### Platforms
+
 | Platform | Notes |
 |---|---|
 | **Docker** | Backend only — see *Quick Start* above. Runs on any container host. |

@@ -191,7 +191,15 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
     enable_docs: bool = True
-    secret_key: str = Field(..., min_length=32)
+    secret_key: str = Field(
+        ...,
+        min_length=32,
+        description=(
+            "Encryption key for sessions, signed cookies, and JWT keyring at rest. "
+            "Set via the SECRET_KEY environment variable. "
+            "Generate: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        ),
+    )
     jwt_algorithm: str = "RS256"
     keys_dir: str = "data/keys"
     private_key_path: str = "data/keys/private_key.pem"
@@ -468,6 +476,17 @@ class Settings(BaseSettings):
                 UserWarning,
             )
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_secret_key_present(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("secret_key"):
+            raise ValueError(
+                "SECRET_KEY is required and must be at least 32 characters.\n"
+                "Set it via the SECRET_KEY environment variable or in your .env file.\n"
+                "Generate: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            )
+        return data
 
     @model_validator(mode="after")
     def _validate_debug_not_enabled_in_production(self):
