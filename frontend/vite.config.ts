@@ -1,11 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
-import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [
-    tsconfigPaths(),
     react(),
     visualizer({
       open: false,
@@ -14,6 +12,11 @@ export default defineConfig({
       filename: 'dist/stats.html',
     }),
   ],
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
   build: {
     rollupOptions: {
       output: {
