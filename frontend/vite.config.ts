@@ -10,10 +10,11 @@ function resolveAtAlias() {
   const src = join(__dirname, 'src')
   return {
     name: 'resolve-at-alias',
-    resolveId(id: string) {
-      if (id.startsWith('@/')) {
-        return join(src, id.slice(2))
-      }
+    async resolveId(id: string, importer: string | undefined, opts: { skipSelf?: boolean }) {
+      if (!id.startsWith('@/')) return null
+      const absolute = join(src, id.slice(2))
+      const result = await this.resolve(absolute, importer, { ...opts, skipSelf: true })
+      return result || null
     },
   }
 }
