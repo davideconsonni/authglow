@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { resolve } from 'node:path'
 
 export default defineConfig({
   plugins: [
@@ -14,7 +15,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': './src',
+      '@': resolve(process.cwd(), 'src'),
     },
   },
   build: {
