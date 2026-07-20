@@ -1,13 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import { join } from 'node:path'
 
 function resolveAtAlias() {
-  const src = join(__dirname, 'src')
+  const src = join(process.cwd(), 'src')
   return {
     name: 'resolve-at-alias',
     async resolveId(id: string, importer: string | undefined, opts: { skipSelf?: boolean }) {
