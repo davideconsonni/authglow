@@ -267,7 +267,7 @@ npm run test:e2e   # Playwright end-to-end
 
 ## 🤖 Built with AI
 
-**100% AI-generated.** Every line of backend and frontend code, every template, every piece of documentation here was written by AI models — Claude, Gemini, DeepSeek — under human direction. No manual coding.
+**100% AI-generated.** Every line of backend and frontend code, every template, every piece of documentation here was written by open-source and open-weight AI models — GLM, DeepSeek, MiniMax — under human direction. No manual coding.
 
 I decided what to build and how. The AI wrote the code.
 
