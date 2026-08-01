@@ -90,51 +90,87 @@ export function SessionsPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-surface-2 bg-surface-1">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-surface-2">
-                <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase w-32">Device</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Client</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Address</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Created</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Active</th>
-                  <th className="px-4 py-2.5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-2">
-                {sessions.map((s) => (
-                  <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
-                    <td className="px-4 py-2.5">
-                      {s.id === thisDeviceId && (
-                        <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">This device</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-primary">{s.client}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
-                        <Globe size={10} />
-                        {s.ip_address}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.created_at)}</td>
-                    <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.last_active)}</td>
-                    <td className="px-4 py-2.5">
-                      <button
-                        onClick={() => setRevokeId(s.id)}
-                        className="text-text-muted hover:text-semantic-error transition-colors"
-                        aria-label="Revoke session"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block rounded-2xl border border-surface-2 bg-surface-1">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-surface-2">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase w-32">Device</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Client</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Address</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Active</th>
+                    <th className="px-4 py-2.5" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-surface-2">
+                  {sessions.map((s) => (
+                    <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
+                      <td className="px-4 py-2.5">
+                        {s.id === thisDeviceId && (
+                          <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">This device</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-text-primary">{s.client}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
+                          <Globe size={10} />
+                          {s.ip_address}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.created_at)}</td>
+                      <td className="px-4 py-2.5 text-sm text-text-secondary">{formatDateTime(s.last_active)}</td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          onClick={() => setRevokeId(s.id)}
+                          className="text-text-muted hover:text-semantic-error transition-colors"
+                          aria-label="Revoke session"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {sessions.map((s) => (
+              <div key={s.id} className="rounded-2xl border border-surface-2 bg-surface-1 p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-text-primary truncate">{s.client}</p>
+                      {s.id === thisDeviceId && (
+                        <span className="shrink-0 inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-[10px] font-medium text-brand-violet">This device</span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
+                      <Globe size={10} />
+                      <span>{s.ip_address}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setRevokeId(s.id)}
+                    className="shrink-0 rounded-lg p-1.5 text-text-muted hover:text-semantic-error hover:bg-semantic-error/10 transition-colors"
+                    aria-label="Revoke session"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-text-muted">
+                  <span>Created {formatDateTime(s.created_at)}</span>
+                  <span>Active {formatDateTime(s.last_active)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <ConfirmDialog

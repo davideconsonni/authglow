@@ -227,9 +227,12 @@ class UserService:
 
         return result
 
-    async def update_user(self, user: User) -> User:
-        """Update an existing user (acquires per-user lock)."""
-        async with self._lock(f"user:{user.id}"):
+    async def update_user(self, user: User, *, acquire_lock: bool = True) -> User:
+        """Update an existing user, optionally reusing an outer user lock."""
+        if acquire_lock:
+            async with self._lock(f"user:{user.id}"):
+                await self._user_repo.update(user)
+        else:
             await self._user_repo.update(user)
         user_cache.pop(user.email.lower(), None)
         return user

@@ -296,13 +296,69 @@ class TestCreateEmailProvider:
             assert isinstance(provider, FileStorageEmailProvider)
 
     def test_unknown_provider_defaults_to_console(self):
-        from authglow.services.email.console import ConsoleEmailProvider
         from authglow.services.email.factory import create_email_provider
 
         with patch("authglow.services.email.factory.get_settings") as mock_settings:
+            mock_settings.return_value.email_backend = "unknown"
+            import pytest
+
+            with pytest.raises(ValueError, match="Unsupported EMAIL_BACKEND"):
+                create_email_provider()
+
+    def test_smtp_provider(self):
+        from authglow.services.email.factory import create_email_provider
+        from authglow.services.email.smtp import SMTPEmailProvider
+
+        with patch("authglow.services.email.factory.get_settings") as mock_settings:
             mock_settings.return_value.email_backend = "smtp"
+            mock_settings.return_value.smtp_host = "smtp.example.com"
+            mock_settings.return_value.smtp_port = 587
+            mock_settings.return_value.smtp_username = "user"
+            mock_settings.return_value.smtp_password = "password"
+            mock_settings.return_value.smtp_use_tls = True
+            mock_settings.return_value.email_from_address = "noreply@example.com"
+            mock_settings.return_value.email_from_name = "AuthGlow"
             provider = create_email_provider()
-            assert isinstance(provider, ConsoleEmailProvider)
+            assert isinstance(provider, SMTPEmailProvider)
+
+    def test_sendgrid_provider(self):
+        from authglow.services.email.factory import create_email_provider
+        from authglow.services.email.sendgrid import SendGridEmailProvider
+
+        with patch("authglow.services.email.factory.get_settings") as mock_settings:
+            mock_settings.return_value.email_backend = "sendgrid"
+            mock_settings.return_value.sendgrid_api_key = "test-key"
+            mock_settings.return_value.email_from_address = "noreply@example.com"
+            mock_settings.return_value.email_from_name = "AuthGlow"
+            provider = create_email_provider()
+            assert isinstance(provider, SendGridEmailProvider)
+
+    def test_mailgun_provider(self):
+        from authglow.services.email.factory import create_email_provider
+        from authglow.services.email.mailgun import MailgunEmailProvider
+
+        with patch("authglow.services.email.factory.get_settings") as mock_settings:
+            mock_settings.return_value.email_backend = "mailgun"
+            mock_settings.return_value.mailgun_api_key = "test-key"
+            mock_settings.return_value.mailgun_domain = "mg.example.com"
+            mock_settings.return_value.mailgun_base_url = "https://api.eu.mailgun.net"
+            mock_settings.return_value.email_from_address = "noreply@example.com"
+            mock_settings.return_value.email_from_name = "AuthGlow"
+            provider = create_email_provider()
+            assert isinstance(provider, MailgunEmailProvider)
+
+    def test_resend_provider(self):
+        from authglow.services.email.factory import create_email_provider
+        from authglow.services.email.resend import ResendEmailProvider
+
+        with patch("authglow.services.email.factory.get_settings") as mock_settings:
+            mock_settings.return_value.email_backend = "resend"
+            mock_settings.return_value.resend_api_key = "test-key"
+            mock_settings.return_value.resend_base_url = "https://api.resend.com"
+            mock_settings.return_value.email_from_address = "noreply@example.com"
+            mock_settings.return_value.email_from_name = "AuthGlow"
+            provider = create_email_provider()
+            assert isinstance(provider, ResendEmailProvider)
 
 
 class TestEmailService:

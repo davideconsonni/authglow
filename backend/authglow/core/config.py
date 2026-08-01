@@ -111,6 +111,15 @@ def get_or_generate_keyring(
 
     try:
         asyncio.run(_run())
+    except RuntimeError:
+        # Python 3.13 — ``asyncio.run()`` raises when there is
+        # already a running event loop (e.g. uvicorn's spawn
+        # process).  Fall back to running in a new thread with
+        # its own event loop so the keyring bootstrap still
+        # completes before the first JWT is needed.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(asyncio.run, _run()).result()
     finally:
         if previous_loop is not None:
             try:
@@ -392,25 +401,30 @@ class Settings(BaseSettings):
     passkey_origin: str = "http://localhost:8000"
 
     # Email settings
-    email_backend: str = "console"  # console, file_storage
-    email_provider: Optional[str] = None  # For future use with real email services
+    email_backend: str = "console"  # console, file_storage, smtp, sendgrid, mailgun, resend
+    email_provider: Optional[str] = None  # Deprecated alias; use email_backend
     email_from_address: str = "noreply@authglow.example.com"
     email_from_name: str = "AuthGlow"
     email_storage_path: str = "data/users/emails"
 
-    # SMTP Settings (if email_provider = "smtp")
+    # SMTP Settings (if email_backend = "smtp")
     smtp_host: Optional[str] = None
     smtp_port: int = 587
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
     smtp_use_tls: bool = True
 
-    # SendGrid Settings (if email_provider = "sendgrid")
+    # SendGrid Settings (if email_backend = "sendgrid")
     sendgrid_api_key: Optional[str] = None
 
-    # Mailgun Settings (if email_provider = "mailgun")
+    # Mailgun Settings (if email_backend = "mailgun")
     mailgun_api_key: Optional[str] = None
     mailgun_domain: Optional[str] = None
+    mailgun_base_url: str = "https://api.mailgun.net"
+
+    # Resend Settings (if email_backend = "resend")
+    resend_api_key: Optional[str] = None
+    resend_base_url: str = "https://api.resend.com"
 
     # Base URL for links in emails
     base_url: str = "http://localhost:8000"

@@ -1,9 +1,16 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, ChevronDown, Sun, Moon } from 'lucide-react'
+import { LogOut, User, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 import { ROUTES } from '../../lib/constants'
 import { useEffect, useState } from 'react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '../../components/ui/dropdown-menu'
 
 export function TopBar() {
   const { user, logout } = useAuth()
@@ -37,40 +44,47 @@ export function TopBar() {
         >
           {isLight ? <Moon size={18} /> : <Sun size={18} />}
         </button>
-        <div className="dropdown">
-          <button
-            className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors"
-            onClick={(e) => {
-              const menu = e.currentTarget.nextElementSibling
-              if (menu) menu.classList.toggle('hidden')
-            }}
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet/20 text-brand-violet text-sm font-medium">
-              {user?.first_name?.charAt(0) || 'U'}
-            </div>
-            <span className="hidden sm:inline">
-              {user ? `${user.first_name} ${user.last_name}` : 'User'}
-            </span>
-            <ChevronDown size={14} />
-          </button>
-          <div className="absolute right-6 top-14 z-50 mt-1 hidden w-48 rounded-xl border border-surface-2 bg-surface-1 shadow-glow-violet">
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
+              className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors outline-none"
+              data-testid="user-menu-trigger"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet/20 text-brand-violet text-sm font-medium">
+                {user?.first_name?.charAt(0) || 'U'}
+              </div>
+              <span className="hidden sm:inline">
+                {user ? `${user.first_name} ${user.last_name}` : 'User'}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-text-muted">
+                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={8}
+            className="w-48 rounded-xl border border-surface-2 bg-surface-1 shadow-glow-violet"
+          >
+            <DropdownMenuItem
               onClick={() => navigate(ROUTES.PROFILE)}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors rounded-t-xl"
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-text-secondary cursor-pointer focus:bg-surface-2 focus:text-text-primary"
             >
               <User size={16} />
               Profile
-            </button>
-            <button
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-surface-2" />
+            <DropdownMenuItem
               onClick={handleLogout}
               data-testid="logout-btn"
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-semantic-error hover:bg-surface-2 transition-colors rounded-b-xl"
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-semantic-error cursor-pointer focus:bg-surface-2 focus:text-semantic-error"
             >
               <LogOut size={16} />
               Logout
-            </button>
-          </div>
-        </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

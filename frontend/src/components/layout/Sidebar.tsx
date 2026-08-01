@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -40,6 +40,8 @@ export function Sidebar() {
   const [isMobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useAuth()
+  const mobileNavRef = useRef<HTMLElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const isAdmin = user?.scopes?.includes('admin')
 
@@ -79,27 +81,98 @@ export function Sidebar() {
     })
   }
 
-  const sidebarContent = (
+  const closeMobile = useCallback(() => {
+    setMobileOpen(false)
+    previousFocusRef.current?.focus()
+  }, [])
+
+  // Escape key handler + focus trap for mobile sidebar
+  useEffect(() => {
+    if (!isMobileOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeMobile()
+        return
+      }
+
+      // Focus trap
+      if (e.key === 'Tab' && mobileNavRef.current) {
+        const focusable = mobileNavRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
+
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    // Auto-focus first nav item
+    requestAnimationFrame(() => {
+      const firstLink = mobileNavRef.current?.querySelector<HTMLElement>('a[href]')
+      firstLink?.focus()
+    })
+
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isMobileOpen, closeMobile])
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isMobileOpen])
+
+  const openMobile = () => {
+    previousFocusRef.current = document.activeElement as HTMLElement
+    setMobileOpen(true)
+  }
+
+  const sidebarContent = (isMobile: boolean) => (
     <div
       className={cn(
         'flex h-full flex-col bg-surface-1 border-r border-surface-2 transition-all duration-300 scrollbar-dark',
-        collapsed ? 'w-16' : 'w-64',
+        collapsed && !isMobile ? 'w-16' : 'w-64',
       )}
     >
       <div className="flex h-16 items-center justify-between px-4 border-b border-surface-2">
         {!collapsed && (
           <span className="text-lg font-bold gradient-text">AuthGlow</span>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <Menu size={18} />
-        </button>
+        {!isMobile && (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <Menu size={18} />
+          </button>
+        )}
+        {isMobile && (
+          <button
+            onClick={closeMobile}
+            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 space-y-6">
+      <nav ref={isMobile ? mobileNavRef : undefined} className="flex-1 overflow-y-auto py-4 space-y-6">
         {sections.map((section) => (
           <div key={section.label} className="px-3">
             {!collapsed && (
@@ -115,17 +188,17 @@ export function Sidebar() {
                       <NavLink
                         to={item.to}
                         end={isTopLevel}
-                        onClick={() => setMobileOpen(false)}
+                        onClick={isMobile ? closeMobile : undefined}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-xl px-3 min-h-[44px] py-2.5 text-sm font-medium transition-all duration-150',
                         isActive
                           ? 'bg-brand-violet/15 text-brand-violet shadow-glow-violet'
                           : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
-                        collapsed && 'justify-center px-2',
+                        collapsed && !isMobile && 'justify-center px-2',
                       )
                     }
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed && !isMobile ? item.label : undefined}
                   >
                     <item.icon size={20} />
                     {!collapsed && <span>{item.label}</span>}
@@ -142,42 +215,47 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:block" data-testid="sidebar">{sidebarContent}</aside>
-
-      {/* Mobile sidebar overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {/* Mobile sidebar */}
-      {isMobileOpen && (
-        <aside className="fixed inset-y-0 left-0 z-50 md:hidden">
-          {sidebarContent}
-        </aside>
-      )}
+      <aside className="hidden md:block" data-testid="sidebar">{sidebarContent(false)}</aside>
 
       {/* Mobile toggle */}
       <button
-        onClick={() => setMobileOpen(true)}
+        onClick={openMobile}
         className="fixed top-4 left-4 z-30 rounded-xl p-2 bg-surface-1 border border-surface-2 text-text-secondary md:hidden"
         aria-label="Open sidebar"
       >
         <Menu size={20} />
       </button>
 
-      {/* Mobile close button */}
-      {isMobileOpen && (
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="fixed top-4 left-[calc(16rem+1rem)] z-50 rounded-xl p-2 bg-surface-1 border border-surface-2 text-text-secondary md:hidden"
-          aria-label="Close sidebar"
+      {/* Mobile sidebar */}
+      <div
+        className={cn(
+          'fixed inset-0 z-50 md:hidden transition-opacity duration-300',
+          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+        )}
+      >
+        {/* Backdrop */}
+        <div
+          className={cn(
+            'absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300',
+            isMobileOpen ? 'opacity-100' : 'opacity-0',
+          )}
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+
+        {/* Panel */}
+        <aside
+          className={cn(
+            'absolute inset-y-0 left-0 z-50 transition-transform duration-300 ease-out',
+            isMobileOpen ? 'translate-x-0' : '-translate-x-full',
+          )}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
         >
-          <X size={20} />
-        </button>
-      )}
+          {sidebarContent(true)}
+        </aside>
+      </div>
     </>
   )
 }

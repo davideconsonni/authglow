@@ -857,6 +857,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - **smtp** — sends via SMTP server
 - **sendgrid** — SendGrid API
 - **mailgun** — Mailgun API
+- **resend** — Resend API
 
 ### Email Templates
 - HTML + text for each type:
@@ -871,7 +872,8 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - `EMAIL_BACKEND`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`
 - SMTP: host, port, username, password, TLS
 - SendGrid: API key
-- Mailgun: API key, domain
+- Mailgun: API key, domain, optional API base URL for EU domains
+- Resend: API key, optional API base URL
 
 ---
 

@@ -31,6 +31,7 @@ interface CreateForm {
   scopes: string
   expires_in_days: string
   allowed_ips: string
+  tier: string
 }
 
 interface EditForm {
@@ -38,6 +39,7 @@ interface EditForm {
   description: string
   scopes: string
   allowed_ips: string
+  tier: string
 }
 
 interface CreatedKey {
@@ -57,6 +59,7 @@ const initialForm: CreateForm = {
   scopes: '',
   expires_in_days: '',
   allowed_ips: '',
+  tier: '',
 }
 
 const initialEdit: EditForm = {
@@ -64,6 +67,7 @@ const initialEdit: EditForm = {
   description: '',
   scopes: '',
   allowed_ips: '',
+  tier: '',
 }
 
 export function AdminApiKeysPage() {
@@ -167,6 +171,7 @@ export function AdminApiKeysPage() {
         scopes,
         user_email: form.user_email,
         allowed_ips,
+        tier: form.tier.trim() || null,
       }
       const days = parseInt(form.expires_in_days, 10)
       if (!isNaN(days) && days > 0) {
@@ -200,6 +205,7 @@ export function AdminApiKeysPage() {
       description: k.description || '',
       scopes: (k.scopes || []).join(', '),
       allowed_ips: (k.allowed_ips || []).join(', '),
+      tier: k.tier || '',
     })
   }
 
@@ -220,6 +226,7 @@ export function AdminApiKeysPage() {
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
+        tier: editForm.tier.trim() || null,
       })
       closeEdit()
       notify.success('Key updated.')
@@ -532,6 +539,17 @@ export function AdminApiKeysPage() {
               />
             </div>
 
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Tier (optional)</label>
+              <input
+                value={form.tier}
+                onChange={(e) => setForm({ ...form, tier: e.target.value })}
+                placeholder="production, staging, dev"
+                data-testid="key-tier-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setShowCreate(false); setForm(initialForm); setFormError(null) }}
@@ -663,6 +681,16 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
                 placeholder="203.0.113.5, 198.51.100.0/24"
                 data-testid="key-edit-allowed-ips-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Tier (optional)</label>
+              <input
+                value={editForm.tier}
+                onChange={(e) => setEditForm({ ...editForm, tier: e.target.value })}
+                placeholder="production, staging, dev"
+                data-testid="key-edit-tier-input"
                 className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
               />
             </div>

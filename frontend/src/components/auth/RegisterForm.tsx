@@ -108,6 +108,7 @@ export function RegisterForm() {
             type="text"
             autoComplete="given-name"
             placeholder="John"
+            autoFocus
             {...register('first_name')}
             className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
           />

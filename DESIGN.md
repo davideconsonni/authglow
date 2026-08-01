@@ -645,3 +645,104 @@ NEVER
 AUTH GLOW should look like:
 
 "Stripe Dashboard meets Auth0 meets Linear with a premium cyber-security identity layer."
+
+---
+
+# 39. B2C UX PATTERNS
+
+AuthGlow serves end-users, not just developers. Every screen must feel:
+
+- **Instant** — skeleton loading on every data fetch, never blank screens
+- **Clear** — one primary action per viewport, no decision paralysis
+- **Safe** — confirm destructive actions, never lose user input
+- **Delightful** — subtle micro-interactions, not sterile enterprise
+
+Rules:
+- Every page must have a skeleton loading state (not "Loading..." text)
+- Every empty state must have: icon + title + description + CTA
+- Every form must auto-focus the first input
+- Every modal/dialog must trap focus and handle Escape
+- Toast notifications: top-right on desktop, bottom-center on mobile
+- Tables with > 3 columns must have a mobile card layout alternative
+
+---
+
+# 40. MOBILE-FIRST RULES
+
+Mobile is not an afterthought — it is the primary experience for B2C.
+
+Breakpoints:
+- < 768px: Mobile (card layouts, stacked navigation, bottom toasts)
+- >= 768px: Desktop (tables, sidebar, top-right toasts)
+
+Mobile-specific patterns:
+- Sidebar: slide-in drawer with backdrop blur, focus trap, Escape to close
+- Tables: convert to vertically-stacked cards
+- Forms: full-width inputs, larger touch targets (min 44px)
+- Modals: full-screen on mobile, centered on desktop
+- Toast: bottom-center with full-width on mobile
+
+Touch targets:
+- Minimum 44x44px for all interactive elements
+- 8px minimum spacing between touch targets
+
+---
+
+# 41. LOADING STATES
+
+Every data-fetching screen must show one of:
+
+1. **Skeleton** — pulsing shapes matching the final layout (preferred)
+2. **Spinner** — centered, only for actions (button submit, etc.)
+3. **Progress** — for known-duration operations
+
+Never show:
+- Blank white/dark screens
+- "Loading..." as plain text without visual context
+- Multiple spinners on the same page
+
+Skeleton rules:
+- Use `animate-pulse` with `bg-surface-2` shapes
+- Match the exact dimensions of the final content
+- Show skeleton on initial load, not on refetch (use stale data)
+
+---
+
+# 42. ANIMATION CHOREOGRAPHY
+
+Timing:
+- Micro-interactions: 150ms (button hover, focus ring)
+- Content transitions: 250ms (dropdown open, tab switch)
+- Page transitions: 500ms fade-in (route changes)
+- Staggered lists: 120ms delay per item (feature cards, lists)
+
+Easing:
+- Default: cubic-bezier(0.4, 0, 0.2, 1)
+- Enter: cubic-bezier(0, 0, 0.2, 1)
+- Exit: cubic-bezier(0.4, 0, 1, 1)
+
+Rules:
+- Never animate layout properties (width, height) — use transform/opacity
+- Never animate more than 3 elements simultaneously
+- Stagger animations for lists > 3 items
+- Respect `prefers-reduced-motion` — disable non-essential animations
+
+---
+
+# 43. FOCUS MANAGEMENT
+
+Keyboard navigation is mandatory for accessibility.
+
+Rules:
+- Every interactive element must have visible focus ring (`ring-2 ring-brand-violet`)
+- Modals/dialogs must trap focus (Tab cycles within dialog)
+- Escape must close: dropdowns, modals, drawers, popovers
+- Focus must return to trigger element when closing overlays
+- Auto-focus first input in forms and dialogs
+- Skip navigation link for main content (accessibility)
+
+Focus ring:
+- 2px ring with brand-violet color
+- 2px offset from the element
+- Visible in both dark and light modes
+- Never remove focus rings (`outline: none` without replacement)

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Shield, Zap, Globe, Sparkles, CheckCircle2 } from 'lucide-react'
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -6,19 +7,79 @@ interface AuthLayoutProps {
   description?: string
 }
 
+const FEATURES = [
+  { icon: Shield, label: 'Zero-Trust Security', desc: 'Bank-grade encryption for every session' },
+  { icon: Zap, label: 'Lightning Fast', desc: 'Sub-100ms authentication responses' },
+  { icon: Globe, label: 'Federated Identity', desc: 'Google, SAML, OIDC — one login' },
+  { icon: Sparkles, label: 'AI-Native', desc: 'Smart risk scoring & anomaly detection' },
+] as const
+
+const TRUST_BADGES = [
+  'SOC 2 Type II',
+  'GDPR Compliant',
+  'WCAG AA',
+  '99.99% Uptime',
+]
+
 export function AuthLayout({ children, title, description }: AuthLayoutProps) {
   return (
     <div className="flex min-h-screen">
-      {/* Brand column */}
-      <div className="hidden w-1/2 flex-col justify-between bg-surface-1 p-12 md:flex">
-        <div>
+      {/* Brand column — desktop only */}
+      <div className="hidden w-1/2 flex-col justify-between bg-surface-1 p-12 lg:p-16 relative overflow-hidden md:flex">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+            backgroundSize: '32px 32px',
+          }}
+        />
+
+        <div className="relative z-10">
           <h1 className="text-2xl font-bold gradient-text">AuthGlow</h1>
         </div>
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold text-text-primary">{title}</h2>
-          {description && (
-            <p className="max-w-md text-text-muted">{description}</p>
-          )}
+
+        <div className="relative z-10 space-y-10">
+          <div className="space-y-4">
+            <h2 className="text-3xl lg:text-4xl font-bold text-text-primary leading-tight">{title}</h2>
+            {description && (
+              <p className="max-w-md text-text-muted leading-relaxed">{description}</p>
+            )}
+          </div>
+
+          {/* Feature highlights */}
+          <div className="space-y-4">
+            {FEATURES.map((f, i) => (
+              <div
+                key={f.label}
+                className="flex items-start gap-4 animate-fade-in"
+                style={{ animationDelay: `${i * 120}ms`, animationFillMode: 'both' }}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-violet/10 text-brand-violet">
+                  <f.icon size={20} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">{f.label}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trust badges */}
+        <div className="relative z-10 space-y-4">
+          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Trusted by teams worldwide</p>
+          <div className="flex flex-wrap gap-2">
+            {TRUST_BADGES.map((badge) => (
+              <span
+                key={badge}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-surface-2 bg-surface-2/50 px-3 py-1.5 text-[11px] font-medium text-text-secondary"
+              >
+                <CheckCircle2 size={10} className="text-semantic-success" />
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 

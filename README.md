@@ -141,7 +141,9 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173
 
 Everything else (password policy, passkey RP settings, token lifetimes, white-labeling) has sane defaults in `backend/.env.example` — copy it and adjust as needed.
 
-**A note on email:** the `console` and `file_storage` backends are fully implemented and work out of the box (handy for local dev — emails just print or land as JSON files). `smtp`, `sendgrid`, and `mailgun` exist as configuration keys but the provider integrations aren't wired up in `services/email/factory.py` yet — setting `EMAIL_BACKEND` to one of those currently falls back to `console` silently. PRs welcome.
+**Email providers:** `console` and `file_storage` are useful for local development. Real delivery is supported through `smtp`, `sendgrid`, `mailgun`, and `resend`. Select one with `EMAIL_BACKEND`; provider-specific examples and credentials are documented in `backend/.env.example`.
+
+For production email, set `EMAIL_FROM_ADDRESS` to a verified sender. SMTP uses STARTTLS when `SMTP_USE_TLS=true`; SendGrid uses its v3 Mail Send API; Mailgun uses its Messages API; Resend uses its `/emails` API. Set `MAILGUN_BASE_URL=https://api.eu.mailgun.net` for Mailgun EU domains.
 
 ---
 
@@ -285,7 +287,7 @@ Found a security issue? Please follow [SECURITY.md](SECURITY.md). Found a bug, a
 
 This is `main`, moving fast — no tagged releases yet. Pin a commit if you need stability.
 
-Known gap: SMTP / SendGrid / Mailgun email delivery is configured but not yet implemented (see *Configuration* above). Everything else in [FEATURES.md](FEATURES.md) reflects working code.
+SMTP / SendGrid / Mailgun email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](FEATURES.md) reflects working code.
 
 ---
 

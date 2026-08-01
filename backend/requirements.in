@@ -33,6 +33,7 @@ adlfs
 pydantic
 pydantic-settings
 python-dotenv
+httpx
 
 # Utilities
 email-validator
@@ -43,4 +44,3 @@ cachetools
 pytest
 pytest-asyncio
 pytest-xdist
-httpx

@@ -153,6 +153,10 @@ function LazyFallback() {
   return <LoadingState />
 }
 
+function PageTransition({ children }: { children: React.ReactNode }) {
+  return <div className="animate-fade-in">{children}</div>
+}
+
 function ThemeInitializer({ children }: { children: React.ReactNode }) {
   useTheme()
   return <>{children}</>
@@ -176,27 +180,27 @@ function App() {
           <Route path={ROUTES.SETUP} element={<SetupPage />} />
 
           <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
-            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-            <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
-            <Route path={ROUTES.SECURITY} element={<Suspense fallback={<LazyFallback />}><SecurityPage /></Suspense>} />
-            <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
-            <Route path={ROUTES.API_KEYS} element={<ApiKeysPage />} />
-            <Route path={ROUTES.DEVICE_AUTHORIZATIONS} element={<DeviceAuthorizationsPage />} />
-            <Route path={ROUTES.ADMIN.DASHBOARD} element={<Suspense fallback={<LazyFallback />}><AdminDashboardPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.USERS} element={<Suspense fallback={<LazyFallback />}><AdminUsersPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<Suspense fallback={<LazyFallback />}><AdminOAuthClientsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.SESSIONS} element={<Suspense fallback={<LazyFallback />}><AdminSessionsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.CONSENTS} element={<Suspense fallback={<LazyFallback />}><AdminConsentsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.API_KEYS} element={<Suspense fallback={<LazyFallback />}><AdminApiKeysPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.RBAC} element={<Suspense fallback={<LazyFallback />}><AdminRbacPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<Suspense fallback={<LazyFallback />}><AdminJwkKeysPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.FEDERATION} element={<Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.SETTINGS} element={<Suspense fallback={<LazyFallback />}><AdminSettingsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.RATE_LIMITS} element={<Suspense fallback={<LazyFallback />}><AdminRateLimitsPage /></Suspense>} />
-            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS_NEW} element={<Suspense fallback={<LazyFallback />}><DeviceAuthNewTool /></Suspense>} />
-            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS} element={<Suspense fallback={<LazyFallback />}><AdminDeviceAuthsPage /></Suspense>} />
+            <Route path={ROUTES.DASHBOARD} element={<PageTransition><DashboardPage /></PageTransition>} />
+            <Route path={ROUTES.PROFILE} element={<PageTransition><ProfilePage /></PageTransition>} />
+            <Route path={ROUTES.SECURITY} element={<PageTransition><Suspense fallback={<LazyFallback />}><SecurityPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.SESSIONS} element={<PageTransition><SessionsPage /></PageTransition>} />
+            <Route path={ROUTES.API_KEYS} element={<PageTransition><ApiKeysPage /></PageTransition>} />
+            <Route path={ROUTES.DEVICE_AUTHORIZATIONS} element={<PageTransition><DeviceAuthorizationsPage /></PageTransition>} />
+            <Route path={ROUTES.ADMIN.DASHBOARD} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminDashboardPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.USERS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminUsersPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.OAUTH_CLIENTS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminOAuthClientsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.SESSIONS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminSessionsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.CONSENTS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminConsentsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.API_KEYS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminApiKeysPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.RBAC} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminRbacPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.JWK_KEYS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminJwkKeysPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.FEDERATION} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.SETTINGS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminSettingsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.RATE_LIMITS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminRateLimitsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS_NEW} element={<PageTransition><Suspense fallback={<LazyFallback />}><DeviceAuthNewTool /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminDeviceAuthsPage /></Suspense></PageTransition>} />
           </Route>
 
           <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />

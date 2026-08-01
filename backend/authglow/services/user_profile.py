@@ -121,7 +121,7 @@ class UserProfileService:
             # ``_write_user`` shortcut on the service is no longer
             # the canonical path; the repository is responsible
             # for PII encryption + atomic write).
-            await self.user_storage.update_user(user)
+            await self.user_storage.update_user(user, acquire_lock=False)
 
         return await self.get_user_profile(user_id)
 
@@ -152,10 +152,12 @@ class UserProfileService:
             user.hashed_password = await hash_password_async(new_password)
             user.updated_at = utcnow()
 
-            await self.user_storage.update_user(user)
+            await self.user_storage.update_user(user, acquire_lock=False)
 
-        # Send security notification
-        await self.security_service.send_password_changed_alert(user, ip_address)
+        # Send security notification (fire-and-forget — don't block
+        # the response on SMTP / email provider availability).
+        import asyncio
+        asyncio.create_task(self.security_service.send_password_changed_alert(user, ip_address))
 
         return True, "Password changed successfully"
 
@@ -200,10 +202,11 @@ class UserProfileService:
         token = await self.email_service.create_verification_token(user)
         await self.email_service.send_verification_email(user, token.verification_code)
 
-        # Send notification to old email
-        await self.security_service.send_email_changed_alert(
+        # Send notification to old email (fire-and-forget)
+        import asyncio
+        asyncio.create_task(self.security_service.send_email_changed_alert(
             old_email, user.first_name or "User", new_email, ip_address
-        )
+        ))
 
         # VAPT-130: audit the self-service email change. The admin
         # route already logs; this closes the gap where a

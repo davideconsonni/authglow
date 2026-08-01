@@ -32,11 +32,11 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 import pytest
+
 from authglow.core.config import get_settings
 from authglow.core.crypto import hash_index_key
 from authglow.models.user import User
 from authglow.services.user import UserService
-
 
 # ---------------------------------------------------------------------------
 # In-memory implementations of the 3 repositories the UserService depends on
@@ -289,6 +289,28 @@ class TestUserServiceWithInMemoryRepositories:
         assert (
             await email_index_repo.lookup("smoke@example.com") == "smoke-1"
         )
+
+    async def test_update_user_can_reuse_outer_user_lock(
+        self,
+        service: UserService,
+        user_repo: InMemoryUserRepository,
+    ):
+        """Profile operations must not deadlock on the per-user lock."""
+        from authglow.core.concurrency import named_lock
+
+        user = User(
+            id="locked-update-1",
+            email="locked-update@example.com",
+            hashed_password="$2b$hashed",
+            is_active=True,
+        )
+        await user_repo.create(user)
+        service._lock = named_lock()
+
+        async with service._lock(f"user:{user.id}"):
+            await asyncio.wait_for(service.update_user(user, acquire_lock=False), timeout=0.1)
+
+        assert await user_repo.get_by_id(user.id) is user
 
     async def test_create_user_duplicate_email_raises(
         self, service: UserService, user_repo: InMemoryUserRepository

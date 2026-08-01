@@ -51,6 +51,45 @@ export function DashboardPage() {
   const missingChecks = isFederated ? 0 : ((!emailVerified ? 1 : 0) + (!mfaEnabled ? 1 : 0))
   const allSecure = isFederated || missingChecks === 0
 
+  const isInitialLoading = !profile && !sessionsData && !keysData
+
+  if (isInitialLoading) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div>
+          <div className="h-7 w-48 rounded-lg bg-surface-2" />
+          <div className="mt-2 h-4 w-64 rounded-lg bg-surface-2" />
+        </div>
+        <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
+          <div className="flex items-start gap-5">
+            <div className="h-14 w-14 shrink-0 rounded-2xl bg-surface-2" />
+            <div className="flex-1 space-y-3">
+              <div className="h-5 w-40 rounded-lg bg-surface-2" />
+              <div className="h-4 w-56 rounded-lg bg-surface-2" />
+              <div className="flex gap-2">
+                <div className="h-5 w-20 rounded-lg bg-surface-2" />
+                <div className="h-5 w-24 rounded-lg bg-surface-2" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex-1 rounded-2xl border border-surface-2 bg-surface-1 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-surface-2" />
+                <div className="space-y-1.5">
+                  <div className="h-3 w-16 rounded bg-surface-2" />
+                  <div className="h-5 w-8 rounded bg-surface-2" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div>

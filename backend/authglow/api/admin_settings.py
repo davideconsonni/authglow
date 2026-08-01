@@ -305,6 +305,21 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
     "smtp_host": {"category": "email", "label": "SMTP host", "restart_required": True},
     "smtp_port": {"category": "email", "label": "SMTP port", "restart_required": True},
     "smtp_use_tls": {"category": "email", "label": "SMTP use TLS", "restart_required": True},
+    "mailgun_base_url": {
+        "category": "email",
+        "label": "Mailgun API base URL",
+        "restart_required": True,
+    },
+    "resend_api_key": {
+        "category": "email",
+        "label": "Resend API key",
+        "restart_required": True,
+    },
+    "resend_base_url": {
+        "category": "email",
+        "label": "Resend API base URL",
+        "restart_required": True,
+    },
     # --- Storage ---
     "storage_backend": {
         "category": "storage",
@@ -394,6 +409,7 @@ _EXCLUDED_FIELDS = frozenset(
         "sendgrid_api_key",
         "mailgun_api_key",
         "mailgun_domain",
+        "resend_api_key",
         "aws_access_key_id",
         "aws_secret_access_key",
         "aws_region",

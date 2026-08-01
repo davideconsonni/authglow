@@ -289,100 +289,163 @@ export function ApiKeysPage() {
       )}
 
       {keys && keys.length > 0 ? (
-        <div className="rounded-2xl border border-surface-2 bg-surface-1">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-surface-2">
-                <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Name</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Restriction</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Used</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Status</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
-                  <th className="px-4 py-2.5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-2">
-                {keys.map((k, i) => (
-                  <tr key={k.key_id || i} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
-                    <td className="px-4 py-2.5 text-sm font-medium text-text-primary">
-                      <div>{k.name}</div>
-                      {k.description && (
-                        <p
-                          className="mt-0.5 max-w-md truncate text-xs text-text-muted"
-                          title={k.description}
-                          data-testid="key-description-display"
-                        >
-                          {k.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {k.scopes.map((s) => (
-                          <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">{s}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5" data-testid="key-ips-display">
-                      {k.allowed_ips && k.allowed_ips.length > 0 ? (
-                        <span
-                          className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
-                          title={k.allowed_ips.join(', ')}
-                        >
-                          {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block rounded-2xl border border-surface-2 bg-surface-1">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-surface-2">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Name</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Prefix</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Scopes</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">IP Restriction</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Last Used</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Status</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase">Expires</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-2">
+                  {keys.map((k, i) => (
+                    <tr key={k.key_id || i} className={`hover:bg-surface-2/50 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
+                      <td className="px-4 py-2.5 text-sm font-medium text-text-primary">
+                        <div>{k.name}</div>
+                        {k.description && (
+                          <p
+                            className="mt-0.5 max-w-md truncate text-xs text-text-muted"
+                            title={k.description}
+                            data-testid="key-description-display"
+                          >
+                            {k.description}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <code className="text-xs font-mono text-text-secondary">{k.key_prefix || '-'}</code>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {k.scopes.map((s) => (
+                            <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">{s}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5" data-testid="key-ips-display">
+                        {k.allowed_ips && k.allowed_ips.length > 0 ? (
+                          <span
+                            className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
+                            title={k.allowed_ips.join(', ')}
+                          >
+                            {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-text-muted">
+                        {k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${k.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
+                          {k.is_active ? 'Active' : 'Inactive'}
                         </span>
-                      ) : (
-                        <span className="text-xs text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-muted">
-                      {k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${k.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-text-muted">
+                        {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEdit(k)}
+                            data-testid="key-edit-btn"
+                            className="text-text-muted hover:text-brand-violet transition-colors"
+                            aria-label="Edit key"
+                            title="Edit"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          {k.is_active ? (
+                            <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">
+                              <Ban size={14} />
+                            </button>
+                          ) : (
+                            <button onClick={() => setRestoreId(k.key_id)} className="text-text-muted hover:text-semantic-success transition-colors" aria-label="Restore key" title="Restore">
+                              <RotateCcw size={14} />
+                            </button>
+                          )}
+                          <button onClick={() => setDeleteId(k.key_id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {keys.map((k, i) => (
+              <div key={k.key_id || i} className={`rounded-2xl border border-surface-2 bg-surface-1 p-4 space-y-3 ${!k.is_active ? 'opacity-50' : ''}`} data-testid="api-key-row">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-text-primary truncate">{k.name}</p>
+                      <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium ${k.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
                         {k.is_active ? 'Active' : 'Inactive'}
                       </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-muted">
-                      {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => openEdit(k)}
-                          data-testid="key-edit-btn"
-                          className="text-text-muted hover:text-brand-violet transition-colors"
-                          aria-label="Edit key"
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        {k.is_active ? (
-                          <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">
-                            <Ban size={14} />
-                          </button>
-                        ) : (
-                          <button onClick={() => setRestoreId(k.key_id)} className="text-text-muted hover:text-semantic-success transition-colors" aria-label="Restore key" title="Restore">
-                            <RotateCcw size={14} />
-                          </button>
-                        )}
-                        <button onClick={() => setDeleteId(k.key_id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    {k.description && (
+                      <p className="mt-0.5 truncate text-xs text-text-muted" title={k.description} data-testid="key-description-display">
+                        {k.description}
+                      </p>
+                    )}
+                    <code className="mt-1 inline-block text-[10px] font-mono text-text-muted">{k.key_prefix || '-'}</code>
+                  </div>
+                  <div className="shrink-0 flex gap-1">
+                    <button
+                      onClick={() => openEdit(k)}
+                      data-testid="key-edit-btn"
+                      className="rounded-lg p-1.5 text-text-muted hover:text-brand-violet hover:bg-brand-violet/10 transition-colors"
+                      aria-label="Edit key"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    {k.is_active ? (
+                      <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="rounded-lg p-1.5 text-text-muted hover:text-semantic-warning hover:bg-semantic-warning/10 transition-colors" aria-label="Deactivate key">
+                        <Ban size={14} />
+                      </button>
+                    ) : (
+                      <button onClick={() => setRestoreId(k.key_id)} className="rounded-lg p-1.5 text-text-muted hover:text-semantic-success hover:bg-semantic-success/10 transition-colors" aria-label="Restore key">
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                    <button onClick={() => setDeleteId(k.key_id)} className="rounded-lg p-1.5 text-text-muted hover:text-semantic-error hover:bg-semantic-error/10 transition-colors" aria-label="Delete key">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {k.scopes.map((s) => (
+                    <span key={s} className="rounded-lg bg-surface-2 px-2 py-0.5 text-[10px] text-text-secondary">{s}</span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-text-muted">
+                  {k.allowed_ips && k.allowed_ips.length > 0 && (
+                    <span className="text-brand-violet" title={k.allowed_ips.join(', ')}>
+                      {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
+                    </span>
+                  )}
+                  <span>Last: {k.last_used_at ? formatDateTime(k.last_used_at) : 'Never'}</span>
+                  <span>Exp: {k.expires_at ? formatDateTime(k.expires_at) : 'Never'}</span>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </>
       ) : (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-12 text-center">
           <Key className="mx-auto h-8 w-8 text-text-muted" />
