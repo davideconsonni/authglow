@@ -37,6 +37,7 @@ authglow/
 ├── SECURITY.md                # Vulnerability reporting policy
 ├── docs/                      # Integration guides, feature catalog, plans, post-mortems
 │   ├── FEATURES.md            # Complete feature catalog
+│   ├── flows/                 # Per-flow guides: standard + custom behavior
 ├── backend/
 │   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts
 │   ├── .env.example           # All configurable settings template

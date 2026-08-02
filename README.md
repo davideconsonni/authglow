@@ -259,6 +259,7 @@ npm run test:e2e   # Playwright end-to-end
 ## 📖 Documentation
 
 - [FEATURES.md](docs/FEATURES.md) — complete feature catalog, endpoint by endpoint
+- [Flows](docs/flows/README.md) — per-flow guides: how each OAuth2/OIDC flow works, its standard, and what's custom
 - [ARCHITECTURE.md](ARCHITECTURE.md) — directory map, request lifecycle, where to add what
 - [DESIGN.md](DESIGN.md) — design system and visual language
 - [AGENTS.md](AGENTS.md) — developer guide for AI coding agents
