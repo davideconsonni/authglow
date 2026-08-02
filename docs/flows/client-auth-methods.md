@@ -1,7 +1,7 @@
 # Client Authentication Methods
 
-Come un client si autentica al token endpoint (e agli endpoint di
-revocation/introspection/DCR).
+How a client authenticates to the token endpoint (and the
+revocation/introspection/DCR endpoints).
 
 ---
 
@@ -9,63 +9,66 @@ revocation/introspection/DCR).
 
 - **Client Metadata** — RFC 7591 §2 (`token_endpoint_auth_method`)
 - **JWT Profile for OAuth 2.0 Client Auth** — RFC 7523
-- FAPI 2.0 (§5.2.2) per i metodi JWT
+- FAPI 2.0 (§5.2.2) for JWT methods
 
 ---
 
-## Metodi supportati
+## Supported methods
 
-| Method | Algo | Descrizione | Note |
-|--------|------|-------------|------|
-| `client_secret_basic` | — | HTTP Basic. | Default legacy. |
-| `client_secret_post` | — | Secret nel form. | |
-| `client_secret_jwt` | HS256 | `client_assertion` JWT firmato con chiave simmetrica. | Chiave **server-minted** per client, mostra una volta, mai persistita in chiaro. |
-| `private_key_jwt` | RS256 | `client_assertion` JWT firmato con chiave privata. | JWK pubblica registrata a DCR (`public_jwk`). |
-| `none` | — | Client pubblici. | PKCE obbligatoria. |
+| Method | Alg | Description | Notes |
+|--------|-----|-------------|-------|
+| `client_secret_basic` | — | HTTP Basic. | Legacy default. |
+| `client_secret_post` | — | Secret in the form body. | |
+| `client_secret_jwt` | HS256 | `client_assertion` JWT signed with a symmetric key. | Key **server-minted** per client, shown once, never persisted in cleartext. |
+| `private_key_jwt` | RS256 | `client_assertion` JWT signed with a private key. | Public JWK registered at DCR (`public_jwk`). |
+| `none` | — | Public clients. | PKCE mandatory. |
 
-### `client_secret_jwt` / `private_key_jwt` — dettagli (RFC 7523)
+### `client_secret_jwt` / `private_key_jwt` — details (RFC 7523)
 
-`client_assertion` JWT con:
+`client_assertion` JWT with:
 - `iss`, `sub` = `client_id`
-- `aud` = URL del token endpoint
-- `exp`, `jti` (monouso, replay-protected)
+- `aud` = the token endpoint URL
+- `exp`, `jti` (single-use, replay-protected)
 
-Il server verifica la firma (HS256 con la chiave crittografata server-side,
-o RS256 con la JWK pubblica) in `services/client_jwt_auth.py`.
+The server verifies the signature (HS256 with the encrypted server-side
+key, or RS256 with the public JWK) in `services/client_jwt_auth.py`.
+For `client_secret_jwt` the key is minted by the server at client creation
+and shown once; the plaintext is never persisted, only a Fernet-encrypted
+copy is stored on disk.
 
 ---
 
-## Come lo usiamo
+## How we use it
 
-Sul token endpoint, sia con form che con HTTP Basic, e accettiamo
+On the token endpoint (with form or HTTP Basic), and we accept
 `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`
-come alternativa forte al secret per `client_credentials` e
+as a stronger alternative to the secret for `client_credentials` and
 `authorization_code`.
 
 ---
 
-## Conformità
+## Conformance
 
-| Aspetto | Stato |
-|--------|-------|
-| RFC 7591 §2 | Supporto completo dei metodi dichiarati. |
-| RFC 7523 | Conforme (HS256/RS256). |
-| Chiave client_secret_jwt | **Custom**: minted dal server (mai ricevuta dal client over the wire). |
-| JWK privata | `public_jwk` incorporata a DCR (no round-trip JWKS fetch). |
-| `none` | Solo client pubblici; PKCE obbligatoria. |
-
----
-
-## Endpoint
-
-| Method | Path | Ruolo |
-|--------|------|-------|
-| POST | `/oauth2/token` | Applica il metodo del client registrato |
-| POST | `/oauth2/revoke` | Client auth su ≤RFC 7009 |
-| POST | `/oauth2/introspect` | Client auth su RFC 7662 |
+| Aspect | Status |
+|--------|--------|
+| RFC 7591 §2 | Full support for the declared methods. |
+| RFC 7523 | Conformant (HS256/RS256). |
+| `client_secret_jwt` key | **Custom**: minted by the server (never received client-side over the wire). |
+| `public_jwk` | Embedded at DCR (no JWKS round-trip). |
+| `none` | Public clients only; PKCE mandatory. |
 
 ---
 
-> **Custom vs standard**: sostanzialmente conforme. Le differenze: la
-> chiave `client_secret_jwt` è mintata lato server (più sicura, il plaintext
-> mono-volta), e la JWK pubblica incorporata a DCR invece di un JWKS fetch.
+## Endpoints
+
+| Method | Path | Role |
+|--------|------|------|
+| POST | `/oauth2/token` | Applies the client's registered method |
+| POST | `/oauth2/revoke` | Client auth for RFC 7009 |
+| POST | `/oauth2/introspect` | Client auth for RFC 7662 |
+
+---
+
+> **Custom vs standard**: essentially conformant. Differences: the
+> `client_secret_jwt` key is server-minted (safer — the secret is shown
+> once), and the public JWK is embedded at DCR instead of a JWKS fetch.

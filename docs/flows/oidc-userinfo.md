@@ -1,63 +1,82 @@
 # OIDC UserInfo Endpoint
 
-Ritorna le claim dell'utente autenticato. Usato dalle Relying Party che
-hanno ottenuto un access token con `scope` includente claim profiling.
+Returns the authenticated user's claims. Used by relying parties that
+obtained an access token whose scope includes profile claims.
 
 ---
 
 ## Standard
 
-- **UserInfo Endpoint** — OpenID Connect Core §5.1 (5.3, 5.4)
+- **UserInfo Endpoint** — OpenID Connect Core §5.1 (and §5.3/5.4)
 
 ---
 
-## Come lo supportiamo
+## Actors
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client (RP)
+    participant U as AuthGlow UserInfo
+    actor R as User (subject)
+
+    C->>U: GET /oauth2/userinfo (Authorization: Bearer access_token)
+    U->>U: verify signature + jti blacklist (+ ath if DPoP)
+    U->>U: filter claims by granted scope + claims param
+    U-->>C: { sub, email, name, ... }
+    R->>R: (claiming subject)
+```
+
+---
+
+## How we support it
 
 ```
 GET /oauth2/userinfo   (Authorization: Bearer <access_token>)
 ```
 
-1. Verifica l'**access token** (firma + `jti` blacklist). Può anche
-   verificare `ath` se il token è DPoP-bound (RFC 9449).
-2. Valida gli **scope** concessi: le claim emesse dipendono dallo scope
-   (`openid`, `profile`, `email`, `phone`, `address`).
-3. Applica l'eventuale **`claims` request parameter** (OIDC Core §5.5):
-   se il client ha mandato un `claims` al momento dell'autorizzazione,
-   filtra la risposta alle sole claim richieste.
+1. Verifies the **access token** (signature + `jti` blacklist; also
+   `ath` for DPoP-bound tokens, RFC 9449).
+2. Validates the granted **scopes**: the emitted claims depend on the
+   scope (`openid`, `profile`, `email`, `phone`, `address`).
+3. Applies any **`claims` request parameter** (OIDC Core §5.5): if the
+   client sent `claims` at authorization time, the response is filtered
+   to the requested claims only.
 
-Risposta (claim esempio, dipendono dallo scope):
+Example response (claims depend on scope):
 
 ```json
 {
-  "sub":            "user-id",
-  "email":          "user@example.com",
-  "email_verified": true,
-  "name":           "Mario Rossi",
+  "sub":               "user-id",
+  "email":             "user@example.com",
+  "email_verified":    true,
+  "name":              "Mario Rossi",
   "preferred_username": "mariorossi"
 }
 ```
 
 ---
 
-## Conformità
+## Conformance
 
-| Aspetto | Stato |
-|--------|-------|
-| OIDC Core §5.1 | **Conforme**. |
-| Scope-based emission | Claim limitate agli scope concessi. |
-| `claims` request (…5.5) | Supportato (filtra sia UserInfo che ID token). |
-| Provider | Supporta il `sub`, `azp` (authorized party). |
-| DPoP | Se token DPoP-bound, richiede una proof con `ath` fresh. |
-
----
-
-## Endpoint
-
-| Method | Path | Ruolo |
-|--------|------|-------|
-| GET | `/oauth2/userinfo` | Ritorna claim utente in base a scope + claims param |
+| Aspect | Status |
+|--------|--------|
+| OIDC Core §5.1 | **Conformant**. |
+| Scope-based emission | Claims limited to granted scopes. |
+| `claims` request (§5.5) | Supported (filters both UserInfo and ID token). |
+| `sub` + `azp` | Supported (authorized party). |
+| DPoP | If DPoP-bound, requires a proof with fresh `ath`. |
 
 ---
 
-> **Custom vs standard**: conforme a OIDC Core §5.1/§5.5. L'unica estensione
-> è l'integrazione del `claims` request parameter per filtrare la risposta.
+## Endpoints
+
+| Method | Path | Role |
+|--------|------|------|
+| GET | `/oauth2/userinfo` | Return user claims based on scope + claims param |
+
+---
+
+> **Custom vs standard**: conformant with OIDC Core §5.1/§5.5. The only
+> addition is the integration of the `claims` request parameter to filter
+> the response.

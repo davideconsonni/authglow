@@ -1,85 +1,107 @@
 # Refresh Token Flow — Rotation & Reuse Detection
 
-Prolunga la sessione senza ri-autenticare l'utente. AuthGlow applica
-**rotazione ad ogni utilizzo** e **rilevamento del riuso**.
+Extends the session without re-authenticating the user. AuthGlow applies
+**rotation on every use** and **reuse detection**.
 
 ---
 
 ## Standard
 
 - **Refreshing an Access Token** — RFC 6749 §6
-- **OAuth 2.0 Security BCP** — RFC 9700 (raccomanda rotazione + revoca family)
+- **OAuth 2.0 Security BCP** — RFC 9700 (recommends rotation + family revocation)
 
 ---
 
-## Come lo supportiamo
+## Actors
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client (RP)
+    participant T as AuthGlow Token Endpoint
+    participant S as RefreshTokenService
+    actor U as User
+
+    C->>T: POST /oauth2/token (grant_type=refresh_token, refresh_token, client_id)
+    T->>S: validate_and_rotate(refresh_token, client_id)
+    alt token used before
+        S->>T: reuse detected -> revoke whole family
+        T-->>C: 401 "reuse detected"
+    else valid
+        S->>T: new access_token + new child refresh_token
+        T-->>C: access_token, refresh_token, scope
+    end
+    U->>U: longer-lived session
+```
+
+---
+
+## How we support it
 
 ```
 POST /oauth2/token   (form URL-encoded)   grant_type=refresh_token
 ```
 
-Parametri:
+Parameters:
 
-| Parametro      | Obbligatorio | Note |
-|----------------|--------------|------|
-| `grant_type`   | SÌ | `refresh_token` |
-| `refresh_token`| SÌ | Form oppure cookie `auth_cookie_refresh_name`. |
-| `client_id`    | SÌ | |
+| Parameter      | Required | Notes |
+|----------------|----------|-------|
+| `grant_type`   | YES | `refresh_token` |
+| `refresh_token`| YES | Form or `auth_cookie_refresh_name` cookie. |
+| `client_id`    | YES | |
 
-Il servizio `RefreshTokenService.validate_and_rotate`:
+`RefreshTokenService.validate_and_rotate`:
 
-1. Recupera il refresh token (lookup l'hash, mai il plaintext persistito).
-2. Verifica: non revocato, `client_id` match, non scaduto.
-3. Se `rt.used` è già `True` → **riuso rilevato**: revoca l'intera
-   famiglia (tutti i token collegati via `parent_token_id`) e rifiuta.
-4. Altrimenti segna `used=True`, crea un **nuovo refresh token** figlio
-   (`parent_token_id` = id del precedente) e rimuove il vecchio dall'index
-   attivo.
-5. Emette un nuovo **access token** JWT (nuovo `jti`) e lo sostituisce.
+1. Looks up the refresh token (by hash — the plaintext is never persisted).
+2. Checks: not revoked, `client_id` matches, not expired.
+3. If already `used` → **reuse detected**: revoke the whole **family**
+   (all linked tokens via `parent_token_id`) and refuse.
+4. Otherwise mark `used`, create a **child refresh token**
+   (`parent_token_id` = the previous id) and remove the old one from the
+   active index.
+5. Issue a new **access token** JWT (fresh `jti`) and return it.
 
-Il tutto è protetto da un `named_lock` sulla chiave e da retry
-optimistic-concurrency (CAS) per evitare race su rotazioni concorrenti.
+Protected by a `named_lock` on the lookup key plus optimistic-concurrency
+(CAS) retries to avoid races on concurrent rotations.
 
-Risposta:
-
-```
+```json
 {
-  "access_token":  "…",
+  "access_token":  "...",
   "token_type":    "Bearer",
   "expires_in":    3600,
-  "refresh_token": "<NUOVO>",
+  "refresh_token": "<NEW>",
   "scope":         "openid profile"
 }
 ```
 
 ---
 
-## Conformità
+## Conformance
 
-| Aspetto | Stato |
-|--------|-------|
-| RFC 6749 §6 | **Conforme** (include rotation, che è raccomandata non richiesta). |
-| Rotazione automatica | Sempre attiva. Ogni refresh emette un nuovo refresh token e invalida il precedente. |
-| Riuso rilevato | **Custom, più severo dello standard**: se un refresh token già usato viene ripresentato, l'intera famiglia viene revocata (RFC 9700 BCP lo consiglia). |
-| Cookie fallback | Il refresh token può arrivare via cookie httpOnly (per il frontend first-party). |
-| Replay | Nuovo `jti` ad ogni refresh; riuso del vecchio token → famiglia revocata. |
-| Gestione di sessione | `GET /api/tokens/refresh/list`, revoca singola o revoca-all "log out from all devices". |
-
----
-
-## Endpoint
-
-| Method | Path | Ruolo |
-|--------|------|-------|
-| POST | `/oauth2/token` | Rinnova access + refresh (rotazione) |
-| GET | `/api/tokens/refresh/list` | Lista refresh token attivi dell'utente |
-| POST | `/api/tokens/refresh/revoke-all` | Revoca tutti i refresh token dell'utente |
-| DELETE | `/api/tokens/refresh/{token_id}` | Revoca un singolo refresh token |
-| POST | `/oauth2/revoke` | Revoca (RFC 7009) — fallisce la rotazione |
+| Aspect | Status |
+|--------|--------|
+| RFC 6749 §6 | **Conformant** (includes rotation, which is recommended, not required). |
+| Automatic rotation | Always on. Every refresh issues a new refresh token and invalidates the previous one. |
+| Reuse detection | **Custom, stricter than the standard**: a reused refresh token revokes the entire family (RFC 9700 BCP recommends this). |
+| Cookie fallback | The refresh token may arrive via httpOnly cookie (front-end first-party flow). |
+| Replay | Fresh `jti` per refresh; reuse of the old token revokes the family. |
+| Session management | `GET /api/tokens/refresh/list`, single revoke, or revoke-all ("log out from all devices"). |
 
 ---
 
-> **Custom vs standard**: il flusso segue RFC 6749 §6 e RFC 9700, ma
-> promuove a obbligatoria la rotazione e applica la **revoca dell'intera
-> famiglia** al riuso — più severo del default. Inoltre il client può
-> rinnovare passando il refresh token in un cookie httpOnly **custom**.
+## Endpoints
+
+| Method | Path | Role |
+|--------|------|------|
+| POST | `/oauth2/token` | Renew access + refresh (rotation) |
+| GET | `/api/tokens/refresh/list` | List the user's active refresh tokens |
+| POST | `/api/tokens/refresh/revoke-all` | Revoke all of the user's refresh tokens |
+| DELETE | `/api/tokens/refresh/{token_id}` | Revoke a single refresh token |
+| POST | `/oauth2/revoke` | Revoke (RFC 7009) — breaks pending rotation |
+
+---
+
+> **Custom vs standard**: the flow follows RFC 6749 §6 and RFC 9700, but
+> promotes rotation to mandatory and applies **whole-family revocation** on
+> reuse — stricter than the default. In addition the client may renew by
+> passing the refresh token in a httpOnly cookie (**custom**).

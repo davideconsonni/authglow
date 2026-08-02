@@ -1,67 +1,89 @@
 # OIDC RP-Initiated Logout
 
-Permette a una Relying Party di stendere il logout dell'utente tramite
-AuthGlow, e di farlo propagare verso più applicazioni collegate.
+Lets a relying party end the user's session through AuthGlow, and propagate
+the logout across the applications connected to it.
 
 ---
 
 ## Standard
 
 - **OpenID Connect RP-Initiated Logout 1.0**
-- **OpenID Connect Front-Channel Logout 1.0** (per i client che lo usano)
+- **OpenID Connect Front-Channel Logout 1.0** (for clients that use it)
 
 ---
 
-## Come lo supportiamo
+## Actors
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant B as Browser
+    participant A as AuthGlow Logout (/oauth2/logout)
+    participant C as RP A
+    participant D as RP B (front-channel)
+
+    U->>B: clicks "sign out" on RP A
+    B->>A: GET /oauth2/logout (id_token_hint, post_logout_redirect_uri, state)
+    A->>A: validate id_token_hint + allowed_post_logout_redirect_uris
+    A-->>B: HTML page: iframe -> RP B?iss&sid
+    B-->>D: POST top-level to RP B (front-channel) or hidden iframe
+    A-->>B: 303 redirect to post_logout_redirect_uri (with state)
+    B-->>U: signed out
+```
+
+---
+
+## How we support it
 
 ```
-GET /oauth2/logout? + id_token_hint=… + post_logout_redirect_uri=… + state=…
+GET /oauth2/logout? id_token_hint=...& post_logout_redirect_uri=...& state=...
 ```
 
-O anche `POST /oauth2/logout` (con Bearer auth, per audit).
+Or `POST /oauth2/logout` (with Bearer auth, for audit).
 
-Logica:
+Logic:
 
-1. Se è presente `post_logout_redirect_uri`, **`id_token_hint` è
-   obbligatorio** — serve a identificare il client (custom: lo standard lo
-   raccomanda, qui è richiesto).
-2. Valida `id_token_hint` (firma + `aud`).
-3. Verifica che `post_logout_redirect_uri` sia nella lista
-   `allowed_post_logout_redirect_uris` del client. Altrimenti 400.
-4. Redirige a `post_logout_redirect_uri` con lo `state` riportato.
-5. **Front-Channel Logout**: se alcuni client hanno `frontchannel_logout_uri`,
-   la risposta è una pagina HTML con un `<iframe>` per ciascuno
-   (`?iss=…&sid=…`), poi re-direzione dopo ~2s.
+1. If a `post_logout_redirect_uri` is present, **`id_token_hint` is
+   required** — it identifies the client (custom: the standard recommends
+   it, here it is mandatory).
+2. Validates `id_token_hint` (signature + `aud`).
+3. Verifies `post_logout_redirect_uri` is in the client
+   `allowed_post_logout_redirect_uris`; otherwise 400.
+4. Redirects to `post_logout_redirect_uri` with the `state` echoed back.
+5. **Front-Channel Logout**: if some clients have `frontchannel_logout_uri`,
+   the response is an HTML page with one `<iframe>` per client
+   (`?iss=...&sid=...`), then redirects after ~2s.
 
-AuthGlow è **stateless**: non tiene una sessione lato server. L'utente o il
-client eliminano i propri token; il server revoca il refresh token e
-blacklista il `jti` dell'access token. L'evento viene audit-logged.
-
----
-
-## Conformità
-
-| Aspetto | Stato |
-|--------|-------|
-| RP-Initiated Logout 1.0 | **Conforme**. |
-| `post_logout_redirect_uri` | Strict match contro `allowed_post_logout_redirect_uris`. |
-| `id_token_hint` + redirect | **Custom, più severo**: obbligatorio quando si chiede un redirect. |
-| Front-Channel Logout | Supportato (iframe `iss` + `sid`). |
-| Back-Channel Logout | `backchannel_logout_uri` supportato sul client ma **non** eseguito (stateless). |
-| `state` | Ri-appenduto nella redirect URL. |
+AuthGlow is **stateless**: no server-side session. The user/client delete
+their own tokens; the server revokes the refresh token and blacklists the
+access-token `jti`. The event is audit-logged.
 
 ---
 
-## Endpoint
+## Conformance
 
-| Method | Path | Ruolo |
-|--------|------|-------|
+| Aspect | Status |
+|--------|--------|
+| RP-Initiated Logout 1.0 | **Conformant**. |
+| `post_logout_redirect_uri` | Exact match against `allowed_post_logout_redirect_uris`. |
+| `id_token_hint` + redirect | **Custom, stricter**: required when asking for a redirect. |
+| Front-Channel Logout | Supported (iframe `iss` + `sid`). |
+| Back-Channel Logout | `backchannel_logout_uri` is stored on the client but **not** executed (stateless). |
+| `state` | Re-appended to the redirect URL. |
+
+---
+
+## Endpoints
+
+| Method | Path | Role |
+|--------|------|------|
 | GET | `/oauth2/logout` | RP-Initiated Logout (query params) |
-| POST | `/oauth2/logout` | Idem, con Bearer auth |
+| POST | `/oauth2/logout` | Same, with Bearer auth |
 
 ---
 
-> **Custom vs standard**: unica differenza — `id_token_hint` è obbligatorio
-> quando si richiede un redirect (lo standard lo raccomanda). Il back-channel
-> logout non è eseguito: il client è stateless e la revoca avviene
+> **Custom vs standard**: single difference — `id_token_hint` is required
+> when a redirect is requested (the standard recommends it). Back-channel
+> logout is not executed: the client is stateless and revocation happens
 > client-side.

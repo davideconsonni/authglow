@@ -1,7 +1,7 @@
 # Token Revocation & Introspection
 
-Due endpoint utili ai client e ai resource server per gestire il ciclo di
-vita dei token: **revocarli** (RFC 7009) e **interrogarli** (RFC 7662).
+Two endpoints that let clients and resource servers manage the token
+lifecycle: **revoke** (RFC 7009) and **inspect** (RFC 7662).
 
 ---
 
@@ -9,7 +9,28 @@ vita dei token: **revocarli** (RFC 7009) e **interrogarli** (RFC 7662).
 
 - **Token Revocation Endpoint** — RFC 7009
 - **Token Introspection Endpoint** — RFC 7662
-- Access token revocation — RFC 7009 + JWT jti blacklist
+- Access-token revocation — RFC 7009 + JWT `jti` blacklist
+
+---
+
+## Actors
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client (authenticated)
+    participant R as AuthGlow /oauth2/revoke
+    participant I as AuthGlow /oauth2/introspect
+    participant G as AuthGlow Resource Server
+
+    C->>R: POST /oauth2/revoke (token, token_type_hint, client auth)
+    R-->>C: always 200 {}
+    C->>C: discard local token
+    C->>I: POST /oauth2/introspect (token, client auth)
+    I-->>C: { active, scope, client_id, exp, sub, ... }
+    C->>G: GET /api (with access token)
+    G-->>C: 200/401 depending on revocation
+```
 
 ---
 
@@ -19,30 +40,29 @@ vita dei token: **revocarli** (RFC 7009) e **interrogarli** (RFC 7662).
 POST /oauth2/revoke   (form)   token, token_type_hint, client_id, client_secret
 ```
 
-Richiede **client authentication** (HTTP Basic o form):
+Requires **client authentication** (HTTP Basic or form):
 
-- **refresh_token** → revoca il refresh token nel repository.
-- **access_token** → decodifica il JWT e aggiunge il suo `jti` alla
-  **blacklist** (persistita su disco, per-instanza condivisa).
+- **refresh_token** → revokes the refresh token in the repository.
+- **access_token** → decodes the JWT and adds its `jti` to the persistent
+  **blacklist** (shared across instances sharing the filesystem).
 
-RFC 7009 impone di rispondere **sempre 200** (anche se il token non esiste
-o le credenziali sono errate) per non far leakare informazioni. AuthGlow
-rispetta questa regola — i client auth reject rispondono comunque `200
-{ }`.
+RFC 7009 mandates responding **always 200** (even if the token does not
+exist or the credentials are wrong) to avoid leaking information. AuthGlow
+honours this — even bad client auth returns `200 {}`.
 
-## Introspection: RFC 7662
+## Introspection — RFC 7662
 
 ```
 POST /oauth2/introspect   (form)   token, token_type_hint, client_id, client_secret
 ```
 
-Richiede **client authentication**. Restituisce:
+Requires **client authentication**. Returns:
 
-```
+```json
 {
   "active":     true,
   "scope":      "openid profile",
-  "client_id":  "…",
+  "client_id":  "...",
   "token_type": "access_token",
   "exp":        1690000000,
   "iat":        1689996400,
@@ -50,26 +70,27 @@ Richiede **client authentication**. Restituisce:
 }
 ```
 
-Per gli **access token** (JWT) applica anche:
-- **Audience binding**: se il `aud` del token NON è il client che introspect,
-  ritorna `active=false` (RFC 7662 §2.2 — non fugare il motivo).
-- **Blacklist check**: un `jti` revocato → `active=false`.
+For **access tokens** (JWT) it also applies:
+
+- **Audience binding**: if the token `aud` is NOT the introspecting
+  client, returns `active=false` (RFC 7662 §2.2 — do not leak why).
+- **Blacklist check**: a revoked `jti` → `active=false`.
 
 ---
 
-## Conformità
+## Conformance
 
-| Aspetto | Revocation | Introspection |
+| Aspect | Revocation | Introspection |
 |--------|-----------|---------------|
-| RFC | 7009 **conforme** | 7662 **conforme** |
-| Client auth | Sì (Basic o form) | Sì (Basic o form) |
-| Sempre 200 | Sì (anche per errore credenziali) | — |
-| Audience binding | — | custom: `active:false` se `aud` mismatch |
-| Access token | jti blacklist persistita | jti blacklist rispettata |
+| RFC | 7009 **conformant** | 7662 **conformant** |
+| Client auth | Yes (Basic or form) | Yes (Basic or form) |
+| Always 200 | Yes (even on bad creds) | — |
+| Audience binding | — | custom: `active:false` if `aud` mismatch |
+| Access token | persistent `jti` blacklist | blacklist respected |
 
 ---
 
-## Endpoint
+## Endpoints
 
 | Method | Path | Standard |
 |--------|------|----------|
@@ -78,7 +99,6 @@ Per gli **access token** (JWT) applica anche:
 
 ---
 
-> **Custom vs standard**: entrambi conformi. Unica estensione: il binding
-> dell'audience in introspection (solo il client target può ottenere
-> informazioni attive sul token) — comportamento più restrittivo e sicuro
-> di quanto richiesto.
+> **Custom vs standard**: both conformant. The only extension is the
+> audience binding in introspection (only the target client can get active
+> info on a token) — a stricter, safer behavior than the RFC requires.

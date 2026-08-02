@@ -1,47 +1,53 @@
 # AuthGlow — Supported Flows
 
-Questa directory documenta ogni flusso di autenticazione/autorizzazione
-supportato da AuthGlow, **come** è implementato, lo **standard** di
-riferimento e — dove presente — le **differenze/custom** rispetto allo
+This directory documents every authentication/authorization flow
+supported by AuthGlow: **how** it is implemented, the **standard** it
+follows, and — where applicable — the **custom differences** from that
 standard.
 
-Ogni file segue lo stesso schema:
+> **Language note (AGENTS.md):** the repo uses English for code and
+> documentation. Files in this directory are written in English.
 
-| Sezione            | Contenuto |
-|--------------------|-----------|
-| **Standard**       | La RFC / spec di riferimento. |
-| **Come lo supportiamo** | Endpoint coinvolti, sequenza richieste/risposte, parametri. |
-| **Conformità**     | Cosa è pienamente standard, cosa è più severo, cosa è custom. |
-| **Endpoint coinvolti** | Tabella endpoint (metodo + path). |
+Each file uses the same structure:
 
-## Indice dei flussi
+| Section            | Content |
+|--------------------|---------|
+| **Standard**       | The reference RFC / specification. |
+| **Actors**         | A Mermaid sequence diagram showing the parties involved. |
+| **How we support it** | Endpoints involved, request/response sequence, parameters. |
+| **Conformance**    | What is standard, what is stricter, what is custom. |
+| **Endpoints**      | Endpoint table (method + path). |
 
-| Flusso | File | Standard | Principale differenza rispetto allo standard |
-|--------|------|----------|----------------------------------------------|
-| Authorization Code + PKCE | [`authorization-code-pkce.md`](authorization-code-pkce.md) | RFC 6749 §4.1, RFC 7636 | PKCE **obbligatorio** per TUTTI i client (anche confidential), solo `S256` |
-| Client Credentials | [`client-credentials.md`](client-credentials.md) | RFC 6749 §4.4 | Scope strettamente validati (nessun scope non consentito) |
-| Refresh Token Rotation | [`refresh-token-rotation.md`](refresh-token-rotation.md) | RFC 6749 §6, OAuth BCP | Rotazione automatica + **rilevamento riuso** (revoca famiglia) |
-| Device Authorization Grant | [`device-authorization.md`](device-authorization.md) | RFC 8628 | Serve auth utente autenticata; polling rate-limited, `slow_down` |
-| First-party browser login | [`first-party-browser-login.md`](first-party-browser-login.md) | — (NON è OAuth2) | Endpoint `/api/token` custom, cookie httpOnly, riservato al frontend |
-| Revocation / Introspection | [`revocation-introspection.md`](revocation-introspection.md) | RFC 7009, RFC 7662 | Conformi; revoca access token tramite jti-blacklist |
-| OIDC UserInfo | [`oidc-userinfo.md`](oidc-userinfo.md) | OIDC Core §5.1 | Supporta il `claims` request parameter (§5.5) |
-| OIDC RP-Initiated Logout | [`oidc-logout.md`](oidc-logout.md) | OIDC RP-Initiated Logout 1.0 | `id_token_hint` richiesto per il redirect; front-channel via iframe |
+## Flow index
 
-## Meccanismi trasversali
+| Flow | File | Standard | Main difference from the standard |
+|------|------|----------|------------------------------------|
+| Authorization Code + PKCE | [`authorization-code-pkce.md`](authorization-code-pkce.md) | RFC 6749 §4.1, RFC 7636 | PKCE **mandatory** for ALL clients (incl. confidential), `S256` only |
+| Client Credentials | [`client-credentials.md`](client-credentials.md) | RFC 6749 §4.4 | Scopes strictly validated; supports `client_assertion` (RFC 7523) |
+| Refresh Token Rotation | [`refresh-token-rotation.md`](refresh-token-rotation.md) | RFC 6749 §6, OAuth BCP | Automatic rotation + **reuse detection** (family revocation) |
+| Device Authorization Grant | [`device-authorization.md`](device-authorization.md) | RFC 8628 | Approval endpoints require an authenticated user session |
+| First-party browser login | [`first-party-browser-login.md`](first-party-browser-login.md) | — (NOT OAuth2) | Custom `/api/token`, httpOnly cookies, frontend-only |
+| Revocation / Introspection | [`revocation-introspection.md`](revocation-introspection.md) | RFC 7009, RFC 7662 | Conformant; access-token revocation via JTI blacklist |
+| OIDC UserInfo | [`oidc-userinfo.md`](oidc-userinfo.md) | OIDC Core §5.1 | Supports the `claims` request parameter (§5.5) |
+| OIDC RP-Initiated Logout | [`oidc-logout.md`](oidc-logout.md) | OIDC RP-Initiated Logout 1.0 | `id_token_hint` required for redirect; front-channel via iframe |
 
-| Meccanismo | File | Standard |
+## Cross-cutting mechanisms
+
+| Mechanism | File | Standard |
 |-----------|------|----------|
 | Client authentication methods | [`client-auth-methods.md`](client-auth-methods.md) | RFC 7591 §2, RFC 7523 |
 | DPoP (sender-constrained tokens) | [`dpop.md`](dpop.md) | RFC 9449 |
 
-## Convenzioni comuni (vale per tutti i flow)
+## Common conventions (apply to every flow)
 
-- **UTC** ovunque, nessun datetime naive.
-- **UTC** storage: access token JWT (lifetime per-client), refresh token con rotazione, autorization code con exp.
-- **Rate limiting** per IP (o per token) su ogni endpoint di flusso.
-- **Audit logging** strutturato (structlog) su ogni evento di consenso/revoca/token.
-- Gli endpoint pubblici puntano a `request` con rate limit implicit.
+- **UTC on concile** — no naive datetimes anywhere.
+- **Token storage**: JWT access token (per-client lifetime), refresh token
+  with rotation, short-lived authorization code.
+- **Rate limiting** per IP (or per token) on every flow endpoint.
+- **Audit logging** (structlog) on every consent/revoke/token event.
+- Time-based expiry everywhere; no persistent server-side session.
 
 ---
 
-> Riferimento principale: [`docs/FEATURES.md`](../FEATURES.md) — catalogo completo di endpoint e feature.
+> Primary reference: [`docs/FEATURES.md`](../FEATURES.md) — the complete
+> endpoint + feature catalog.

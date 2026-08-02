@@ -1,8 +1,7 @@
 # DPoP — Sender-Constrained Tokens (RFC 9449)
 
-Legatura dimostrabile del possesso (proof-of-possession): l'access token è
-vincolato alla chiave pubblica del client, rendendo l'uso del token
-necessario per chi possiede la chiave.
+Proof-of-possession binding: the access token is bound to the client's
+public key, so the token is only usable by the holder of the key.
 
 ---
 
@@ -14,54 +13,73 @@ necessario per chi possiede la chiave.
 
 ---
 
-## Come lo supportiamo
+## Actors
 
-DPoP è **opt-in per-client** tramite il flag `dpop_bound` (default `False`).
-Quando è attivo:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant T as AuthGlow Token Endpoint
+    participant U as AuthGlow UserInfo
+    participant R as Resource Server
 
-1. Il client presenta un **DPoP proof JWT** nell'header `DPoP:` su ogni
-   richiesta al token endpoint e a UserInfo.
-2. L'access token è emesso con `cnf={"jkt":"<thumbprint>"}` e
-   `token_type=DPoP` (invece di `Bearer`).
-3. UserInfo richiede una proof con `ath` legata al token.
-
-### DPoP proof JWT
-
-Claim richiesti dal proof:
-
-| Claim | Semantica |
-|-------|-----------|
-| `htm` | HTTP method (`POST`, `GET`…) |
-| `htu` | URL del token endpoint (target) |
-| `iat` | Short-lived: max **120s** |
-| `jti` | Monouso, replay-protected via cache server-side |
-| `jwk` | Nell'header del proof — chiave pubblica del client |
-
-Algoritmo: **solo `ES256`** (per rispondere a FAPI 2.0).
+    C->>T: POST /oauth2/token (+ DPoP: proof JWT)
+    T->>T: verify proof (htm, htu, iat, jti) + client auth
+    T-->>C: access_token (token_type=DPoP, cnf={jkt})
+    C->>U: GET /oauth2/userinfo (+ DPoP: proof with ath)
+    U-->>C: 200 user claims
+    C->>R: GET /resource (Authorization: DPoP access_token)
+    R-->>C: 200 resource
+```
 
 ---
 
-## Conformità
+## How we support it
 
-| Aspetto | Stato |
-|--------|-------|
-| RFC 9449 | **Conforme** (ES256). |
-| `cnf` + `jkt` (RFC 7800) | Emesso sugli access token bound. |
-| `token_type` | `DPoP` invece di `Bearer`. |
-| Opt-in | **Custom**: non obbligatorio — attivato per-client (`dpop_bound`), non di default. |
-| Finestra `iat` | Max 120s, replay cache. |
+DPoP is **opt-in per client** via the `dpop_bound` flag (default `False`).
+When enabled:
+
+1. The client presents a **DPoP proof JWT** in the `DPoP:` header on every
+   request to the token endpoint and to UserInfo.
+2. The access token is issued with `cnf={"jkt":"<thumbprint>"}` and
+   `token_type=DPoP` (instead of `Bearer`).
+3. UserInfo requires a proof with `ath` bound to the token.
+
+### DPoP proof JWT required claims
+
+| Claim | Meaning |
+|-------|---------|
+| `htm` | HTTP method (`POST`, `GET`, …) |
+| `htu` | The token endpoint URL (target) |
+| `iat` | Short-lived: max **120 s** |
+| `jti` | Single-use, replay-protected via a server-side cache |
+| `jwk` | In the proof header — the client's public key |
+
+Algorithm: **`ES256` only** (to satisfy FAPI 2.0).
 
 ---
 
-## Endpoint
+## Conformance
+
+| Aspect | Status |
+|--------|--------|
+| RFC 9449 | **Conformant** (ES256). |
+| `cnf` + `jkt` (RFC 7800) | Issued on bound access tokens. |
+| `token_type` | `DPoP` instead of `Bearer`. |
+| Opt-in | **Custom**: not mandatory — enabled per client (`dpop_bound`), not by default. |
+| `iat` window | Max 120 s, replay cache. |
+
+---
+
+## Endpoints
 
 | Method | Path | Standard | Note |
 |--------|------|----------|------|
-| POST | `/oauth2/token` | RFC 9449 | Richiede DPoP proof per i client bound |
-| GET | `/oauth2/userinfo` | RFC 9449 | Richiede proof con `ath` fresh |
+| POST | `/oauth2/token` | RFC 9449 | Requires a DPoP proof for bound clients |
+| GET | `/oauth2/userinfo` | RFC 9449 | Requires a proof with fresh `ath` |
 
 ---
 
-> **Custom vs standard**: pienamente conforme a RFC 9449, ma **opt-in** per
-> client (non obbligatorio di default) — il che lo distingue dal deployment
-> obbligatorio di FAPI 2.0. Il token esce sempre `cnf` + `token_type=DPoP`.
+> **Custom vs standard**: fully conformant with RFC 9449, but **opt-in** per
+> client (not mandatory by default) — which differs from FAPI 2.0's mandatory
+> deployment. Bound tokens always carry `cnf` + `token_type=DPoP`.
