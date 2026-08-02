@@ -1,0 +1,22 @@
+# Never ship secrets or dev files into the image.
+.env
+.env.*
+!.env.example
+
+# Local/Python artifacts
+.venv
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# Local data / keys (volume-mounted at runtime)
+data/
+keys/
+
+# Tests are not part of the runtime image
+tests/
+.gitleaks.toml

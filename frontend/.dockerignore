@@ -1,0 +1,23 @@
+# Never ship development env or dependency/tooling files into the build.
+.env
+.env.*
+!.env.example
+!.env.production
+
+node_modules/
+dist/
+
+tests/
+coverage/
+playwright-report/
+test-results/
+
+# Local tooling / Python assistants living in the frontend folder
+*.py
+quick_test.py
+test-e2e*.py
+test-login.py
+test-oauth*.py
+
+*.log
+*.tsbuildinfo

@@ -5,8 +5,10 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.middleware import SlowAPIMiddleware
 
 from authglow.api.admin import router as admin_router
@@ -121,6 +123,10 @@ app.include_router(claim_policy_router, tags=["Claim Policy"])
 
 @app.get("/")
 async def root():
+    if _enable_frontend:
+        index = os.path.join(_dist, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
     return {"status": "ok", "app": "AuthGlow API"}
 
 
@@ -128,6 +134,42 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+
+# ---------------------------------------------------------------------------
+# Single-container mode (backend + frontend): serve the built SPA.
+#
+# Started only when ``FRONTEND_DIST_DIR`` is set and points to a directory
+# (done by the combined image). This enables the hashed ``/assets`` mount and
+# a SPA catch-all for client-side routes, WITHOUT touching the API. The
+# catch-all is registered last so every router above keeps matching first;
+# backend-only namespaces still 404 on unknown paths instead of returning the
+# HTML shell. When ``frontend_dist_dir`` is empty the block is a no-op.
+# ---------------------------------------------------------------------------
+_dist = settings.frontend_dist_dir
+_enable_frontend = bool(_dist and os.path.isdir(_dist))
+if _dist and os.path.isdir(_dist):
+    _dist = os.path.abspath(_dist)
+    _assets = os.path.join(_dist, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="assets")
+
+    # SPA client-side pages that live under the REST /oauth2 namespace and must
+    # be served by the shell; every other /oauth2 path is a server endpoint.
+    _SPA_OAUTH_PAGES = {"/oauth2/authorize", "/oauth2/device/verify"}
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def spa_fallback(path: str):
+        first = path.split("/", 1)[0].lower() if path else ""
+        if first in ("api", "well-known", "docs", "redoc", "openapi.json") or (
+            first == "oauth2" and "/" + path not in _SPA_OAUTH_PAGES
+        ):
+            raise HTTPException(status_code=404, detail="Not Found")
+        if path and os.path.isfile(os.path.join(_dist, path)):
+            return FileResponse(os.path.join(_dist, path))
+        index = os.path.join(_dist, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
+        raise HTTPException(status_code=404, detail="Not Found")
 
 
 if __name__ == "__main__":

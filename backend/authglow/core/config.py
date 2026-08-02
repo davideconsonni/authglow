@@ -429,6 +429,12 @@ class Settings(BaseSettings):
     # Base URL for links in emails
     base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:5173"
+    # Directory holding the built frontend (vite build output, i.e. the ``dist``
+    # folder). When set and present, FastAPI also serves the SPA and its static
+    # assets so a single container can expose both the API and the UI on one
+    # port. Leave empty for a backend-only deployment. In the container this is
+    # ``/app/frontend/dist`` (see the combined Dockerfile).
+    frontend_dist_dir: str = ""
     company_name: str = "AuthGlow"
 
     # UI Customization
