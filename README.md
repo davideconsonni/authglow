@@ -217,6 +217,12 @@ Copy `backend/.env.example` as a starting point, then override every value above
 
 ### ☁️ Google Cloud Run — single image, single port
 
+[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/davideconsonni/authglow.git)
+
+> One-click deploy straight from this repo (requires the repository to be
+> public and a Google Cloud project selected). It builds the root `Dockerfile`
+> (backend + frontend) and asks only for `SECRET_KEY`, via the root `app.json`.
+
 The root **`Dockerfile`** builds one image that contains **both** the FastAPI
 backend and the pre-built SPA frontend. FastAPI serves the SPA on the same
 origin as the API (single container, one port), so cookies are same-site and
