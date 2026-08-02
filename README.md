@@ -5,8 +5,10 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg">
-  <a href="https://github.com/davideconsonni/authglow/actions/workflows/test.yml"><img alt="Test Suite" src="https://github.com/davideconsonni/authglow/actions/workflows/test.yml/badge.svg"></a>
+<a href="https://github.com/davideconsonni/authglow/actions/workflows/test.yml"><img alt="Test Suite" src="https://github.com/davideconsonni/authglow/actions/workflows/test.yml/badge.svg"></a>
   <img alt="AI Generated" src="https://img.shields.io/badge/AI%20Generated-100%25-blueviolet.svg">
+  <br>
+  <a href="https://deploy.cloud.run/?git_repo=https://github.com/davideconsonni/authglow.git"><img alt="Run on Google Cloud" src="https://deploy.cloud.run/button.svg"></a>
 </p>
 
 ---
@@ -216,12 +218,6 @@ These have defaults that work locally but **must be changed** before going live:
 Copy `backend/.env.example` as a starting point, then override every value above.
 
 ### ☁️ Google Cloud Run — single image, single port
-
-[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/davideconsonni/authglow.git)
-
-> One-click deploy straight from this repo (requires the repository to be
-> public and a Google Cloud project selected). It builds the root `Dockerfile`
-> (backend + frontend) and asks only for `SECRET_KEY`, via the root `app.json`.
 
 The root **`Dockerfile`** builds one image that contains **both** the FastAPI
 backend and the pre-built SPA frontend. FastAPI serves the SPA on the same
