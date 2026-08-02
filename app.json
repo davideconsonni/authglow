@@ -1,6 +1,11 @@
 {
   "name": "authglow",
   "env": {
+    "STORAGE_BUCKET": {
+      "description": "GCS bucket name (globally unique). Created if missing; AuthGlow data and the JWT keyring are stored under it.",
+      "value": "",
+      "required": true
+    },
     "SECRET_KEY": {
       "description": "Encryption key (32+ chars) for sessions, signed cookies and the JWT keyring at rest. Generated if left blank.",
       "generator": "secret",
@@ -19,5 +24,17 @@
     "cpu": "1",
     "concurrency": 10,
     "max-instances": 3
+  },
+  "hooks": {
+    "precreate": {
+      "commands": [
+        "gsutil ls gs://$STORAGE_BUCKET 2>/dev/null || gcloud storage buckets create gs://$STORAGE_BUCKET --project=$GOOGLE_CLOUD_PROJECT --location=$GOOGLE_CLOUD_REGION"
+      ]
+    },
+    "postcreate": {
+      "commands": [
+        "gcloud run services update $K_SERVICE --region=$GOOGLE_CLOUD_REGION --project=$GOOGLE_CLOUD_PROJECT --set-env-vars 'STORAGE_BACKEND=gcs,STORAGE_PATH=gs://'$STORAGE_BUCKET'/authglow/data,KEYS_DIR=gs://'$STORAGE_BUCKET'/authglow/keys' --remove-env-vars STORAGE_BUCKET"
+      ]
+    }
   }
 }
