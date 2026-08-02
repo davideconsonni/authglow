@@ -56,7 +56,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 - Single `Dockerfile`, single volume for persistence
 - Zero message queue, zero cache cluster — just files
 
-> Full catalog with every endpoint: [FEATURES.md](FEATURES.md)
+> Full catalog with every endpoint: [FEATURES.md](docs/FEATURES.md)
 
 ---
 
@@ -258,13 +258,11 @@ npm run test:e2e   # Playwright end-to-end
 
 ## 📖 Documentation
 
-- [FEATURES.md](FEATURES.md) — complete feature catalog, endpoint by endpoint
+- [FEATURES.md](docs/FEATURES.md) — complete feature catalog, endpoint by endpoint
 - [ARCHITECTURE.md](ARCHITECTURE.md) — directory map, request lifecycle, where to add what
 - [DESIGN.md](DESIGN.md) — design system and visual language
 - [AGENTS.md](AGENTS.md) — developer guide for AI coding agents
 - [docs/QUICK_SETUP.md](docs/QUICK_SETUP.md) — zero-to-signed-in setup guide (local + deployed)
-- [docs/FAPI.md](docs/FAPI.md) — FAPI 2.0 gap analysis and roadmap
-- [docs/SECURITY.md](docs/SECURITY.md) — security model, threat model, and hardening rationale
 - [docs/CIE.md](docs/CIE.md) — Italian Electronic Identity Card (CIE) integration guide
 - [docs/GOOGLE.md](docs/GOOGLE.md) — Google OIDC integration guide
 - [SECURITY.md](SECURITY.md) — vulnerability reporting and scope
@@ -292,7 +290,7 @@ Found a security issue? Please follow [SECURITY.md](SECURITY.md). Found a bug, a
 
 This is `main`, moving fast — no tagged releases yet. Pin a commit if you need stability.
 
-SMTP / SendGrid / Mailgun / Resend email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](FEATURES.md) reflects working code.
+SMTP / SendGrid / Mailgun / Resend email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](docs/FEATURES.md) reflects working code.
 
 ---
 

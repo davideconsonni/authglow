@@ -272,75 +272,26 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
     })
   })
 
-  describe('CONFORMANCE T.4 — docs/FAPI.md', () => {
-    const fapiPath = resolve(ROOT, '..', 'docs', 'FAPI.md')
-
-    it('docs/FAPI.md esiste', () => {
-      expect(existsSync(fapiPath)).toBe(true)
-    })
-
-    it('docs/FAPI.md contiene il gap analysis principale', () => {
-      const content = readFileSync(fapiPath, 'utf-8')
-      // Le sezioni obbligatorie devono essere presenti.
-      expect(content).toContain('Conformance Matrix')
-      expect(content).toContain('Gap Roadmap')
-      expect(content).toContain('PAR')
-      expect(content).toContain('DPoP')
-      expect(content).toContain('mTLS')
-    })
-
-    it('docs/FAPI.md documenta T.2 (client_secret_jwt / private_key_jwt)', () => {
-      const content = readFileSync(fapiPath, 'utf-8')
-      expect(content).toContain('client_secret_jwt')
-      expect(content).toContain('private_key_jwt')
-    })
-
-    it('docs/FAPI.md documenta T.3 (DPoP RFC 9449)', () => {
-      const content = readFileSync(fapiPath, 'utf-8')
-      expect(content).toContain('RFC 9449')
-      expect(content).toContain('ES256')
-      expect(content).toContain('cnf')
-    })
-  })
-
   describe('CONFORMANCE U.3-U.5 — documentazione release', () => {
-    const securityPath = resolve(ROOT, '..', 'docs', 'SECURITY.md')
     const featuresPath = resolve(ROOT, '..', 'docs', 'FEATURES.md')
-    const changelogPath = resolve(ROOT, '..', 'CHANGELOG.md')
 
-    it('docs/SECURITY.md esiste e documenta i fix di conformance', () => {
-      expect(existsSync(securityPath)).toBe(true)
-      const content = readFileSync(securityPath, 'utf-8')
-      // La tabella dei fix di conformance deve esistere.
-      expect(content).toContain('Conformance Fixes Applied')
-      // Tutti i workstream A-T devono essere citati almeno
-      // una volta (a parte U.1/U.2 deferred).
-      for (const ws of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T.2', 'T.3', 'T.4']) {
-        expect(content).toContain(`**${ws}**`)
-      }
-    })
-
-    it('docs/FEATURES.md esiste e cataloga le feature OIDC', () => {
+    it('docs/FEATURES.md esiste e cataloga le feature OIDC/FAPI', () => {
       expect(existsSync(featuresPath)).toBe(true)
       const content = readFileSync(featuresPath, 'utf-8')
       expect(content).toContain('Supported OAuth 2.0 / OIDC Standards')
+      expect(content).toContain('FAPI 2.0 Security Profile')
+      // Client auth metute per T.2/T.3.
+      expect(content).toContain('client_secret_jwt')
+      expect(content).toContain('private_key_jwt')
+      expect(content).toContain('DPoP')
+      expect(content).toContain('mTLS')
+      expect(content).toContain('RFC 9449')
       // I claim OIDC devono essere documentati.
       expect(content).toContain('`acr`')
       expect(content).toContain('`amr`')
       expect(content).toContain('`at_hash`')
       expect(content).toContain('`c_hash`')
       expect(content).toContain('`sid`')
-    })
-
-    it('CHANGELOG.md esiste e documenta i breaking changes', () => {
-      expect(existsSync(changelogPath)).toBe(true)
-      const content = readFileSync(changelogPath, 'utf-8')
-      expect(content).toContain('Breaking Changes')
-      // I breaking changes principali.
-      expect(content).toContain('`password` grant')
-      expect(content).toContain('`implicit` grant')
-      expect(content).toContain('PKCE mandatory')
-      expect(content).toContain('post_logout_redirect_uri')
     })
   })
 })

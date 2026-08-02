@@ -34,9 +34,9 @@ authglow/
 ├── AGENTS.md                  # Code style, naming, test commands
 ├── ARCHITECTURE.md            # This file — structural map
 ├── DESIGN.md                  # Visual design system (colors, typography)
-├── FEATURES.md                # Complete feature catalog
 ├── SECURITY.md                # Vulnerability reporting policy
-├── docs/                      # Integration guides, post-mortems, plans
+├── docs/                      # Integration guides, feature catalog, plans, post-mortems
+│   ├── FEATURES.md            # Complete feature catalog
 ├── backend/
 │   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts
 │   ├── .env.example           # All configurable settings template

@@ -1366,14 +1366,14 @@ async def token_endpoint(
         #   - urn:ietf:params:oauth:grant-type:device_code
         # First-party browser login goes through `/api/token` below, which is
         # NOT a standard OAuth2 grant and MUST NOT be exposed to third-party
-        # clients. See docs/SECURITY.md.
+        # clients. See docs/FEATURES.md (Supported OAuth 2.0 / OIDC Standards).
         raise HTTPException(status_code=400, detail="Unsupported grant_type")
 
 
 # Traditional first-party token endpoint (browser login).
 # NOT a standard OAuth2 grant: reserved for the AuthGlow frontend only.
 # Third-party clients must use the standard `/oauth2/token` endpoint above
-# with one of the supported grants (see CONFORMANCE T.1, docs/SECURITY.md).
+# with one of the supported grants (see CONFORMANCE T.1, docs/FEATURES.md).
 @router.post("/api/token")
 @router.post("/api/token")
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP

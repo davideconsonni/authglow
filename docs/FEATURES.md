@@ -1081,7 +1081,7 @@ Any OIDC-compliant provider works out of the box:
 - `acr_values` for security levels (L1/L2/L3)
 - Custom claims mapping: codice_fiscale, NIS, data_nascita, etc.
 - NFC-based authentication handled transparently by the CIE IdP
-- Full documentation: [docs/CIE.md](docs/CIE.md)
+- Full documentation: [CIE.md](CIE.md)
 
 ### Admin Management
 - CRUD for external IdP configurations
@@ -1100,7 +1100,7 @@ Any OIDC-compliant provider works out of the box:
 - Federation flow available in the OAuth Playground for testing
 - Simulate redirect to external IdP with configurable parameters
 
-> For detailed CIE-specific setup, see [docs/CIE.md](docs/CIE.md).
+> For detailed CIE-specific setup, see [CIE.md](CIE.md).
 
 ---
 
@@ -1259,23 +1259,23 @@ endpoints, `jwks_uri`, `registration_endpoint`, supported scopes, grant types
 
 ## 31. FAPI 2.0 Capability Summary
 
-| FAPI 2.0 requirement                       | Status | Where                                        |
-|--------------------------------------------|--------|----------------------------------------------|
-| Asymmetric client auth (`private_key_jwt`)  | ✅    | `client_jwt_auth.py` — `OAuth2Client.public_jwk` |
-| Symmetric client auth (`client_secret_jwt`) | ✅    | `client_jwt_auth.py` — `client_secret_jwt_key` |
-| PKCE with S256                              | ✅    | `Settings.enforce_pkce` (default True)        |
-| `state` parameter validation                | ✅    | authorization endpoint                        |
-| HTTPS-only redirect URIs                     | ✅    | `oidc.py:_validate_redirect_uri`             |
-| `amr` / `acr` claim propagation              | ✅    | `services/acr.py`                            |
-| `at_hash` / `c_hash` on ID token             | ✅    | `services/jwt.py`                      |
-| Refresh-token rotation (single-use)          | ✅    | `RefreshTokenService.validate_and_rotate`    |
-| DPoP sender-constrained tokens               | ✅    | `services/dpop.py`                          |
-| PAR (Pushed Authorization Requests)          | ❌    | Follow-up                                 |
-| JARM (JWT-secured Auth Response)             | ❌    | Follow-up                                 |
-| mTLS client authentication                   | ❌    | Follow-up                                 |
-| Code lifetime ≤ 30s                          | 🟡    | Set `OAUTH2_AUTHORIZATION_CODE_EXPIRE_MINUTES=0.5` |
+| FAPI 2.0 requirement                        | Status | Where                                              |
+|---------------------------------------------|--------|----------------------------------------------------|
+| Asymmetric client auth (`private_key_jwt`)  | ✅     | `client_jwt_auth.py` — `OAuth2Client.public_jwk`   |
+| Symmetric client auth (`client_secret_jwt`) | ✅     | `client_jwt_auth.py` — `client_secret_jwt_key`     |
+| PKCE with S256                              | ✅     | `Settings.enforce_pkce` (default True)             |
+| `state` parameter validation                | ✅     | authorization endpoint                             |
+| HTTPS-only redirect URIs                    | ✅     | `oidc.py:_validate_redirect_uri`                   |
+| `amr` / `acr` claim propagation             | ✅     | `services/acr.py`                                  |
+| `at_hash` / `c_hash` on ID token            | ✅     | `services/jwt.py`                                  |
+| Refresh-token rotation (single-use)         | ✅     | `RefreshTokenService.validate_and_rotate`          |
+| DPoP sender-constrained tokens              | ✅     | `services/dpop.py`                                 |
+| PAR (Pushed Authorization Requests)         | ❌     | Follow-up                                          |
+| JARM (JWT-secured Auth Response)            | ❌     | Follow-up                                          |
+| mTLS client authentication                  | ❌     | Follow-up                                          |
+| Code lifetime ≤ 30s                         | 🟡     | Set `OAUTH2_AUTHORIZATION_CODE_EXPIRE_MINUTES=0.5` |
 
-See [docs/FAPI.md](FAPI.md) for the full gap analysis and roadmap.
+See [FAPI.md](FAPI.md) for the full gap analysis and roadmap.
 
 ---
 
