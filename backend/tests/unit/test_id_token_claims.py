@@ -3,8 +3,7 @@
 Validates that the ID token includes ``acr`` and ``amr`` claims based on
 the authentication methods used to obtain the authorization code.
 
-See ``docs/plans/CONFORMANCE_REMEDIATION_PLAN.md`` for context
-(OIDC Core §2, §5.5.1.1).
+Context: OIDC Core §2, §5.5.1.1.
 """
 
 import asyncio

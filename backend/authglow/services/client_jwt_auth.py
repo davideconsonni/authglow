@@ -3,7 +3,7 @@
 Implements ``client_secret_jwt`` (HS256, RFC 7521 §3.2) and
 ``private_key_jwt`` (RS256, RFC 7521 §3.1) client authentication at
 the token endpoint, per the FAPI 2.0 / OpenID Connect Core profile
-and ``CONFORMANCE_REMEDIATION_PLAN.md`` workstream T.2.
+(conformance workstream T.2).
 
 Public surface
 --------------

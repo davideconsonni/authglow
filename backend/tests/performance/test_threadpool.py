@@ -2,7 +2,7 @@
 
 Measures how the asyncio event loop handles a burst of blocking
 operations when the underlying ``ThreadPoolExecutor`` is sized
-differently. Tier 2.1 of ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md``
+differently. Performance workstream Tier 2.1
 widens the default executor from CPython's
 ``min(32, cpu_count + 4)`` workers to ``min(32, cpu_count * 4)``;
 this benchmark exists to decide whether that change actually moves
@@ -134,7 +134,7 @@ class TestThreadPoolBenchmark:
         pool (32 workers) cuts the wall time by >=20% vs
         the default pool (~28 workers on this machine), the
         §2.1 change is worth keeping. Otherwise, the
-        PERFORMANCE_OPTIMIZATION_PLAN §2.1 rollback procedure
+        Tier 2.1 rollback procedure
         applies and the ``set_default_executor`` line in
         ``main.py`` is reverted.
         """

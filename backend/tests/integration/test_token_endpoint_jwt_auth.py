@@ -1,7 +1,7 @@
 """Integration tests for the OAuth 2.0 token endpoint with JWT-Bearer
 client authentication (``client_secret_jwt`` / ``private_key_jwt``).
 
-CONFORMANCE_REMEDIATION_PLAN.md workstream T.2.
+Conformance workstream T.2.
 
 These tests stand up a minimal FastAPI app with the real
 ``/oauth2/token`` router and replace the heavy backing services

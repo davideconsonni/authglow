@@ -1,6 +1,6 @@
 """Migration: enforce PKCE on all existing OAuth2 clients.
 
-Context (Workstream B, CONFORMANCE_REMEDIATION_PLAN.md):
+Context (OAuth 2.0 Security BCP conformance, workstream B):
     OAuth 2.0 Security BCP requires PKCE for every client. This one-shot
     script sets ``require_pkce=True`` on every existing client that still
     has it set to ``False``. After the migration, the global

@@ -1134,8 +1134,8 @@ class KeyStoreRepository(Protocol):
 
         Implemented as an async, fsspec-routed accessor so the
         ``/.well-known/jwks.json`` route handler does not block
-        the event loop on per-kid file reads (Tier 1.8 of
-        ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md``)."""
+        the event loop on per-kid file reads (performance
+        workstream Tier 1.8)."""
 
     async def rotate(self, secret_key: str, key_size: int = 2048) -> object:
         """Generate a new RSA key pair, mark the current

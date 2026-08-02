@@ -20,8 +20,8 @@ _GRANT_TYPES_REJECTED_MESSAGE = (
 
 # Allowed values for ``token_endpoint_auth_method`` (RFC 7591 §2 + FAPI 2.0).
 # ``client_secret_jwt`` and ``private_key_jwt`` are the FAPI-aligned
-# alternatives to ``client_secret_basic``/``client_secret_post`` — see
-# CONFORMANCE_REMEDIATION_PLAN.md workstream T.2.
+# alternatives to ``client_secret_basic``/``client_secret_post``
+# (conformance workstream T.2).
 _ALLOWED_AUTH_METHODS = (
     "client_secret_basic",
     "client_secret_post",
@@ -162,7 +162,7 @@ class OAuth2Client(BaseModel):
 
     # token_endpoint_auth_method (RFC 7591 §2, FAPI 2.0). Defaults to
     # ``client_secret_basic`` for backward compatibility with clients
-    # registered before T.2 (CONFORMANCE_REMEDIATION_PLAN).
+    # registered before conformance workstream T.2.
     token_endpoint_auth_method: str = "client_secret_basic"
     # Fernet-encrypted symmetric key used to verify HS256 client_assertion
     # JWTs when ``token_endpoint_auth_method == "client_secret_jwt"``.

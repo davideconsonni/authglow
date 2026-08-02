@@ -1,6 +1,6 @@
 """Unit tests for :mod:`authglow.services.dpop`.
 
-CONFORMANCE_REMEDIATION_PLAN.md T.3: DPoP-bound tokens (RFC 9449).
+Conformance workstream T.3: DPoP-bound tokens (RFC 9449).
 ES256 only, with the public JWK embedded in the proof header.
 """
 

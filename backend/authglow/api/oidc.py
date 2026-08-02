@@ -43,8 +43,8 @@ async def openid_configuration(request: Request, response: Response):
     Returns metadata about the OpenID Provider's configuration.
     Spec: https://openid.net/specs/openid-connect-discovery-1_0.html
 
-    The response is publicly cacheable for one hour (Tier 1.6 of
-    PERFORMANCE_OPTIMIZATION_PLAN.md): the discovery document only
+    The response is publicly cacheable for one hour (performance
+    workstream Tier 1.6): the discovery document only
     changes on operator-driven configuration changes, not on
     per-request activity.  Public intermediaries (CDNs, reverse
     proxies) can serve the cached document to many clients.
@@ -159,7 +159,7 @@ async def jwks(request: Request, response: Response):
 
     The response is publicly cacheable for five minutes and
     carries an ETag derived from the keyring ``_version`` field
-    (Tier 1.6 of PERFORMANCE_OPTIMIZATION_PLAN.md).  Clients
+    (performance workstream Tier 1.6).  Clients
     (RPs) that re-fetch the JWKS within the cache window get
     a ``304 Not Modified`` from intermediaries, avoiding the
     cost of re-reading every public key file.
@@ -291,7 +291,7 @@ async def userinfo(
     Returns:
         User information based on the scopes in the access token
 
-    Tier 1.6 of PERFORMANCE_OPTIMIZATION_PLAN.md: the response is
+    Performance workstream Tier 1.6: the response is
     explicitly non-cacheable (``private, max-age=0, no-cache``).
     UserInfo is personalised and the response MUST NOT leak
     across users via shared caches.

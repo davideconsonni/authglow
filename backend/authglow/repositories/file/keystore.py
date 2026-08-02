@@ -192,7 +192,7 @@ class FileKeyStoreRepository(BaseFileRepository):
         return self._path(f"{kid}/public_key.pem")
 
     # ------------------------------------------------------------------
-    # Public key access (Tier 1.8 of PERFORMANCE_OPTIMIZATION_PLAN.md)
+    # Public key access (performance workstream Tier 1.8)
     # ------------------------------------------------------------------
 
     async def read_public_key(self, kid: str) -> Optional[bytes]:

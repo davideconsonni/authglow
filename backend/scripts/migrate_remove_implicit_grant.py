@@ -1,6 +1,6 @@
 """Migration: remove the 'implicit' grant_type from existing OAuth2 clients.
 
-Context (Workstream E, CONFORMANCE_REMEDIATION_PLAN.md):
+Context (OAuth 2.0 Security BCP conformance, workstream E):
     The implicit grant is deprecated by the OAuth 2.0 Security BCP and
     was never implemented by AuthGlow. The discovery endpoint and the
     DCR endpoint now refuse it, but legacy clients persisted on disk

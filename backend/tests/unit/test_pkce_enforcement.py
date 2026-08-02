@@ -4,8 +4,7 @@ Validates that ``Settings.enforce_pkce=True`` (global gate) forces every
 authorisation request and token exchange to include PKCE, regardless of
 per-client ``require_pkce``.
 
-See ``docs/plans/CONFORMANCE_REMEDIATION_PLAN.md`` for context
-(OAuth 2.0 Security BCP §4.8.1, RFC 7636).
+Context: OAuth 2.0 Security BCP §4.8.1, RFC 7636.
 """
 
 import secrets

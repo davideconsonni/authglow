@@ -1,7 +1,6 @@
 """Cache-Control and ETag header tests for the public OIDC endpoints.
 
-Tier 1.6 of ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md`` adds HTTP
-caching to three OIDC endpoints:
+Performance workstream Tier 1.6 adds HTTP caching to three OIDC endpoints:
 
 * ``/.well-known/openid-configuration`` — public, ``max-age=3600``
 * ``/.well-known/jwks.json`` — public, ``max-age=300``, ETag

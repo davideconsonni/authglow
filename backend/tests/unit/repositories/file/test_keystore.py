@@ -475,7 +475,7 @@ class TestFileKeyStoreRepositoryWithCustomKeysDir:
 
 
 # ---------------------------------------------------------------------------
-# Public key access (Tier 1.8 of PERFORMANCE_OPTIMIZATION_PLAN.md)
+# Public key access (performance workstream Tier 1.8)
 # ---------------------------------------------------------------------------
 
 

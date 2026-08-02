@@ -1,8 +1,9 @@
 """FastAPI dependency-injection factories for repositories.
 
-Per-entity factory functions are added here as each storage service
-is migrated to the repository pattern (see
-``docs/REFACTOR_REPOSITORY_PLAN.md`` §5.1 for the full schedule).
+One ``get_<entity>_repository()`` factory per entity. Services
+depend on these factories (or take an injected repository directly),
+so a new storage backend only adds a new ``repositories/<backend>/``
+implementation — zero changes to services or API.
 """
 
 from typing import TYPE_CHECKING

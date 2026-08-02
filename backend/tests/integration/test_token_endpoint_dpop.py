@@ -1,6 +1,6 @@
 """Integration tests for the OAuth 2.0 token endpoint with DPoP-bound clients.
 
-CONFORMANCE_REMEDIATION_PLAN.md T.3: RFC 9449 DPoP. ES256 only,
+Conformance workstream T.3: RFC 9449 DPoP. ES256 only,
 JWK embedded in the proof header. The token endpoint refuses to
 issue a token for a DPoP-bound client without a valid DPoP proof.
 """

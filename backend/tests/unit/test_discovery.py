@@ -6,8 +6,7 @@ types and grant types that the Authorization Server actually
 implements, and that the Dynamic Client Registration endpoint
 refuses the deprecated ``implicit`` grant.
 
-See ``docs/plans/CONFORMANCE_REMEDIATION_PLAN.md`` for context
-(implicit grant removal, OAuth 2.0 Security BCP §2.1.2).
+Context: implicit grant removal, OAuth 2.0 Security BCP §2.1.2.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch

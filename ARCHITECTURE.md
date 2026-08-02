@@ -42,15 +42,15 @@ authglow/
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
 │       ├── api/               # 18 FastAPI routers (HTTP layer, one per domain)
-│       ├── services/          # 27 service classes (business logic, cross-entity coordination)
+│       ├── services/          # 31 modules / 37 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
 │       │   ├── dependencies.py# Factory functions: get_<entity>_repository()
-│       │   └── file/          # 26 File*Repository impls (JSON on disk via fsspec)
-│       ├── models/            # Pydantic request/response/domain models
-│       ├── core/              # config.py, crypto.py, cache.py, concurrency.py, permissions.py
-│       └── middleware/        # Security headers, HTTPS enforcement, request size, proxy
+│       │   └── file/          # 25 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
+│       ├── models/            # Pydantic request/response/domain models (20 modules)
+│       ├── core/              # config, crypto, cache, concurrency, permissions, password, pii, datetime, async_io, http_client, jwt_singleton, rate_limit
+│       └── middleware/        # Security headers, HTTPS enforcement, request size, request ID, proxy headers
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx            # Routing, provider stack, route guards
@@ -58,7 +58,7 @@ authglow/
 │   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/
 │   │   ├── stores/            # Zustand: authStore, toastStore, playgroundStore
 │   │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle
-│   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts
+│   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts, jwt.ts, loginStorage.ts
 │   │   └── styles/            # globals.css (Tailwind + design tokens)
 │   └── e2e/                   # Playwright E2E specs
 └── images/                    # README screenshots
@@ -74,7 +74,7 @@ HTTP Request
   ▼
 Middleware stack (applied in order):
   CORSMiddleware → ProxyHeaders → SlowAPI (rate limit)
-  → SecurityHeaders (CSP/HSTS) → MaxBodySize → HTTPS enforcement
+  → SecurityHeaders (CSP/HSTS) → MaxBodySize → HTTPS enforcement → RequestID
   │
   ▼
 FastAPI Router (api/<module>.py)
@@ -130,7 +130,7 @@ Page component
 
 5. **All filesystem access goes through fsspec** — the `BaseFileRepository` base class owns the fsspec filesystem selection (`storage_backend`) and the `AsyncFileSystem` wrapper. Direct `os.path` / `open()` in repository code is a violation. Every entity, including the JWT keyring (`repositories/file/keystore.py`), rides on fsspec via `BaseFileRepository` and honours `STORAGE_BACKEND` like the rest. The keyring uses a `_version` field in `keyring.json` for object-store atomicity (CAS via `_write_json_versioned`).
 
-6. **CPU-bound work off the event loop** — bcrypt (`services/password.py:hash_password_async` / `verify_password_async`) and fsspec I/O (`core/async_io.py:AsyncFileSystem`) are offloaded to the default thread pool via `asyncio.to_thread`. All async request handlers must use the `*_async` variants of these helpers — see Tier 1.1 of `docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md` for the rollout. The sync `hash_password` / `verify_password` remain available for CLI scripts and offline jobs.
+6. **CPU-bound work off the event loop** — bcrypt (`services/password.py:hash_password_async` / `verify_password_async`) and fsspec I/O (`core/async_io.py:AsyncFileSystem`) are offloaded to the default thread pool via `asyncio.to_thread`. All async request handlers must use the `*_async` variants of these helpers. The sync `hash_password` / `verify_password` remain available for CLI scripts and offline jobs.
 
 7. **Default-safe enforcement** — AuthGlow is hardened at the framework layer, not at the call site. Examples: PKCE enforced for every authorization-code flow (`enforce_pkce=True`), implicit grant rejected at the model layer, ROPC rejected at the token endpoint, refresh-token rotation with reuse-detection family-revocation, and **API-key BOPLA + IP allowlist enforced by default** (see "API Key Hardening" below). New features must follow the same pattern: declare a policy, enforce it in the service, not in the route handler.
 
@@ -154,6 +154,13 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 | `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                                      |
 | `backend/authglow/services/claim_policy.py`     | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
 | `backend/authglow/models/claim_policy.py`       | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
+| `backend/authglow/api/device_auth.py`           | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
+| `backend/authglow/api/claim_policy.py`          | Claim policy CRUD per client + admin templates                                            |
+| `backend/authglow/services/dpop.py`             | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
+| `backend/authglow/services/client_jwt_auth.py`  | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |
+| `backend/authglow/services/acr.py`              | ACR/AMR computation for ID tokens                                                         |
+| `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                 |
+| `backend/authglow/api/admin_settings.py`        | Admin settings read + rate-limit status endpoints                                         |
 | `frontend/src/App.tsx`                          | All routes, providers, guards                                                             |
 | `frontend/src/lib/api.ts`                       | HTTP client with auto-refresh, 429 handling, session-expired dispatch                     |
 | `frontend/src/lib/constants.ts`                 | `ROUTES` object and `API_URL`                                                             |

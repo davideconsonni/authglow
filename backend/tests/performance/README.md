@@ -9,7 +9,7 @@ and ``tests/integration/`` (which exercises cross-module flows), this suite:
   validates single-operation overhead and concurrency safety of the new
   ``asyncio.to_thread`` bcrypt path.
 
-The Tier 1.1 of ``docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md`` introduced
+Performance workstream Tier 1.1 introduced
 ``hash_password_async`` / ``verify_password_async``; this file is the
 regression test that proves the async path is correct AND does not
 block the event loop.

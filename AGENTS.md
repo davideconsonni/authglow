@@ -279,8 +279,8 @@ Lazy imports inside functions for circular-dependency avoidance.
 backend/
   authglow/
     api/          # FastAPI routers (HTTP layer)
-    core/         # Config, crypto, cache, rate_limit, datetime, password
-    middleware/   # Security headers, request size, HTTPS enforcement
+    core/         # Config, crypto, cache, rate_limit, datetime, password, pii, permissions, concurrency, async_io, http_client, jwt_singleton
+    middleware/   # Security headers, request size, HTTPS enforcement, request ID, proxy headers
     models/       # Pydantic data models
     services/     # Business logic (thin facade over repositories)
     repositories/ # ⭐ NEW: Repository pattern abstraction
@@ -294,7 +294,7 @@ backend/
     unit/
       repositories/
         test_protocols.py   # ⭐ 20+ parametrized conformance checks
-        test_in_memory.py    # ⭐ 7 in-memory smoke tests
+        test_in_memory.py    # ⭐ 8 in-memory smoke tests
         file/                # Per-impl File tests
           test_<entity>.py   # 1 per entity (20+ entities)
       test_<service>.py
@@ -302,9 +302,9 @@ backend/
     conftest.py   # Shared fixtures (incl. _override_settings autouse)
 
 frontend/src/
-  lib/            # api.ts, utils.ts, constants.ts
-  stores/         # Zustand stores (authStore, playgroundStore)
-  hooks/          # Custom hooks (useApi, useAuth, useTheme)
+  lib/            # api.ts, utils.ts, constants.ts, jwt.ts, loginStorage.ts
+  stores/         # Zustand stores (authStore, toastStore, playgroundStore)
+  hooks/          # Custom hooks (useApi, useAuth, useTheme, useDocumentTitle)
   components/
     ui/           # shadcn/ui primitives
     layout/       # AppShell, Sidebar, TopBar
@@ -316,8 +316,9 @@ frontend/src/
 ### Repository Pattern (post-Fase 21)
 
 The `authglow/repositories/` layer was introduced in **Fase 0**
-and completed in **Fase 21** (see `docs/REFACTOR_REPOSITORY_PLAN.md`
-for the full 21-phase migration history).
+and completed in **Fase 21** — the original 21-phase migration
+plan is archived in git history. The current repository layout
+is authoritative.
 
 **Key principles**:
 

@@ -1,6 +1,6 @@
 """Unit tests for :mod:`authglow.services.client_jwt_auth`.
 
-CONFORMANCE_REMEDIATION_PLAN.md T.2: ``client_secret_jwt`` (HS256)
+Conformance workstream T.2: ``client_secret_jwt`` (HS256)
 and ``private_key_jwt`` (RS256) client authentication at the OAuth 2.0
 token endpoint.
 

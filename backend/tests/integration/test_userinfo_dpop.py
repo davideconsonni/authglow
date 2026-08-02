@@ -1,6 +1,6 @@
 """Integration tests for the UserInfo endpoint with DPoP-bound tokens.
 
-CONFORMANCE_REMEDIATION_PLAN.md T.3: RFC 9449 DPoP. The UserInfo
+Conformance workstream T.3: RFC 9449 DPoP. The UserInfo
 endpoint must verify the DPoP proof whenever the access token
 carries a ``cnf`` claim (proof-of-possession binding).
 """

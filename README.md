@@ -28,6 +28,8 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 - **Device Authorization Grant** (RFC 8628) — sign in on a CLI, smart TV, or IoT device by entering a code on your phone
 - **Passkeys (WebAuthn/FIDO2)** — passwordless sign-in with Touch ID, Windows Hello, or a security key
 - **Multi-Factor Authentication** — TOTP, backup codes, "remember this device"
+- **DPoP (RFC 9449)** — sender-constrained tokens, bound to a client keypair via `cnf` claims
+- **Client authentication methods** — `client_secret_basic/post`, `client_secret_jwt` (HS256), `private_key_jwt` (RS256), `none` (public + PKCE)
 - **API Keys** — scoped, bcrypt-hashed, never stored in plaintext
 
 **Identity federation**
@@ -37,6 +39,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 **Authorization & admin**
 - **RBAC** — roles, permissions, per-route enforcement
+- **Claim Policy** — per-OAuth2-client declarative rules that decide which custom claims land in access/ID tokens (OIDC §5.1.2 namespacing)
 - **OAuth2 client management** — per-client branding, scopes, grant types, secret rotation
 - **Consent screen** — configurable, with custom CSS branding per client
 - **Admin dashboard** — users, OAuth2 clients, sessions, consents, API keys, roles, JWK keys, audit log
@@ -70,7 +73,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 The full experience — login screen, MFA, passkeys, admin dashboard, OAuth Playground — needs **both** the backend (API) and the frontend (UI) running. It's two terminals and about three minutes.
 
-**Prerequisites:** Python 3.11+, Node.js 20.19+ (or 22.12+), Git.
+**Prerequisites:** Python 3.11+, Node.js 20.19+ (or 22.12+, below 24), Git.
 
 ### Terminal 1 — Backend
 
@@ -160,7 +163,7 @@ authglow/
 │   │   ├── repositories/   storage layer — one fsspec-backed implementation per entity
 │   │   ├── services/       business logic: JWT, OAuth2, MFA, passkeys, RBAC, email
 │   │   └── templates/      Jinja2 email templates
-│   ├── tests/              1,200+ unit & integration tests (pytest)
+│   ├── tests/              2,300+ unit & integration tests (pytest)
 │   └── main.py             entry point
 │
 └── frontend/
@@ -172,7 +175,7 @@ authglow/
     └── e2e/                Playwright end-to-end tests
 ```
 
-**Stack:** Python 3.11+ / FastAPI / Pydantic v2 (backend) · TypeScript / React 19 / Vite / Tailwind / Zustand / TanStack Query (frontend).
+**Stack:** Python 3.11+ / FastAPI / Pydantic v2 (backend) · TypeScript / React 19 / Vite / Tailwind / Zustand / TanStack Query / React Router (frontend).
 
 **Persistence:** files on disk or cloud object storage via fsspec. No database, no migrations, no ORM.
 
@@ -241,7 +244,7 @@ The JWT signing keyring lives at `KEYS_DIR` (default `data/keys/`) and rides on 
 
 ```bash
 cd backend
-pytest -q --tb=line -n auto       # ~1,250 tests, parallelized
+pytest -q --tb=line -n auto       # ~2,300 tests, parallelized
 ruff check authglow/ && mypy authglow/
 ```
 
@@ -260,6 +263,8 @@ npm run test:e2e   # Playwright end-to-end
 - [DESIGN.md](DESIGN.md) — design system and visual language
 - [AGENTS.md](AGENTS.md) — developer guide for AI coding agents
 - [docs/QUICK_SETUP.md](docs/QUICK_SETUP.md) — zero-to-signed-in setup guide (local + deployed)
+- [docs/FAPI.md](docs/FAPI.md) — FAPI 2.0 gap analysis and roadmap
+- [docs/SECURITY.md](docs/SECURITY.md) — security model, threat model, and hardening rationale
 - [docs/CIE.md](docs/CIE.md) — Italian Electronic Identity Card (CIE) integration guide
 - [docs/GOOGLE.md](docs/GOOGLE.md) — Google OIDC integration guide
 - [SECURITY.md](SECURITY.md) — vulnerability reporting and scope
@@ -287,7 +292,7 @@ Found a security issue? Please follow [SECURITY.md](SECURITY.md). Found a bug, a
 
 This is `main`, moving fast — no tagged releases yet. Pin a commit if you need stability.
 
-SMTP / SendGrid / Mailgun email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](FEATURES.md) reflects working code.
+SMTP / SendGrid / Mailgun / Resend email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](FEATURES.md) reflects working code.
 
 ---
 

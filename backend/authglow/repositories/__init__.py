@@ -22,17 +22,10 @@ Layered architecture::
             ├── base.py      # BaseFileRepository (fsspec + AsyncFileSystem)
             └── <entity>.py  # File<Entity>Repository
 
-Two-layer migration is in progress:
-
-* ``repositories/protocols.py`` declares the contracts.
-* ``repositories/file/<entity>.py`` provides the file-system
-  implementations. The existing services in ``authglow.services`` are
-  migrated one at a time (strangler pattern) to call these
-  repositories instead of using ``fsspec`` / ``AsyncFileSystem`` directly.
-
-Until a service is migrated, the corresponding ``File<Entity>Repository``
-may not exist yet — see ``docs/REFACTOR_REPOSITORY_PLAN.md`` for the
-full migration roadmap.
+The migration to the repository pattern is complete: every service in
+``authglow.services`` calls a repository instead of using ``fsspec`` /
+``AsyncFileSystem`` directly, and a ``File<Entity>Repository``
+implementation exists for every entity (see AGENTS.md for the layout).
 """
 
 from authglow.repositories.exceptions import (

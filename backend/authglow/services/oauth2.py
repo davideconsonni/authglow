@@ -85,7 +85,7 @@ class OAuth2Service:
         return self._repository
 
     # ------------------------------------------------------------------
-    # Per-request client cache (Tier 1.5 of PERFORMANCE_OPTIMIZATION_PLAN)
+    # Per-request client cache (performance workstream Tier 1.5)
     # ------------------------------------------------------------------
 
     async def _get_client_cached(self, client_id: str) -> Optional[OAuth2Client]:
