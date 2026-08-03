@@ -16,8 +16,6 @@
 
 AuthGlow is a self-hosted **OAuth 2.0 / OpenID Connect authorization server**, user directory, and admin console — with no database to run, patch, or back up. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the exact same code runs on your laptop, a VPS, or against an S3 bucket.
 
-If you've ever looked at Keycloak or Ory Hydra and thought *"I don't want to operate a database cluster just to handle login,"* this is built for that exact moment.
-
 Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data — including the JWT signing keys — moves with it. No migrations, no schema, no code changes.
 
 ---
