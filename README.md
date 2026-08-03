@@ -8,14 +8,13 @@
 <a href="https://github.com/davideconsonni/authglow/actions/workflows/test.yml"><img alt="Test Suite" src="https://github.com/davideconsonni/authglow/actions/workflows/test.yml/badge.svg"></a>
   <img alt="AI Generated" src="https://img.shields.io/badge/AI%20Generated-100%25-blueviolet.svg">
   <br>
-  <a href="https://deploy.cloud.run/?git_repo=https://github.com/davideconsonni/authglow.git"><img alt="Run on Google Cloud" src="https://deploy.cloud.run/button.svg"></a>
 </p>
 
 ---
 
 ## What is AuthGlow?
 
-AuthGlow is a self-hosted **OAuth 2.0 / OpenID Connect authorization server**, user directory, and admin console — with no database to run, patch, or back up. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the exact same code runs on your laptop, in a single Cloud Run container, or against an S3 bucket.
+AuthGlow is a self-hosted **OAuth 2.0 / OpenID Connect authorization server**, user directory, and admin console — with no database to run, patch, or back up. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the exact same code runs on your laptop, a VPS, or against an S3 bucket.
 
 If you've ever looked at Keycloak or Ory Hydra and thought *"I don't want to operate a database cluster just to handle login,"* this is built for that exact moment.
 
@@ -126,7 +125,7 @@ docker run -p 8000:8000 -e PORT=8000 \
   authglow
 ```
 
-`PORT=8000` keeps the container aligned with the `BASE_URL` / `ISSUER` / `PASSKEY_ORIGIN` defaults already in `.env.example` — without it, the container listens on `8080` (the Cloud Run convention baked into the image) while your config still advertises `8000`, which breaks OIDC discovery.
+`PORT=8000` keeps the container aligned with the `BASE_URL` / `ISSUER` / `PASSKEY_ORIGIN` defaults already in `.env.example`.
 
 </details>
 
@@ -198,7 +197,7 @@ Generate a production-safe secret:
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Set it as an environment variable on your platform (Docker `--env-file`, Render dashboard, Cloud Run secrets, etc.).
+Set it as an environment variable on your platform (Docker `--env-file`, Render dashboard, your cloud provider's secrets manager, etc.).
 
 ### Recommended for Production
 
@@ -216,98 +215,6 @@ These have defaults that work locally but **must be changed** before going live:
 | `PASSKEY_ORIGIN` | `http://localhost:8000` | Your public URL |
 
 Copy `backend/.env.example` as a starting point, then override every value above.
-
-### ☁️ Google Cloud Run — single image, single port
-
-The root **`Dockerfile`** builds one image that contains **both** the FastAPI
-backend and the pre-built SPA frontend. FastAPI serves the SPA on the same
-origin as the API (single container, one port), so cookies are same-site and
-CORS never comes into play. The same image also runs on GKE, EKS, ECS, or any
-Docker host — nothing about it is Cloud Run-specific.
-
-**1. Project & region**
-
-```bash
-gcloud config set project YOUR_PROJECT
-gcloud auth configure-docker
-REGION=us-central1                 # change as needed
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com
-
-# One-time Artifact Registry repo for the image
-gcloud artifacts repositories create gcp \
-  --repository-format=docker --location=$REGION
-```
-
-**2. Build and push the be+fe image**
-
-```bash
-# Builds the root ./Dockerfile (backend + built frontend) and pushes it.
-gcloud builds submit --region=$REGION \
-  --tag=$REGION-docker.pkg.dev/YOUR_PROJECT/gcp/authglow:latest .
-```
-
-> The frontend is built **without** `VITE_API_URL`, so the SPA talks to the
-> same origin (relative `/api/...`). That keeps the image deployable behind any
-> public URL with no rebuild.
-
-**3. Create the object-storage bucket** (Cloud Run instances have an ephemeral,
-read-only filesystem — persistence must be cloud storage):
-
-```bash
-gsutil mb -l $REGION gs://YOUR_AUTHGLOW_BUCKET
-```
-
-**4. Deploy (first pass — just to learn the URL)**
-
-```bash
-IMAGE=$REGION-docker.pkg.dev/YOUR_PROJECT/gcp/authglow:latest
-
-gcloud run deploy authglow --image $IMAGE \
-  --region=$REGION --port 8080 --ingress=all --allow-unauthenticated \
-  --memory=2Gi --cpu=1 \
-  --set-env-vars SECRET_KEY=REPLACE_WITH_32PLUS_RANDOM_CHARS
-```
-
-Grab the assigned URL, then **redeploy** with every setting that must match it
-(`BASE_URL`, `ISSUER`, `PASSKEY_ORIGIN`, `frontend_base_url`, `CORS_ALLOWED_ORIGINS`):
-
-```bash
-PUBLIC_URL=$(gcloud run services describe authglow --region=$REGION --format='value(status.url)')
-IMAGE=$REGION-docker.pkg.dev/YOUR_PROJECT/gcp/authglow:latest
-
-# Passkey RP ID is the hostname without the scheme, e.g. "authglow-hash-uc.a.run.app"
-RP_ID=$(python -c "from urllib.parse import urlparse;print(urlparse('$PUBLIC_URL').hostname)")
-
-gcloud run deploy authglow --image $IMAGE \
-  --region=$REGION --port 8080 --ingress=all --allow-unauthenticated \
-  --memory=2Gi --cpu=1 \
-  --set-env-vars \
-    "APP_ENV=production,STORAGE_BACKEND=gcs,STORAGE_PATH=gs://YOUR_AUTHGLOW_BUCKET/authglow/data,KEYS_DIR=gs://YOUR_AUTHGLOW_BUCKET/authglow/keys,SECRET_KEY=REPLACE_WITH_32PLUS_RANDOM_CHARS,BASE_URL=$PUBLIC_URL,ISSUER=$PUBLIC_URL,PASSKEY_RP_ID=$RP_ID,PASSKEY_ORIGIN=$PUBLIC_URL,FRONTEND_BASE_URL=$PUBLIC_URL,CORS_ALLOWED_ORIGINS=$PUBLIC_URL" \
-  --service-account=YOUR_SERVICE_ACCOUNT
-```
-
-- Whatever service account you pass needs `roles/storage.objectAdmin` on the bucket.
-- **Do not** set `ENFORCE_HTTPS=true`: Cloud Run terminates TLS at its load
-  balancer and `X-Forwarded-Proto` is handled by the platform; enabling it inside
-  the container can cause redirect loops.
-- For secrets (`SECRET_KEY`, `OAUTH2_CLIENT_SECRET`) prefer
-  [Cloud Run secrets](https://cloud.google.com/run/docs/configuring/secrets) over
-  plain env vars once you promote past a smoke test.
-
-Open `$PUBLIC_URL/setup` and create your admin with the one-time `SETUP_TOKEN`.
-
-### Platforms
-
-| Platform | Notes |
-|---|---|
-| **Docker** | Root `Dockerfile` = backend + frontend in one image/port. Launch: `docker build -t authglow . && docker run -p 8080:8080 -e SECRET_KEY=... authglow`. For the API-only image, use `backend/Dockerfile` (see Quick Start). |
-| **GCP Cloud Run** | Single be+fe image — see *☁️ Google Cloud Run* above. `STORAGE_BACKEND=gcs` |
-| **GKE / EKS / ECS** | Same single be+fe image behind an Ingress/Service; `STORAGE_BACKEND=gcs|s3`, shared `KEYS_DIR`. |
-| **AWS Lambda** | FastAPI via Mangum, `STORAGE_BACKEND=s3` |
-| **Azure Functions** | Container deploy, `STORAGE_BACKEND=abfs` |
-| **VPS / bare metal** | systemd service, `STORAGE_PATH=/data/authglow` |
-
-Switch storage backend at any time — your data moves with it, just change `STORAGE_BACKEND`.
 
 ### Multiple instances? Mind the keyring
 
