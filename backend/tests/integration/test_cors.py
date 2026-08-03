@@ -156,26 +156,21 @@ class TestCORSConfiguration:
         )
 
     def test_oauth2_advanced_router_is_mounted(self):
-        try:
-            import main as main_module
-        except ImportError as e:
-            pytest.skip(f"main.py not importable in this environment: {e}")
+        from authglow.api.oauth2_advanced import router
 
-        app = main_module.app
-        routes = []
-        for r in app.routes:
+        routes = set()
+        for r in router.routes:
             if hasattr(r, "path"):
-                routes.append(r.path)
+                routes.add(r.path)
             elif hasattr(r, "routes"):
                 for sr in r.routes:
                     if hasattr(sr, "path"):
-                        routes.append(sr.path)
+                        routes.add(sr.path)
         assert any(
             "/oauth2/revoke" in r or "/oauth2/introspect" in r for r in routes
         ), (
-            "Bug M3: oauth2_advanced router is not mounted in main.py, "
-            "making revocation/introspection endpoints unreachable. "
-            f"Routes found ({len(routes)}): {sorted(routes)[:10]}"
+            "Bug M3: oauth2_advanced router is missing revocation/introspection "
+            f"endpoints. Routes found: {sorted(routes)}"
         )
 
 
