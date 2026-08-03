@@ -421,6 +421,7 @@ _EXCLUDED_FIELDS = frozenset(
         "keys_dir",
         "private_key_path",
         "public_key_path",
+        "frontend_dist_dir",
     }
 )
 

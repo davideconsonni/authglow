@@ -165,6 +165,28 @@ def _clear_crypto_caches():
     crypto.verification_code_lookup_key.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """Clear the process-wide slowapi in-memory budget between tests.
+
+    ``auth.py`` rate-limits ``POST /api/oauth2/authorize`` at 10/minute
+    via the central :class:`Limiter` singleton
+    (``authglow.core.rate_limit``), whose ``MemoryStorage`` is global
+    to the worker and is never cleared by pytest. Tests that include
+    ``auth.router`` and call that endpoint (mock PKCE / VAPT-048 suites)
+    each draw from the same shared budget — once too many authorize
+    calls happen across a worker, later tests get a 429 instead of the
+    expected 401/423/400. ``reset()`` wipes the storage/events/locks so
+    every test starts with a clean budget. Tests that deliberately
+    exercise limiting (``test_proxy_headers``, ``test_rate_limit``) use
+    their own local :class:`Limiter`, so they are unaffected.
+    """
+    from authglow.core.rate_limit import limiter
+
+    yield
+    limiter.reset()
+
+
 @pytest.fixture
 def jwt_service(test_settings):
     import asyncio

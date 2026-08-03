@@ -156,11 +156,9 @@ class TestCORSConfiguration:
         )
 
     def test_oauth2_advanced_router_is_mounted(self):
-        from authglow.api.oauth2_advanced import router
-        from fastapi import FastAPI
+        import main as main_module
 
-        app = FastAPI()
-        app.include_router(router)
+        app = main_module.app
         routes = []
         for r in app.routes:
             if hasattr(r, "path"):
