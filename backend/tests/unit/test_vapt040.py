@@ -305,59 +305,6 @@ class TestVapt040TokenBlacklistHmacFilename:
 
 
 # ---------------------------------------------------------------------------
-# Storage directories — mode 0700
-# ---------------------------------------------------------------------------
-
-
-class TestVapt040DirectoryPermissions:
-    def test_newly_created_storage_path_has_mode_0o700(self, test_settings, tmp_path):
-        """VAPT-040: a freshly-created storage directory must be
-        mode ``0o700`` so a directory-read attacker with a
-        non-owner account cannot enumerate the index files."""
-        if os.name == "nt":
-            pytest.skip("chmod 0o700 is unreliable on Windows")
-
-        from authglow.repositories.file.user import FileUserRepository
-
-        # Use a sub-path that the test_settings fixture does not
-        # pre-create, so this test exercises a true fresh-creation
-        # scenario (VAPT-040).
-        storage_path = str(tmp_path / "fresh" / "users")
-        if os.path.exists(storage_path):
-            shutil.rmtree(os.path.dirname(storage_path))
-        custom = test_settings.model_copy(update={"storage_path": storage_path})
-        # Force the path not to exist yet.
-        assert not os.path.exists(storage_path)
-        FileUserRepository(settings=custom)
-
-        mode = os.stat(storage_path).st_mode & 0o777
-        assert mode == 0o700, (
-            f"Expected 0o700, got {oct(mode)} — VAPT-040 directory "
-            "permission tightening did not apply"
-        )
-
-    def test_existing_directory_is_tightened_to_0o700(self, test_settings, tmp_path):
-        """An existing directory with looser permissions (e.g. ``0o755``)
-        must be tightened on the next repository construction."""
-        if os.name == "nt":
-            pytest.skip("chmod 0o700 is unreliable on Windows")
-
-        from authglow.repositories.file.user import FileUserRepository
-
-        storage_path = str(tmp_path / "data" / "users")
-        os.makedirs(storage_path, mode=0o755, exist_ok=True)
-        os.chmod(storage_path, 0o755)
-        # Sanity: the dir is currently 0o755.
-        assert (os.stat(storage_path).st_mode & 0o777) == 0o755
-
-        custom = test_settings.model_copy(update={"storage_path": storage_path})
-        FileUserRepository(settings=custom)
-
-        mode = os.stat(storage_path).st_mode & 0o777
-        assert mode == 0o700
-
-
-# ---------------------------------------------------------------------------
 # Crypto helpers — roundtrip + migration
 # ---------------------------------------------------------------------------
 

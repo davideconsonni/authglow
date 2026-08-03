@@ -238,11 +238,14 @@ class TestVapt038BcryptRoundsConfigurable:
         import bcrypt
         from authglow.services import password as password_service
 
+        # ``test_settings`` pins ``bcrypt_rounds`` at the floor (4) to
+        # keep the suite fast. A test hash must sit *below* the current
+        # target, which is impossible at the floor, so raise the target
+        # for this case to exercise the stale-hash rehash path.
+        test_settings.bcrypt_rounds = 5
         target = test_settings.bcrypt_rounds
-        if target <= 4:
-            pytest.skip("Cannot simulate stale hash when target is at floor (4)")
 
-        # Build a hash at one cost below the target.
+        # Build a hash at the cost below the target.
         stale = bcrypt.hashpw(
             b"Vapt038P@ss1!",
             bcrypt.gensalt(rounds=target - 1),
