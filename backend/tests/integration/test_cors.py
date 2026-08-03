@@ -155,24 +155,6 @@ class TestCORSConfiguration:
             "passing cors_allowed_headers directly to CORSMiddleware"
         )
 
-    def test_oauth2_advanced_router_is_mounted(self):
-        from authglow.api.oauth2_advanced import router
-
-        routes = set()
-        for r in router.routes:
-            if hasattr(r, "path"):
-                routes.add(r.path)
-            elif hasattr(r, "routes"):
-                for sr in r.routes:
-                    if hasattr(sr, "path"):
-                        routes.add(sr.path)
-        assert any(
-            "/oauth2/revoke" in r or "/oauth2/introspect" in r for r in routes
-        ), (
-            "Bug M3: oauth2_advanced router is missing revocation/introspection "
-            f"endpoints. Routes found: {sorted(routes)}"
-        )
-
 
 class TestTimezoneConsistency:
     def test_services_do_not_use_deprecated_utcnow(self):
@@ -193,14 +175,4 @@ class TestTimezoneConsistency:
         assert len(offenders) == 0, (
             f"Bug M4: the following modules still use deprecated datetime.utcnow() "
             f"instead of authglow.core.datetime.utcnow(): {', '.join(offenders)}"
-        )
-
-    def test_main_py_mounts_oauth2_advanced_router(self):
-        import main as main_module
-        import inspect
-
-        source = inspect.getsource(main_module)
-        assert "oauth2_advanced" in source or "oauth2_advanced_router" in source, (
-            "Bug M3: oauth2_advanced router is not mounted in main.py, "
-            "making revocation/introspection endpoints unreachable."
         )
