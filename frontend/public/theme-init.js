@@ -6,7 +6,7 @@
       theme = saved
     }
   } catch(e) {}
-  if (theme === 'light' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)) {
-    document.documentElement.classList.add('light')
+  if (theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark')
   }
 })()

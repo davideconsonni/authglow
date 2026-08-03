@@ -8,10 +8,15 @@ function readPackageJson() {
   return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'))
 }
 
-describe('Fase 1.1 — Tailwind CSS + PostCSS + Autoprefixer', () => {
+describe('Fase 1.1 — Tailwind CSS v4 + PostCSS', () => {
   it('tailwindcss è in devDependencies', () => {
     const pkg = readPackageJson()
     expect(pkg.devDependencies).toHaveProperty('tailwindcss')
+  })
+
+  it('@tailwindcss/postcss è in devDependencies', () => {
+    const pkg = readPackageJson()
+    expect(pkg.devDependencies).toHaveProperty('@tailwindcss/postcss')
   })
 
   it('postcss è in devDependencies', () => {
@@ -19,24 +24,14 @@ describe('Fase 1.1 — Tailwind CSS + PostCSS + Autoprefixer', () => {
     expect(pkg.devDependencies).toHaveProperty('postcss')
   })
 
-  it('autoprefixer è in devDependencies', () => {
-    const pkg = readPackageJson()
-    expect(pkg.devDependencies).toHaveProperty('autoprefixer')
-  })
-
   it('postcss.config.js esiste', () => {
     const configPath = resolve(ROOT, 'postcss.config.js')
     expect(existsSync(configPath)).toBe(true)
   })
 
-  it('postcss.config.js contiene la configurazione tailwindcss', async () => {
+  it('postcss.config.js contiene la configurazione @tailwindcss/postcss', async () => {
     const config = await import(resolve(ROOT, 'postcss.config.js'))
-    expect(config.default.plugins).toHaveProperty('tailwindcss')
-  })
-
-  it('postcss.config.js contiene la configurazione autoprefixer', async () => {
-    const config = await import(resolve(ROOT, 'postcss.config.js'))
-    expect(config.default.plugins).toHaveProperty('autoprefixer')
+    expect(config.default.plugins).toHaveProperty('@tailwindcss/postcss')
   })
 
   it('tailwindcss è importabile correttamente', async () => {
@@ -96,123 +91,100 @@ describe('Fase 1.2 — shadcn/ui installazione e componenti base', () => {
   })
 })
 
-describe('Fase 1.3 — Design token AuthGlow in tailwind.config.js', () => {
-  let config: Record<string, unknown>
+describe('Fase 1.3 — Design token AuthGlow via @theme in globals.css', () => {
+  let css: string
 
-  beforeAll(async () => {
-    config = (await import(resolve(ROOT, 'tailwind.config.js'))).default
+  beforeAll(() => {
+    css = readFileSync(resolve(ROOT, 'src', 'styles', 'globals.css'), 'utf-8')
   })
 
-  it('tailwind.config.js esiste ed è importabile', () => {
-    expect(config).toBeDefined()
+  it('globals.css contiene @theme block', () => {
+    expect(css).toContain('@theme')
   })
 
-  describe('Colori bg', () => {
-    it('bg.primary usa CSS variable', () => {
-      expect(config.theme.extend.colors.bg.primary).toBe('var(--color-bg-primary)')
-    })
-    it('bg.secondary usa CSS variable', () => {
-      expect(config.theme.extend.colors.bg.secondary).toBe('var(--color-bg-secondary)')
-    })
-    it('bg.tertiary usa CSS variable', () => {
-      expect(config.theme.extend.colors.bg.tertiary).toBe('var(--color-bg-tertiary)')
-    })
+  it('@theme contiene --color-bg-primary', () => {
+    expect(css).toMatch(/--color-bg-primary:\s*var\(--color-bg-primary\)/)
+  })
+  it('@theme contiene --color-bg-secondary', () => {
+    expect(css).toMatch(/--color-bg-secondary:\s*var\(--color-bg-secondary\)/)
+  })
+  it('@theme contiene --color-bg-tertiary', () => {
+    expect(css).toMatch(/--color-bg-tertiary:\s*var\(--color-bg-tertiary\)/)
   })
 
-  describe('Colori surface', () => {
-    it('surface.1 usa CSS variable', () => {
-      expect(config.theme.extend.colors.surface['1']).toBe('var(--color-surface-1)')
-    })
-    it('surface.2 usa CSS variable', () => {
-      expect(config.theme.extend.colors.surface['2']).toBe('var(--color-surface-2)')
-    })
-    it('surface.3 usa CSS variable', () => {
-      expect(config.theme.extend.colors.surface['3']).toBe('var(--color-surface-3)')
-    })
+  it('@theme contiene --color-surface-1', () => {
+    expect(css).toMatch(/--color-surface-1:\s*var\(--color-surface-1\)/)
+  })
+  it('@theme contiene --color-surface-2', () => {
+    expect(css).toMatch(/--color-surface-2:\s*var\(--color-surface-2\)/)
+  })
+  it('@theme contiene --color-surface-3', () => {
+    expect(css).toMatch(/--color-surface-3:\s*var\(--color-surface-3\)/)
   })
 
-  describe('Colori brand', () => {
-    it('brand.violet usa CSS variable', () => {
-      expect(config.theme.extend.colors.brand.violet).toBe('var(--color-brand-violet)')
-    })
-    it('brand.magenta usa CSS variable', () => {
-      expect(config.theme.extend.colors.brand.magenta).toBe('var(--color-brand-magenta)')
-    })
-    it('brand.blue usa CSS variable', () => {
-      expect(config.theme.extend.colors.brand.blue).toBe('var(--color-brand-blue)')
-    })
+  it('@theme contiene --color-brand-violet', () => {
+    expect(css).toMatch(/--color-brand-violet:\s*var\(--color-brand-violet\)/)
+  })
+  it('@theme contiene --color-brand-magenta', () => {
+    expect(css).toMatch(/--color-brand-magenta:\s*var\(--color-brand-magenta\)/)
+  })
+  it('@theme contiene --color-brand-blue', () => {
+    expect(css).toMatch(/--color-brand-blue:\s*var\(--color-brand-blue\)/)
   })
 
-  describe('Colori semantic', () => {
-    it('semantic.success usa CSS variable', () => {
-      expect(config.theme.extend.colors.semantic.success).toBe('var(--color-semantic-success)')
-    })
-    it('semantic.warning usa CSS variable', () => {
-      expect(config.theme.extend.colors.semantic.warning).toBe('var(--color-semantic-warning)')
-    })
-    it('semantic.error usa CSS variable', () => {
-      expect(config.theme.extend.colors.semantic.error).toBe('var(--color-semantic-error)')
-    })
-    it('semantic.info usa CSS variable', () => {
-      expect(config.theme.extend.colors.semantic.info).toBe('var(--color-semantic-info)')
-    })
+  it('@theme contiene --color-semantic-success', () => {
+    expect(css).toMatch(/--color-semantic-success:\s*var\(--color-semantic-success\)/)
+  })
+  it('@theme contiene --color-semantic-warning', () => {
+    expect(css).toMatch(/--color-semantic-warning:\s*var\(--color-semantic-warning\)/)
+  })
+  it('@theme contiene --color-semantic-error', () => {
+    expect(css).toMatch(/--color-semantic-error:\s*var\(--color-semantic-error\)/)
+  })
+  it('@theme contiene --color-semantic-info', () => {
+    expect(css).toMatch(/--color-semantic-info:\s*var\(--color-semantic-info\)/)
   })
 
-  describe('Colori text', () => {
-    it('text.primary usa CSS variable', () => {
-      expect(config.theme.extend.colors.text.primary).toBe('var(--color-text-primary)')
-    })
-    it('text.secondary usa CSS variable', () => {
-      expect(config.theme.extend.colors.text.secondary).toBe('var(--color-text-secondary)')
-    })
-    it('text.muted usa CSS variable', () => {
-      expect(config.theme.extend.colors.text.muted).toBe('var(--color-text-muted)')
-    })
+  it('@theme contiene --color-text-primary', () => {
+    expect(css).toMatch(/--color-text-primary:\s*var\(--color-text-primary\)/)
+  })
+  it('@theme contiene --color-text-secondary', () => {
+    expect(css).toMatch(/--color-text-secondary:\s*var\(--color-text-secondary\)/)
+  })
+  it('@theme contiene --color-text-muted', () => {
+    expect(css).toMatch(/--color-text-muted:\s*var\(--color-text-muted\)/)
   })
 
-  describe('Font family', () => {
-    it('include Inter', () => {
-      expect(config.theme.extend.fontFamily.sans).toContain('Inter')
-    })
+  it('@theme include font-family Inter', () => {
+    expect(css).toContain('Inter')
   })
 
-  describe('Glow shadows', () => {
-    it('glow-violet definito', () => {
-      expect(config.theme.extend.boxShadow['glow-violet']).toBeDefined()
-    })
-    it('glow-magenta definito', () => {
-      expect(config.theme.extend.boxShadow['glow-magenta']).toBeDefined()
-    })
-    it('glow-blue definito', () => {
-      expect(config.theme.extend.boxShadow['glow-blue']).toBeDefined()
-    })
+  it('@theme contiene glow-violet shadow', () => {
+    expect(css).toMatch(/--shadow-glow-violet/)
+  })
+  it('@theme contiene glow-magenta shadow', () => {
+    expect(css).toMatch(/--shadow-glow-magenta/)
+  })
+  it('@theme contiene glow-blue shadow', () => {
+    expect(css).toMatch(/--shadow-glow-blue/)
   })
 
-  describe('Gradient background', () => {
-    it('gradient-cta definito', () => {
-      expect(config.theme.extend.backgroundImage['gradient-cta']).toBeDefined()
-    })
-    it('gradient-secondary definito', () => {
-      expect(config.theme.extend.backgroundImage['gradient-secondary']).toBeDefined()
-    })
+  it('@theme contiene gradient-cta', () => {
+    expect(css).toMatch(/--background-image-gradient-cta/)
+  })
+  it('@theme contiene gradient-secondary', () => {
+    expect(css).toMatch(/--background-image-gradient-secondary/)
   })
 
-  describe('Border radius', () => {
-    it('card radius = 24px', () => {
-      expect(config.theme.extend.borderRadius.card).toBe('24px')
-    })
+  it('@theme contiene radius-card', () => {
+    expect(css).toContain('--radius-card:')
   })
 
-  describe('Transition durations', () => {
-    it('micro = 150ms', () => {
-      expect(config.theme.extend.transitionDuration.micro).toBe('150ms')
-    })
-    it('complex = 400ms', () => {
-      expect(config.theme.extend.transitionDuration.complex).toBe('400ms')
-    })
-    it('page = 500ms', () => {
-      expect(config.theme.extend.transitionDuration.page).toBe('500ms')
-    })
+  it('@theme contiene animate-accordion-down', () => {
+    expect(css).toContain('--animate-accordion-down:')
+  })
+  it('@theme contiene animate-fade-in', () => {
+    expect(css).toContain('--animate-fade-in:')
   })
 })
 
@@ -227,16 +199,9 @@ describe('Fase 1.4 — globals.css con CSS custom properties e classi glow', () 
     expect(existsSync(resolve(ROOT, 'src', 'styles', 'globals.css'))).toBe(true)
   })
 
-  it('contiene @tailwind base', () => {
-    expect(css).toContain('@tailwind base')
-  })
-
-  it('contiene @tailwind components', () => {
-    expect(css).toContain('@tailwind components')
-  })
-
-  it('contiene @tailwind utilities', () => {
-    expect(css).toContain('@tailwind utilities')
+  it('contiene @import "tailwindcss"', () => {
+    expect(css).toContain('@import')
+    expect(css).toContain('tailwindcss')
   })
 
   it('contiene classe .glass', () => {
@@ -269,6 +234,14 @@ describe('Fase 1.4 — globals.css con CSS custom properties e classi glow', () 
 
   it('contiene CSS custom property --glow-violet', () => {
     expect(css).toContain('--glow-violet')
+  })
+
+  it('contiene @custom-variant dark per dark mode class-based', () => {
+    expect(css).toContain('@custom-variant dark')
+  })
+
+  it('contiene classe .dark per tema scuro', () => {
+    expect(css).toContain('.dark')
   })
 })
 

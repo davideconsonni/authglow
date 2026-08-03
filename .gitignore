@@ -216,3 +216,4 @@ nul
 ./backend/.idea
 ./frontend/.playwright-data
 /data/
+.serena/

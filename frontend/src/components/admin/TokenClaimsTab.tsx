@@ -382,12 +382,12 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
           </div>
           <div className="flex items-center gap-2">
             {isCustom && (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-semantic-info/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-semantic-info">
+              <span data-testid="claim-policy-custom-badge" className="inline-flex items-center gap-1 rounded-lg bg-semantic-info/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-semantic-info">
                 Custom
               </span>
             )}
             {!isCustom && (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              <span data-testid="claim-policy-default-badge" className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                 Default
               </span>
             )}
@@ -451,6 +451,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                   {isCustom && ruleCount > 0 && (
                     <button
                       onClick={handleDeleteAll}
+                      data-testid="claim-policy-reset-btn"
                       disabled={saving}
                       className="flex items-center gap-1 text-[10px] text-text-muted hover:text-semantic-error transition-colors"
                     >
@@ -460,7 +461,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                 </div>
 
                 {ruleCount === 0 && formMode === 'closed' ? (
-                  <div className="rounded-xl border border-dashed border-surface-2 bg-bg-primary p-6 text-center">
+                  <div className="rounded-xl border border-dashed border-surface-2 bg-bg-primary p-6 text-center" data-testid="claim-policy-empty-state">
                     <div className="mx-auto mb-2 inline-flex rounded-xl bg-surface-2 p-2">
                       <Sparkles className="h-4 w-4 text-text-muted" />
                     </div>
@@ -470,6 +471,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                     </p>
                     <button
                       onClick={openAddForm}
+                      data-testid="claim-policy-add-btn"
                       className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
                     >
                       <Plus size={12} /> Add first field
@@ -482,6 +484,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       return (
                         <div
                           key={`rule-${idx}`}
+                          data-testid="claim-rule-card"
                           className="group rounded-xl border border-surface-2 bg-bg-primary p-3 transition-colors hover:border-surface-3"
                         >
                           <div className="flex items-start gap-3">
@@ -492,7 +495,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                             {/* Content */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <code className="font-mono text-[12px] font-semibold text-text-primary">
+                                <code data-testid="rule-claim-name" className="font-mono text-[12px] font-semibold text-text-primary">
                                   {rule.claim_name}
                                 </code>
                                 <span className="text-[9px] text-text-muted">
@@ -527,6 +530,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                               </button>
                               <button
                                 onClick={() => removeRule(idx)}
+                                data-testid="rule-remove-btn"
                                 className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-semantic-error"
                                 aria-label="Remove field"
                                 title="Remove"
@@ -546,6 +550,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
               {ruleCount > 0 && formMode === 'closed' && (
                 <button
                   onClick={openAddForm}
+                  data-testid="claim-policy-add-btn"
                   className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-surface-2 py-2 text-[11px] font-semibold text-text-muted transition-all hover:border-brand-violet/30 hover:text-brand-violet hover:bg-brand-violet/5"
                 >
                   <Plus size={12} /> Add custom field
@@ -568,6 +573,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                     <input
                       value={formDraft.claim_name}
                       onChange={e => setFormDraft(r => ({ ...r, claim_name: e.target.value }))}
+                      data-testid="claim-name-input"
                       placeholder="e.g. tenant_id, subscription_level, or https://yourapp.com/claims/field_name"
                       className={cn(
                         'w-full rounded-lg border bg-surface-1 px-2.5 py-1.5 font-mono text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none',
@@ -579,7 +585,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       formStatus.kind === 'invalid' || formStatus.kind === 'reserved' ? 'text-semantic-error'
                         : formStatus.kind === 'standard' || formStatus.kind === 'uri' ? 'text-semantic-success'
                         : 'text-text-muted',
-                    )}>
+                    )} data-testid="claim-name-status">
                       {formStatus.kind === 'uri' || formStatus.kind === 'standard' || formStatus.kind === 'ok' ? (
                         <CheckCircle2 size={10} />
                       ) : formStatus.kind === 'reserved' || formStatus.kind === 'invalid' ? (
@@ -708,6 +714,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                     </button>
                     <button
                       onClick={submitForm}
+                      data-testid="claim-policy-add-confirm-btn"
                       disabled={formStatus.kind === 'invalid' || formStatus.kind === 'reserved' || formStatus.kind === 'empty'}
                       className="flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                     >
@@ -724,7 +731,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
         <div className="flex-shrink-0 border-t border-surface-2">
           {dirty && (
             <div className="border-b border-semantic-warning/20 bg-semantic-warning/5 px-6 py-2">
-              <p className="flex items-center gap-2 text-[11px] text-semantic-warning">
+              <p data-testid="claim-policy-unsaved-banner" className="flex items-center gap-2 text-[11px] text-semantic-warning">
                 <AlertTriangle size={12} />
                 You have unsaved changes.
               </p>
@@ -737,6 +744,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
             <div className="flex-1" />
             <button
               onClick={handleRevert}
+              data-testid="claim-policy-revert-btn"
               disabled={!dirty || saving}
               className="rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 disabled:opacity-40"
             >
@@ -744,6 +752,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
             </button>
             <button
               onClick={handleSave}
+              data-testid="claim-policy-save-btn"
               disabled={!dirty || saving}
               className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
             >

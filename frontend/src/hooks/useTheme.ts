@@ -21,10 +21,10 @@ function resolveTheme(theme: Theme): 'light' | 'dark' {
 
 function applyTheme(resolved: 'light' | 'dark') {
   const root = document.documentElement
-  if (resolved === 'light') {
-    root.classList.add('light')
+  if (resolved === 'dark') {
+    root.classList.add('dark')
   } else {
-    root.classList.remove('light')
+    root.classList.remove('dark')
   }
 }
 

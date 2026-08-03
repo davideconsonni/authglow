@@ -555,9 +555,15 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
               {/* ----- Custom fields section ----- */}
               <div className="mb-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                    Your custom fields
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                      Your custom fields
+                    </p>
+                    <span className="text-[10px] font-semibold text-text-muted" data-testid="api-key-claim-policy-counter">
+                      {ruleCount} custom rule{ruleCount !== 1 ? 's' : ''}{' · '}
+                      {(policy?.default_rules ?? []).length} default always applied
+                    </span>
+                  </div>
                   {isCustom && ruleCount > 0 && (
                     <button
                       onClick={handleDeleteAll}
@@ -581,6 +587,7 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                     </p>
                     <button
                       onClick={openAddForm}
+                      data-testid="api-key-claim-policy-add-btn"
                       className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
                     >
                       <Plus size={12} /> Add first field
@@ -604,7 +611,7 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                             {/* Content */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <code className="font-mono text-[12px] font-semibold text-text-primary">
+                                <code className="font-mono text-[12px] font-semibold text-text-primary" data-testid="api-key-rule-claim-name">
                                   {rule.claim_name}
                                 </code>
                                 <span className="text-[9px] text-text-muted">
@@ -639,6 +646,7 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                               </button>
                               <button
                                 onClick={() => removeRule(idx)}
+                                data-testid="api-key-rule-remove-btn"
                                 className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-semantic-error"
                                 aria-label="Remove field"
                                 title="Remove"

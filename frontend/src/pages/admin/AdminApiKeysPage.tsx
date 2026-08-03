@@ -22,6 +22,7 @@ interface ApiKeyData {
   is_active: boolean
   expires_at: string | null
   allowed_ips: string[]
+  tier?: string | null
 }
 
 interface CreateForm {
