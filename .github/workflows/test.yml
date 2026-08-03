@@ -13,6 +13,8 @@ jobs:
       run:
         working-directory: backend
     steps:
+      - name: Clean workspace
+        run: rm -rf "${{ github.workspace }}"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
