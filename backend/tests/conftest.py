@@ -183,6 +183,7 @@ def _reset_rate_limit():
     """
     from authglow.core.rate_limit import limiter
 
+    limiter.reset()
     yield
     limiter.reset()
 
