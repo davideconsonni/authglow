@@ -10,10 +10,28 @@ Context: OAuth 2.0 Security BCP §4.8.1, RFC 7636.
 import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.core.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def _force_clean_limiter():
+    """Replace the global ``Limiter`` in-process storage with a fresh
+    instance before every test.  The ``conftest.py`` autouse
+    ``_reset_rate_limit`` already calls ``limiter.reset()`` before/after
+    every test, but in CI with ``pytest-xdist -n auto`` the middleware
+    still occasionally sees a stale budget.  Swapping to a brand-new
+    ``MemoryStorage`` guarantees zero accumulated hits per test.
+    """
+    from limits.storage.memory import MemoryStorage
+
+    from authglow.core.rate_limit import limiter
+
+    limiter._storage = MemoryStorage()
+    yield
 
 # ---------------------------------------------------------------------------
 # Global Settings flag
