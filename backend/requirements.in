@@ -39,6 +39,7 @@ httpx
 email-validator
 python-dateutil
 cachetools
+redis
 
 # Testing
 pytest

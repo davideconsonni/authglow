@@ -229,7 +229,7 @@ async def _require_dpop_proof_if_bound(
     settings_ = get_settings()
     expected_htu = f"{settings_.issuer.rstrip('/')}/oauth2/token"
 
-    claims = verify_dpop_proof(
+    claims = await verify_dpop_proof(
         proof,
         expected_htm=expected_htm,
         expected_htu=expected_htu,
@@ -289,7 +289,7 @@ async def _authenticate_client_at_token_endpoint(
             verify_client_assertion,
         )
 
-        verify_client_assertion(
+        await verify_client_assertion(
             request,
             client,
             client_assertion_type=client_assertion_type,

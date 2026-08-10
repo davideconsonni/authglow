@@ -141,19 +141,19 @@ class TestClientJwtKeyEncryption:
 
 
 class TestReplayProtection:
-    def test_first_seen_jti_proceeds(self):
+    async def test_first_seen_jti_proceeds(self):
         jti = f"jti-{time.time_ns()}"
-        assert replay_protect_jti(jti, int(time.time()) + 60) is True
+        assert await replay_protect_jti(jti, int(time.time()) + 60) is True
 
-    def test_duplicate_jti_is_rejected(self):
+    async def test_duplicate_jti_is_rejected(self):
         jti = f"jti-{time.time_ns()}"
-        assert replay_protect_jti(jti, int(time.time()) + 60) is True
-        assert replay_protect_jti(jti, int(time.time()) + 60) is False
+        assert await replay_protect_jti(jti, int(time.time()) + 60) is True
+        assert await replay_protect_jti(jti, int(time.time()) + 60) is False
 
-    def test_empty_jti_passes_through(self):
+    async def test_empty_jti_passes_through(self):
         # Claim check is responsible for rejecting empty jti; the
         # replay-protect helper is a no-op in that case.
-        assert replay_protect_jti("", int(time.time()) + 60) is True
+        assert await replay_protect_jti("", int(time.time()) + 60) is True
 
 
 # ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ class TestClaimAssertion:
 
 
 class TestVerifyClientAssertion:
-    def test_client_secret_jwt_happy_path(self, test_settings):
+    async def test_client_secret_jwt_happy_path(self, test_settings):
         priv = generate_client_jwt_symmetric_key()
         ciphertext = encrypt_client_jwt_key_value(priv)
         client = _make_client(
@@ -425,14 +425,14 @@ class TestVerifyClientAssertion:
             algorithm="HS256",
         )
         # Should NOT raise.
-        verify_client_assertion(
+        await verify_client_assertion(
             _make_request(),
             client,
             client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,
             client_assertion=token,
         )
 
-    def test_private_key_jwt_happy_path(self, test_settings):
+    async def test_private_key_jwt_happy_path(self, test_settings):
         priv = _generate_rsa_key_pair()
         client = _make_client(
             method="private_key_jwt",
@@ -450,14 +450,14 @@ class TestVerifyClientAssertion:
             priv,
             algorithm="RS256",
         )
-        verify_client_assertion(
+        await verify_client_assertion(
             _make_request(),
             client,
             client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,
             client_assertion=token,
         )
 
-    def test_replay_detected(self, test_settings):
+    async def test_replay_detected(self, test_settings):
         priv = generate_client_jwt_symmetric_key()
         ciphertext = encrypt_client_jwt_key_value(priv)
         client = _make_client(
@@ -477,7 +477,7 @@ class TestVerifyClientAssertion:
             algorithm="HS256",
         )
         # First use succeeds.
-        verify_client_assertion(
+        await verify_client_assertion(
             _make_request(),
             client,
             client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,
@@ -485,7 +485,7 @@ class TestVerifyClientAssertion:
         )
         # Second use with same jti is rejected.
         with pytest.raises(HTTPException) as ei:
-            verify_client_assertion(
+            await verify_client_assertion(
                 _make_request(),
                 client,
                 client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,
@@ -493,7 +493,7 @@ class TestVerifyClientAssertion:
             )
         assert ei.value.detail["error_code"] == "replay_detected"
 
-    def test_wrong_assertion_type_rejected(self, test_settings):
+    async def test_wrong_assertion_type_rejected(self, test_settings):
         priv = generate_client_jwt_symmetric_key()
         ciphertext = encrypt_client_jwt_key_value(priv)
         client = _make_client(
@@ -513,7 +513,7 @@ class TestVerifyClientAssertion:
             algorithm="HS256",
         )
         with pytest.raises(HTTPException) as ei:
-            verify_client_assertion(
+            await verify_client_assertion(
                 _make_request(),
                 client,
                 client_assertion_type="urn:wrong",
@@ -521,7 +521,7 @@ class TestVerifyClientAssertion:
             )
         assert ei.value.detail["error_code"] == "invalid_assertion_type"
 
-    def test_missing_client_jwt_key_rejected(self, test_settings):
+    async def test_missing_client_jwt_key_rejected(self, test_settings):
         # Client is registered for ``client_secret_jwt`` but no key
         # was minted at creation. Must be a hard 401, not a crash.
         client = _make_client(
@@ -529,7 +529,7 @@ class TestVerifyClientAssertion:
             jwt_key_ciphertext=None,
         )
         with pytest.raises(HTTPException) as ei:
-            verify_client_assertion(
+            await verify_client_assertion(
                 _make_request(),
                 client,
                 client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,
@@ -537,13 +537,13 @@ class TestVerifyClientAssertion:
             )
         assert ei.value.detail["error_code"] == "missing_key"
 
-    def test_missing_public_jwk_rejected(self, test_settings):
+    async def test_missing_public_jwk_rejected(self, test_settings):
         client = _make_client(
             method="private_key_jwt",
             public_jwk=None,
         )
         with pytest.raises(HTTPException) as ei:
-            verify_client_assertion(
+            await verify_client_assertion(
                 _make_request(),
                 client,
                 client_assertion_type=CLIENT_ASSERTION_TYPE_JWT_BEARER,

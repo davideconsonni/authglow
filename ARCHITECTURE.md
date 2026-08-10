@@ -65,6 +65,16 @@ authglow/
 └── images/                    # README screenshots
 ```
 
+## Cache Backends
+
+`backend/authglow/core/cache.py` exposes named asynchronous cache namespaces
+through the `CacheBackend` protocol. `InMemoryCacheBackend` uses bounded TTL
+eviction for local and test deployments; `RedisCacheBackend` uses the optional
+`redis.asyncio` client for shared cache state across workers. Select the
+implementation with `CACHE_BACKEND=memory|redis` and configure `REDIS_URL` when
+using Redis. Services depend only on the namespace facade, not on either
+backend implementation.
+
 ## Data Flow
 
 ### Backend: Request Lifecycle

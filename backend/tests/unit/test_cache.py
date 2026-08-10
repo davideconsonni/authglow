@@ -7,6 +7,7 @@ from authglow.core.cache import (
     user_cache,
     refresh_token_cache,
     CacheRegistry,
+    RedisCacheBackend,
 )
 from authglow.core.config import Settings
 
@@ -90,7 +91,7 @@ class TestCacheRegistry:
 
 
 class TestCacheProxyCRUD:
-    def test_get_set_contains_delete(self, monkeypatch):
+    async def test_get_set_contains_delete(self, monkeypatch):
         s = Settings(
             secret_key="a" * 32,
             storage_path="/tmp/test_cache",
@@ -102,19 +103,19 @@ class TestCacheProxyCRUD:
         _reset_cache_registry()
 
         uc = user_cache
-        assert uc.get("missing") is None
-        assert uc.get("missing", "default") == "default"
+        assert await uc.get("missing") is None
+        assert await uc.get("missing", "default") == "default"
 
-        uc["key1"] = "val1"
-        assert uc.get("key1") == "val1"
-        assert "key1" in uc
-        assert uc["key1"] == "val1"
+        await uc.set("key1", "val1")
+        assert await uc.get("key1") == "val1"
+        assert await uc.contains("key1")
+        assert await uc.get("key1") == "val1"
 
-        assert uc.pop("key1") == "val1"
-        assert uc.get("key1") is None
-        assert "key1" not in uc
+        assert await uc.pop("key1") == "val1"
+        assert await uc.get("key1") is None
+        assert not await uc.contains("key1")
 
-    def test_pop_default(self, monkeypatch):
+    async def test_pop_default(self, monkeypatch):
         s = Settings(
             secret_key="a" * 32,
             storage_path="/tmp/test_cache",
@@ -123,10 +124,10 @@ class TestCacheProxyCRUD:
         monkeypatch.setattr("authglow.core.config.get_settings", lambda: s)
         _reset_cache_registry()
 
-        assert user_cache.pop("nonexistent", "fallback") == "fallback"
-        assert user_cache.pop("nonexistent") is None
+        assert await user_cache.pop("nonexistent", "fallback") == "fallback"
+        assert await user_cache.pop("nonexistent") is None
 
-    def test_del_item(self, monkeypatch):
+    async def test_del_item(self, monkeypatch):
         s = Settings(
             secret_key="a" * 32,
             storage_path="/tmp/test_cache",
@@ -135,10 +136,10 @@ class TestCacheProxyCRUD:
         monkeypatch.setattr("authglow.core.config.get_settings", lambda: s)
         _reset_cache_registry()
 
-        user_cache["x"] = "y"
-        assert "x" in user_cache
-        del user_cache["x"]
-        assert "x" not in user_cache
+        await user_cache.set("x", "y")
+        assert await user_cache.contains("x")
+        await user_cache.delete("x")
+        assert not await user_cache.contains("x")
 
 
 class TestCacheRegistryMaxsize:
@@ -148,8 +149,50 @@ class TestCacheRegistryMaxsize:
         assert cr.ttl == 10
 
 
+class _FakeRedis:
+    def __init__(self):
+        self.values = {}
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    async def set(self, key, value, ex, nx=False):
+        if nx and key in self.values:
+            return False
+        self.values[key] = value
+        return True
+
+    async def delete(self, key):
+        self.values.pop(key, None)
+
+    async def exists(self, key):
+        return int(key in self.values)
+
+
+class TestRedisCacheBackend:
+    async def test_round_trip_and_namespace(self):
+        backend = RedisCacheBackend(_FakeRedis(), prefix="authglow:user", ttl=60)
+
+        assert await backend.get("missing") is None
+        await backend.set("user-1", {"active": True})
+
+        assert await backend.get("user-1") == {"active": True}
+        assert await backend.contains("user-1")
+        assert not await backend.set_if_absent("user-1", {"active": False})
+        assert list(backend._redis.values) == ["authglow:user:user-1"]
+
+        await backend.delete("user-1")
+        assert not await backend.contains("user-1")
+
+    async def test_set_if_absent_is_atomic_contract(self):
+        backend = RedisCacheBackend(_FakeRedis(), prefix="authglow:jti", ttl=60)
+
+        assert await backend.set_if_absent("jti-1", True)
+        assert not await backend.set_if_absent("jti-1", True)
+
+
 class TestCacheNoSideEffects:
-    def test_refresh_token_cache_independent_from_user_cache(self, monkeypatch):
+    async def test_refresh_token_cache_independent_from_user_cache(self, monkeypatch):
         s = Settings(
             secret_key="a" * 32,
             storage_path="/tmp/test_cache",
@@ -160,10 +203,10 @@ class TestCacheNoSideEffects:
         monkeypatch.setattr("authglow.core.config.get_settings", lambda: s)
         _reset_cache_registry()
 
-        user_cache["u1"] = "user1"
-        user_cache["u2"] = "user2"
-        refresh_token_cache["rt1"] = "token1"
+        await user_cache.set("u1", "user1")
+        await user_cache.set("u2", "user2")
+        await refresh_token_cache.set("rt1", "token1")
 
-        assert user_cache.get("u1") == "user1"
-        assert refresh_token_cache.get("rt1") == "token1"
-        assert refresh_token_cache.get("u1") is None
+        assert await user_cache.get("u1") == "user1"
+        assert await refresh_token_cache.get("rt1") == "token1"
+        assert await refresh_token_cache.get("u1") is None

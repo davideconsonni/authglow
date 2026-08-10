@@ -381,6 +381,9 @@ class Settings(BaseSettings):
     trusted_proxies: str = ""  # Comma-separated IPs/CIDR ranges of trusted reverse proxies
 
     # Cache Settings
+    cache_backend: str = "memory"  # memory or redis
+    redis_url: str = "redis://localhost:6379/0"
+    redis_key_prefix: str = "authglow"
     cache_refresh_token_maxsize: int = 5000
     cache_refresh_token_ttl: int = 60
     cache_user_maxsize: int = 2000

@@ -107,7 +107,7 @@ def generate_client_jwt_symmetric_key() -> str:
 # ---------------------------------------------------------------------------
 
 
-def replay_protect_jti(jti: str, exp: int) -> bool:
+async def replay_protect_jti(jti: str, exp: int) -> bool:
     """Record a ``jti`` and reject replays.
 
     Returns ``True`` if the ``jti`` was unseen (proceed) and ``False`` if
@@ -120,10 +120,7 @@ def replay_protect_jti(jti: str, exp: int) -> bool:
         return True  # Replay protection requires a jti — let the claim
         # check below reject requests with no jti.
     key = f"jti:{jti}"
-    if key in jti_cache:
-        return False
-    jti_cache[key] = exp
-    return True
+    return await jti_cache.set_if_absent(key, exp)
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +307,7 @@ def _client_jwt_error(code: str, description: str) -> HTTPException:
     )
 
 
-def verify_client_assertion(
+async def verify_client_assertion(
     request: Request,
     client: OAuth2Client,
     client_assertion_type: Optional[str],
@@ -364,7 +361,7 @@ def verify_client_assertion(
     # ``assert_jwt_claims`` already enforces ``jti`` is present and
     # a string, so we narrow with ``str(...)`` for mypy.
     jti_str = jti if isinstance(jti, str) else ""
-    if not replay_protect_jti(jti_str, exp):
+    if not await replay_protect_jti(jti_str, exp):
         logger.warning(
             "client_jwt_replay_detected",
             client_id=client.client_id,

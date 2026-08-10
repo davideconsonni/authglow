@@ -88,26 +88,26 @@ class OAuth2ClientStorage:
         same client was re-read from disk every time. This
         cross-request cache eliminates those redundant reads.
         """
-        cached: OAuth2Client | None = oauth_client_cache.get(client_id)
+        cached: OAuth2Client | None = await oauth_client_cache.get(client_id)
         if cached is not None:
             return cached
 
         client = await self._repository.get_by_id(client_id)
         if client is not None:
-            oauth_client_cache[client_id] = client
+            await oauth_client_cache.set(client_id, client)
         return client
 
     async def update_client(self, client: OAuth2Client) -> OAuth2Client:
         """Update an existing client (CAS-protected)."""
         await self._repository.update(client)
-        oauth_client_cache.pop(client.client_id, None)
+        await oauth_client_cache.delete(client.client_id)
         return client
 
     async def delete_client(self, client_id: str) -> bool:
         """Delete a client. Returns ``True`` on success."""
         result = await self._repository.delete(client_id)
         if result:
-            oauth_client_cache.pop(client_id, None)
+            await oauth_client_cache.delete(client_id)
         return result
 
     async def list_clients(
@@ -186,7 +186,7 @@ class OAuth2ClientStorage:
                 client.client_secret = await hash_password_async(new_secret)
                 try:
                     await self._repository.update(client)
-                    oauth_client_cache.pop(client_id, None)
+                    await oauth_client_cache.delete(client_id)
                     return new_secret
                 except ConcurrentWriteError:
                     if attempt == self.MAX_CAS_RETRIES - 1:
@@ -215,7 +215,7 @@ class OAuth2ClientStorage:
                 client.client_secret_jwt_key = encrypt_client_jwt_key_value(plaintext)
                 try:
                     await self._repository.update(client)
-                    oauth_client_cache.pop(client_id, None)
+                    await oauth_client_cache.delete(client_id)
                     return plaintext
                 except ConcurrentWriteError:
                     if attempt == self.MAX_CAS_RETRIES - 1:

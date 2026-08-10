@@ -182,13 +182,13 @@ class APIKeyService:
         called 2-3 times (lockout check + verify loop). The
         cache avoids repeated file-system reads for the same key.
         """
-        cached: APIKey | None = api_key_cache.get(key_id)
+        cached: APIKey | None = await api_key_cache.get(key_id)
         if cached is not None:
             return cached
 
         key = await self._repo.get_by_id(key_id)
         if key is not None:
-            api_key_cache[key_id] = key
+            await api_key_cache.set(key_id, key)
         return key
 
     async def get_user_keys(self, user_id: str) -> List[APIKey]:
@@ -326,7 +326,7 @@ class APIKeyService:
                 if user_agent:
                     api_key.last_used_ua = user_agent
                 await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return api_key
 
         for key_id in candidate_ids:
@@ -349,7 +349,7 @@ class APIKeyService:
                 )
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
 
     async def is_key_locked(self, key_id: str) -> bool:
         """Check if an API key is currently locked. Auto-unlocks on expiry."""
@@ -362,7 +362,7 @@ class APIKeyService:
                 api_key.locked_until = None
                 api_key.failed_validation_attempts = 0
                 await self._repo.update(api_key)
-                api_key_cache.pop(key_id, None)
+                await api_key_cache.delete(key_id)
                 return False
 
             return True
@@ -378,7 +378,7 @@ class APIKeyService:
             api_key.locked_until = None
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
 
     # ------------------------------------------------------------------
     # Usage tracking + updates — guarded by named_lock
@@ -404,7 +404,7 @@ class APIKeyService:
                 api_key.last_used_ua = user_agent
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return api_key
 
     async def update_key(
@@ -450,7 +450,7 @@ class APIKeyService:
                     setattr(api_key, field, value)
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return api_key
 
     async def revoke_key(self, key_id: str, revoked_by: str) -> bool:
@@ -465,7 +465,7 @@ class APIKeyService:
             api_key.revoked_by = revoked_by
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return True
 
     async def delete_key(self, key_id: str) -> bool:
@@ -477,7 +477,7 @@ class APIKeyService:
         async with self._lock(f"api_key_delete:{api_key.key_prefix}"):
             await self._repo.remove_from_prefix_index(api_key.key_prefix, key_id)
             result = await self._repo.delete(key_id)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return result
 
     async def track_usage(self, key_id: str, ip_address: Optional[str] = None) -> bool:
@@ -495,7 +495,7 @@ class APIKeyService:
             api_key.total_requests += 1
 
             await self._repo.update(api_key)
-            api_key_cache.pop(key_id, None)
+            await api_key_cache.delete(key_id)
             return True
 
     async def cleanup_expired_keys(self) -> int:

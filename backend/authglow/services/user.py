@@ -151,9 +151,9 @@ class UserService:
             await self._email_index_repo.insert(new_email_lc, user_id)
 
             user.email = new_email
-            user_cache.pop(old_email, None)
-            user_cache.pop(new_email_lc, None)
-            user_by_id_cache.pop(user_id, None)
+            await user_cache.delete(old_email)
+            await user_cache.delete(new_email_lc)
+            await user_by_id_cache.delete(user_id)
             await self._user_repo.update(user)
             return user
 
@@ -166,8 +166,8 @@ class UserService:
             await self._email_index_repo.remove(user.email.lower())
             deleted = await self._user_repo.delete(user_id)
             if deleted:
-                user_cache.pop(user.email.lower(), None)
-                user_by_id_cache.pop(user_id, None)
+                await user_cache.delete(user.email.lower())
+                await user_by_id_cache.delete(user_id)
             return deleted
 
     async def get_by_external_id(self, provider_id: str, external_id: str) -> Optional[User]:
@@ -198,13 +198,13 @@ class UserService:
         (JSON parse + PII decrypt + Pydantic validation) on every
         request for the same user within the TTL window.
         """
-        cached: User | None = user_by_id_cache.get(user_id)
+        cached: User | None = await user_by_id_cache.get(user_id)
         if cached is not None:
             return cached
 
         user = await self._user_repo.get_by_id(user_id)
         if user is not None:
-            user_by_id_cache[user_id] = user
+            await user_by_id_cache.set(user_id, user)
         return user
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
@@ -216,7 +216,7 @@ class UserService:
         storage concerns.
         """
         key = email.lower()
-        cached: User | None = user_cache.get(key)
+        cached: User | None = await user_cache.get(key)
         if cached is not None:
             return cached
 
@@ -238,7 +238,7 @@ class UserService:
             await asyncio.sleep(jitter_ms / 1000.0)
 
         if result is not None:
-            user_cache[key] = result
+            await user_cache.set(key, result)
 
         return result
 
@@ -249,8 +249,8 @@ class UserService:
                 await self._user_repo.update(user)
         else:
             await self._user_repo.update(user)
-        user_cache.pop(user.email.lower(), None)
-        user_by_id_cache.pop(user.id, None)
+        await user_cache.delete(user.email.lower())
+        await user_by_id_cache.delete(user.id)
         return user
 
     async def list_users(
@@ -342,7 +342,7 @@ class UserService:
         """Set a new password for a user."""
         async with self._lock(f"user:{user_id}"):
             result = await self._user_repo.set_password(user_id, hashed_password, require_change)
-            user_by_id_cache.pop(user_id, None)
+            await user_by_id_cache.delete(user_id)
             return result
 
     async def verify_and_maybe_rehash_password(

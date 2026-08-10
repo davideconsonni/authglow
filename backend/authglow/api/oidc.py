@@ -359,7 +359,7 @@ async def userinfo(
             )
         userinfo_htu = f"{get_settings().issuer.rstrip('/')}/oauth2/userinfo"
         try:
-            verify_dpop_proof(
+            await verify_dpop_proof(
                 proof,
                 expected_htm="GET",
                 expected_htu=userinfo_htu,
@@ -920,7 +920,7 @@ async def _authenticate_client_for_dcr(
             )
         from authglow.services.client_jwt_auth import verify_client_assertion
 
-        verify_client_assertion(
+        await verify_client_assertion(
             request,
             client,
             client_assertion_type=("urn:ietf:params:oauth:client-assertion-type:jwt-bearer"),

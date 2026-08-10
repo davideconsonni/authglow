@@ -140,13 +140,13 @@ class RefreshTokenService:
         where the same token is fetched multiple times per exchange.
         """
         token_lookup = self._find_token_lookup(token)
-        cached: RefreshToken | None = refresh_token_cache.get(token_lookup)
+        cached: RefreshToken | None = await refresh_token_cache.get(token_lookup)
         if cached is not None:
             rt = cached
         else:
             rt = await self._repo.get_by_lookup(token_lookup)
             if rt is not None:
-                refresh_token_cache[token_lookup] = rt
+                await refresh_token_cache.set(token_lookup, rt)
 
         if rt is None:
             return None
@@ -223,7 +223,7 @@ class RefreshTokenService:
                 except ConcurrentWriteError:
                     continue
 
-                refresh_token_cache.pop(rt.token_lookup, None)
+                await refresh_token_cache.delete(rt.token_lookup)
                 await self._repo.remove_from_active_index(rt.token_id)
                 return new_token, None
 
@@ -247,7 +247,7 @@ class RefreshTokenService:
             try:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
-                refresh_token_cache.pop(rt.token_lookup, None)
+                await refresh_token_cache.delete(rt.token_lookup)
                 return True
             except Exception:
                 return False
@@ -271,7 +271,7 @@ class RefreshTokenService:
             try:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
-                refresh_token_cache.pop(rt.token_lookup, None)
+                await refresh_token_cache.delete(rt.token_lookup)
                 return True
             except Exception:
                 return False
@@ -308,7 +308,7 @@ class RefreshTokenService:
 
                 await self._repo.update(rt_recheck)
                 await self._repo.remove_from_active_index(token_id)
-                refresh_token_cache.pop(rt_recheck.token_lookup, None)
+                await refresh_token_cache.delete(rt_recheck.token_lookup)
                 revoked_count += 1
 
                 if rt_recheck.replaced_by:

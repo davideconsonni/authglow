@@ -8,7 +8,7 @@ AuthGlow is an authentication platform with a Python/FastAPI backend (`backend/`
 
 ## CodeGraph
 
-When the repository contains a `.codegraph/` index, use the `codegraph_explore` tool before grep, find, or reading source files to understand or locate code. It returns relevant symbols, source, call paths, and dependencies in one query. Use regular file and search tools only for details that CodeGraph does not cover or for files outside the index.
+If a `.codegraph/` index is present, the coding agent may use the `codegraph_explore` tool before grep, find, or reading source files to understand or locate code. It returns relevant symbols, source, call paths, and dependencies in one query. Use regular file and search tools for details that CodeGraph does not cover or for files outside the index.
 
 ## Build & Dev Commands
 

@@ -120,7 +120,7 @@ def build_cnf_claim(jwk: Dict[str, Any]) -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def replay_protect_dpop_jti(jti: str, ttl: int) -> bool:
+async def replay_protect_dpop_jti(jti: str, ttl: int) -> bool:
     """Record a DPoP proof ``jti`` and reject replays.
 
     Returns ``True`` if the ``jti`` was unseen (proceed) and
@@ -133,10 +133,7 @@ def replay_protect_dpop_jti(jti: str, ttl: int) -> bool:
     if not jti:
         return True
     key = f"dpop:{jti}"
-    if key in jti_cache:
-        return False
-    jti_cache[key] = time.time() + max(1, ttl)
-    return True
+    return await jti_cache.set_if_absent(key, time.time() + max(1, ttl))
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +170,7 @@ def _public_key_from_jwk(jwk: Dict[str, Any]) -> Any:
         raise ValueError(f"failed to parse DPoP jwk: {exc}") from exc
 
 
-def verify_dpop_proof(
+async def verify_dpop_proof(
     proof_jwt: str,
     *,
     expected_htm: str,
@@ -290,7 +287,7 @@ def verify_dpop_proof(
     # Replay protection: a single jti may be used at most once
     # within the proof's lifetime.
     remaining_ttl = max(1, int(iat) + _MAX_PROOF_LIFETIME - now)
-    if not replay_protect_dpop_jti(str(jti), remaining_ttl):
+    if not await replay_protect_dpop_jti(str(jti), remaining_ttl):
         logger.warning(
             "dpop_proof_replay_detected",
             jti=jti,
