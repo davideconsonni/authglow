@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, List, Optional
 import fsspec
 
 from authglow.core.async_io import AsyncFileSystem
-from authglow.core.cache import user_cache
+from authglow.core.cache import user_by_id_cache, user_cache
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.models.user import User
@@ -153,6 +153,7 @@ class UserService:
             user.email = new_email
             user_cache.pop(old_email, None)
             user_cache.pop(new_email_lc, None)
+            user_by_id_cache.pop(user_id, None)
             await self._user_repo.update(user)
             return user
 
@@ -166,6 +167,7 @@ class UserService:
             deleted = await self._user_repo.delete(user_id)
             if deleted:
                 user_cache.pop(user.email.lower(), None)
+                user_by_id_cache.pop(user_id, None)
             return deleted
 
     async def get_by_external_id(self, provider_id: str, external_id: str) -> Optional[User]:
@@ -189,8 +191,21 @@ class UserService:
     # ------------------------------------------------------------------
 
     async def get_user(self, user_id: str) -> Optional[User]:
-        """Get user by ID. Delegates to ``UserRepository.get_by_id``."""
-        return await self._user_repo.get_by_id(user_id)
+        """Get user by ID with cross-request caching.
+
+        Every authenticated request calls this through
+        ``get_current_user``. The cache avoids a file-system read
+        (JSON parse + PII decrypt + Pydantic validation) on every
+        request for the same user within the TTL window.
+        """
+        cached: User | None = user_by_id_cache.get(user_id)
+        if cached is not None:
+            return cached
+
+        user = await self._user_repo.get_by_id(user_id)
+        if user is not None:
+            user_by_id_cache[user_id] = user
+        return user
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email (O(1) via the email index).
@@ -235,6 +250,7 @@ class UserService:
         else:
             await self._user_repo.update(user)
         user_cache.pop(user.email.lower(), None)
+        user_by_id_cache.pop(user.id, None)
         return user
 
     async def list_users(
@@ -325,7 +341,9 @@ class UserService:
     ) -> Optional[User]:
         """Set a new password for a user."""
         async with self._lock(f"user:{user_id}"):
-            return await self._user_repo.set_password(user_id, hashed_password, require_change)
+            result = await self._user_repo.set_password(user_id, hashed_password, require_change)
+            user_by_id_cache.pop(user_id, None)
+            return result
 
     async def verify_and_maybe_rehash_password(
         self, user: User, plain_password: str

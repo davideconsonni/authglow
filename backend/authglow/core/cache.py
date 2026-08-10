@@ -67,10 +67,7 @@ class CacheRegistry:
 
 
 def get_cache_registry() -> Dict[str, CacheRegistry]:
-    """Return a dict of named ``CacheRegistry`` instances, lazy-init from Settings.
-
-    Keys: ``"refresh_token"``, ``"user"``, ``"jti"``.
-    """
+    """Return a dict of named ``CacheRegistry`` instances, lazy-init from Settings."""
     global _cache_registry
     if _cache_registry is None:
         from authglow.core.config import get_settings
@@ -86,6 +83,21 @@ def get_cache_registry() -> Dict[str, CacheRegistry]:
                 maxsize=s.cache_user_maxsize,
                 ttl=s.cache_user_ttl,
                 name="user",
+            ),
+            "user_by_id": CacheRegistry(
+                maxsize=s.cache_user_by_id_maxsize,
+                ttl=s.cache_user_by_id_ttl,
+                name="user_by_id",
+            ),
+            "oauth_client": CacheRegistry(
+                maxsize=s.cache_oauth_client_maxsize,
+                ttl=s.cache_oauth_client_ttl,
+                name="oauth_client",
+            ),
+            "api_key": CacheRegistry(
+                maxsize=s.cache_api_key_maxsize,
+                ttl=s.cache_api_key_ttl,
+                name="api_key",
             ),
             "jti": CacheRegistry(
                 maxsize=s.cache_jti_maxsize,
@@ -140,4 +152,7 @@ class _CacheProxy:
 
 refresh_token_cache = _CacheProxy("refresh_token")
 user_cache = _CacheProxy("user")
+user_by_id_cache = _CacheProxy("user_by_id")
+oauth_client_cache = _CacheProxy("oauth_client")
+api_key_cache = _CacheProxy("api_key")
 jti_cache = _CacheProxy("jti")

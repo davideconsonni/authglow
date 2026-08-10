@@ -270,8 +270,10 @@ def oauth2_service(test_settings):
 
 @pytest.fixture
 def api_key_service(test_settings):
+    from authglow.core.cache import _reset_cache_registry
     from authglow.services.api_key import APIKeyService
 
+    _reset_cache_registry()
     with patch("authglow.services.api_key.get_settings", return_value=test_settings):
         svc = APIKeyService()
         return svc
@@ -279,8 +281,10 @@ def api_key_service(test_settings):
 
 @pytest.fixture
 def refresh_token_service(test_settings):
+    from authglow.core.cache import _reset_cache_registry
     from authglow.services.refresh_token import RefreshTokenService
 
+    _reset_cache_registry()
     with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
         svc = RefreshTokenService()
         return svc
@@ -325,8 +329,10 @@ def password_reset_service(test_settings):
 
 @pytest.fixture
 def oauth_client_storage(test_settings):
+    from authglow.core.cache import _reset_cache_registry
     from authglow.services.oauth_client import OAuth2ClientStorage
 
+    _reset_cache_registry()
     with patch("authglow.services.oauth_client.get_settings", return_value=test_settings):
         with patch("authglow.services.password.get_settings", return_value=test_settings):
             return OAuth2ClientStorage()

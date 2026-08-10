@@ -385,6 +385,23 @@ class Settings(BaseSettings):
     cache_refresh_token_ttl: int = 60
     cache_user_maxsize: int = 2000
     cache_user_ttl: int = 300
+    # User-by-ID cache (get_current_user hot path). Shorter TTL than
+    # the email-keyed user cache because every authenticated request
+    # reads through it — a 60 s window keeps the user fresh without
+    # hammering the file system.
+    cache_user_by_id_maxsize: int = 5000
+    cache_user_by_id_ttl: int = 60
+    # OAuth2 client cross-request cache. Clients change rarely; a
+    # 300 s TTL covers every authorize + token exchange in a session
+    # without re-reading from the fsspec backend.
+    cache_oauth_client_maxsize: int = 500
+    cache_oauth_client_ttl: int = 300
+    # API key cache. Key metadata (scopes, active flag, expiry) is
+    # read on every request authenticated with an API key. 60 s TTL
+    # because lockout counters change with every failed attempt and
+    # the service invalidates on mutation.
+    cache_api_key_maxsize: int = 2000
+    cache_api_key_ttl: int = 60
     # JTI replay-protection cache for client_assertion JWTs (T.2). Bounds
     # the in-process state of recently-seen ``jti`` claims — entries evict
     # automatically when the JWT expires.

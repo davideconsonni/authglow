@@ -348,6 +348,36 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "User cache TTL (s)",
         "restart_required": True,
     },
+    "cache_user_by_id_maxsize": {
+        "category": "cache",
+        "label": "User-by-ID cache max size",
+        "restart_required": True,
+    },
+    "cache_user_by_id_ttl": {
+        "category": "cache",
+        "label": "User-by-ID cache TTL (s)",
+        "restart_required": True,
+    },
+    "cache_oauth_client_maxsize": {
+        "category": "cache",
+        "label": "OAuth2 client cache max size",
+        "restart_required": True,
+    },
+    "cache_oauth_client_ttl": {
+        "category": "cache",
+        "label": "OAuth2 client cache TTL (s)",
+        "restart_required": True,
+    },
+    "cache_api_key_maxsize": {
+        "category": "cache",
+        "label": "API key cache max size",
+        "restart_required": True,
+    },
+    "cache_api_key_ttl": {
+        "category": "cache",
+        "label": "API key cache TTL (s)",
+        "restart_required": True,
+    },
     # --- Passkey ---
     "passkey_rp_id": {"category": "passkey", "label": "WebAuthn RP ID", "restart_required": True},
     "passkey_rp_name": {

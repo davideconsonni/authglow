@@ -46,20 +46,32 @@ class FileEmailIndexRepository(BaseFileRepository, EmailIndexRepository):
     calling ``lookup`` / ``insert`` / ``remove`` (the public API
     of the service layer enforces this).
 
-    Layout note: ``BaseFileRepository`` requires a non-empty
-    ``_subdir``. The email index lives at the storage **root**,
-    not in a subdirectory, so we pass ``subdir="."`` to the base
-    constructor and override ``_storage_path`` to point back at
-    the root (the ``.`` would otherwise show up in the path).
+    The entire index is loaded into an in-memory dict on first
+    access and kept in sync via write-through: ``insert`` and
+    ``remove`` mutate both the in-memory dict and the on-disk
+    file under the caller's ``named_lock("email_index")``.
+    ``lookup`` and ``all`` read from memory and never touch disk.
     """
 
     _filename = "email_index.json"
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         super().__init__(settings=settings, subdir=".")
-        # Collapse the "." subdir back to the root so the file
-        # lives at <storage>/email_index.json (not <storage>/./...).
         self._storage_path = self._storage_root
+        self._index_cache: Optional[Dict[str, str]] = None
+        self._index_loaded: bool = False
+
+    # ------------------------------------------------------------------
+    # In-memory cache (write-through)
+    # ------------------------------------------------------------------
+
+    async def _ensure_index_loaded(self) -> Dict[str, str]:
+        if not self._index_loaded:
+            index = await self._read_index()
+            self._index_cache = index
+            self._index_loaded = True
+        assert self._index_cache is not None
+        return self._index_cache
 
     # ------------------------------------------------------------------
     # Path helper (overrides default BaseFileRepository._path semantics)
@@ -80,13 +92,10 @@ class FileEmailIndexRepository(BaseFileRepository, EmailIndexRepository):
     async def lookup(self, email: str) -> Optional[str]:
         """Return the user_id mapped to *email*, or ``None``.
 
-        *email* is expected to be lower-cased by the caller (the
-        service layer enforces this invariant). The repository
-        HMAC-hashes the email before reading from the index.
+        Reads from the in-memory index (loaded from disk on first
+        access, kept in sync via write-through).
         """
-        index = await self._read_index()
-        if not isinstance(index, dict):
-            return None
+        index = await self._ensure_index_loaded()
         return index.get(hash_index_key(email))
 
     # ------------------------------------------------------------------
@@ -94,20 +103,10 @@ class FileEmailIndexRepository(BaseFileRepository, EmailIndexRepository):
     # ------------------------------------------------------------------
 
     async def insert(self, email: str, user_id: str) -> None:
-        """Insert a new ``email -> user_id`` mapping.
-
-        If the email is already present, the mapping is overwritten
-        — the service layer (``UserStorage.create_user``) is
-        responsible for checking uniqueness before calling
-        ``insert`` and for raising a domain-level error.
-
-        The write is single-shot and lock-free at the repository
-        level: cross-process safety is delegated to the
-        ``named_lock("email_index")`` held by ``UserStorage``.
+        """Insert a new ``email -> user_id`` mapping. Write-through:
+        both the in-memory dict and the on-disk file are updated.
         """
-        index = await self._read_index()
-        if not isinstance(index, dict):
-            index = {}
+        index = await self._ensure_index_loaded()
         index[hash_index_key(email)] = user_id
         await self._write_index(index)
 
@@ -116,9 +115,10 @@ class FileEmailIndexRepository(BaseFileRepository, EmailIndexRepository):
     # ------------------------------------------------------------------
 
     async def remove(self, email: str) -> None:
-        """Remove the mapping for *email*. No-op if absent."""
-        index = await self._read_index()
-        if not isinstance(index, dict):
+        """Remove the mapping for *email*. No-op if absent.
+        Write-through: both in-memory dict and on-disk file."""
+        index = await self._ensure_index_loaded()
+        if hash_index_key(email) not in index:
             return
         index.pop(hash_index_key(email), None)
         await self._write_index(index)
@@ -128,14 +128,8 @@ class FileEmailIndexRepository(BaseFileRepository, EmailIndexRepository):
     # ------------------------------------------------------------------
 
     async def all(self) -> Dict[str, str]:
-        """Return a snapshot of the entire index as a dict.
-
-        Used by debug + ``count``/``list`` fallback only — the
-        service layer prefers ``lookup`` for O(1) reads.
-        """
-        index = await self._read_index()
-        if not isinstance(index, dict):
-            return {}
+        """Return a snapshot of the entire in-memory index."""
+        index = await self._ensure_index_loaded()
         return dict(index)
 
     # ------------------------------------------------------------------

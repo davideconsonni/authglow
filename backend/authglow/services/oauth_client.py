@@ -26,6 +26,7 @@ factory uses the default.
 import secrets
 from typing import List, Optional
 
+from authglow.core.cache import oauth_client_cache
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import Settings, get_settings
 from authglow.core.datetime import utcnow
@@ -78,17 +79,36 @@ class OAuth2ClientStorage:
         return client
 
     async def get_client(self, client_id: str) -> Optional[OAuth2Client]:
-        """Get a client by client_id."""
-        return await self._repository.get_by_id(client_id)
+        """Get a client by client_id with cross-request caching.
+
+        In the OAuth2 authorize + token-exchange flow the same
+        client can be read 5+ times per request (verify_* /
+        process_scopes methods). The per-request ContextVar in
+        _get_client_cached covers that, but across requests the
+        same client was re-read from disk every time. This
+        cross-request cache eliminates those redundant reads.
+        """
+        cached: OAuth2Client | None = oauth_client_cache.get(client_id)
+        if cached is not None:
+            return cached
+
+        client = await self._repository.get_by_id(client_id)
+        if client is not None:
+            oauth_client_cache[client_id] = client
+        return client
 
     async def update_client(self, client: OAuth2Client) -> OAuth2Client:
         """Update an existing client (CAS-protected)."""
         await self._repository.update(client)
+        oauth_client_cache.pop(client.client_id, None)
         return client
 
     async def delete_client(self, client_id: str) -> bool:
         """Delete a client. Returns ``True`` on success."""
-        return await self._repository.delete(client_id)
+        result = await self._repository.delete(client_id)
+        if result:
+            oauth_client_cache.pop(client_id, None)
+        return result
 
     async def list_clients(
         self, limit: int = 100, offset: int = 0, active_only: bool = False
@@ -166,6 +186,7 @@ class OAuth2ClientStorage:
                 client.client_secret = await hash_password_async(new_secret)
                 try:
                     await self._repository.update(client)
+                    oauth_client_cache.pop(client_id, None)
                     return new_secret
                 except ConcurrentWriteError:
                     if attempt == self.MAX_CAS_RETRIES - 1:
@@ -194,6 +215,7 @@ class OAuth2ClientStorage:
                 client.client_secret_jwt_key = encrypt_client_jwt_key_value(plaintext)
                 try:
                     await self._repository.update(client)
+                    oauth_client_cache.pop(client_id, None)
                     return plaintext
                 except ConcurrentWriteError:
                     if attempt == self.MAX_CAS_RETRIES - 1:

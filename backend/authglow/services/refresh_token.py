@@ -26,6 +26,7 @@ import secrets
 from datetime import timedelta
 from typing import List, Optional, Tuple
 
+from authglow.core.cache import refresh_token_cache
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
@@ -131,9 +132,22 @@ class RefreshTokenService:
         return refresh_token
 
     async def get_refresh_token(self, token: str) -> Optional[RefreshToken]:
-        """Get refresh token by plaintext token string using O(1) HMAC lookup."""
+        """Get refresh token by plaintext token string using O(1) HMAC lookup.
+
+        The cache is keyed by ``token_lookup`` (the HMAC of the
+        plaintext, which doubles as the on-disk filename). Caching
+        avoids re-reading the JSON file during the rotation loop
+        where the same token is fetched multiple times per exchange.
+        """
         token_lookup = self._find_token_lookup(token)
-        rt = await self._repo.get_by_lookup(token_lookup)
+        cached: RefreshToken | None = refresh_token_cache.get(token_lookup)
+        if cached is not None:
+            rt = cached
+        else:
+            rt = await self._repo.get_by_lookup(token_lookup)
+            if rt is not None:
+                refresh_token_cache[token_lookup] = rt
+
         if rt is None:
             return None
         if not await verify_password_async(token, rt.token_hash):
@@ -209,6 +223,7 @@ class RefreshTokenService:
                 except ConcurrentWriteError:
                     continue
 
+                refresh_token_cache.pop(rt.token_lookup, None)
                 await self._repo.remove_from_active_index(rt.token_id)
                 return new_token, None
 
@@ -232,6 +247,7 @@ class RefreshTokenService:
             try:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
+                refresh_token_cache.pop(rt.token_lookup, None)
                 return True
             except Exception:
                 return False
@@ -255,6 +271,7 @@ class RefreshTokenService:
             try:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
+                refresh_token_cache.pop(rt.token_lookup, None)
                 return True
             except Exception:
                 return False
@@ -291,6 +308,7 @@ class RefreshTokenService:
 
                 await self._repo.update(rt_recheck)
                 await self._repo.remove_from_active_index(token_id)
+                refresh_token_cache.pop(rt_recheck.token_lookup, None)
                 revoked_count += 1
 
                 if rt_recheck.replaced_by:
