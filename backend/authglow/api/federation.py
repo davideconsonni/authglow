@@ -652,6 +652,7 @@ async def create_provider(
         auth_levels=provider_data.auth_levels,
         claims_mapping=provider_data.claims_mapping
         or ExternalIdpConfig.model_fields["claims_mapping"].default,
+        rate_limit_per_minute=provider_data.rate_limit_per_minute,
     )
     created = await storage.create_provider(provider)
     return created

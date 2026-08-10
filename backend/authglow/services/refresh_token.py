@@ -141,6 +141,7 @@ class RefreshTokenService:
         """
         token_lookup = self._find_token_lookup(token)
         cached: RefreshToken | None = await refresh_token_cache.get(token_lookup)
+        rt: Optional[RefreshToken]
         if cached is not None:
             rt = cached
         else:

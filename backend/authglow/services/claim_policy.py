@@ -218,8 +218,8 @@ class ClaimPolicyService:
             # When a saved rule emits a claim that the default
             # rules also emit, the saved rule wins (last-wins
             # on dict assignment).
-            saved = await self._api_key_repository.get_by_api_key(api_key_id)
-            saved_rules = saved.rules if saved is not None else []
+            saved_api_key = await self._api_key_repository.get_by_api_key(api_key_id)
+            saved_rules = saved_api_key.rules if saved_api_key is not None else []
             active_rules = self._default_rules() + saved_rules
         else:
             # First-party default (cookie auth, password
@@ -399,11 +399,13 @@ class ClaimPolicyService:
                 claim_name=f"{ns}/roles",
                 source=ClaimSource.RBAC_ROLES,
                 include_in=[ClaimTarget.ACCESS_TOKEN],
+                description=None,
             ),
             ClaimRule(
                 claim_name=f"{ns}/permissions",
                 source=ClaimSource.RBAC_PERMISSIONS,
                 include_in=[ClaimTarget.ACCESS_TOKEN],
+                description=None,
             ),
         ]
 

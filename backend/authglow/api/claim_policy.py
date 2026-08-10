@@ -185,11 +185,13 @@ def _to_default_payload(client_id: str) -> ClaimPolicyResponse:
             claim_name=f"{ns}/roles",
             source=ClaimSource.RBAC_ROLES,
             include_in=[ClaimTarget.ACCESS_TOKEN],
+            description=None,
         ),
         ClaimRule(
             claim_name=f"{ns}/permissions",
             source=ClaimSource.RBAC_PERMISSIONS,
             include_in=[ClaimTarget.ACCESS_TOKEN],
+            description=None,
         ),
     ]
     return ClaimPolicyResponse(
