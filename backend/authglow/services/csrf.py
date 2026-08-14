@@ -138,6 +138,7 @@ class CSRFTokenService:
         if not secrets.compare_digest(stored_hash, submitted_hash):
             return False
 
+        await self._repository.delete(lookup)
         return True
 
 

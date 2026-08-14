@@ -208,10 +208,6 @@ class OAuth2Service:
                 return await self.client_storage.verify_client_secret(client, client_secret)
             return True
 
-        # Settings-based fallback client — disabled in production (VAPT-014)
-        if self.settings.is_production:
-            return False
-
         if client_id != self.settings.oauth2_client_id:
             return False
 
@@ -230,11 +226,8 @@ class OAuth2Service:
         if client:
             return await self.client_storage.verify_redirect_uri(client_id, redirect_uri)
 
-        if self.settings.is_production:
-            return False
-
         if client_id == self.settings.oauth2_client_id:
-            return redirect_uri == "http://localhost:8000/callback"
+            return redirect_uri == self.settings.oauth2_first_party_redirect_uri
 
         return False
 
@@ -244,9 +237,6 @@ class OAuth2Service:
 
         if client:
             return await self.client_storage.is_scope_allowed(client_id, requested_scopes)
-
-        if self.settings.is_production:
-            return False
 
         return client_id == self.settings.oauth2_client_id
 
@@ -272,10 +262,9 @@ class OAuth2Service:
 
         # Settings-based fallback client — only permissible in non-production
         if not client and client_id == self.settings.oauth2_client_id:
-            if not self.settings.is_production:
-                if not self.settings.oauth2_reject_unknown_scopes:
-                    return requested_scopes
-                allowed_scopes = []
+            if not self.settings.oauth2_reject_unknown_scopes:
+                return requested_scopes
+            allowed_scopes = []
 
         # Always include OIDC standard scopes in allowed list
         allowed_scopes_set = set(allowed_scopes) | OIDC_STANDARD_SCOPES
@@ -301,9 +290,6 @@ class OAuth2Service:
 
         if client:
             return await self.client_storage.is_grant_type_allowed(client_id, grant_type)
-
-        if self.settings.is_production:
-            return False
 
         return client_id == self.settings.oauth2_client_id
 

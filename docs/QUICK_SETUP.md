@@ -119,13 +119,12 @@ Success response:
 
 **After this call succeeds, the setup token is consumed.** Subsequent calls return `404`.
 
-### 4. Log in and get a token
+### 4. Log in through OAuth2/OIDC
 
-```bash
-curl -s -X POST https://your-instance.example.com/api/token \
-  -d "username=admin@example.com" \
-  -d "password=SecurePwd1!"
-```
+Open the frontend and choose **Sign in with AuthGlow**. The dashboard uses
+Authorization Code + PKCE and creates httpOnly browser session cookies after
+the callback. Third-party applications must register their own OAuth client
+and use the standard `/oauth2/authorize` and `/oauth2/token` endpoints.
 
 Response:
 
@@ -145,7 +144,7 @@ Response:
 
 ```bash
 curl -s https://your-instance.example.com/api/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+  -H "Cookie: access_token=YOUR_ACCESS_TOKEN"
 ```
 
 Response:
@@ -166,24 +165,18 @@ Response:
 
 Open `https://your-instance.example.com/docs` in a browser:
 
-1. Click the green **Authorize** button (the second one, labeled `OAuth2PasswordBearer`)
-2. Fill in:
-   - **username**: your email (`admin@example.com`)
-   - **password**: your password
-   - Leave `client_id` and `client_secret` empty
-3. Click **Authorize** → Swagger now sends the JWT with every request
-4. The lock icon 🔒 appears on protected endpoints
+1. Use the dashboard login or a registered OAuth2/OIDC client.
+2. For API testing, send a valid Bearer access token issued by `/oauth2/token`.
+3. The lock icon appears on protected endpoints.
 
 ### Token refresh
 
 Access tokens expire after 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`).
 To refresh without re-entering credentials:
 
-```bash
-curl -s -X POST https://your-instance.example.com/api/auth/refresh \
-  -d "grant_type=refresh_token" \
-  -d "refresh_token=YOUR_REFRESH_TOKEN"
-```
+The dashboard refreshes its httpOnly cookie session with
+`POST /api/auth/refresh`. External OAuth2 clients rotate refresh tokens using
+`POST /oauth2/token` with `grant_type=refresh_token`.
 
 ---
 
@@ -192,11 +185,11 @@ curl -s -X POST https://your-instance.example.com/api/auth/refresh \
 | Problem | Likely Cause | Fix |
 |---|---|---|
 | `403` on `/api/setup/create-admin` | Wrong or missing setup token | Verify token from logs or `SETUP_TOKEN` env var |
-| `404` on `/api/setup/create-admin` | Setup already completed | Users exist — use `/api/token` to log in |
+| `404` on `/api/setup/create-admin` | Setup already completed | Users exist — use the dashboard OAuth2 login |
 | `500` on `/api/setup/create-admin` | `SETUP_TOKEN` not configured on server and auto-generation failed | Check server config, redeploy |
 | `400` "Password validation failed" | Password doesn't meet policy | Use a password with uppercase, lowercase, digit, special char, 8+ chars |
-| `401` on `/api/token` | Wrong credentials or user inactive | Verify email and password; check user status |
-| `423` on `/api/token` | Account locked | Too many failed attempts — wait or unlock via admin |
+| `401` on `/oauth2/authorize` | Invalid credentials or inactive user | Check the account status and retry |
+| `423` on `/oauth2/authorize` | Account locked | Too many failed attempts — wait or unlock via admin |
 | `401` on protected endpoints | Token expired (30 min default) | Refresh the token or log in again |
 | Swagger can't reach API | CORS or `BASE_URL` mismatch | Set `BASE_URL` to your public URL; add frontend URL to `CORS_ALLOWED_ORIGINS` |
 

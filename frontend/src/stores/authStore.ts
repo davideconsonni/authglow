@@ -28,7 +28,6 @@ interface AuthState {
 interface AuthActions {
   setAuthenticated: (value: boolean) => void
   setUser: (user: AuthUser) => void
-  login: (email: string, password: string) => Promise<AuthUser | { mfa_required: boolean }>
   logout: () => Promise<void>
   fetchCurrentUser: () => Promise<void>
 }
@@ -37,7 +36,7 @@ type AuthStore = AuthState & AuthActions
 
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
@@ -47,45 +46,21 @@ export const useAuthStore = create<AuthStore>()(
         set({ isAuthenticated: value })
         if (!value) {
           set({ user: null })
+          try {
+            const event = String(Date.now())
+            localStorage.setItem('auth-state-event', event)
+            localStorage.removeItem('auth-state-event')
+            if ('BroadcastChannel' in window) {
+              const channel = new BroadcastChannel('authglow-auth')
+              channel.postMessage('session-invalidated')
+              channel.close()
+            }
+          } catch { /* storage unavailable */ }
         }
       },
 
       setUser: (user: AuthUser) => {
         set({ user })
-      },
-
-      login: async (email: string, password: string) => {
-        set({ isLoading: true })
-        try {
-          const response = await api.postForm<{
-            access_token: string
-            refresh_token?: string
-            token_type: string
-            mfa_required?: boolean
-            session_token?: string
-          }>('/api/token', {
-            username: email,
-            password,
-          })
-
-          if (response.mfa_required) {
-            set({ isLoading: false })
-            return { mfa_required: true, session_token: response.session_token } as unknown as { mfa_required: boolean; session_token: string }
-          }
-
-          set({
-            isAuthenticated: true,
-            isLoading: false,
-            user: null,
-          })
-
-          await get().fetchCurrentUser()
-          return {} as AuthUser
-        } catch (err) {
-          set({ isLoading: false })
-          const message = err instanceof Error ? err.message : 'Login failed'
-          throw new Error(message, { cause: err })
-        }
       },
 
       logout: async () => {

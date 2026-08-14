@@ -4,13 +4,13 @@ import base64
 import hashlib
 import re
 from datetime import timedelta
-from typing import Annotated, Any, Dict, List, NoReturn, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 
 import jwt
 import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 
 from authglow.core.config import Settings, get_settings
 from authglow.core.crypto import decrypt_totp_secret
@@ -51,8 +51,25 @@ from authglow.services.user import UserService
 UserStorage = UserService
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/oauth2/token", auto_error=False)
 FIRST_PARTY_BROWSER_CLIENT_ID = "password_grant"
+FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin"
+
+
+def _first_party_oauth_client(settings: Settings) -> OAuth2Client:
+    """Build the configured public client used by the AuthGlow dashboard."""
+    return OAuth2Client(
+        client_id=settings.oauth2_client_id,
+        client_secret="first-party-public-client",
+        client_name="AuthGlow Dashboard",
+        redirect_uris=[settings.oauth2_first_party_redirect_uri],
+        allowed_scopes=FIRST_PARTY_OAUTH_SCOPES.split(),
+        grant_types=["authorization_code", "refresh_token"],
+        is_confidential=False,
+        require_pkce=True,
+        require_consent=False,
+        token_endpoint_auth_method="none",
+    )
 
 
 def _cookie_kwargs(settings: Settings) -> dict:
@@ -318,7 +335,14 @@ async def _authenticate_client_at_token_endpoint(
     if not resolved_client_id:
         return None
     client = await oauth2_service.client_storage.get_client(resolved_client_id)
-    is_confidential = bool(getattr(client, "is_confidential", True)) if client else True
+    settings = get_settings()
+    if client is None and resolved_client_id == settings.oauth2_client_id:
+        client = _first_party_oauth_client(settings)
+    is_confidential = (
+        bool(getattr(client, "is_confidential", True))
+        if client
+        else resolved_client_id != settings.oauth2_client_id
+    )
 
     if is_confidential:
         if not resolved_client_secret:
@@ -497,8 +521,10 @@ async def csrf_token_endpoint(request: Request):
         key=SESSION_ID_COOKIE,
         value=session_id,
         httponly=True,
-        samesite="lax",
-        secure=settings.is_production,
+        samesite=settings.auth_cookie_samesite,
+        secure=settings.auth_cookie_secure,
+        domain=settings.auth_cookie_domain,
+        path="/",
         max_age=1800,
     )
     return response
@@ -537,11 +563,13 @@ async def authorize_post(
     Accepts either email+password credentials OR an existing session cookie.
     """
     # Verify client and redirect_uri before processing login
+    settings = get_settings()
     client = await oauth2_service.client_storage.get_client(client_id)
+    if client is None and client_id == settings.oauth2_client_id:
+        client = _first_party_oauth_client(settings)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
-    settings = get_settings()
     if settings.enforce_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
@@ -903,6 +931,19 @@ async def authorize_post(
     }
 
 
+@router.get("/api/auth/oidc/config")
+async def first_party_oidc_config():
+    """Return public OIDC configuration for the AuthGlow dashboard client."""
+    settings = get_settings()
+    return {
+        "client_id": settings.oauth2_client_id,
+        "redirect_uri": settings.oauth2_first_party_redirect_uri,
+        "scopes": FIRST_PARTY_OAUTH_SCOPES,
+        "authorization_endpoint": f"{settings.issuer}/oauth2/authorize",
+        "token_endpoint": f"{settings.issuer}/oauth2/token",
+    }
+
+
 @router.post("/oauth2/token", response_model=Token)
 async def token_endpoint(
     request: Request,
@@ -973,7 +1014,7 @@ async def token_endpoint(
         if not oauth_client:
             # Determine is_confidential for the public-client branch
             # of the legacy path.
-            is_confidential = True
+            is_confidential = resolved_client_id != settings.oauth2_client_id
             stored = await oauth2_service.client_storage.get_client(resolved_client_id)
             if stored:
                 is_confidential = stored.is_confidential
@@ -1079,6 +1120,15 @@ async def token_endpoint(
         # Add refresh token to response
         access_token_response.refresh_token = rt.token
 
+        # The dashboard is a public OAuth client. Set the browser session
+        # cookies as a same-origin convenience; the OAuth response remains
+        # standards-compatible JSON for every other client.
+        if (
+            resolved_client_id == settings.oauth2_client_id
+            and redirect_uri == settings.oauth2_first_party_redirect_uri
+        ):
+            _set_auth_cookies(response, access_token_response.access_token, rt.token, settings)
+
         # Add ID token if OpenID Connect flow (openid scope requested)
         if "openid" in scopes:
             from authglow.services.oidc import OIDCService
@@ -1167,6 +1217,20 @@ async def token_endpoint(
             # Add to response
             access_token_response.id_token = id_token
 
+        if (
+            resolved_client_id == settings.oauth2_client_id
+            and redirect_uri == settings.oauth2_first_party_redirect_uri
+        ):
+            from fastapi.responses import JSONResponse
+
+            first_party_response = JSONResponse(content={"ok": True})
+            _set_auth_cookies(
+                first_party_response,
+                access_token_response.access_token,
+                rt.token,
+                settings,
+            )
+            return first_party_response
         return access_token_response
 
     elif grant_type == "client_credentials":
@@ -1388,205 +1452,9 @@ async def token_endpoint(
         #   - client_credentials
         #   - refresh_token
         #   - urn:ietf:params:oauth:grant-type:device_code
-        # First-party browser login goes through `/api/token` below, which is
-        # NOT a standard OAuth2 grant and MUST NOT be exposed to third-party
-        # clients. See docs/FEATURES.md (Supported OAuth 2.0 / OIDC Standards).
+        # Password grant is not supported. Browser login uses the same
+        # Authorization Code + PKCE flow as every public client.
         raise HTTPException(status_code=400, detail="Unsupported grant_type")
-
-
-# Traditional first-party token endpoint (browser login).
-# NOT a standard OAuth2 grant: reserved for the AuthGlow frontend only.
-# Third-party clients must use the standard `/oauth2/token` endpoint above
-# with one of the supported grants (see CONFORMANCE T.1, docs/FEATURES.md).
-@router.post("/api/token")
-@limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
-async def login_for_access_token(
-    request: Request,
-    response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    storage: UserStorage = Depends(get_user_storage),
-    jwt_service: JWTService = Depends(get_jwt_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
-):
-    """Direct token endpoint (username/password). Sets httpOnly auth cookies."""
-    settings = get_settings()
-    user = await storage.get_user_by_email(form_data.username)
-
-    # Unified failure handling to prevent user enumeration
-    async def handle_failed_login() -> NoReturn:
-        await audit_service.log_event(
-            event_type="login_failed",
-            email=form_data.username,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            severity="warning",
-        )
-        # Record login history for existing users
-        if user:
-            from authglow.services.login_history import LoginHistoryService
-
-            login_svc = LoginHistoryService()
-            await login_svc.record_login(
-                user_id=user.id,
-                email=user.email,
-                success=False,
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent"),
-                failure_reason="invalid_password",
-            )
-            locked_until = await storage.record_failed_login(user.id)
-            if locked_until:
-                await audit_service.log_event(
-                    event_type="account_locked",
-                    user_id=user.id,
-                    email=user.email,
-                    ip_address=request.client.host if request.client else None,
-                    user_agent=request.headers.get("user-agent"),
-                    severity="high",
-                )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check if user exists.
-    # VAPT-048: the lockout check is performed BEFORE the bcrypt
-    # compare to prevent CPU DoS amplification — an attacker
-    # hammering a locked account would otherwise pay one full
-    # bcrypt cost (~100ms at rounds=12) per request, capped only
-    # by the per-IP rate limiter. The lockout check is a single
-    # file read with no crypto, so the per-request cost on a
-    # locked account drops from ~100ms to <1ms.
-    if not user:
-        # VAPT-050 will add a dummy bcrypt here to equalize
-        # timing for non-existent users.
-        await handle_failed_login()
-    assert user is not None  # help mypy narrow after NoReturn handler
-
-    if await storage.is_account_locked(user.id):
-        await audit_service.log_event(
-            event_type="login_attempt_while_locked",
-            user_id=user.id,
-            email=user.email,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            severity="high",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
-        )
-
-    # VAPT-038: verify_and_maybe_rehash_password transparently
-    # re-hashes the stored hash to the configured bcrypt cost
-    # on a successful verify. Returns (True, user) on success,
-    # (False, None) on mismatch — the second tuple element is
-    # intentionally unused here since ``user`` was already
-    # fetched above.
-    if not (await storage.verify_and_maybe_rehash_password(user, form_data.password))[0]:
-        await handle_failed_login()
-    assert user is not None  # help mypy narrow after NoReturn handler
-
-    # Check if account is suspended
-    if user.suspended_until and utcnow() < user.suspended_until:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail=f"Account suspended until {user.suspended_until.isoformat()}",
-        )
-
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-
-    # Reset failed login attempts on successful login
-    await storage.reset_failed_login_attempts(user.id)
-
-    # Check if MFA is required
-    if user.mfa_enabled and user.mfa_verified:
-        # Create temporary session token for MFA verification
-        session_token = jwt_service.create_mfa_session_token(user.id, user.email)
-
-        await audit_service.log_event(
-            event_type="login_mfa_required",
-            user_id=user.id,
-            email=user.email,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
-
-        return {
-            "mfa_required": True,
-            "session_token": session_token,
-            "message": "MFA verification required",
-        }
-
-    # Update last login
-    await storage.update_last_login(user.id)
-
-    # Log successful login
-    await audit_service.log_event(
-        event_type="login_success",
-        user_id=user.id,
-        email=user.email,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    from authglow.services.login_history import LoginHistoryService
-
-    login_svc = LoginHistoryService()
-    await login_svc.record_login(
-        user_id=user.id,
-        email=user.email,
-        success=True,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-
-    # Generate JWT token response (without refresh token from JWT service)
-    # VAPT-046: tag the access token with the internal-flow
-    # audience so a future resource server that wants to
-    # accept only federated OAuth2 traffic can reject tokens
-    # minted by the first-party login flow.
-    from authglow.services.jwt import INTERNAL_AUDIENCE
-
-    claim_policy_service = ClaimPolicyService()
-    extra_claims = await claim_policy_service.build_claims(
-        user,
-        client_id=None,  # first-party flow
-        scopes=list(user.scopes),
-        target=ClaimTarget.ACCESS_TOKEN,
-    )
-
-    token_response = jwt_service.create_token_response(
-        user.id,
-        user.email,
-        user.scopes,
-        include_refresh=False,
-        audience=INTERNAL_AUDIENCE,
-        extra_claims=extra_claims,
-    )
-
-    # Check if password is expired
-    if user.password_expired:
-        token_response.password_expired = True
-
-    # Create persistent refresh token in storage so sessions are tracked
-    rt = await refresh_token_service.create_refresh_token(
-        user_id=user.id,
-        client_id=FIRST_PARTY_BROWSER_CLIENT_ID,
-        scopes=user.scopes,
-        issued_ip=request.client.host if request.client else None,
-        expires_in_days=30,
-    )
-
-    token_response.refresh_token = rt.token
-
-    # Set httpOnly auth cookies for browser-based clients
-    _set_auth_cookies(response, token_response.access_token, rt.token, settings)
-
-    return token_response
-
 
 @router.post("/api/token/api-key")
 @limiter.limit("20/minute")
@@ -1711,7 +1579,7 @@ async def cookie_refresh(
 
     new_rt, error = await refresh_token_service.validate_and_rotate(
         token=rt_cookie,
-        client_id=FIRST_PARTY_BROWSER_CLIENT_ID,
+        client_id=settings.oauth2_client_id,
         ip_address=request.client.host if request.client else None,
     )
 

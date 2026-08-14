@@ -44,12 +44,23 @@ let pendingRequests: (() => void)[] = []
 // The flag is per-module-load, so it resets on the next page navigation
 // (after the soft redirect to /auth/login).
 let sessionExpiredNotified = false
+let csrfToken: string | null = null
+
+async function getCsrfToken(): Promise<string> {
+  const response = await fetch(`${API_URL}/api/oauth2/csrf-token`, { credentials: 'include' })
+  const data = await response.json() as { csrf_token?: string }
+  if (!response.ok || !data.csrf_token) throw new Error('Unable to initialize CSRF protection')
+  csrfToken = data.csrf_token
+  return csrfToken
+}
 
 async function attemptRefresh(): Promise<boolean> {
   try {
+    const token = await getCsrfToken()
     const resp = await fetch(`${API_URL}/api/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-CSRF-Token': token },
     })
     return resp.ok
   } catch {
@@ -100,13 +111,16 @@ async function request<T>(endpoint: string, options: ApiOptions = {}): Promise<T
       ? JSON.stringify(body)
       : undefined
 
-  const doFetch = () =>
-    fetch(`${API_URL}${endpoint}`, {
+  const isUnsafe = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(rest.method || '')
+  const doFetch = async () => {
+    if (isUnsafe) headers['X-CSRF-Token'] = await getCsrfToken()
+    return fetch(`${API_URL}${endpoint}`, {
       ...rest,
       headers,
       body: requestBody,
       credentials: 'include',
     })
+  }
 
   let response = await doFetch()
 

@@ -19,6 +19,7 @@ import { OAuthAuthorizePage } from './pages/OAuthAuthorizePage'
 import { PlaygroundOAuthCallbackPage } from './pages/admin/PlaygroundOAuthCallbackPage'
 import { DeviceVerificationPage } from './pages/DeviceVerificationPage'
 import { MFAVerifyPage } from './pages/auth/MFAVerifyPage'
+import { OAuthCallbackPage } from './pages/auth/OAuthCallbackPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { SessionsPage } from './pages/SessionsPage'
@@ -99,6 +100,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const broadcast = 'BroadcastChannel' in window ? new BroadcastChannel('authglow-auth') : null
+    const invalidate = () => useAuthStore.getState().setAuthenticated(false)
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'auth-state-event' && event.newValue) invalidate()
+    }
+    broadcast?.addEventListener('message', invalidate)
+    window.addEventListener('storage', onStorage)
+    const revalidate = () => useAuthStore.getState().fetchCurrentUser()
+    window.addEventListener('focus', revalidate)
+    document.addEventListener('visibilitychange', revalidate)
+    return () => {
+      broadcast?.removeEventListener('message', invalidate)
+      broadcast?.close()
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', revalidate)
+      document.removeEventListener('visibilitychange', revalidate)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!hydrated || probed.current) return
     probed.current = true
     // Always verify the session with the server, even when isAuthenticated is
@@ -175,6 +196,7 @@ function App() {
           <Route path={ROUTES.AUTH.FORGOT_PASSWORD} element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
           <Route path={ROUTES.AUTH.RESET_PASSWORD} element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
           <Route path={ROUTES.AUTH.MFA_VERIFY} element={<MFAVerifyPage />} />
+          <Route path={ROUTES.AUTH.CALLBACK} element={<OAuthCallbackPage />} />
           <Route path={ROUTES.AUTH.VERIFY_EMAIL} element={<EmailVerifiedPage />} />
           <Route path={ROUTES.OAUTH_AUTHORIZE} element={<OAuthAuthorizePage />} />
           <Route path={ROUTES.OAUTH_DEVICE_VERIFY} element={<DeviceVerificationPage />} />

@@ -32,6 +32,7 @@ from authglow.api.user_profile import router as user_profile_router
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
+from authglow.middleware.csrf import CSRFMiddleware
 from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.request_id import RequestIDMiddleware
@@ -92,6 +93,7 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(HttpsEnforcementMiddleware)
+app.add_middleware(CSRFMiddleware)
 # VAPT-042: RequestIDMiddleware is added LAST so it is the
 # outermost wrapper. The contextvar is set before any other
 # middleware or the app code runs, so every structlog

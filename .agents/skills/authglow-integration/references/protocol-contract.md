@@ -70,4 +70,4 @@ The resource server must enforce issuer, audience, expiry, signature, and requir
 
 ## First-party distinction
 
-`/api/token` is AuthGlow's internal browser login endpoint. It is not the integration API for third-party clients and must not be presented as an OAuth2 password grant.
+`/api/token` is not registered. The AuthGlow dashboard uses the same Authorization Code + PKCE flow as other public clients; third-party clients must use their own registered client and discovery metadata.

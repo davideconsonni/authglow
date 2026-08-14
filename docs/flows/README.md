@@ -26,7 +26,7 @@ Each file uses the same structure:
 | Client Credentials | [`client-credentials.md`](client-credentials.md) | RFC 6749 §4.4 | Scopes strictly validated; supports `client_assertion` (RFC 7523) |
 | Refresh Token Rotation | [`refresh-token-rotation.md`](refresh-token-rotation.md) | RFC 6749 §6, OAuth BCP | Automatic rotation + **reuse detection** (family revocation) |
 | Device Authorization Grant | [`device-authorization.md`](device-authorization.md) | RFC 8628 | Approval endpoints require an authenticated user session |
-| First-party browser login | [`first-party-browser-login.md`](first-party-browser-login.md) | — (NOT OAuth2) | Custom `/api/token`, httpOnly cookies, frontend-only |
+| First-party browser login | [`first-party-browser-login.md`](first-party-browser-login.md) | RFC 6749 §4.1, RFC 7636, OIDC Core | Dashboard public client with PKCE and httpOnly session cookies |
 | Revocation / Introspection | [`revocation-introspection.md`](revocation-introspection.md) | RFC 7009, RFC 7662 | Conformant; access-token revocation via JTI blacklist |
 | OIDC UserInfo | [`oidc-userinfo.md`](oidc-userinfo.md) | OIDC Core §5.1 | Supports the `claims` request parameter (§5.5) |
 | OIDC RP-Initiated Logout | [`oidc-logout.md`](oidc-logout.md) | OIDC RP-Initiated Logout 1.0 | `id_token_hint` required for redirect; front-channel via iframe |

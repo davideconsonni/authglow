@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { useAuthStore } from '../stores/authStore'
 
 describe('authStore', () => {
@@ -80,62 +80,6 @@ describe('authStore', () => {
       }
       useAuthStore.getState().setUser(user)
       expect(useAuthStore.getState().user).toEqual(user)
-    })
-  })
-
-  describe('login', () => {
-    it('sets isAuthenticated on success', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            access_token: 'test-token',
-            token_type: 'Bearer',
-          }),
-      })
-
-      await useAuthStore.getState().login('test@test.com', 'password123')
-      expect(useAuthStore.getState().isAuthenticated).toBe(true)
-    })
-
-    it('loading is false after success', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            access_token: 'test-token',
-            token_type: 'Bearer',
-          }),
-      })
-
-      await useAuthStore.getState().login('test@test.com', 'password123')
-      expect(useAuthStore.getState().isLoading).toBe(false)
-    })
-
-    it('throws on login failure (non-401)', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({ detail: 'Invalid credentials' }),
-      })
-
-      await expect(
-        useAuthStore.getState().login('test@test.com', 'bad'),
-      ).rejects.toThrow('Invalid credentials')
-    })
-
-    it('throws on login failure (401)', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({}),
-      })
-
-      await expect(
-        useAuthStore.getState().login('test@test.com', 'bad'),
-      ).rejects.toThrow('Unauthorized')
     })
   })
 

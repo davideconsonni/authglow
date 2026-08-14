@@ -1,88 +1,62 @@
-# First-Party Browser Login (`/api/token`)
+# First-Party Browser Login (Authorization Code + PKCE)
 
-Email+password login **reserved for the AuthGlow frontend itself**. It is
-**NOT a standard OAuth2 grant** — it must not be used by third-party
-clients.
+The AuthGlow dashboard is an OAuth2/OIDC public client. It uses the same
+Authorization Code + PKCE flow available to other public applications and
+receives only httpOnly browser session cookies after the callback.
 
----
+## Configuration
 
-## Standard
+Set the dashboard client values through:
 
-None. This is a **custom** proprietary flow that does not implement any
-RFC 6749 grant type. It is the classic first-party "login".
+```text
+OAUTH2_CLIENT_ID
+OAUTH2_FIRST_PARTY_REDIRECT_URI=https://authglow.example.com/auth/callback
+```
 
----
+The configured client is public, requires PKCE S256, and is restricted to the
+exact first-party redirect URI.
 
-## Actors
+## Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor U as User
     participant B as AuthGlow Frontend
-    participant A as AuthGlow Login (/api/token)
-    participant T as AuthGlow Token refresh
+    participant A as OAuth Authorize UI
+    participant T as OAuth Token Endpoint
+    participant S as Browser Session
 
-    U->>B: enters email + password
-    B->>A: POST /api/token (username, password)
-    A->>A: verify credentials (bcrypt) + lockout check
-    A-->>B: set httpOnly access + refresh cookies
+    U->>B: clicks Sign in with AuthGlow
+    B->>B: generates state, nonce, and PKCE verifier
+    B->>A: Authorization Code request
+    U->>A: completes credentials/MFA/consent
+    A-->>B: redirect with code and state
+    B->>B: validates redirect, state, and nonce transaction
+    B->>T: authorization_code + code_verifier
+    T-->>B: OAuth token response + httpOnly cookies
+    B->>S: verifies current user through cookie session
     B-->>U: signed in
-    B->>T: POST /oauth2/token (refresh_token via cookie) [on expiry]
-    T-->>B: rotated access + refresh cookies
+    B->>T: cookie refresh endpoint when access expires
 ```
-
----
-
-## How we support it
-
-```
-POST /api/token   (form URL-encoded)
-```
-
-Parameters: `username` (email), `password`, `grant_type=password` (accepted
-here by the frontend only, not on `/oauth2/token`).
-
-1. Verifies the credentials (bcrypt + transparent re-hash when the cost
-   changes).
-2. Loads the user; applies account lockout on repeated failures.
-3. Issues an **access token** JWT and a **refresh token** (rotating).
-4. Sets **httpOnly session cookies** (`auth_cookie_access_name`,
-   `auth_cookie_refresh_name`) on the response.
-
-The browser must not touch the tokens from JS: the session lives in
-cookies.
-
----
-
-## Conformance
-
-Explicitly **non-standard**. It differs from `/oauth2/token` as follows:
-
-| Aspect | `/oauth2/token` | `/api/token` |
-|---------|-----------------|--------------|
-| Grant | `authorization_code`, `client_credentials`, `refresh_token`, `device_code` | password (custom, non-OAuth) |
-| Client auth | Required | None (first-party) |
-| Session | Access token in body | Access + refresh token in **httpOnly cookies** |
-| Usage | Third-party clients | AuthGlow frontend only |
-
-**For this endpoint:**
-- `grant_type=password` is NOT OAuth2 ROPC in the RFC 6749 §4.3 sense: it
-  is a proprietary frontend login.
-- On the standard token endpoint (`/oauth2/token`) it is reported as
-  "unsupported".
-- Use **only** from the first party; do not expose it to third parties.
-
----
 
 ## Endpoints
 
 | Method | Path | Role |
 |--------|------|------|
-| POST | `/api/token` | Email+password login → set session cookies |
+| GET/POST | `/oauth2/authorize` | Authorization UI and code issuance |
+| POST | `/oauth2/token` | Authorization code exchange |
+| POST | `/api/auth/refresh` | First-party cookie session rotation |
+| POST | `/api/auth/logout` | First-party session logout |
 
----
+`/api/token` is not registered. Password login is not exposed as an
+application-specific authentication protocol.
 
-> **Custom vs standard**: entirely custom. It serves the frontend and is
-> not an OAuth2 grant. Third-party clients must use `authorization_code`
-> + PKCE (see [`authorization-code-pkce.md`](authorization-code-pkce.md)).
+## Security properties
+
+- Passwords are entered only in the AuthGlow authorization UI.
+- The dashboard uses Authorization Code + PKCE S256.
+- `state` and `nonce` are generated with a CSPRNG and validated on callback.
+- Access and refresh tokens are not persisted in browser storage.
+- The browser receives httpOnly cookies for its local session.
+- Third-party applications must register their own client and use discovery.

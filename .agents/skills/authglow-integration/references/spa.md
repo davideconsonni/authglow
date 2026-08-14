@@ -22,7 +22,7 @@ Only the issuer, client ID, and public redirect URI may be exposed to browser co
 - Validate callback state before exchanging the code.
 - Validate the ID token nonce and claims.
 - Use the host framework's router for internal redirects.
-- Do not call AuthGlow's first-party `/api/token` endpoint.
+- Do not call `/api/token`; it is not registered. Use Authorization Code + PKCE through discovery.
 
 ## Preferred libraries
 

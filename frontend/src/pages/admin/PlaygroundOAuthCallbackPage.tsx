@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -11,9 +11,11 @@ export function PlaygroundOAuthCallbackPage() {
   const persistTokens = usePlaygroundStore((store) => store.persistTokens)
   const [error, setError] = useState('')
   const [complete, setComplete] = useState(false)
+  const started = useRef(false)
 
   useEffect(() => {
-    let cancelled = false
+    if (started.current) return
+    started.current = true
 
     const exchangeCallback = async () => {
       try {
@@ -50,14 +52,13 @@ export function PlaygroundOAuthCallbackPage() {
           idToken,
         )
         sessionStorage.removeItem(PLAYGROUND_TRANSACTION_KEY)
-        if (!cancelled) setComplete(true)
+        setComplete(true)
       } catch (err: unknown) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'OAuth callback failed')
+        setError(err instanceof Error ? err.message : 'OAuth callback failed')
       }
     }
 
     exchangeCallback()
-    return () => { cancelled = true }
   }, [persistTokens])
 
   return (

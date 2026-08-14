@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
-from authglow.api.auth import _build_oauth_redirect
+from authglow.api.auth import _build_oauth_redirect, _first_party_oauth_client
+from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.services.audit import AuditService
 from authglow.services.oauth2 import OAuth2Service
@@ -33,6 +34,8 @@ async def get_authorize_info(
 ):
     """Return public client info for the OAuth authorize page."""
     client = await client_storage.get_client(client_id)
+    if client is None and client_id == get_settings().oauth2_client_id:
+        client = _first_party_oauth_client(get_settings())
     if not client or not client.is_active:
         raise HTTPException(status_code=400, detail="Invalid client_id")
 

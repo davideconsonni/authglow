@@ -20,7 +20,7 @@ class TestAuthAPIEndpointStructure:
                     if hasattr(sr, "path"):
                         paths.add(sr.path)
         assert "/oauth2/token" in paths
-        assert "/api/token" in paths
+        assert "/api/token" not in paths
         assert "/api/oauth2/authorize" in paths
         assert "/api/token/api-key" in paths
 
@@ -33,30 +33,6 @@ class TestAuthAPIEndpointStructure:
         assert "authorization_code" in source
         assert "client_credentials" in source
         assert "refresh_token" in source
-
-
-class TestLoginLockoutOrder:
-    def test_login_checks_account_lockout_before_password(self):
-        """VAPT-048: lockout must be checked BEFORE bcrypt to prevent
-        CPU DoS amplification. The per-request cost on a locked
-        account must be a cheap file read, not a full bcrypt
-        comparison (~100ms at rounds=12)."""
-        import inspect
-
-        from authglow.api.auth import login_for_access_token
-
-        source = inspect.getsource(login_for_access_token)
-        lockout_pos = source.find("is_account_locked")
-        verify_pwd_pos = source.find("verify_and_maybe_rehash_password")
-        assert lockout_pos != -1, "is_account_locked call missing from login_for_access_token"
-        assert verify_pwd_pos != -1, (
-            "verify_and_maybe_rehash_password call missing from login_for_access_token"
-        )
-        assert lockout_pos < verify_pwd_pos, (
-            "Regression: account lockout must be checked BEFORE the "
-            "bcrypt compare to prevent CPU DoS amplification. "
-            f"lockout_pos={lockout_pos}, verify_pwd_pos={verify_pwd_pos}"
-        )
 
 
 class TestExtractBasicAuth:

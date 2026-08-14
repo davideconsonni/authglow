@@ -16,7 +16,7 @@ The skill is version-aware. AuthGlow follows trunk-based development, so do not 
 - Use Authorization Code + PKCE for browser, SPA, desktop, and mobile public clients.
 - Use Authorization Code with confidential client authentication for server-side web applications.
 - Use Client Credentials only for machine-to-machine access without a user.
-- Never use `/api/token` for third-party application integration. It is AuthGlow's first-party browser login endpoint.
+- Never use `/api/token` for integration; it is not a registered endpoint. The AuthGlow dashboard itself uses Authorization Code + PKCE.
 - Never use Resource Owner Password Credentials or collect AuthGlow passwords in the client application.
 - Never store access tokens, refresh tokens, client secrets, or ID tokens in `localStorage`.
 - Generate `state`, `nonce`, and PKCE `code_verifier` with a platform CSPRNG.

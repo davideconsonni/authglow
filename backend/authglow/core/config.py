@@ -282,6 +282,7 @@ class Settings(BaseSettings):
         default=SecretStr("change-me-in-production"),
         description="OAuth2 client secret. Must be overridden in production.",
     )
+    oauth2_first_party_redirect_uri: str = "http://localhost:5173/auth/callback"
     oauth2_reject_unknown_scopes: bool = False
     enforce_pkce: bool = True
     blacklist_backend: str = "persistent"
@@ -296,7 +297,7 @@ class Settings(BaseSettings):
     )
     cors_allow_credentials: bool = True
     cors_allowed_methods: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"  # Comma-separated list
-    cors_allowed_headers: str = "Authorization, Content-Type, X-Requested-With, Accept"
+    cors_allowed_headers: str = "Authorization, Content-Type, X-Requested-With, Accept, X-CSRF-Token"
 
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
@@ -536,6 +537,15 @@ class Settings(BaseSettings):
                 "Debug mode enables auto-reload and may leak tracebacks "
                 "via HTTP responses."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_auth_cookie_policy(self):
+        """Reject unsafe or internally inconsistent cookie policies."""
+        if self.auth_cookie_samesite.lower() not in {"lax", "strict", "none"}:
+            raise ValueError("AUTH_COOKIE_SAMESITE must be lax, strict, or none")
+        if self.auth_cookie_samesite.lower() == "none" and not self.auth_cookie_secure:
+            raise ValueError("AUTH_COOKIE_SAMESITE=none requires HTTPS and Secure cookies")
         return self
 
     @model_validator(mode="after")

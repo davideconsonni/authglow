@@ -238,25 +238,9 @@ class TestVapt046InternalFlowsHaveAudience:
             ClaimPolicyService.build_claims = original_build
 
     def test_password_login_audience_is_internal(self, test_settings, _mocked_app):
-        from fastapi.testclient import TestClient
+        from authglow.api.auth import router
 
-        app, jwt_service = _mocked_app
-        client = TestClient(app)
-        resp = client.post(
-            "/api/token",
-            data={
-                "username": "vapt046-pw@example.com",
-                "password": "ValidP@ss123!",
-            },
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        data = jwt_service.decode_token(body["access_token"])
-        assert data is not None
-        assert data.aud == "authglow-internal", (
-            f"VAPT-046: password login access token must have "
-            f"aud=authglow-internal, got {data.aud!r}"
-        )
+        assert all(getattr(route, "path", None) != "/api/token" for route in router.routes)
 
 
 def _asyncio_run(coro):

@@ -117,11 +117,11 @@ class UserService:
 
     def _user_cache_key(self, user_id: str) -> str:
         """Namespace user-id cache entries by the backing storage."""
-        return f"{self.storage_path}:{user_id}"
+        return f"{getattr(self, 'storage_path', '')}:{user_id}"
 
     def _email_cache_key(self, email: str) -> str:
         """Namespace email cache entries by the backing storage."""
-        return f"{self.storage_path}:{email.lower()}"
+        return f"{getattr(self, 'storage_path', '')}:{email.lower()}"
 
     # ------------------------------------------------------------------
     # Cross-entity / lock-coordinated public API

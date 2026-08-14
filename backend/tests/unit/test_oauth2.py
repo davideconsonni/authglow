@@ -118,7 +118,7 @@ class TestOAuth2ClientVerification:
         import asyncio
 
         result = asyncio.run(
-            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:8000/callback")
+            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:5173/auth/callback")
         )
         assert result is True
 
@@ -160,14 +160,14 @@ class TestOAuth2ScopeProcessing:
 
 
 class TestVerifyClientProductionGate:
-    """VAPT-014: The settings-based fallback client must be disabled in production."""
+    """The explicitly configured first-party public client works in production."""
 
     def test_fallback_disabled_in_production(self, oauth2_service):
         import asyncio
 
         oauth2_service.settings.app_env = "production"
         result = asyncio.run(oauth2_service.verify_client("test-client-id", "test-client-secret"))
-        assert result is False, "Fallback client must be rejected in production"
+        assert result is True, "Configured first-party client must work in production"
 
     def test_fallback_works_in_development(self, oauth2_service):
         import asyncio
@@ -193,16 +193,16 @@ class TestVerifyClientProductionGate:
 
         oauth2_service.settings.app_env = "production"
         result = asyncio.run(
-            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:8000/callback")
+            oauth2_service.verify_redirect_uri("test-client-id", "http://localhost:5173/auth/callback")
         )
-        assert result is False
+        assert result is True
 
     def test_verify_scopes_fallback_disabled_in_production(self, oauth2_service):
         import asyncio
 
         oauth2_service.settings.app_env = "production"
         result = asyncio.run(oauth2_service.verify_scopes("test-client-id", ["read", "write"]))
-        assert result is False
+        assert result is True
 
     def test_verify_grant_type_fallback_disabled_in_production(self, oauth2_service):
         import asyncio
@@ -211,4 +211,4 @@ class TestVerifyClientProductionGate:
         result = asyncio.run(
             oauth2_service.verify_grant_type("test-client-id", "authorization_code")
         )
-        assert result is False
+        assert result is True

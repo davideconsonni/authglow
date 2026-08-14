@@ -57,7 +57,7 @@ def get_user_storage() -> UserStorage:
 
 
 @router.get("/api/federation/providers")
-@limiter.limit("10/minute")
+@limiter.limit("60/minute")
 async def list_public_providers(
     request: Request,
     context: Optional[str] = Query(default=None),

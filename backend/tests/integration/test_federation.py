@@ -555,7 +555,7 @@ class TestVapt026FederationRateLimits:
             mock_service.get_providers_for_ui = AsyncMock(return_value=[])
             with patch("authglow.api.federation.FederationService", return_value=mock_service):
                 client = self._make_limited_app()
-                for _ in range(10):
+                for _ in range(60):
                     resp = client.get("/api/federation/providers")
                     assert resp.status_code == 200
                 resp = client.get("/api/federation/providers")

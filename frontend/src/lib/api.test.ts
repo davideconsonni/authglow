@@ -29,8 +29,10 @@ describe('api', () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ ok: true }),
+        json: () => Promise.resolve({ csrf_token: 'csrf-token' }),
       })
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ csrf_token: 'csrf-token' }) })
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
       globalThis.fetch = mockFetch
 
       await api.post('/api/auth/logout')
@@ -68,6 +70,12 @@ describe('api', () => {
         if (callCount === 1) {
           return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
         }
+        if (callCount === 2) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ csrf_token: 'csrf-token' }) })
+        }
+        if (callCount === 3) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
+        }
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data: 'retried' }) })
       })
       globalThis.fetch = mockFetch
@@ -87,10 +95,11 @@ describe('api', () => {
       const handler = () => { eventFired = true }
       window.addEventListener('auth:session-expired', handler)
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({}),
+      let callCount = 0
+      globalThis.fetch = vi.fn().mockImplementation(() => {
+        callCount++
+        if (callCount === 2) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ csrf_token: 'csrf-token' }) })
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
       })
 
       try {

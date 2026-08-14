@@ -6,6 +6,7 @@ export const API_URL = import.meta.env.VITE_API_URL ?? ''
 export const ROUTES = {
   AUTH: {
     LOGIN: '/auth/login',
+    CALLBACK: '/auth/callback',
     REGISTER: '/auth/register',
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',

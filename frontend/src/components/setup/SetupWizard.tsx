@@ -45,7 +45,7 @@ export function SetupWizard() {
         },
         {
           headers: {
-            Authorization: `Bearer ${data.setup_token}`,
+            Authorization: `Bearer ${data.setup_token.trim()}`,
           },
         },
       )

@@ -3,7 +3,7 @@ import { Fingerprint, Loader2 } from 'lucide-react'
 import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../stores/authStore'
-import { getSavedEmail } from '../../lib/loginStorage'
+import { getSavedEmail, saveEmail } from '../../lib/loginStorage'
 import { Banner } from '../../components/shared/Banner'
 
 export function PasskeyLoginButton() {
@@ -11,17 +11,20 @@ export function PasskeyLoginButton() {
   const fetchCurrentUser = useAuthStore((s) => s.fetchCurrentUser)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [email, setEmail] = useState(getSavedEmail())
+  const [requiresEmail, setRequiresEmail] = useState(!getSavedEmail())
 
   const handlePasskeyLogin = async () => {
     setLoading(true)
     setError('')
     try {
-      const email = getSavedEmail()
       if (!email) {
-        setError('Sign in with email first to enable passkey login.')
+        setError('Enter your email to find your registered passkey.')
         setLoading(false)
         return
       }
+      saveEmail(email)
+      setRequiresEmail(false)
       const beginResp = await api.post<PublicKeyCredentialRequestOptionsJSON>('/api/passkey/auth/begin', { email })
       const authResult = await startAuthentication({ optionsJSON: beginResp })
       const completeResp = await api.post<{ access_token: string; refresh_token?: string }>('/api/passkey/auth/complete', {
@@ -54,9 +57,20 @@ export function PasskeyLoginButton() {
           {error}
         </Banner>
       )}
+      {requiresEmail && (
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          aria-label="Email for passkey login"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+        />
+      )}
       <button
         onClick={handlePasskeyLogin}
-        disabled={loading}
+        disabled={loading || !email}
         className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-brand-violet/30 bg-brand-violet/5 px-4 py-3 text-sm font-medium text-brand-violet hover:bg-brand-violet/10 hover:border-brand-violet/50 hover:shadow-glow-violet transition-all disabled:opacity-50"
       >
         {loading ? (

@@ -15,9 +15,9 @@
 - Audit log: event `user_registered`
 
 ### Login
-- **Traditional login**: `POST /api/token` (OAuth2PasswordRequestForm) with username/password
-- **OAuth2 login**: `GET/POST /oauth2/authorize` → login form → redirect with authorization code
-- Rate limiting: 5 attempts/minute on `/api/token`, 10/minute on `/oauth2/authorize`
+- **Dashboard login**: Authorization Code + PKCE via `/oauth2/authorize` and `/oauth2/token`; the dashboard receives httpOnly session cookies after the callback
+- **OAuth2/OIDC login**: `/oauth2/authorize` → login form → redirect with authorization code
+- Rate limiting: 10 attempts/minute on `/oauth2/authorize`
 - Automatic account lockout after 5 consecutive failed attempts (15 minutes, configurable)
 - User enumeration protection: identical error messages for nonexistent email and wrong password
 - Timing side-channel protection: random jitter in responses for users not found

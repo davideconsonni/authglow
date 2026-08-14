@@ -276,6 +276,27 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Default OAuth2 Client ID",
         "restart_required": True,
     },
+    "cache_backend": {
+        "category": "cache",
+        "label": "Cache backend",
+        "restart_required": True,
+    },
+    "redis_url": {
+        "category": "cache",
+        "label": "Redis URL",
+        "restart_required": True,
+        "sensitive": True,
+    },
+    "redis_key_prefix": {
+        "category": "cache",
+        "label": "Redis key prefix",
+        "restart_required": True,
+    },
+    "oauth2_first_party_redirect_uri": {
+        "category": "oauth2_client",
+        "label": "First-party dashboard redirect URI",
+        "restart_required": True,
+    },
     # --- Device Auth ---
     "device_code_expire_seconds": {
         "category": "devices",
