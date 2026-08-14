@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { usePlaygroundStore, generateState } from '../../../stores/playgroundStore'
+import { generateOAuthNonce, generatePkceChallenge, generatePkceVerifier, parseAuthorizationCallback, readJwtClaim } from '../../../lib/oauthCrypto'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 
@@ -12,19 +13,9 @@ const STEPS = [
   { id: 'tokens', label: 'Tokens' },
 ]
 
-function base64UrlEncode(bytes: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-}
-
 async function createPkcePair(): Promise<{ verifier: string; challenge: string }> {
-  const random = new Uint8Array(32)
-  crypto.getRandomValues(random)
-  const verifier = base64UrlEncode(random)
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  return { verifier, challenge: base64UrlEncode(digest) }
+  const verifier = generatePkceVerifier()
+  return { verifier, challenge: await generatePkceChallenge(verifier) }
 }
 
 export function AuthorizationCodeFlow() {
@@ -43,6 +34,8 @@ export function AuthorizationCodeFlow() {
   const [localScopes, setLocalScopes] = useState(store.scopes)
   const [localState, setLocalState] = useState(store.state)
   const [localCode, setLocalCode] = useState(store.authCode)
+  const [callbackUrl, setCallbackUrl] = useState('')
+  const [localNonce] = useState(store.nonce || generateOAuthNonce())
   const [codeVerifier, setCodeVerifier] = useState('')
   const [codeChallenge, setCodeChallenge] = useState('')
 
@@ -56,6 +49,7 @@ export function AuthorizationCodeFlow() {
       state: localState,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      nonce: localNonce,
     })
     return `${window.location.origin}/oauth2/authorize?${params.toString()}`
   })()
@@ -70,6 +64,7 @@ export function AuthorizationCodeFlow() {
     store.setRedirectUri(localRedirectUri)
     store.setScopes(localScopes)
     store.setState(localState)
+    store.setNonce(localNonce)
     setCompleted(['config'])
     setCurrentStep('authorize')
   }
@@ -85,22 +80,30 @@ export function AuthorizationCodeFlow() {
     setResponse(null)
     setHttpStatus(null)
     try {
+      const exchangeCode = callbackUrl.trim()
+        ? parseAuthorizationCallback(callbackUrl.trim(), localRedirectUri, localState)
+        : localCode
+      if (!exchangeCode) throw new Error('Authorization code or callback URL is required')
       const formBody: Record<string, string> = {
         grant_type: 'authorization_code',
-        code: localCode,
-      redirect_uri: localRedirectUri,
-      code_verifier: codeVerifier || sessionStorage.getItem('authglow-playground-pkce-verifier') || '',
+        code: exchangeCode,
+        redirect_uri: localRedirectUri,
+        code_verifier: codeVerifier || sessionStorage.getItem('authglow-playground-pkce-verifier') || '',
       }
       if (localClientId) formBody.client_id = localClientId
       if (localClientSecret) formBody.client_secret = localClientSecret
 
       const result = await api.postForm('/oauth2/token', formBody)
       const r = result as Record<string, unknown>
+      const idToken = typeof r.id_token === 'string' ? r.id_token : ''
+      if (localScopes.split(/\s+/).includes('openid') && readJwtClaim<string>(idToken, 'nonce') !== localNonce) {
+        throw new Error('OIDC nonce validation failed')
+      }
 
       store.persistTokens(
         (r.access_token as string) || '',
         (r.refresh_token as string) || '',
-        (r.id_token as string) || '',
+        idToken,
       )
       setLocalCode(store.authCode)
 
@@ -197,15 +200,19 @@ export function AuthorizationCodeFlow() {
       {currentStep === 'code' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">
-            Paste the authorization code received in the callback redirect.
+            Paste the full callback URL to validate state automatically, or enter only the code for compatibility.
           </p>
           <div>
+            <label className="block mb-1 text-xs font-medium text-text-muted">Callback URL</label>
+            <input value={callbackUrl} onChange={(e) => setCallbackUrl(e.target.value)} placeholder={`${localRedirectUri}?code=...&state=...`} data-testid="playground-callback-url" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+          </div>
+          <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Authorization Code *</label>
-            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." data-testid="playground-auth-code" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl(''); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." data-testid="playground-auth-code" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
           </div>
           <button
             onClick={handleExchangeCode}
-            disabled={loading || !localCode}
+            disabled={loading || (!localCode && !callbackUrl.trim())}
             data-testid="playground-exchange-code"
             className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
           >

@@ -7,7 +7,6 @@ import { ConsentScreen } from '../components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '../components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '../components/auth/PasskeyLoginButton'
 import { Banner } from '../components/shared/Banner'
-import { LOGIN_EMAIL_KEY } from '../lib/loginStorage'
 
 interface ClientInfo {
   client_name: string
@@ -481,7 +480,6 @@ export function OAuthAuthorizePage() {
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value)
-                      try { localStorage.setItem(LOGIN_EMAIL_KEY, e.target.value) } catch { /* noop */ }
                     }}
                     placeholder="admin@authglow.local"
                     autoFocus

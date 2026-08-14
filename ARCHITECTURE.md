@@ -156,25 +156,25 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 
 ## Key Files
 
-| File                                            | Why important                                                                             |
-|-------------------------------------------------|-------------------------------------------------------------------------------------------|
-| `backend/main.py`                               | All middleware registration and router mounts                                             |
-| `backend/authglow/core/config.py`               | `Settings` class — all env vars read here                                                 |
-| `backend/authglow/repositories/protocols.py`    | All storage contracts (30 Protocols)                                                      |
-| `backend/authglow/repositories/dependencies.py` | Factory functions (one per entity)                                                        |
-| `backend/authglow/services/user.py`             | Canonical service: cross-entity coordination pattern                                      |
-| `backend/authglow/services/claim_policy.py`     | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
-| `backend/authglow/models/claim_policy.py`       | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
-| `backend/authglow/api/device_auth.py`           | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
-| `backend/authglow/api/claim_policy.py`          | Claim policy CRUD per client + admin templates                                            |
-| `backend/authglow/services/dpop.py`             | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
-| `backend/authglow/services/client_jwt_auth.py`  | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |
-| `backend/authglow/services/acr.py`              | ACR/AMR computation for ID tokens                                                         |
-| `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                 |
-| `backend/authglow/api/admin_settings.py`        | Admin settings read + rate-limit status endpoints                                         |
-| `frontend/src/App.tsx`                          | All routes, providers, guards                                                             |
-| `frontend/src/lib/api.ts`                       | HTTP client with auto-refresh, 429 handling, session-expired dispatch                     |
-| `frontend/src/lib/constants.ts`                 | `ROUTES` object and `API_URL`                                                             |
+| File                                                | Why important                                                                             |
+|-----------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `backend/main.py`                                   | All middleware registration and router mounts                                             |
+| `backend/authglow/core/config.py`                   | `Settings` class — all env vars read here                                                 |
+| `backend/authglow/repositories/protocols.py`        | All storage contracts (30 Protocols)                                                      |
+| `backend/authglow/repositories/dependencies.py`     | Factory functions (one per entity)                                                        |
+| `backend/authglow/services/user.py`                 | Canonical service: cross-entity coordination pattern                                      |
+| `backend/authglow/services/claim_policy.py`         | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
+| `backend/authglow/models/claim_policy.py`           | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
+| `backend/authglow/api/device_auth.py`               | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
+| `backend/authglow/api/claim_policy.py`              | Claim policy CRUD per client + admin templates                                            |
+| `backend/authglow/services/dpop.py`                 | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
+| `backend/authglow/services/client_jwt_auth.py`      | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |
+| `backend/authglow/services/acr.py`                  | ACR/AMR computation for ID tokens                                                         |
+| `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                     |
+| `backend/authglow/api/admin_settings.py`            | Admin settings read + rate-limit status endpoints                                         |
+| `frontend/src/App.tsx`                              | All routes, providers, guards                                                             |
+| `frontend/src/lib/api.ts`                           | HTTP client with auto-refresh, 429 handling, session-expired dispatch                     |
+| `frontend/src/lib/constants.ts`                     | `ROUTES` object and `API_URL`                                                             |
 
 ## Claim Policy System (OIDC §5.1.2 namespacing)
 

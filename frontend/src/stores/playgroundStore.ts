@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { generateOAuthNonce, generateOAuthState, generatePkceChallenge, generatePkceVerifier } from '../lib/oauthCrypto'
 
 export type PlaygroundFlow =
   | 'authorization-code'
@@ -27,6 +28,7 @@ export interface PlaygroundState {
   redirectUri: string
   scopes: string
   state: string
+  nonce: string
   apiKey: string
   responseData: string | null
 
@@ -42,38 +44,11 @@ export interface PlaygroundState {
   setRedirectUri: (uri: string) => void
   setScopes: (scopes: string) => void
   setState: (state: string) => void
+  setNonce: (nonce: string) => void
   setApiKey: (key: string) => void
   setResponseData: (data: string | null) => void
   persistTokens: (access?: string, refresh?: string, id?: string) => void
   clearAll: () => void
-}
-
-function generateState(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < 16; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
-}
-
-function generatePkceVerifier(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
-  let result = ''
-  for (let i = 0; i < 64; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
-}
-
-async function generatePkceChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(verifier)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
 }
 
 export const usePlaygroundStore = create<PlaygroundState>((set) => ({
@@ -88,7 +63,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   authCode: '',
   redirectUri: '',
   scopes: 'openid profile email',
-  state: generateState(),
+  state: generateOAuthState(),
+  nonce: generateOAuthNonce(),
   apiKey: '',
   responseData: null,
 
@@ -104,6 +80,7 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   setRedirectUri: (uri) => set({ redirectUri: uri }),
   setScopes: (scopes) => set({ scopes }),
   setState: (state) => set({ state }),
+  setNonce: (nonce) => set({ nonce }),
   setApiKey: (key) => set({ apiKey: key }),
   setResponseData: (data) => set({ responseData: data }),
 
@@ -123,6 +100,7 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
       clientSecret: '',
       codeVerifier: '',
       codeChallenge: '',
+      nonce: generateOAuthNonce(),
       authCode: '',
       redirectUri: '',
       apiKey: '',
@@ -130,4 +108,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
     }),
 }))
 
-export { generateState, generatePkceVerifier, generatePkceChallenge }
+export {
+  generateOAuthState as generateState,
+  generatePkceVerifier,
+  generatePkceChallenge,
+}
