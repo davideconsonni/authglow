@@ -23,6 +23,7 @@ interface ConsentScreenProps {
   clientHomepageUri?: string | null
   clientTermsUri?: string | null
   clientPrivacyUri?: string | null
+  redirectUri?: string | null
   branding?: Record<string, unknown> | null
   scopes: Array<{ name: string; description: string }>
   preview?: boolean
@@ -48,6 +49,7 @@ export function ConsentScreen({
   clientHomepageUri,
   clientTermsUri,
   clientPrivacyUri,
+  redirectUri,
   branding,
   scopes,
   preview = false,
@@ -55,6 +57,16 @@ export function ConsentScreen({
   const [approving, setApproving] = useState(false)
   const [denying, setDenying] = useState(false)
   const [generalError, setGeneralError] = useState('')
+  const [rememberConsent, setRememberConsent] = useState(false)
+
+  let redirectOrigin = ''
+  if (redirectUri) {
+    try {
+      redirectOrigin = new URL(redirectUri).origin
+    } catch {
+      redirectOrigin = redirectUri
+    }
+  }
 
   const handleApprove = async () => {
     if (preview || !sessionToken) return
@@ -66,7 +78,7 @@ export function ConsentScreen({
         {
           session_token: sessionToken,
           approved: 'true',
-          remember: 'true',
+          remember: String(rememberConsent),
         },
       )
       window.location.href = data.redirect_url
@@ -151,6 +163,25 @@ export function ConsentScreen({
               )
             })}
           </ul>
+
+          {redirectOrigin && (
+            <div className="mt-4 rounded-xl border border-surface-2 bg-surface-2/50 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Redirect destination</p>
+              <p className="mt-1 break-all text-xs font-mono text-text-secondary">{redirectOrigin}</p>
+            </div>
+          )}
+
+          {!preview && (
+            <label className="mt-4 flex items-start gap-2 text-xs text-text-secondary">
+              <input
+                type="checkbox"
+                checked={rememberConsent}
+                onChange={(event) => setRememberConsent(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-surface-3 accent-brand-violet"
+              />
+              <span>Remember this decision for future requests from this application</span>
+            </label>
+          )}
 
           {/* Branding links */}
           {hasLinks && (

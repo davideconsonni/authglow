@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { usePlaygroundStore, generateState, generatePkceVerifier, generatePkceChallenge } from '../../../stores/playgroundStore'
-import { generateOAuthNonce, parseAuthorizationCallback, readJwtClaim } from '../../../lib/oauthCrypto'
+import { generateOAuthNonce, parseAuthorizationCallback, PLAYGROUND_TRANSACTION_KEY, readJwtClaim } from '../../../lib/oauthCrypto'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 
@@ -25,7 +25,7 @@ export function PkceFlow() {
   const [httpStatus, setHttpStatus] = useState<number | null>(null)
 
   const [localClientId, setLocalClientId] = useState(store.clientId)
-  const [localRedirectUri, setLocalRedirectUri] = useState(store.redirectUri)
+  const [localRedirectUri, setLocalRedirectUri] = useState(store.redirectUri || `${window.location.origin}/admin/playground/oauth/callback`)
   const [localScopes, setLocalScopes] = useState(store.scopes)
   const [localState, setLocalState] = useState(store.state)
   const [localVerifier, setLocalVerifier] = useState(store.codeVerifier)
@@ -66,6 +66,14 @@ export function PkceFlow() {
     setLocalChallenge(c)
     store.setCodeVerifier(v)
     store.setCodeChallenge(c)
+    sessionStorage.setItem(PLAYGROUND_TRANSACTION_KEY, JSON.stringify({
+      clientId: localClientId,
+      redirectUri: localRedirectUri,
+      scopes: localScopes,
+      state: localState,
+      nonce: localNonce,
+      codeVerifier: v,
+    }))
     setCompleted(['config', 'pkce'])
     setCurrentStep('authorize')
   }
@@ -180,7 +188,7 @@ export function PkceFlow() {
           <div className="rounded-xl border border-surface-2 bg-surface-2/50 p-4 space-y-3">
             <code className="block break-all text-xs font-mono text-text-secondary">{authUrl}</code>
             <div className="flex gap-2">
-              <a href={authUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-lg bg-brand-violet/20 px-3 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/30">
+              <a href={authUrl} className="flex items-center gap-1.5 rounded-lg bg-brand-violet/20 px-3 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/30">
                 <ExternalLink size={14} /> Open in Browser
               </a>
             </div>

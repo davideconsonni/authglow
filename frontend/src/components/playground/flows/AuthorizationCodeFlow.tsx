@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { usePlaygroundStore, generateState } from '../../../stores/playgroundStore'
-import { generateOAuthNonce, generatePkceChallenge, generatePkceVerifier, parseAuthorizationCallback, readJwtClaim } from '../../../lib/oauthCrypto'
+import { generateOAuthNonce, generatePkceChallenge, generatePkceVerifier, parseAuthorizationCallback, PLAYGROUND_TRANSACTION_KEY, readJwtClaim } from '../../../lib/oauthCrypto'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
 
@@ -30,7 +30,7 @@ export function AuthorizationCodeFlow() {
 
   const [localClientId, setLocalClientId] = useState(store.clientId)
   const [localClientSecret, setLocalClientSecret] = useState(store.clientSecret)
-  const [localRedirectUri, setLocalRedirectUri] = useState(store.redirectUri)
+  const [localRedirectUri, setLocalRedirectUri] = useState(store.redirectUri || `${window.location.origin}/admin/playground/oauth/callback`)
   const [localScopes, setLocalScopes] = useState(store.scopes)
   const [localState, setLocalState] = useState(store.state)
   const [localCode, setLocalCode] = useState(store.authCode)
@@ -58,7 +58,15 @@ export function AuthorizationCodeFlow() {
     const pkce = await createPkcePair()
     setCodeVerifier(pkce.verifier)
     setCodeChallenge(pkce.challenge)
-    sessionStorage.setItem('authglow-playground-pkce-verifier', pkce.verifier)
+    sessionStorage.setItem(PLAYGROUND_TRANSACTION_KEY, JSON.stringify({
+      clientId: localClientId,
+      clientSecret: localClientSecret,
+      redirectUri: localRedirectUri,
+      scopes: localScopes,
+      state: localState,
+      nonce: localNonce,
+      codeVerifier: pkce.verifier,
+    }))
     store.setClientId(localClientId)
     store.setClientSecret(localClientSecret)
     store.setRedirectUri(localRedirectUri)
@@ -88,7 +96,7 @@ export function AuthorizationCodeFlow() {
         grant_type: 'authorization_code',
         code: exchangeCode,
         redirect_uri: localRedirectUri,
-        code_verifier: codeVerifier || sessionStorage.getItem('authglow-playground-pkce-verifier') || '',
+        code_verifier: codeVerifier || '',
       }
       if (localClientId) formBody.client_id = localClientId
       if (localClientSecret) formBody.client_secret = localClientSecret
@@ -183,8 +191,6 @@ export function AuthorizationCodeFlow() {
             <div className="flex gap-2">
               <a
                 href={authUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="flex items-center gap-1.5 rounded-lg bg-brand-violet/20 px-3 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/30"
               >
                 <ExternalLink size={14} /> Open in Browser

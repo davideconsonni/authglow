@@ -16,6 +16,7 @@ import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage'
 import { EmailVerifiedPage } from './pages/auth/EmailVerifiedPage'
 import { OAuthAuthorizePage } from './pages/OAuthAuthorizePage'
+import { PlaygroundOAuthCallbackPage } from './pages/admin/PlaygroundOAuthCallbackPage'
 import { DeviceVerificationPage } from './pages/DeviceVerificationPage'
 import { MFAVerifyPage } from './pages/auth/MFAVerifyPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -195,7 +196,8 @@ function App() {
             <Route path={ROUTES.ADMIN.RBAC} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminRbacPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.JWK_KEYS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminJwkKeysPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.PASSWORD_RESETS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminPasswordResetsPage /></Suspense></PageTransition>} />
-            <Route path={ROUTES.ADMIN.PLAYGROUND} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense></PageTransition>} />
+             <Route path={ROUTES.ADMIN.PLAYGROUND} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminPlaygroundPage /></Suspense></PageTransition>} />
+             <Route path={ROUTES.ADMIN.PLAYGROUND_OAUTH_CALLBACK} element={<PageTransition><PlaygroundOAuthCallbackPage /></PageTransition>} />
             <Route path={ROUTES.ADMIN.FEDERATION} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.SETTINGS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminSettingsPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.RATE_LIMITS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminRateLimitsPage /></Suspense></PageTransition>} />

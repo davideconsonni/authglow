@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
+from authglow.api.auth import _build_oauth_redirect
 from authglow.core.rate_limit import limiter
 from authglow.services.audit import AuditService
 from authglow.services.oauth2 import OAuth2Service
@@ -83,9 +84,9 @@ async def check_consent_auto(
             nonce=session.get("nonce"),
         )
 
-        redirect_url = f"{session['redirect_uri']}?code={auth_code.code}"
-        if session.get("state"):
-            redirect_url += f"&state={session['state']}"
+        redirect_url = _build_oauth_redirect(
+            session["redirect_uri"], code=auth_code.code, state=session.get("state")
+        )
 
         return {
             "consent_required": False,
@@ -104,6 +105,7 @@ async def check_consent_auto(
     return {
         "consent_required": True,
         "session_token": session_token,
+        "redirect_uri": session["redirect_uri"],
         "client_name": client.client_name if client else session["client_id"],
         "client_id": session["client_id"],
         "client_description": client.description if client else None,
@@ -134,6 +136,7 @@ async def process_consent(
         raise HTTPException(status_code=400, detail="Invalid or expired session")
 
     is_approved = approved.lower() == "true"
+    remember_consent = remember.lower() == "true"
 
     if not is_approved:
         await audit_service.log_event(
@@ -144,20 +147,23 @@ async def process_consent(
             ip_address=request.client.host if request.client else None,
         )
 
-        redirect_url = f"{session['redirect_uri']}?error=access_denied"
-        if session.get("state"):
-            redirect_url += f"&state={session['state']}"
+        redirect_url = _build_oauth_redirect(
+            session["redirect_uri"],
+            error="access_denied",
+            state=session.get("state"),
+        )
 
         return {"approved": False, "redirect_url": redirect_url}
 
     requested_scopes = session["scope"].split() if session["scope"] else ["read"]
 
-    await consent_service.create_consent(
-        user_id=session["user_id"],
-        client_id=session["client_id"],
-        scopes=requested_scopes,
-        expires_at=None,
-    )
+    if remember_consent:
+        await consent_service.create_consent(
+            user_id=session["user_id"],
+            client_id=session["client_id"],
+            scopes=requested_scopes,
+            expires_at=None,
+        )
 
     await audit_service.log_event(
         event_type="oauth2_consent_granted",
@@ -165,7 +171,7 @@ async def process_consent(
         metadata={
             "client_id": session["client_id"],
             "scopes": requested_scopes,
-            "remembered": True,
+            "remembered": remember_consent,
         },
         severity="info",
         ip_address=request.client.host if request.client else None,
@@ -183,8 +189,8 @@ async def process_consent(
 
     await session_service.delete_consent_session(session_token)
 
-    redirect_url = f"{session['redirect_uri']}?code={auth_code.code}"
-    if session.get("state"):
-        redirect_url += f"&state={session['state']}"
+    redirect_url = _build_oauth_redirect(
+        session["redirect_uri"], code=auth_code.code, state=session.get("state")
+    )
 
     return {"approved": True, "authorization_code": auth_code.code, "redirect_url": redirect_url}

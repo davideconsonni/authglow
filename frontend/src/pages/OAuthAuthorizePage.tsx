@@ -15,6 +15,7 @@ interface ClientInfo {
   client_homepage_uri?: string | null
   client_terms_uri?: string | null
   client_privacy_uri?: string | null
+  redirect_uri?: string | null
   branding?: Record<string, unknown> | null
 }
 
@@ -29,6 +30,7 @@ interface AuthorizeResponse {
   client_homepage_uri?: string | null
   client_terms_uri?: string | null
   client_privacy_uri?: string | null
+  redirect_uri?: string | null
   branding?: Record<string, unknown> | null
   scopes?: Array<{ name: string; description: string }>
 }
@@ -398,6 +400,7 @@ export function OAuthAuthorizePage() {
   const displayHomepage = consentData?.client_homepage_uri ?? clientInfo?.client_homepage_uri
   const displayTerms = consentData?.client_terms_uri ?? clientInfo?.client_terms_uri
   const displayPrivacy = consentData?.client_privacy_uri ?? clientInfo?.client_privacy_uri
+  const displayRedirectUri = consentData?.redirect_uri ?? redirectUri
   const displayBranding = consentData?.branding ?? clientInfo?.branding
   const displayCustomCss = typeof displayBranding?.custom_css === 'string' ? displayBranding.custom_css : ''
 
@@ -424,6 +427,7 @@ export function OAuthAuthorizePage() {
         clientHomepageUri={displayHomepage}
         clientTermsUri={displayTerms}
         clientPrivacyUri={displayPrivacy}
+        redirectUri={displayRedirectUri}
         branding={displayBranding}
         scopes={consentData.scopes || []}
       />

@@ -603,6 +603,7 @@ export function AdminOAuthClientsPage() {
                 clientHomepageUri={previewClient.homepage_uri}
                 clientTermsUri={previewClient.terms_uri}
                 clientPrivacyUri={previewClient.privacy_uri}
+                redirectUri={previewClient.redirect_uris?.[0]}
                 scopes={(previewClient.allowed_scopes || previewClient.scopes || ['openid', 'profile', 'email']).map(s => ({
                   name: s,
                   description: getScopeLabel(s),

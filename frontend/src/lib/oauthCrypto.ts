@@ -1,4 +1,5 @@
 const OAUTH_RANDOM_BYTES = 32
+export const PLAYGROUND_TRANSACTION_KEY = 'authglow-playground-oauth-transaction'
 
 function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes))

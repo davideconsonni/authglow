@@ -891,6 +891,7 @@ async def authorize_post(
     return {
         "consent_required": True,
         "session_token": consent_session["session_token"],
+        "redirect_uri": redirect_uri,
         "client_name": client.client_name,
         "client_description": client.description,
         "client_logo_uri": client.logo_uri,

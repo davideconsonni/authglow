@@ -32,6 +32,7 @@ export const ROUTES = {
     JWK_KEYS: '/admin/jwk-keys',
     PASSWORD_RESETS: '/admin/password-resets',
     PLAYGROUND: '/admin/playground',
+    PLAYGROUND_OAUTH_CALLBACK: '/admin/playground/oauth/callback',
     FEDERATION: '/admin/federation',
     DEVICE_AUTHORIZATIONS: '/admin/device-authorizations',
     DEVICE_AUTHORIZATIONS_NEW: '/admin/device-authorizations/new',
