@@ -47,8 +47,8 @@ export function LoginForm() {
         return
       }
 
-      if (redirect) {
-        window.location.assign(redirect)
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+        navigate(redirect)
         return
       }
 

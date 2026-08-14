@@ -5,6 +5,7 @@ import hashlib
 import re
 from datetime import timedelta
 from typing import Annotated, Any, Dict, List, NoReturn, Optional, Tuple
+from urllib.parse import urlencode
 
 import jwt
 import structlog
@@ -51,6 +52,7 @@ UserStorage = UserService
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
+FIRST_PARTY_BROWSER_CLIENT_ID = "password_grant"
 
 
 def _cookie_kwargs(settings: Settings) -> dict:
@@ -180,6 +182,15 @@ def _validate_state(state: Optional[str]) -> Optional[str]:
     if not _STATE_OK.match(state):
         return None
     return state
+
+
+def _build_oauth_redirect(redirect_uri: str, **parameters: Optional[str]) -> str:
+    """Append OAuth response parameters without changing their values."""
+    values = {key: value for key, value in parameters.items() if value is not None}
+    if not values:
+        return redirect_uri
+    separator = "&" if "?" in redirect_uri else "?"
+    return f"{redirect_uri}{separator}{urlencode(values)}"
 
 
 async def _require_dpop_proof_if_bound(
@@ -639,10 +650,12 @@ async def authorize_post(
 
     # --- Prompt parameter handling (OIDC Core §3.1.2) ---
     if "none" in parsed_prompts and not user:
-        error_redirect = f"{redirect_uri}?error=login_required"
-        error_redirect += "&error_description=User+is+not+authenticated"
-        if state:
-            error_redirect += f"&state={state}"
+        error_redirect = _build_oauth_redirect(
+            redirect_uri,
+            error="login_required",
+            error_description="User is not authenticated",
+            state=state,
+        )
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse(url=error_redirect, status_code=302)
@@ -666,9 +679,7 @@ async def authorize_post(
             state=state,
             requested_claims=parsed_claims,
         )
-        redirect_url = f"{redirect_uri}?code={auth_code.code}"
-        if state:
-            redirect_url += f"&state={state}"
+        redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse(url=redirect_url, status_code=302)
@@ -823,9 +834,7 @@ async def authorize_post(
                 state=state,
                 requested_claims=parsed_claims,
             )
-            redirect_url = f"{redirect_uri}?code={auth_code.code}"
-            if state:
-                redirect_url += f"&state={state}"
+            redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
             return {"redirect_url": redirect_url}
 
         from authglow.services.oauth_consent import OAuth2ConsentService
@@ -851,9 +860,7 @@ async def authorize_post(
                 state=state,
                 requested_claims=parsed_claims,
             )
-            redirect_url = f"{redirect_uri}?code={auth_code.code}"
-            if state:
-                redirect_url += f"&state={state}"
+            redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
             return {"redirect_url": redirect_url}
 
     # Show consent screen (forced by prompt=consent, or no prior consent)
@@ -1234,13 +1241,29 @@ async def token_endpoint(
         # Refresh token flow with rotation (supports body + cookie)
         if not refresh_token:
             refresh_token = request.cookies.get(settings.auth_cookie_refresh_name)
-        if not refresh_token or not client_id:
+        basic_client_id, basic_client_secret = _extract_basic_auth(request)
+        resolved_client_id = client_id or basic_client_id
+        resolved_client_secret = client_secret or basic_client_secret
+        if basic_client_id and client_id and basic_client_id != client_id:
+            raise HTTPException(status_code=400, detail="Client ID mismatch")
+        if not refresh_token or not resolved_client_id:
             raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
+
+        oauth_client = await _authenticate_client_at_token_endpoint(
+            request,
+            oauth2_service,
+            resolved_client_id=resolved_client_id,
+            resolved_client_secret=resolved_client_secret,
+            client_assertion_type=client_assertion_type,
+            client_assertion=client_assertion,
+        )
+        if not oauth_client:
+            raise HTTPException(status_code=401, detail="Invalid client credentials")
 
         # Validate and rotate refresh token
         new_rt, error = await refresh_token_service.validate_and_rotate(
             token=refresh_token,
-            client_id=client_id,
+            client_id=resolved_client_id,
             ip_address=request.client.host if request.client else None,
         )
 
@@ -1271,8 +1294,8 @@ async def token_endpoint(
             user.email,
             new_rt.scopes,
             include_refresh=False,
-            audience=client_id,
-            azp=client_id,
+            audience=resolved_client_id,
+            azp=resolved_client_id,
             extra_claims=extra_claims,
         )
 
@@ -1374,7 +1397,6 @@ async def token_endpoint(
 # NOT a standard OAuth2 grant: reserved for the AuthGlow frontend only.
 # Third-party clients must use the standard `/oauth2/token` endpoint above
 # with one of the supported grants (see CONFORMANCE T.1, docs/FEATURES.md).
-@router.post("/api/token")
 @router.post("/api/token")
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login_for_access_token(
@@ -1551,7 +1573,7 @@ async def login_for_access_token(
     # Create persistent refresh token in storage so sessions are tracked
     rt = await refresh_token_service.create_refresh_token(
         user_id=user.id,
-        client_id="password_grant",
+        client_id=FIRST_PARTY_BROWSER_CLIENT_ID,
         scopes=user.scopes,
         issued_ip=request.client.host if request.client else None,
         expires_in_days=30,
@@ -1688,7 +1710,7 @@ async def cookie_refresh(
 
     new_rt, error = await refresh_token_service.validate_and_rotate(
         token=rt_cookie,
-        client_id="cookie_grant",
+        client_id=FIRST_PARTY_BROWSER_CLIENT_ID,
         ip_address=request.client.host if request.client else None,
     )
 

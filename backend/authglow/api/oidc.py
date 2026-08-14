@@ -396,6 +396,7 @@ async def userinfo(
 @limiter.limit("30/minute")
 async def logout_get(
     request: Request,
+    response: Response,
     id_token_hint: str | None = None,
     post_logout_redirect_uri: str | None = None,
     state: str | None = None,
@@ -480,6 +481,10 @@ async def logout_get(
             },
         )
 
+        from authglow.api.auth import _clear_auth_cookies
+
+        _clear_auth_cookies(response, get_settings())
+
         # --- Front-Channel Logout (OIDC Front-Channel Logout 1.0) ---
         sid = token_data.sid or ""
         all_clients = await oauth2_service.client_storage.list_clients(limit=200, active_only=True)
@@ -551,6 +556,9 @@ async def logout_get(
                 },
             )
 
+    from authglow.api.auth import _clear_auth_cookies
+
+    _clear_auth_cookies(response, get_settings())
     return {
         "message": "Logged out successfully",
         "note": "Please delete access and refresh tokens on the client side",

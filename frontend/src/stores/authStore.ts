@@ -23,8 +23,6 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   _hydrated: boolean
-  accessToken: string | null
-  refreshToken: string | null
 }
 
 interface AuthActions {
@@ -44,8 +42,6 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       _hydrated: false,
-      accessToken: null,
-      refreshToken: null,
 
       setAuthenticated: (value: boolean) => {
         set({ isAuthenticated: value })
@@ -78,8 +74,6 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           set({
-            accessToken: response.access_token,
-            refreshToken: response.refresh_token || null,
             isAuthenticated: true,
             isLoading: false,
             user: null,
@@ -110,9 +104,6 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const user = await api.get<AuthUser>('/api/users/me')
           set({ user, isAuthenticated: true })
-          api.get<{ access_token: string }>('/api/auth/my-token').then(
-            ({ access_token }) => set({ accessToken: access_token }),
-          ).catch(() => {})
         } catch {
           set({ user: null, isAuthenticated: false })
         }
@@ -120,7 +111,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated, accessToken: state.accessToken }),
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
       onRehydrateStorage: () => {
         return (state) => {
           if (state) {

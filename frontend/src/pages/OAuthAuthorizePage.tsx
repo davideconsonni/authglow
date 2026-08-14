@@ -221,8 +221,31 @@ export function OAuthAuthorizePage() {
   const codeChallengeMethod = searchParams.get('code_challenge_method') || ''
   const nonce = searchParams.get('nonce') || ''
   const responseType = searchParams.get('response_type') || ''
+  const mfaSessionToken = searchParams.get('mfa_session_token') || ''
 
   useEffect(() => {
+    if (mfaSessionToken) {
+      let cancelled = false
+      const loadConsentAfterMfa = async () => {
+        try {
+          const data = await api.get<AuthorizeResponse & { consent_required?: boolean }>(
+            `/api/oauth2/consent/check?session_token=${encodeURIComponent(mfaSessionToken)}`,
+          )
+          if (cancelled) return
+          if (data.redirect_url) {
+            window.location.href = data.redirect_url
+          } else if (data.consent_required) {
+            setConsentData({ ...data, session_token: data.session_token || mfaSessionToken })
+            setPhase('consent')
+          }
+        } catch {
+          if (!cancelled) setError('The OAuth authorization session has expired.')
+          if (!cancelled) setPhase('login')
+        }
+      }
+      loadConsentAfterMfa()
+      return () => { cancelled = true }
+    }
     if (!clientId || !redirectUri) {
       if (searchParams.get('fed') === '1') {
         setPhase('login')
@@ -255,7 +278,7 @@ export function OAuthAuthorizePage() {
     }
     fetchClientInfo()
     return () => { cancelled = true }
-  }, [clientId, redirectUri, responseType])
+  }, [clientId, redirectUri, responseType, mfaSessionToken])
 
   useEffect(() => {
     if (phase !== 'login') return
@@ -353,7 +376,7 @@ export function OAuthAuthorizePage() {
         return
       }
       if (data.mfa_required) {
-        setError('MFA verification is required but not yet supported in this flow.')
+        window.location.href = `/auth/mfa-verify?session_token=${encodeURIComponent(data.session_token || '')}&oauth=1`
         return
       }
     } catch (err: unknown) {

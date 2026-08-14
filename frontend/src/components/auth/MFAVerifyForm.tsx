@@ -10,6 +10,7 @@ import { Banner } from '../../components/shared/Banner'
 export function MFAVerifyForm() {
   const [searchParams] = useSearchParams()
   const sessionToken = searchParams.get('session_token')
+  const isOAuthFlow = searchParams.get('oauth') === '1'
   const [digits, setDigits] = useState<string[]>(Array(6).fill(''))
   const [isBackupCode, setIsBackupCode] = useState(false)
   const [backupInput, setBackupInput] = useState('')
@@ -32,14 +33,20 @@ export function MFAVerifyForm() {
           access_token: string
           refresh_token?: string
           redirect_url?: string
+          consent_session_token?: string
           mfa_required?: boolean
-        }>('/api/mfa/verify-login', {
+        }>(isOAuthFlow ? '/api/mfa/verify-oauth-login' : '/api/mfa/verify-login', {
           session_token: sessionToken,
           code,
         })
 
         if (response.redirect_url) {
           window.location.href = response.redirect_url
+          return
+        }
+
+        if (response.consent_session_token) {
+          window.location.href = `/oauth2/authorize?mfa_session_token=${encodeURIComponent(response.consent_session_token)}`
           return
         }
 

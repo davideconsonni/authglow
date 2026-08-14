@@ -4,7 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from authglow.api.auth import _set_auth_cookies, get_current_user
+from authglow.api.auth import _build_oauth_redirect, _set_auth_cookies, get_current_user
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
@@ -22,6 +22,10 @@ from authglow.models.user import User, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
+from authglow.services.oauth2 import OAuth2Service
+from authglow.services.oauth_client import OAuth2ClientStorage
+from authglow.services.oauth_consent import OAuth2ConsentService
+from authglow.services.session import SessionService
 from authglow.services.user import UserService
 
 # Back-compat alias for Fase 21 transition window
@@ -369,3 +373,90 @@ async def verify_mfa_login(
     _set_auth_cookies(response, token_response.access_token, rt.token, settings)
 
     return token_response
+
+
+@router.post("/api/mfa/verify-oauth-login")
+@limiter.limit("3/minute")
+async def verify_oauth_mfa_login(
+    request: Request,
+    login_request: MFALoginRequest,
+    storage: UserStorage = Depends(get_user_storage),
+    mfa_service: MFAService = Depends(get_mfa_service),
+    session_service: SessionService = Depends(lambda: SessionService()),
+    oauth2_service: OAuth2Service = Depends(lambda: OAuth2Service()),
+    consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
+    client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
+):
+    """Complete MFA for an OAuth authorization transaction."""
+    session = await session_service.get_mfa_session(login_request.session_token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired OAuth MFA session")
+
+    user = await storage.get_user(session.user_id)
+    if not user or not user.is_active or not user.mfa_enabled or not user.mfa_verified:
+        raise HTTPException(status_code=401, detail="Invalid OAuth MFA session")
+
+    is_valid = False
+    if len(login_request.code) == 6 and login_request.code.isdigit():
+        if not user.mfa_secret:
+            raise HTTPException(status_code=500, detail="MFA secret not configured")
+        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), login_request.code)
+    else:
+        try:
+            is_valid = await mfa_service.verify_user_backup_code(user.id, login_request.code)
+        except BackupCodeLockedException as exc:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many backup code attempts. Retry after {exc.retry_after_seconds} seconds.",
+                headers={"Retry-After": str(exc.retry_after_seconds)},
+            ) from exc
+
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+    await storage.update_last_login(user.id)
+    await session_service.delete_mfa_session(login_request.session_token)
+
+    client = await client_storage.get_client(session.client_id)
+    if not client or not client.is_active:
+        raise HTTPException(status_code=400, detail="Invalid or inactive OAuth client")
+
+    requested_scopes = session.scope.split() if session.scope else ["read"]
+    has_consent, _ = await consent_service.check_consent(
+        user_id=user.id,
+        client_id=session.client_id,
+        required_scopes=requested_scopes,
+    )
+
+    if client.require_consent and not has_consent:
+        consent_session = await session_service.create_consent_session(
+            user_id=user.id,
+            client_id=session.client_id,
+            redirect_uri=session.redirect_uri,
+            scope=session.scope,
+            state=session.state,
+            code_challenge=session.code_challenge,
+            code_challenge_method=session.code_challenge_method,
+            nonce=session.nonce,
+        )
+        return {"consent_session_token": consent_session["session_token"]}
+
+    auth_code = await oauth2_service.create_authorization_code(
+        client_id=session.client_id,
+        user_id=user.id,
+        redirect_uri=session.redirect_uri,
+        scope=session.scope,
+        code_challenge=session.code_challenge,
+        code_challenge_method=session.code_challenge_method,
+        nonce=session.nonce,
+        acr="2",
+        amr=["pwd", "otp"],
+        state=session.state,
+    )
+    return {
+        "redirect_url": _build_oauth_redirect(
+            session.redirect_uri,
+            code=auth_code.code,
+            state=session.state,
+        )
+    }

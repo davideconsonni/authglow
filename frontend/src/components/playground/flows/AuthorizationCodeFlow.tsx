@@ -12,6 +12,21 @@ const STEPS = [
   { id: 'tokens', label: 'Tokens' },
 ]
 
+function base64UrlEncode(bytes: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
+async function createPkcePair(): Promise<{ verifier: string; challenge: string }> {
+  const random = new Uint8Array(32)
+  crypto.getRandomValues(random)
+  const verifier = base64UrlEncode(random)
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  return { verifier, challenge: base64UrlEncode(digest) }
+}
+
 export function AuthorizationCodeFlow() {
   const store = usePlaygroundStore()
 
@@ -28,6 +43,8 @@ export function AuthorizationCodeFlow() {
   const [localScopes, setLocalScopes] = useState(store.scopes)
   const [localState, setLocalState] = useState(store.state)
   const [localCode, setLocalCode] = useState(store.authCode)
+  const [codeVerifier, setCodeVerifier] = useState('')
+  const [codeChallenge, setCodeChallenge] = useState('')
 
   const authUrl = (() => {
     if (!localClientId || !localRedirectUri) return ''
@@ -37,11 +54,17 @@ export function AuthorizationCodeFlow() {
       redirect_uri: localRedirectUri,
       scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
       state: localState,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     })
     return `${window.location.origin}/oauth2/authorize?${params.toString()}`
   })()
 
-  const handleConfigNext = () => {
+  const handleConfigNext = async () => {
+    const pkce = await createPkcePair()
+    setCodeVerifier(pkce.verifier)
+    setCodeChallenge(pkce.challenge)
+    sessionStorage.setItem('authglow-playground-pkce-verifier', pkce.verifier)
     store.setClientId(localClientId)
     store.setClientSecret(localClientSecret)
     store.setRedirectUri(localRedirectUri)
@@ -65,7 +88,8 @@ export function AuthorizationCodeFlow() {
       const formBody: Record<string, string> = {
         grant_type: 'authorization_code',
         code: localCode,
-        redirect_uri: localRedirectUri,
+      redirect_uri: localRedirectUri,
+      code_verifier: codeVerifier || sessionStorage.getItem('authglow-playground-pkce-verifier') || '',
       }
       if (localClientId) formBody.client_id = localClientId
       if (localClientSecret) formBody.client_secret = localClientSecret
