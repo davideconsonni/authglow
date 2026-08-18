@@ -20,6 +20,7 @@ from authglow.api.claim_policy import router as claim_policy_router
 from authglow.api.device_auth import router as device_auth_router
 from authglow.api.email_verification import router as email_verification_router
 from authglow.api.federation import router as federation_router
+from authglow.api.meta import router as meta_router
 from authglow.api.mfa import router as mfa_router
 from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 from authglow.api.oauth_client import router as oauth_client_router
@@ -66,6 +67,31 @@ async def lifespan(app: FastAPI):
         ThreadPoolExecutor(max_workers=_DEFAULT_EXECUTOR_WORKERS),
     )
     await token_blacklist().startup_hydrate()
+
+    # ------------------------------------------------------------------
+    # Demo mode bootstrap (INTENTIONAL public sandbox — see
+    # ``authglow.services.demo`` for the security rationale).
+    #
+    # Seeds the well-known demo admin and stores its plaintext password
+    # on ``app.state`` so the rate-limited ``GET /api/meta`` endpoint can
+    # expose it to anonymous visitors. The password is generated at boot
+    # (rotates on every restart) and is NEVER logged.
+    # ------------------------------------------------------------------
+    if settings.demo_mode:
+        from authglow.services.demo import seed_demo_user
+
+        app.state.demo_password = await seed_demo_user(settings=settings)
+        logger.warning(
+            "DEMO_MODE_ENABLED",
+            demo_user_email=settings.demo_user_email,
+            demo_banner_text=settings.demo_banner_text,
+            note=(
+                "Public sandbox admin; password exposed via GET /api/meta only; "
+                "data is ephemeral and reset on restart."
+            ),
+        )
+    else:
+        app.state.demo_password = None
     yield
 
 
@@ -124,6 +150,7 @@ app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 app.include_router(federation_router, tags=["Federation"])
 app.include_router(device_auth_router, tags=["Device Authorization"])
 app.include_router(claim_policy_router, tags=["Claim Policy"])
+app.include_router(meta_router, tags=["Meta"])
 
 
 @app.get("/")

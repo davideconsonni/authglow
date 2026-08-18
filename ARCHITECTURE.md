@@ -45,7 +45,7 @@ authglow/
 │   ├── Dockerfile             # Backend-only image (pure REST API)
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
-│       ├── api/               # 18 FastAPI routers (HTTP layer, one per domain)
+│       ├── api/               # 19 FastAPI routers (HTTP layer, one per domain)
 │       ├── services/          # 31 modules / 37 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
@@ -112,6 +112,35 @@ eviction for local and test deployments; `RedisCacheBackend` uses the optional
 implementation with `CACHE_BACKEND=memory|redis` and configure `REDIS_URL` when
 using Redis. Services depend only on the namespace facade, not on either
 backend implementation.
+
+## Demo Mode
+
+Demo mode is an **intentional public sandbox** for letting anonymous visitors
+log in and try the product. It is **orthogonal to `app_env`** — a demo
+deployment keeps `app_env=production`, so every production security validator
+(SECRET_KEY strength, OAuth2 defaults, DEBUG) still applies. Demo mode adds two
+behaviours on top:
+
+1. **Seeded demo admin** — on startup the lifespan (`backend/main.py`) calls
+   `seed_demo_user()` (`backend/authglow/services/demo.py`), which creates (or
+   refreshes) the well-known demo user (`demo_user_email`, default
+   `admin@example.com`) with `read/write/admin` scope. The password is generated
+   at boot with `secrets.token_urlsafe(16)` and rotates on every restart; it is
+   **never logged or persisted**. The seed is idempotent: on a stateless demo
+   instance (no disk, e.g. Render free tier) the user is recreated after every
+   reset without needing the setup token.
+2. **Warning banner + demo credentials** — `GET /api/meta`
+   (`backend/authglow/api/meta.py`, public, rate-limited `20/minute`) returns
+   `demo_mode`, `demo_banner_text`, and — only when `demo_mode=true` — the demo
+   email + boot-time password. The frontend surfaces a `warning` `Banner` on the
+   login page, the OAuth authorize page, and inside `AppShell` for authenticated
+   users.
+
+Security rationale (why this is not a hole): the demo credential is rotated on
+every boot (self-expiring), demo mode is off by default, and the intended
+deployment has no persistent storage — a compromised demo admin cannot cause
+lasting damage because all state is wiped on the next restart. Enable with
+`demo_mode=true` (plus optional `demo_banner_text` / `demo_user_email`).
 
 ## Data Flow
 
@@ -210,6 +239,8 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 | `backend/authglow/services/acr.py`                  | ACR/AMR computation for ID tokens                                                         |
 | `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                     |
 | `backend/authglow/api/admin_settings.py`            | Admin settings read + rate-limit status endpoints                                         |
+| `backend/authglow/api/meta.py`                      | Public `GET /api/meta` (demo mode banner + credentials)                                   |
+| `backend/authglow/services/demo.py`                 | Idempotent demo-admin seed (boot-time password, never logged)                             |
 | `frontend/src/App.tsx`                              | All routes, providers, guards                                                             |
 | `frontend/src/lib/api.ts`                           | HTTP client with auto-refresh, 429 handling, session-expired dispatch                     |
 | `frontend/src/lib/constants.ts`                     | `ROUTES` object and `API_URL`                                                             |

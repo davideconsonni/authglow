@@ -474,6 +474,32 @@ class Settings(BaseSettings):
     # a fixed token (e.g. for CI/CD or to reset the persisted one).
     setup_token: Optional[str] = None
 
+    # ------------------------------------------------------------------
+    # Demo Mode (INTENTIONAL public sandbox — not a security hole)
+    #
+    # ``demo_mode`` is ORTHOGONAL to ``app_env``. A demo deployment keeps
+    # ``app_env=production`` so every production security validator below
+    # (SECRET_KEY strength, OAuth2 defaults, DEBUG) still applies. Demo
+    # mode only adds two behaviours on top:
+    #
+    #   1. A well-known demo admin user (``demo_user_email``) is seeded at
+    #      boot with a freshly generated password and ``admin`` scope. The
+    #      plaintext password is exposed via ``GET /api/meta`` so anonymous
+    #      visitors can log in and try the product. It is NEVER logged.
+    #   2. A warning banner tells every visitor that the environment is a
+    #      sandbox and that data is ephemeral.
+    #
+    # This is intentional: the demo instance has NO persistent storage
+    # (Render free tier, /app/data resets on restart), so a compromised or
+    # misused admin account cannot cause lasting damage — all state is
+    # wiped on the next restart/redeploy. Disabled by default.
+    # ------------------------------------------------------------------
+    demo_mode: bool = False
+    demo_banner_text: str = (
+        "Demo environment — accounts and data are reset on every server restart."
+    )
+    demo_user_email: str = "admin@example.com"
+
     @field_validator("bcrypt_rounds")
     @classmethod
     def validate_bcrypt_rounds(cls, v: int) -> int:

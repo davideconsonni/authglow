@@ -5,12 +5,14 @@ import { api } from '../../lib/api'
 import { ROUTES } from '../../lib/constants'
 import { generateOAuthNonce, generateOAuthState, generatePkceChallenge, generatePkceVerifier, PLAYGROUND_TRANSACTION_KEY } from '../../lib/oauthCrypto'
 import { Banner } from '../../components/shared/Banner'
+import { useDemoMeta } from '../../hooks/useDemoMeta'
 
 export function LoginForm() {
   const [generalError, setGeneralError] = useState('')
   const [searchParams] = useSearchParams()
   const redirect = searchParams.get('redirect')
   const [starting, setStarting] = useState(false)
+  const { meta } = useDemoMeta()
 
   const startLogin = async () => {
     setGeneralError('')
@@ -57,6 +59,28 @@ export function LoginForm() {
         <Banner variant="error" role="alert">
           {generalError}
         </Banner>
+      )}
+      {meta.demo_mode && (
+        <Banner variant="warning" data-testid="demo-mode-banner">
+          {meta.demo_banner_text || 'Demo environment — accounts and data are reset on every server restart.'}
+        </Banner>
+      )}
+      {meta.demo_mode && meta.demo_user_email && meta.demo_user_password && (
+        <div
+          data-testid="demo-credentials"
+          className="rounded-xl border border-surface-2 bg-surface-1/50 p-4 text-sm"
+        >
+          <p className="mb-2 font-medium text-text-primary">Demo credentials</p>
+          <p className="break-all font-mono text-xs text-text-secondary">
+            <span className="text-text-muted">Email: </span>{meta.demo_user_email}
+          </p>
+          <p className="mt-1 break-all font-mono text-xs text-text-secondary">
+            <span className="text-text-muted">Password: </span>{meta.demo_user_password}
+          </p>
+          <p className="mt-2 text-xs text-text-muted">
+            Use these on the next screen to sign in to the sandbox.
+          </p>
+        </div>
       )}
       <p className="text-sm text-text-secondary">Continue with AuthGlow using the secure OAuth 2.0 Authorization Code flow with PKCE.</p>
       <button

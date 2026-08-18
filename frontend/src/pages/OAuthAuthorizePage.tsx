@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Shield, Loader2, LogIn } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
+import { useDemoMeta } from '../hooks/useDemoMeta'
 import { ConsentScreen } from '../components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '../components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '../components/auth/PasskeyLoginButton'
@@ -213,6 +214,7 @@ export function OAuthAuthorizePage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { meta } = useDemoMeta()
 
   const clientId = searchParams.get('client_id') || ''
   const redirectUri = searchParams.get('redirect_uri') || ''
@@ -474,49 +476,72 @@ export function OAuthAuthorizePage() {
               <p>{error}</p>
             </div>
           ) : (
-            <form onSubmit={handleLogin}>
-              <div className="login-form-card">
-                <div className="login-field">
-                  <label htmlFor="oauth-email" className="login-label">Email</label>
-                  <input
-                    id="oauth-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value)
-                    }}
-                    placeholder="admin@authglow.local"
-                    autoFocus
-                    autoComplete="email"
-                    required
-                    className="login-input"
-                  />
+            <>
+              {meta.demo_mode && (
+                <div data-testid="demo-mode-banner" className="mb-4">
+                  <Banner variant="warning">
+                    {meta.demo_banner_text || 'Demo environment — accounts and data are reset on every server restart.'}
+                  </Banner>
+                </div>
+              )}
+              {meta.demo_mode && meta.demo_user_email && meta.demo_user_password && (
+                <div
+                  data-testid="demo-credentials"
+                  className="mb-4 rounded-xl border border-[#e2e8f0] bg-[#fffbeb] px-4 py-3 text-sm"
+                >
+                  <p className="mb-1 font-semibold text-[#92400e]">Demo credentials</p>
+                  <p className="font-mono text-xs text-[#78350f]">
+                    Email: <span className="font-semibold">{meta.demo_user_email}</span>
+                  </p>
+                  <p className="mt-0.5 font-mono text-xs text-[#78350f]">
+                    Password: <span className="font-semibold">{meta.demo_user_password}</span>
+                  </p>
+                </div>
+              )}
+              <form onSubmit={handleLogin}>
+                <div className="login-form-card">
+                  <div className="login-field">
+                    <label htmlFor="oauth-email" className="login-label">Email</label>
+                    <input
+                      id="oauth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                      }}
+                      placeholder="admin@authglow.local"
+                      autoFocus
+                      autoComplete="email"
+                      required
+                      className="login-input"
+                    />
+                  </div>
+
+                  <div className="login-field">
+                    <label htmlFor="oauth-password" className="login-label">Password</label>
+                    <input
+                      id="oauth-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      autoComplete="current-password"
+                      required
+                      className="login-input"
+                    />
+                  </div>
                 </div>
 
-                <div className="login-field">
-                  <label htmlFor="oauth-password" className="login-label">Password</label>
-                  <input
-                    id="oauth-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    required
-                    className="login-input"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || !email || !password}
-                className="login-btn"
-              >
-                {loading ? <Loader2 size={16} className="login-spin" /> : <LogIn size={16} />}
-                Sign In & Continue
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading || !email || !password}
+                  className="login-btn"
+                >
+                  {loading ? <Loader2 size={16} className="login-spin" /> : <LogIn size={16} />}
+                  Sign In & Continue
+                </button>
+              </form>
+            </>
           )}
 
           <div className="mt-5 pt-4 border-t border-[#e2e8f0]">
