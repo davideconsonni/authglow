@@ -12,7 +12,8 @@
 # =============================================================================
 
 # ---- Stage 1: build the frontend -------------------------------------------
-FROM node:20-slim AS frontend-build
+# Matches the `engines` requirement in frontend/package.json (node >=26.7.0).
+FROM node:26-slim AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -42,9 +43,19 @@ COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 # Runtime state (users, keys, sessions) is volume-mounted here or on GCS.
-RUN mkdir -p /app/data /app/data/keys && chmod 700 /app/data
+RUN mkdir -p /app/data /app/data/keys \
+    && chmod 700 /app/data \
+    && useradd --system --create-home --uid 1000 appuser \
+    && chown -R appuser:appuser /app/data
+
+# Run as an unprivileged user: a container escape must not yield host root
+# (VAPT-095). The app only ever writes under /app/data.
+USER appuser
 
 EXPOSE 8080
 
 # $PORT comes from the platform (Cloud Run, Railway…) or is set at runtime.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD python -c "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8080')+'/health',timeout=2)"
+
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

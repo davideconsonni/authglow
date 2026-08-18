@@ -279,6 +279,27 @@ async def list_all_api_keys(
     return responses
 
 
+@router.get("/api/admin/keys/{key_id}", response_model=APIKeyResponse)
+async def get_single_api_key(
+    key_id: str,
+    current_user: User = Depends(get_current_user),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+):
+    """Get a single API key by ID (admin only)."""
+    if "admin" not in current_user.scopes:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    api_key = await api_key_service.get_key(key_id)
+    if api_key is None:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    key_data = api_key.model_dump()
+    user_storage = UserStorage()
+    user = await user_storage.get_user(api_key.user_id)
+    key_data["user_email"] = user.email if user else None
+    return APIKeyResponse(**key_data)
+
+
 @router.get("/api/admin/users/{user_id}/keys", response_model=List[APIKeyResponse])
 async def list_user_api_keys(
     user_id: str,

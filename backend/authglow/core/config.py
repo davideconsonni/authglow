@@ -6,7 +6,7 @@ import secrets
 import warnings
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import structlog
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -118,6 +118,7 @@ def get_or_generate_keyring(
         # its own event loop so the keyring bootstrap still
         # completes before the first JWT is needed.
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             pool.submit(asyncio.run, _run()).result()
     finally:
@@ -206,7 +207,7 @@ class Settings(BaseSettings):
         description=(
             "Encryption key for sessions, signed cookies, and JWT keyring at rest. "
             "Set via the SECRET_KEY environment variable. "
-            "Generate: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            'Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"'
         ),
     )
     jwt_algorithm: str = "RS256"
@@ -297,7 +298,9 @@ class Settings(BaseSettings):
     )
     cors_allow_credentials: bool = True
     cors_allowed_methods: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"  # Comma-separated list
-    cors_allowed_headers: str = "Authorization, Content-Type, X-Requested-With, Accept, X-CSRF-Token"
+    cors_allowed_headers: str = (
+        "Authorization, Content-Type, X-Requested-With, Accept, X-CSRF-Token"
+    )
 
     # OpenID Connect Settings
     issuer: str = "http://localhost:8000"  # Must match the actual server URL
@@ -368,7 +371,7 @@ class Settings(BaseSettings):
     auth_cookie_access_name: str = "access_token"
     auth_cookie_refresh_name: str = "refresh_token"
     auth_cookie_path: str = "/api"
-    auth_cookie_samesite: str = "lax"
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     auth_cookie_domain: Optional[str] = None
 
     @property
@@ -525,7 +528,7 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SECRET_KEY is required and must be at least 32 characters.\n"
                 "Set it via the SECRET_KEY environment variable or in your .env file.\n"
-                "Generate: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                'Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
         return data
 
@@ -539,12 +542,16 @@ class Settings(BaseSettings):
             )
         return self
 
+    @field_validator("auth_cookie_samesite", mode="before")
+    @classmethod
+    def validate_auth_cookie_samesite(cls, v: object) -> object:
+        """Accept case-insensitive SameSite values from env (back-compat)."""
+        return v.lower() if isinstance(v, str) else v
+
     @model_validator(mode="after")
     def _validate_auth_cookie_policy(self):
         """Reject unsafe or internally inconsistent cookie policies."""
-        if self.auth_cookie_samesite.lower() not in {"lax", "strict", "none"}:
-            raise ValueError("AUTH_COOKIE_SAMESITE must be lax, strict, or none")
-        if self.auth_cookie_samesite.lower() == "none" and not self.auth_cookie_secure:
+        if self.auth_cookie_samesite == "none" and not self.auth_cookie_secure:
             raise ValueError("AUTH_COOKIE_SAMESITE=none requires HTTPS and Secure cookies")
         return self
 

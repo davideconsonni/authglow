@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -31,8 +32,8 @@ from authglow.api.setup import router as setup_router
 from authglow.api.user_profile import router as user_profile_router
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
-from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 from authglow.middleware.csrf import CSRFMiddleware
+from authglow.middleware.https_enforcement import HttpsEnforcementMiddleware
 from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.request_id import RequestIDMiddleware
@@ -40,6 +41,8 @@ from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.services.auth.token_blacklist import token_blacklist
 
 settings = get_settings()
+
+logger = structlog.get_logger("authglow.audit")
 
 # Default ``ThreadPoolExecutor`` size used by ``asyncio.to_thread`` for
 # off-loading blocking I/O (bcrypt, fsspec, PII decrypt, sync RSA parse).
@@ -149,6 +152,11 @@ async def health_check():
 # ---------------------------------------------------------------------------
 _dist = settings.frontend_dist_dir
 _enable_frontend = bool(_dist and os.path.isdir(_dist))
+if _dist and not _enable_frontend:
+    logger.warning(
+        "FRONTEND_DIST_DIR is set but the directory is missing; running API-only",
+        frontend_dist_dir=_dist,
+    )
 if _dist and os.path.isdir(_dist):
     _dist = os.path.abspath(_dist)
     _assets = os.path.join(_dist, "assets")

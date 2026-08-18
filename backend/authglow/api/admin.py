@@ -94,6 +94,58 @@ async def get_dashboard_stats(
     )
 
 
+@router.get("/api/admin/users")
+async def list_users_admin(
+    search: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    mfa_enabled: Optional[bool] = Query(None),
+    email_verified: Optional[bool] = Query(None),
+    scopes: Optional[str] = Query(None),
+    created_after: Optional[datetime] = Query(None),
+    created_before: Optional[datetime] = Query(None),
+    last_login_after: Optional[datetime] = Query(None),
+    last_login_before: Optional[datetime] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    sort: Optional[str] = Query(None),
+    current_user: User = Depends(require_admin),
+    storage: UserStorage = Depends(get_user_storage),
+):
+    """List users with optional filters, pagination and sorting (admin only).
+
+    Mirrors ``GET /api/admin/users/search`` but also supports a
+    ``sort`` parameter (e.g. ``created_at:desc``). Sorting happens
+    server-side over a fetch window so the returned page is
+    globally ordered, not just page-ordered.
+    """
+    scope_list: Optional[list[str]] = None
+    if scopes:
+        scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+
+    users, total = await storage.list_users(
+        limit=500,
+        offset=0,
+        search=search,
+        is_active=is_active,
+        mfa_enabled=mfa_enabled,
+        email_verified=email_verified,
+        scopes=scope_list,
+        created_after=created_after,
+        created_before=created_before,
+        last_login_after=last_login_after,
+        last_login_before=last_login_before,
+    )
+
+    if sort:
+        field, _, direction = sort.partition(":")
+        if field == "created_at":
+            users.sort(key=lambda u: u.created_at, reverse=(direction == "desc"))
+
+    page = users[offset : offset + limit]
+    items = [AdminUserDetail.from_user(user) for user in page]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
 @router.get("/api/admin/users/search")
 async def search_users(
     search: Optional[str] = Query(None),

@@ -52,7 +52,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 **Infrastructure**
 - **No database** — file-based storage by default, swaps to S3, GCS, or Azure Blob with one `STORAGE_BACKEND` value
-- Single `Dockerfile`, single volume for persistence
+- Single-container `Dockerfile` (API + built SPA) or backend-only — one volume for persistence
 - Zero message queue, zero cache cluster — just files
 
 > Full catalog with every endpoint: [FEATURES.md](docs/FEATURES.md)
@@ -109,18 +109,46 @@ Open **http://localhost:5173/setup**, paste the setup token from Terminal 1, and
 > No client to configure first: a default OAuth2 client ships via `OAUTH2_CLIENT_ID` / `OAUTH2_CLIENT_SECRET` in `.env.example`, so the OAuth Playground works immediately.
 
 <details>
-<summary><strong>Just want the API, no UI? (Docker)</strong></summary>
+<summary><strong>Single-container deploy (backend + UI in one image) — recommended</strong></summary>
 
-The Dockerfile packages the **backend only** — a pure REST API plus Swagger docs. Useful if you already have a frontend, or you're wiring AuthGlow in as the identity provider for an existing app.
+The root `Dockerfile` builds the **entire application** as one image: FastAPI serves both the API and the pre-built React SPA on a single port — no nginx, no second process, no docker-compose. One container, one port, one process, ready for Cloud Run, Fly.io, Railway, Render, ECS/Fargate, or any Docker host that injects a `$PORT`.
+
+```bash
+cd authglow
+docker build -t authglow .
+
+docker run -p 8080:8080 \
+  -e PORT=8080 \
+  -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+  -e ISSUER="https://auth.example.com" \
+  -e BASE_URL="https://auth.example.com" \
+  -e FRONTEND_BASE_URL="https://auth.example.com" \
+  -e OAUTH2_FIRST_PARTY_REDIRECT_URI="https://auth.example.com/auth/callback" \
+  -e PASSKEY_RP_ID="auth.example.com" \
+  -e PASSKEY_ORIGIN="https://auth.example.com" \
+  -v authglow-data:/app/data \
+  authglow
+```
+
+- **One port, one process.** Uvicorn serves `/api/...`, `/oauth2/...`, `/.well-known/...` *and* the SPA (React routes fall back to `index.html`). The platform injects `PORT` — no rebuild to change it.
+- **All configuration is runtime.** Point the URL vars above at your public origin. The SPA is built with relative, same-origin API URLs (`VITE_API_URL` is intentionally never baked in), so **one immutable image** runs unchanged on dev, staging, and production.
+- **Persist state.** Users, sessions and the JWT keyring live under `/app/data`. On serverless platforms (Cloud Run, ECS, Fly.io) the filesystem is ephemeral: mount a volume at `/app/data`, or set `STORAGE_BACKEND=s3` / `gcs` / `abfs` so everything — including the JWT signing keys — lives in object storage. An ephemeral instance with `STORAGE_BACKEND=file` loses its users and keys on every recycle.
+
+</details>
+
+<details>
+<summary><strong>Just want the API, no UI?</strong></summary>
+
+The `backend/Dockerfile` packages the **backend only** — a pure REST API plus Swagger docs. Useful if you already have a frontend, or you're wiring AuthGlow in as the identity provider for an existing app.
 
 ```bash
 cd authglow/backend
 cp .env.example .env          # set SECRET_KEY at minimum
 
-docker build -t authglow .
+docker build -t authglow-api .
 docker run -p 8000:8000 -e PORT=8000 \
   --env-file .env -v ./data:/app/data \
-  authglow
+  authglow-api
 ```
 
 `PORT=8000` keeps the container aligned with the `BASE_URL` / `ISSUER` / `PASSKEY_ORIGIN` defaults already in `.env.example`.
@@ -142,6 +170,32 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173
 ```
 
 Everything else (password policy, passkey RP settings, token lifetimes, white-labeling) has sane defaults in `backend/.env.example` — copy it and adjust as needed.
+
+### URL variables for a real deployment
+
+The backend builds **absolute URLs** from these env vars (OIDC discovery, email links, OAuth redirects, passkeys). In production they must all point at the **same public origin** — the defaults are localhost-only:
+
+| Variable | Controls | Default |
+|---|---|---|
+| `ISSUER` | OIDC discovery (`/.well-known/openid-configuration`) and token `aud` | `http://localhost:8000` |
+| `BASE_URL` | `/docs` links, federation callback URL | `http://localhost:8000` |
+| `FRONTEND_BASE_URL` | Password-reset emails, device-code verification page, post-federation redirects | `http://localhost:5173` |
+| `OAUTH2_FIRST_PARTY_REDIRECT_URI` | First-party OAuth2 redirect | `http://localhost:5173/auth/callback` |
+| `PASSKEY_RP_ID` | WebAuthn relying-party ID (bare hostname) | `localhost` |
+| `PASSKEY_ORIGIN` | WebAuthn origin (must match the browser address bar) | `http://localhost:8000` |
+
+Example for `https://auth.example.com`:
+
+```bash
+ISSUER=https://auth.example.com
+BASE_URL=https://auth.example.com
+FRONTEND_BASE_URL=https://auth.example.com
+OAUTH2_FIRST_PARTY_REDIRECT_URI=https://auth.example.com/auth/callback
+PASSKEY_RP_ID=auth.example.com
+PASSKEY_ORIGIN=https://auth.example.com
+```
+
+In the single-container image the SPA itself needs no URL config: it calls the API with relative, same-origin paths, so it works on any origin you deploy to.
 
 **Email providers:** `console` and `file_storage` are useful for local development. Real delivery is supported through `smtp`, `sendgrid`, `mailgun`, and `resend`. Select one with `EMAIL_BACKEND`; provider-specific examples and credentials are documented in `backend/.env.example`.
 

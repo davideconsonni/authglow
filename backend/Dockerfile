@@ -9,6 +9,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
+# Run as an unprivileged user (VAPT-095): /app/data holds users, keys and
+# sessions and is volume-mounted at runtime.
+RUN useradd --system --create-home --uid 1000 appuser \
+    && mkdir -p /app/data /app/data/keys \
+    && chown -R appuser:appuser /app/data
+USER appuser
+
 # Expose port (Cloud Run uses PORT env var, default to 8080)
 ENV PORT=8080
 EXPOSE 8080

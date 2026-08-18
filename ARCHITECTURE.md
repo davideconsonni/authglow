@@ -35,11 +35,14 @@ authglow/
 ├── ARCHITECTURE.md            # This file — structural map
 ├── DESIGN.md                  # Visual design system (colors, typography)
 ├── SECURITY.md                # Vulnerability reporting policy
+├── Dockerfile                 # Single-container image: FastAPI + built SPA (one port, one process)
+├── .dockerignore              # Build-context exclusions for the single-container image
 ├── docs/                      # Integration guides, feature catalog, plans, post-mortems
 │   ├── FEATURES.md            # Complete feature catalog
 │   ├── flows/                 # Per-flow guides: standard + custom behavior
 ├── backend/
-│   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts
+│   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts, SPA serving
+│   ├── Dockerfile             # Backend-only image (pure REST API)
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
 │       ├── api/               # 18 FastAPI routers (HTTP layer, one per domain)
@@ -64,6 +67,41 @@ authglow/
 │   └── e2e/                   # Playwright E2E specs
 └── images/                    # README screenshots
 ```
+
+## Single-Container Deployment
+
+AuthGlow ships as one image that exposes both the API and the React SPA on a
+single port, under a single Uvicorn process — no nginx, no process manager, no
+docker-compose. It runs unchanged on Cloud Run, ECS/Fargate, Fly.io, Railway,
+Render, or any Docker host that injects a `$PORT` env var.
+
+- **Two build targets**
+  - `Dockerfile` (repo root) — **full app**: builds the SPA with `node:26-slim`,
+    then a `python:3.13-slim` runtime copies `frontend/dist` to
+    `FRONTEND_DIST_DIR=/app/frontend/dist` and serves both API and UI.
+  - `backend/Dockerfile` — **API-only**: pure REST API + Swagger, for when a
+    separate frontend already exists.
+- **Single-origin SPA.** The frontend is built with relative API URLs
+  (`API_URL = import.meta.env.VITE_API_URL ?? ''`), so SPA and API share one
+  origin and cookies/CSRF need no cross-origin configuration.
+- **SPA serving** lives in `backend/main.py`: when `frontend_dist_dir` is set and
+  present, `/assets` is mounted and a `/{path:path}` catch-all — registered after
+  all routers — serves the React shell for client-side routes (`/admin`,
+  `/dashboard`, `/auth/login`, `/oauth2/authorize`, …) while `/api`, `/docs`,
+  `/.well-known` and other `/oauth2/*` server endpoints keep 404ing on unknown
+  paths. `FRONTEND_DIST_DIR=""` (default) disables it for backend-only deploys.
+- **Runtime-only configuration.** Every setting is an env var (Pydantic
+  `Settings`, `case_sensitive=False`); the image is immutable across
+  dev/staging/prod. `PORT` comes from the platform; URL-bearing vars
+  (`ISSUER`, `BASE_URL`, `FRONTEND_BASE_URL`, `OAUTH2_FIRST_PARTY_REDIRECT_URI`,
+  `PASSKEY_RP_ID`, `PASSKEY_ORIGIN`) must point at the public origin.
+- **State.** Users, sessions, and the JWT keyring live under `/app/data`
+  (`STORAGE_PATH` / `keys_dir`). Mount a volume there, or set
+  `STORAGE_BACKEND=s3|gcs|abfs` for serverless (see `repositories/file/`).
+- Both images run as a non-root user (`USER appuser`) and ship a `HEALTHCHECK`
+  against `/health`. CI (`container-smoke` job) builds the image and verifies
+  SPA routes, hashed assets, OIDC discovery, API-404 behavior, and `$PORT`
+  injection.
 
 ## Cache Backends
 

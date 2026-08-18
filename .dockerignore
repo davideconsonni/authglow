@@ -1,0 +1,54 @@
+# =============================================================================
+# Build-context ignore for the single-container image (build from repo root).
+#
+# Docker only reads the .dockerignore at the build-context root, so this file
+# must cover BOTH build stages of the root Dockerfile:
+#   - frontend-build: COPY frontend/...   (needs source, no node_modules/dist)
+#   - runtime:        COPY backend/...    (needs app, no tests/.env/data)
+# =============================================================================
+
+# VCS / tooling / IDE
+.git
+.github
+.agents
+.serena
+.codegraph
+.idea
+docs
+images
+
+# Secrets — never ship .env* into any image layer (VAPT-097)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/htmlcov/
+.venv/
+venv/
+
+# Local runtime state (volume-mounted at runtime, never baked into the image)
+data/
+**/data/
+keys/
+**/keys/
+
+# Tests / tooling not needed at image build time
+tests/
+**/tests/
+coverage/
+playwright-report/
+test-results/
+
+# Node / frontend build artifacts
+node_modules/
+**/node_modules/
+dist/
+*.log
+*.tsbuildinfo

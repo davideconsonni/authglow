@@ -46,3 +46,86 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt
+
+  container-smoke:
+    name: Container smoke test (single-container image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the single-container image
+        run: docker build -t authglow .
+
+      - name: Smoke test on PORT 8080
+        run: |
+          set -euo pipefail
+          docker run -d --name authglow-smoke \
+            -e PORT=8080 \
+            -e SECRET_KEY=ci-only-secret-key-abcdefghijklmnopqrstuvwxyz123456 \
+            -e ISSUER=http://localhost:8080 \
+            -e BASE_URL=http://localhost:8080 \
+            -e FRONTEND_BASE_URL=http://localhost:8080 \
+            -e OAUTH2_FIRST_PARTY_REDIRECT_URI=http://localhost:8080/auth/callback \
+            -e PASSKEY_RP_ID=localhost \
+            -e PASSKEY_ORIGIN=http://localhost:8080 \
+            -p 8080:8080 \
+            authglow
+
+          # Wait for readiness (FastAPI startup + keyring generation).
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+
+          echo "== /health =="
+          curl -fsS http://127.0.0.1:8080/health
+
+          echo "== SPA shell served on / and client-side routes =="
+          for path in / /admin /admin/users /dashboard /auth/login /setup /oauth2/authorize; do
+            curl -fsS "http://127.0.0.1:8080$path" | grep -q '<title>AuthGlow</title>' \
+              || { echo "FAIL: $path did not serve index.html"; exit 1; }
+          done
+
+          echo "== hashed /assets/* served =="
+          asset=$(curl -fsS http://127.0.0.1:8080/ | grep -o '/assets/[^"]*\.js' | head -n1)
+          test -n "$asset" || { echo "FAIL: no hashed JS asset in index.html"; exit 1; }
+          curl -fsS -o /dev/null "http://127.0.0.1:8080$asset"
+
+          echo "== static public files =="
+          curl -fsS -o /dev/null http://127.0.0.1:8080/theme-init.js
+
+          echo "== API surfaces =="
+          curl -fsS -o /dev/null http://127.0.0.1:8080/docs
+          curl -fsS http://127.0.0.1:8080/.well-known/openid-configuration | grep -q 'issuer'
+
+          echo "== API namespace must not leak the SPA shell =="
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/does-not-exist)
+          test "$status" = "404" || { echo "FAIL: /api/does-not-exist -> $status (expected 404)"; exit 1; }
+
+          docker stop authglow-smoke
+          docker rm authglow-smoke
+
+      - name: Smoke test on PORT 9000 (serverless port injection)
+        run: |
+          set -euo pipefail
+          docker run -d --name authglow-smoke-9000 \
+            -e PORT=9000 \
+            -e SECRET_KEY=ci-only-secret-key-abcdefghijklmnopqrstuvwxyz123456 \
+            -e ISSUER=http://localhost:9000 \
+            -e BASE_URL=http://localhost:9000 \
+            -e FRONTEND_BASE_URL=http://localhost:9000 \
+            -e PASSKEY_RP_ID=localhost \
+            -e PASSKEY_ORIGIN=http://localhost:9000 \
+            -p 9000:9000 \
+            authglow
+
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:9000/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:9000/health
+          curl -fsS http://127.0.0.1:9000/ | grep -q '<title>AuthGlow</title>'
+
+          docker stop authglow-smoke-9000
+          docker rm authglow-smoke-9000
