@@ -64,15 +64,20 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: async () => {
+        // Clear local state synchronously so the UI signs out immediately,
+        // then revoke the session server-side best-effort. Awaiting the
+        // server call before clearing state caused a stale-isAuthenticated
+        // bounce (login -> dashboard -> login) plus a 2.5s session-expired
+        // timer when the now-cleared cookies triggered a 401.
+        set({
+          user: null,
+          isAuthenticated: false,
+        })
         try {
           await api.post('/api/auth/logout')
         } catch {
           // Clear even if the server call fails
         }
-        set({
-          user: null,
-          isAuthenticated: false,
-        })
       },
 
       fetchCurrentUser: async () => {

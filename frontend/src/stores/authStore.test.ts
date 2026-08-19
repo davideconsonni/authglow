@@ -104,5 +104,26 @@ describe('authStore', () => {
       expect(useAuthStore.getState().isAuthenticated).toBe(false)
       expect(useAuthStore.getState().user).toBeNull()
     })
+
+    it('clears state synchronously even when the server call fails', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('network down'))
+
+      useAuthStore.getState().setAuthenticated(true)
+      useAuthStore.getState().setUser({
+        id: '1',
+        email: 'test@test.com',
+        first_name: 'Test',
+        last_name: 'User',
+        mfa_enabled: false,
+        roles: [],
+        scopes: [],
+        permissions: [],
+        is_federated: false,
+      })
+
+      await useAuthStore.getState().logout()
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().user).toBeNull()
+    })
   })
 })

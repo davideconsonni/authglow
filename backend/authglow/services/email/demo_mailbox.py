@@ -123,10 +123,10 @@ def reset_demo_mailbox() -> None:
 
 
 def message_template_timestamp() -> str:
-    """ISO-8601 UTC timestamp string for a captured email entry."""
+    """RFC-3339 UTC timestamp string for a captured email entry."""
     from authglow.core.datetime import utcnow
 
-    return utcnow().isoformat() + "Z"
+    return utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
 
 class DemoCapturingEmailProvider(EmailProvider):

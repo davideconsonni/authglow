@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Shield, Zap, Globe, Sparkles, CheckCircle2 } from 'lucide-react'
+import { Shield, Zap, Globe, Sparkles } from 'lucide-react'
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -13,13 +13,6 @@ const FEATURES = [
   { icon: Globe, label: 'Federated Identity', desc: 'Google, SAML, OIDC — one login' },
   { icon: Sparkles, label: 'AI-Native', desc: 'Smart risk scoring & anomaly detection' },
 ] as const
-
-const TRUST_BADGES = [
-  'SOC 2 Type II',
-  'GDPR Compliant',
-  'WCAG AA',
-  '99.99% Uptime',
-]
 
 export function AuthLayout({ children, title, description }: AuthLayoutProps) {
   return (
@@ -62,22 +55,6 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
                   <p className="text-xs text-text-muted mt-0.5">{f.desc}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Trust badges */}
-        <div className="relative z-10 space-y-4">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Trusted by teams worldwide</p>
-          <div className="flex flex-wrap gap-2">
-            {TRUST_BADGES.map((badge) => (
-              <span
-                key={badge}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-surface-2 bg-surface-2/50 px-3 py-1.5 text-[11px] font-medium text-text-secondary"
-              >
-                <CheckCircle2 size={10} className="text-semantic-success" />
-                {badge}
-              </span>
             ))}
           </div>
         </div>

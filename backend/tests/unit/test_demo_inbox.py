@@ -13,6 +13,8 @@ codes) when no real mail provider is configured. These tests pin:
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -70,6 +72,21 @@ class TestDemoMailbox:
 
         assert mailbox.list_for("b@example.com") == []
 
+    def test_captured_timestamp_is_parseable_utc(self):
+        """The captured timestamp must be a valid RFC-3339 UTC string.
+
+        Regression: ``utcnow().isoformat() + "Z"`` produced an invalid
+        ``...+00:00Z`` suffix that the frontend's ``new Date()`` could not
+        parse, rendering "Invalid Date" in the demo inbox.
+        """
+        mailbox = DemoMailbox()
+        mailbox.capture(_message(["a@example.com"]), _result())
+
+        timestamp = mailbox.list_for("a@example.com")[0]["timestamp"]
+        assert timestamp.endswith("Z")
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        assert parsed.tzinfo is not None
+
 
 class TestDemoCapturingEmailProvider:
     """The wrapper delegates to the inner provider and captures the email."""
@@ -92,7 +109,6 @@ class TestDemoCapturingEmailProvider:
 
     async def test_captures_even_when_inner_provider_fails(self):
         reset_demo_mailbox()
-        inner = ConsoleEmailProvider(colorize=False)
 
         class FailingProvider(ConsoleEmailProvider):
             async def send(self, message):  # noqa: D102

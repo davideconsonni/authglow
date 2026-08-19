@@ -27,9 +27,9 @@ export function TopBar() {
     return () => observer.disconnect()
   }, [])
 
-  const handleLogout = () => {
-    logout()
-    navigate(ROUTES.AUTH.LOGIN)
+  const handleLogout = async () => {
+    await logout()
+    navigate(ROUTES.AUTH.LOGIN, { replace: true })
   }
 
   return (
