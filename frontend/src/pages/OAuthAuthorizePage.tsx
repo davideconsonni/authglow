@@ -487,14 +487,14 @@ export function OAuthAuthorizePage() {
               {meta.demo_mode && meta.demo_user_email && meta.demo_user_password && (
                 <div
                   data-testid="demo-credentials"
-                  className="mb-4 rounded-xl border border-[#e2e8f0] bg-[#fffbeb] px-4 py-3 text-sm"
+                  className="mb-4 rounded-xl border border-surface-2 bg-surface-1/50 px-4 py-3 text-sm"
                 >
-                  <p className="mb-1 font-semibold text-[#92400e]">Demo credentials</p>
-                  <p className="font-mono text-xs text-[#78350f]">
-                    Email: <span className="font-semibold">{meta.demo_user_email}</span>
+                  <p className="mb-1 font-semibold text-text-primary">Demo credentials</p>
+                  <p className="break-all font-mono text-xs text-text-secondary">
+                    <span className="text-text-muted">Email: </span>{meta.demo_user_email}
                   </p>
-                  <p className="mt-0.5 font-mono text-xs text-[#78350f]">
-                    Password: <span className="font-semibold">{meta.demo_user_password}</span>
+                  <p className="mt-0.5 break-all font-mono text-xs text-text-secondary">
+                    <span className="text-text-muted">Password: </span>{meta.demo_user_password}
                   </p>
                 </div>
               )}

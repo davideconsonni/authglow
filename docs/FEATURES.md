@@ -523,6 +523,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | `/api/oauth2/device/authorizations/{user_code}/revoke` | POST | 8628 | Revoke a device authorization request |
 | `/.well-known/openid-configuration` | GET | OIDC | Discovery metadata |
 | `/.well-known/jwks.json` | GET | 7517 | JWK Set |
+| `/api/meta` | GET | — | Public metadata: `demo_mode`, banner text, and (when enabled) demo credentials |
 | `/oauth2/jwks/status` | GET | — | Keyring status (active / verifying / revoked keys) |
 | `/oauth2/register` | POST | 7591 | Dynamic Client Registration |
 | `/oauth2/register/{client_id}` | GET, PUT, DELETE | 7592 | DCR management (read / update / delete a registered client) |
@@ -1279,9 +1280,34 @@ See [FAPI.md](FAPI.md) for the full gap analysis and roadmap.
 
 ---
 
-## 32. Change Log
+## 32. Demo Mode (Public Sandbox)
+
+Opt-in public sandbox for letting anonymous visitors log in and try the
+product. **Orthogonal to `app_env`** — a demo deployment keeps
+`app_env=production`, so every production security validator (SECRET_KEY
+strength, OAuth2 defaults, DEBUG) still applies. Enabled with `DEMO_MODE=true`.
+
+- **Seeded demo admin** — on startup `seed_demo_user()` (`services/demo.py`)
+  creates (or refreshes) the well-known demo user (`DEMO_USER_EMAIL`, default
+  `admin@example.com`) with `read/write/admin` scope. The password is generated
+  at boot with `secrets.token_urlsafe(16)`, rotates on every restart, and is
+  **never logged or persisted**. The seed is idempotent — on a stateless demo
+  instance (no disk) the user is recreated after every reset.
+- **Warning banner + demo credentials** — `GET /api/meta` (public,
+  rate-limited `20/minute`) returns `demo_mode`, `demo_banner_text`, and — only
+  when `demo_mode=true` — the demo email + boot-time password. The frontend
+  surfaces a warning banner on the login page, the OAuth authorize page, and
+  inside the app shell for authenticated users.
+- **Security rationale** — the demo credential self-expires on every boot,
+  demo mode is off by default, and the intended deployment has no persistent
+  storage, so a compromised demo admin cannot cause lasting damage.
+
+---
+
+## 33. Change Log
 
 | Date       | Change                                                                         |
 |------------|--------------------------------------------------------------------------------|
+| 2026-08    | Added demo mode (`/api/meta`, seeded sandbox admin, warning banner).          |
 | 2026-08    | Unified replacement of the root and `docs/` FEATURES catalogs into this file.  |
 | 2026-06-27 | OIDC/FAPI standards catalog (device auth, DPoP, client JWT auth, FAPI 2.0).    |
