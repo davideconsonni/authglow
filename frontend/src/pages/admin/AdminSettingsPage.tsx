@@ -26,6 +26,7 @@ interface SettingsData {
 
 const CATEGORY_LABELS: Record<string, string> = {
   general: 'General',
+  demo: 'Demo',
   security: 'Security',
   sessions: 'Sessions',
   cors: 'CORS',

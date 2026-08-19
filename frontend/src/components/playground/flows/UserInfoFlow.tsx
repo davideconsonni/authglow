@@ -3,7 +3,6 @@ import { Loader2, RefreshCw, User, Zap } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { decodeJwt } from '../../../lib/jwt'
 import { usePlaygroundStore } from '../../../stores/playgroundStore'
-import { useAuthStore } from '../../../stores/authStore'
 import { useAuth } from '../../../hooks/useAuth'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { FlowStepper } from '../FlowStepper'
@@ -54,20 +53,19 @@ export function UserInfoFlow() {
   }
 
   const handleUseMySession = () => {
-    const token = useAuthStore.getState().accessToken
+    const token = store.accessToken
     if (token) {
       setLocalToken(token)
-      store.setAccessToken(token)
     } else {
-      setResponse(JSON.stringify({ info: 'No access token available. Login via password to see JWT claims. Federated login does not store tokens in browser.' }, null, 2))
+      setResponse(JSON.stringify({ info: 'No access token available. Run an OAuth2 flow in this playground to capture a token, or paste one below.' }, null, 2))
       setCurrentStep('result')
     }
   }
 
   const handleFetchMyUserInfo = () => {
-    const token = useAuthStore.getState().accessToken
+    const token = store.accessToken
     if (!token) {
-      setResponse(JSON.stringify({ info: 'No access token in session. Login via password to see JWT claims.' }, null, 2))
+      setResponse(JSON.stringify({ info: 'No access token captured in this playground session. Run an OAuth2 flow first.' }, null, 2))
       setCurrentStep('result')
       return
     }

@@ -430,11 +430,24 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "JTI replay-protection cache TTL (seconds)",
         "restart_required": True,
     },
+    # --- Demo ---
+    "demo_mode": {"category": "demo", "label": "Demo mode", "restart_required": True},
+    "demo_banner_text": {
+        "category": "demo",
+        "label": "Demo warning banner text",
+        "restart_required": False,
+    },
+    "demo_user_email": {
+        "category": "demo",
+        "label": "Demo admin user email",
+        "restart_required": True,
+    },
     # fmt: on
 }
 
 _CATEGORY_ORDER = [
     "general",
+    "demo",
     "security",
     "sessions",
     "cors",

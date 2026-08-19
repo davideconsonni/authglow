@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useAuthStore } from '../stores/authStore'
 
 describe('authStore', () => {
