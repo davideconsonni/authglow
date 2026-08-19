@@ -5,7 +5,9 @@ import { z } from 'zod'
 import { Loader2, Mail, ArrowLeft } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Banner } from '../../components/shared/Banner'
+import { DemoInbox } from '../../components/shared/DemoInbox'
 import { FieldError } from '../../components/shared/FieldError'
+import { useDemoMeta } from '../../hooks/useDemoMeta'
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -15,7 +17,9 @@ type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
 
 export function ForgotPasswordForm() {
   const [sent, setSent] = useState(false)
+  const [sentEmail, setSentEmail] = useState('')
   const [generalError, setGeneralError] = useState('')
+  const { meta } = useDemoMeta()
 
   const {
     register,
@@ -29,6 +33,7 @@ export function ForgotPasswordForm() {
     setGeneralError('')
     try {
       await api.post('/api/password/reset/request', { email: data.email })
+      setSentEmail(data.email)
       setSent(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : ''
@@ -46,6 +51,11 @@ export function ForgotPasswordForm() {
         <p className="text-sm text-text-muted">
           If an account with that email exists, we've sent a password reset link. Please check your inbox and spam folder.
         </p>
+        {meta.demo_mode && (
+          <div className="text-left">
+            <DemoInbox email={sentEmail} />
+          </div>
+        )}
       </div>
     )
   }

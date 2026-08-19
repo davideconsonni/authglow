@@ -15,12 +15,12 @@ def create_email_provider(provider_name: Optional[str] = None) -> EmailProvider:
     if backend == "file_storage":
         from .file_storage import FileStorageEmailProvider
 
-        return FileStorageEmailProvider(settings.email_storage_path)
+        provider: EmailProvider = FileStorageEmailProvider(settings.email_storage_path)
 
-    if backend == "smtp":
+    elif backend == "smtp":
         from .smtp import SMTPEmailProvider
 
-        return SMTPEmailProvider(
+        provider = SMTPEmailProvider(
             host=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_username,
@@ -30,19 +30,19 @@ def create_email_provider(provider_name: Optional[str] = None) -> EmailProvider:
             from_name=settings.email_from_name,
         )
 
-    if backend == "sendgrid":
+    elif backend == "sendgrid":
         from .sendgrid import SendGridEmailProvider
 
-        return SendGridEmailProvider(
+        provider = SendGridEmailProvider(
             api_key=settings.sendgrid_api_key,
             from_email=settings.email_from_address,
             from_name=settings.email_from_name,
         )
 
-    if backend == "mailgun":
+    elif backend == "mailgun":
         from .mailgun import MailgunEmailProvider
 
-        return MailgunEmailProvider(
+        provider = MailgunEmailProvider(
             api_key=settings.mailgun_api_key,
             domain=settings.mailgun_domain,
             base_url=settings.mailgun_base_url,
@@ -50,25 +50,39 @@ def create_email_provider(provider_name: Optional[str] = None) -> EmailProvider:
             from_name=settings.email_from_name,
         )
 
-    if backend == "resend":
+    elif backend == "resend":
         from .resend import ResendEmailProvider
 
-        return ResendEmailProvider(
+        provider = ResendEmailProvider(
             api_key=settings.resend_api_key,
             base_url=settings.resend_base_url,
             from_email=settings.email_from_address,
             from_name=settings.email_from_name,
         )
 
-    if backend != "console":
+    elif backend != "console":
         raise ValueError(
             f"Unsupported EMAIL_BACKEND '{backend}'. "
             "Choose console, file_storage, smtp, sendgrid, mailgun, or resend."
         )
 
-    from .console import ConsoleEmailProvider
+    else:
+        from .console import ConsoleEmailProvider
 
-    return ConsoleEmailProvider()
+        provider = ConsoleEmailProvider()
+
+    # Demo mode: capture every outgoing email in the in-memory demo mailbox
+    # so the SPA can surface verification / reset codes to anonymous
+    # visitors without a real mail provider. The wrapped provider (e.g.
+    # console) keeps its normal behaviour — operator logs are unchanged.
+    # ``is True`` (not truthiness): ``demo_mode`` is a ``bool`` and some
+    # tests inject MagicMock settings whose attributes are always truthy.
+    if settings.demo_mode is True:
+        from .demo_mailbox import DemoCapturingEmailProvider
+
+        provider = DemoCapturingEmailProvider(provider)
+
+    return provider
 
 
 @lru_cache

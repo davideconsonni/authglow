@@ -7,7 +7,9 @@ import { MailCheck, AlertCircle, Loader2, RefreshCw, KeyRound } from 'lucide-rea
 import { ApiError, api } from '../../lib/api'
 import { ROUTES } from '../../lib/constants'
 import { Banner } from '../../components/shared/Banner'
+import { DemoInbox } from '../../components/shared/DemoInbox'
 import { FieldError } from '../../components/shared/FieldError'
+import { useDemoMeta } from '../../hooks/useDemoMeta'
 
 const verificationCodeSchema = z.object({
   verification_code: z
@@ -28,6 +30,7 @@ export function EmailVerifiedPage() {
   const [searchParams] = useSearchParams()
   const urlToken = searchParams.get('token')
   const userEmail = searchParams.get('email')
+  const { meta } = useDemoMeta()
   const [status, setStatus] = useState<Status>(urlToken ? 'loading' : 'form')
   const [resending, setResending] = useState(false)
   const [resendSent, setResendSent] = useState(false)
@@ -118,6 +121,8 @@ export function EmailVerifiedPage() {
                 </p>
               </div>
             </div>
+
+            {meta.demo_mode && userEmail && <DemoInbox email={userEmail} />}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">

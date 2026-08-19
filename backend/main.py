@@ -18,6 +18,7 @@ from authglow.api.api_key import router as api_key_router
 from authglow.api.auth import router as auth_router
 from authglow.api.claim_policy import router as claim_policy_router
 from authglow.api.device_auth import router as device_auth_router
+from authglow.api.demo import router as demo_router
 from authglow.api.email_verification import router as email_verification_router
 from authglow.api.federation import router as federation_router
 from authglow.api.meta import router as meta_router
@@ -151,6 +152,7 @@ app.include_router(federation_router, tags=["Federation"])
 app.include_router(device_auth_router, tags=["Device Authorization"])
 app.include_router(claim_policy_router, tags=["Claim Policy"])
 app.include_router(meta_router, tags=["Meta"])
+app.include_router(demo_router, tags=["Demo"])
 
 
 @app.get("/")

@@ -524,6 +524,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | `/.well-known/openid-configuration` | GET | OIDC | Discovery metadata |
 | `/.well-known/jwks.json` | GET | 7517 | JWK Set |
 | `/api/meta` | GET | — | Public metadata: `demo_mode`, banner text, and (when enabled) demo credentials |
+| `/api/demo/inbox` | GET | — | Demo only: emails "sent" to a given address (verification/reset codes); `404` when demo is off |
 | `/oauth2/jwks/status` | GET | — | Keyring status (active / verifying / revoked keys) |
 | `/oauth2/register` | POST | 7591 | Dynamic Client Registration |
 | `/oauth2/register/{client_id}` | GET, PUT, DELETE | 7592 | DCR management (read / update / delete a registered client) |
@@ -1298,9 +1299,25 @@ strength, OAuth2 defaults, DEBUG) still applies. Enabled with `DEMO_MODE=true`.
   when `demo_mode=true` — the demo email + boot-time password. The frontend
   surfaces a warning banner on the login page, the OAuth authorize page, and
   inside the app shell for authenticated users.
+- **Demo inbox (no mail provider needed)** — demo instances typically run
+  without an SMTP/API provider (`EMAIL_BACKEND=console`), so emails land on
+  `stderr` and anonymous visitors never see their verification/reset codes.
+  When `demo_mode=true` the email factory wraps every provider in
+  `DemoCapturingEmailProvider` (`services/email/demo_mailbox.py`): the send
+  still goes to the configured provider (console output is unchanged for the
+  operator) and the rendered message is also captured in an **in-memory
+  mailbox** (wiped on every restart, like the rest of the stateless demo
+  data). `GET /api/demo/inbox?email=...` (public, rate-limited `30/minute`)
+  returns the emails addressed to that address, and the frontend shows them
+  in a "Demo inbox" panel on the post-registration login page, the email
+  verification page, and the password-reset "check your email" screen, so the
+  visitor can copy the code directly.
 - **Security rationale** — the demo credential self-expires on every boot,
   demo mode is off by default, and the intended deployment has no persistent
-  storage, so a compromised demo admin cannot cause lasting damage.
+  storage, so a compromised demo admin cannot cause lasting damage. The demo
+  inbox is public by design (codes for a given address are visible to anyone
+  who knows it — the same exposure as the demo password on `/api/meta`) and
+  is a hard `404` when `demo_mode=false`.
 
 ---
 
@@ -1308,6 +1325,7 @@ strength, OAuth2 defaults, DEBUG) still applies. Enabled with `DEMO_MODE=true`.
 
 | Date       | Change                                                                         |
 |------------|--------------------------------------------------------------------------------|
+| 2026-08    | Added demo inbox (`GET /api/demo/inbox`, in-memory email capture in demo mode). |
 | 2026-08    | Added demo mode (`/api/meta`, seeded sandbox admin, warning banner).          |
 | 2026-08    | Unified replacement of the root and `docs/` FEATURES catalogs into this file.  |
 | 2026-06-27 | OIDC/FAPI standards catalog (device auth, DPoP, client JWT auth, FAPI 2.0).    |

@@ -6,6 +6,7 @@ import { EmailVerifiedPage } from '../../pages/auth/EmailVerifiedPage'
 
 vi.mock('../../lib/api', () => ({
   api: {
+    get: vi.fn().mockResolvedValue({ demo_mode: false }),
     post: vi.fn(),
   },
   ApiError: class extends Error {

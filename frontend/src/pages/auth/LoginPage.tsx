@@ -5,6 +5,8 @@ import { AuthLayout } from '../../components/auth/AuthLayout'
 import { LoginForm } from '../../components/auth/LoginForm'
 import { PasskeyLoginButton } from '../../components/auth/PasskeyLoginButton'
 import { FederationLoginButtons } from '../../components/auth/FederationLoginButtons'
+import { DemoInbox } from '../../components/shared/DemoInbox'
+import { useDemoMeta } from '../../hooks/useDemoMeta'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { ROUTES } from '../../lib/constants'
 import { api } from '../../lib/api'
@@ -15,6 +17,7 @@ export function LoginPage() {
   const state = location.state as { registered?: boolean; email?: string } | null
   const registered = state?.registered
   const registeredEmail = state?.email
+  const { meta } = useDemoMeta()
   const [resending, setResending] = useState(false)
   const [resendSent, setResendSent] = useState(false)
 
@@ -60,6 +63,9 @@ export function LoginPage() {
             </div>
           )}
         </div>
+      )}
+      {meta.demo_mode && registeredEmail && (
+        <DemoInbox email={registeredEmail} />
       )}
       <LoginForm />
       <PasskeyLoginButton />

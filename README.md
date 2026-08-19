@@ -210,7 +210,7 @@ For production email, set `EMAIL_FROM_ADDRESS` to a verified sender. SMTP uses S
 authglow/
 ├── backend/
 │   ├── authglow/
-│   │   ├── api/            19 FastAPI routers — the HTTP surface
+│   │   ├── api/            20 FastAPI routers — the HTTP surface
 │   │   ├── core/           config, crypto, rate limiting, concurrency
 │   │   ├── middleware/     security headers, HTTPS enforcement, body-size limits
 │   │   ├── models/         Pydantic schemas

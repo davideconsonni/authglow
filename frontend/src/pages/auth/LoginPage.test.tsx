@@ -6,6 +6,7 @@ import { LoginPage } from '../../pages/auth/LoginPage'
 
 vi.mock('../../lib/api', () => ({
   api: {
+    get: vi.fn().mockResolvedValue({ demo_mode: false }),
     post: vi.fn(),
   },
   ApiError: class extends Error {
