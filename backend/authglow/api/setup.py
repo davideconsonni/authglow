@@ -118,6 +118,7 @@ async def create_admin_user(
             is_active=True,
             email_verified=True,
             is_invited=False,
+            is_bootstrap=True,
         )
 
         await storage.create_user(admin_user)

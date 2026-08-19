@@ -51,6 +51,7 @@ interface UserProfile {
   mfa_enabled: boolean
   mfa_verified: boolean
   email_verified: boolean
+  is_bootstrap: boolean
 }
 
 export function ProfilePage() {
@@ -261,7 +262,7 @@ export function ProfilePage() {
       {!user?.is_federated && (
       <Section title="Danger Zone" description="Irreversible account actions. Please be careful.">
         <div className="rounded-2xl border border-semantic-error/20 bg-surface-1 p-6 space-y-4">
-          {p?.is_active ? (
+          {p?.is_active && !p?.is_bootstrap ? (
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-text-primary">Deactivate Account</p>
@@ -273,6 +274,13 @@ export function ProfilePage() {
               >
                 Deactivate
               </button>
+            </div>
+          ) : p?.is_active ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Bootstrap Admin</p>
+                <p className="text-xs text-text-muted">This is the initial admin account and cannot be deactivated.</p>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-between">

@@ -628,4 +628,32 @@ describe('AdminUsersPage', () => {
     expect(screen.getByTestId('user-tab-history').textContent).toMatch(/^Login History/)
     expect(screen.getByTestId('user-tab-events').textContent).toMatch(/^Security Events/)
   })
+
+  it('bootstrap admin toggle and delete are disabled', () => {
+    mockQueryData.users = { items: makeUsers(1, { is_bootstrap: true, is_active: true }), total: 1, limit: 15, offset: 0 }
+
+    renderPage()
+
+    const toggle = screen.getByTestId('toggle-active-btn')
+    expect(toggle).toBeDisabled()
+
+    const selectCheckbox = screen.getByTestId('user-select-checkbox')
+    expect(selectCheckbox).toBeDisabled()
+
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    const deleteBtn = screen.getAllByRole('button').find(b => b.title === 'Delete')
+    expect(deleteBtn).toBeUndefined()
+  })
+
+  it('non-bootstrap user can be toggled and selected', () => {
+    renderPage()
+
+    const toggles = screen.getAllByTestId('toggle-active-btn')
+    expect(toggles.length).toBeGreaterThan(0)
+    expect(toggles.every(t => !t.disabled)).toBe(true)
+
+    const selectCheckboxes = screen.getAllByTestId('user-select-checkbox')
+    expect(selectCheckboxes.every(c => !c.disabled)).toBe(true)
+  })
 })

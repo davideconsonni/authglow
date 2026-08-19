@@ -135,6 +135,28 @@ class TestSeedDemoUser:
         assert user.email_verified is True
         assert user.hashed_password != password  # hashed, not plaintext
         assert len(password) > 0
+        assert user.is_bootstrap is True
+
+    async def test_existing_demo_admin_is_reactivated_and_pinned(self, test_settings):
+        """A deactivated demo admin must be re-activated on boot and
+        marked as the bootstrap account (so it can no longer be
+        deactivated from the admin surface)."""
+        test_settings.demo_mode = True
+        service = _make_service()
+        await seed_demo_user(service=service, settings=test_settings)
+
+        admin = await service.get_user_by_email(test_settings.demo_user_email)
+        assert admin is not None
+        admin.is_active = False
+        admin.is_bootstrap = False
+        await service.update_user(admin)
+
+        await seed_demo_user(service=service, settings=test_settings)
+
+        refreshed = await service.get_user_by_email(test_settings.demo_user_email)
+        assert refreshed is not None
+        assert refreshed.is_active is True
+        assert refreshed.is_bootstrap is True
 
     async def test_idempotent_two_runs_single_user(self, test_settings):
         test_settings.demo_mode = True

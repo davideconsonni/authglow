@@ -67,6 +67,11 @@ class User(BaseModel):
     # Temporary suspension
     suspended_until: Optional[datetime] = None
 
+    # Bootstrap admin: the first account created during setup (or the
+    # seeded demo admin). Cannot be deactivated from the admin panel or
+    # the profile page, so a misclick never locks the operator out.
+    is_bootstrap: bool = False
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -119,6 +124,7 @@ class UserResponse(BaseModel):
     mfa_verified: bool = False
     email_verified: bool = False
     is_federated: bool = False
+    is_bootstrap: bool = False
 
 
 class RegisterUser(BaseModel):

@@ -50,6 +50,11 @@ async def seed_demo_user(
     password changes on every boot, so a leaked demo credential
     self-expires.
 
+    The demo admin is the bootstrap account: it is pinned with
+    ``is_bootstrap=True`` and re-activated on every boot, so the admin
+    surface refuses to deactivate it and the public sandbox can never
+    be bricked by an operator misclick.
+
     The caller (app startup) is responsible for deciding whether demo
     mode is enabled; this function performs no gating of its own so the
     caller keeps full control.
@@ -73,6 +78,15 @@ async def seed_demo_user(
     if existing is not None:
         # Keep the account but rotate the hash to the boot-time password.
         await service.set_password(existing.id, hashed_password)
+        # The demo admin is the bootstrap account: it must never be left
+        # deactivated (e.g. by an admin misclick), otherwise the public
+        # sandbox is bricked until the next restart. Re-activate it on
+        # every boot and pin the bootstrap flag so the admin surface
+        # refuses to deactivate it.
+        if not existing.is_active or not existing.is_bootstrap:
+            existing.is_active = True
+            existing.is_bootstrap = True
+            await service.update_user(existing)
         return password
 
     demo_user = User(
@@ -84,6 +98,7 @@ async def seed_demo_user(
         is_active=True,
         email_verified=True,
         is_invited=False,
+        is_bootstrap=True,
     )
     await service.create_user(demo_user)
     return password

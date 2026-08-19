@@ -215,6 +215,12 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if update_data.is_active is False and user.is_bootstrap:
+        raise HTTPException(
+            status_code=400,
+            detail="The bootstrap admin account cannot be deactivated",
+        )
+
     if update_data.is_active is not None:
         user.is_active = update_data.is_active
     if update_data.email_verified is not None:
@@ -980,6 +986,10 @@ async def bulk_user_operation(
                 if user_id == current_user.id:
                     results["failed"] += 1
                     results["errors"].append("Cannot deactivate your own account")
+                    continue
+                if user.is_bootstrap:
+                    results["failed"] += 1
+                    results["errors"].append(f"Bootstrap admin {user.email} cannot be deactivated")
                     continue
                 if user.is_federated:
                     results["failed"] += 1

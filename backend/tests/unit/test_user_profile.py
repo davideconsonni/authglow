@@ -323,6 +323,17 @@ class TestAccountStatus:
         success, msg = asyncio_run(user_profile_service.deactivate_account("nonexistent"))
         assert success is False
 
+    def test_bootstrap_admin_cannot_deactivate_account(self, user_profile_service):
+        user = _make_user()
+        user.is_bootstrap = True
+        user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
+        user_profile_service.user_storage.update_user = AsyncMock()
+
+        success, msg = asyncio_run(user_profile_service.deactivate_account("profile-user-1"))
+        assert success is False
+        assert "bootstrap" in msg.lower()
+        user_profile_service.user_storage.update_user.assert_not_called()
+
     def test_reactivate_account(self, user_profile_service):
         user = _make_user()
         user.is_active = False

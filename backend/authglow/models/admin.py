@@ -51,6 +51,7 @@ class AdminUserDetail(BaseModel):
     locked_until: Optional[datetime] = None
     suspended_until: Optional[datetime] = None
     is_federated: bool = False
+    is_bootstrap: bool = False
 
     @classmethod
     def from_user(cls, user: "User") -> "AdminUserDetail":
@@ -76,6 +77,7 @@ class AdminUserDetail(BaseModel):
             locked_until=user.locked_until,
             suspended_until=user.suspended_until,
             is_federated=user.is_federated,
+            is_bootstrap=user.is_bootstrap,
         )
 
 

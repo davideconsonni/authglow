@@ -381,6 +381,12 @@ class UserProfileService:
             if not user:
                 return False, "User not found"
 
+            if user.is_bootstrap:
+                return (
+                    False,
+                    "The bootstrap admin account cannot be deactivated",
+                )
+
             if user.is_federated:
                 return (
                     False,

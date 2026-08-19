@@ -17,7 +17,7 @@ import { notify } from '../../stores/toastStore'
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
   is_active: boolean; mfa_enabled: boolean; created_at: string; login_count: number
-  is_federated: boolean
+  is_federated: boolean; is_bootstrap: boolean
 }
 
 // Mirror of backend defaults (backend/.env.example: PASSWORD_MIN_LENGTH=8,
@@ -46,6 +46,7 @@ interface AdminUserDetail {
   suspended_until: string | null
   phone: string | null; avatar_url: string | null
   is_federated: boolean
+  is_bootstrap: boolean
 }
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
@@ -99,8 +100,9 @@ export function AdminUsersPage() {
   const handleResetMfa = async () => { if (!resetMfaId) return; try { await api.post(`/api/admin/users/${resetMfaId}/reset-mfa`); setResetMfaId(null); notify.success('MFA reset.'); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } }
   const handleRevokeSessions = async () => { if (!revokeSessionsId) return; try { await api.post(`/api/admin/users/${revokeSessionsId}/sessions/revoke-all`); setRevokeSessionsId(null); notify.success('All sessions revoked.'); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } }
 
-  const handleToggleActive = async (id: string, isActive: boolean) => {
-    try { await api.put(`/api/admin/users/${id}`, { is_active: !isActive }); await refetch() } catch { /* ignore */ }
+  const handleToggleActive = async (id: string, isActive: boolean, isBootstrap?: boolean) => {
+    if (isActive && isBootstrap) { notify.error('The bootstrap admin cannot be deactivated.'); return }
+    try { await api.put(`/api/admin/users/${id}`, { is_active: !isActive }); await refetch() } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
   const handleInvite = async () => {
@@ -129,8 +131,9 @@ export function AdminUsersPage() {
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
   }
 
-  const toggleSelect = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n) }
-  const toggleSelectAll = () => setSelected(selected.size === users.length ? new Set() : new Set(users.map(u => u.id)))
+  const toggleSelect = (id: string) => { if (users.find(u => u.id === id)?.is_bootstrap) return; const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n) }
+  const toggleSelectAll = () => setSelected(selected.size === selectable.length ? new Set() : new Set(selectable.map(u => u.id)))
+  const selectable = users.filter(u => !u.is_bootstrap)
 
   const handleBulkAction = async () => {
     if (selected.size === 0 || !bulkAction) return; setBulking(true)
@@ -192,14 +195,14 @@ export function AdminUsersPage() {
           </tr></thead>
           <tbody className="divide-y divide-surface-2">
             {users.map(u => <tr key={u.id} className={`hover:bg-surface-2/50 cursor-pointer ${selected.has(u.id) ? 'bg-brand-violet/5' : ''}`} onClick={() => setDetailUserId(u.id)} data-testid="user-table-row">
-              <td className="px-4 py-3" onClick={e => e.stopPropagation()}><button onClick={() => toggleSelect(u.id)} data-testid="user-select-checkbox" className="rounded p-0.5 text-text-muted hover:text-text-primary">{selected.has(u.id) ? '✓' : '☐'}</button></td>
+              <td className="px-4 py-3" onClick={e => e.stopPropagation()}><button onClick={() => toggleSelect(u.id)} disabled={u.is_bootstrap} title={u.is_bootstrap ? 'The bootstrap admin cannot be bulk-operated' : undefined} data-testid="user-select-checkbox" className="rounded p-0.5 text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30">{selected.has(u.id) ? '✓' : '☐'}</button></td>
               <td className="px-4 py-2.5"><div className="flex items-center gap-3"><UserAvatar first={u.first_name} last={u.last_name} /><span className="text-sm font-medium text-text-primary">{u.first_name} {u.last_name}</span></div></td>
               <td className="px-4 py-2.5 text-sm text-text-secondary">{u.email}</td>
               <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${u.mfa_enabled ? 'bg-semantic-success/10 text-semantic-success' : 'bg-surface-2 text-text-muted'}`}>{u.mfa_enabled ? 'Enabled' : 'Disabled'}</span></td>
-              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active)} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
+              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><button onClick={() => handleToggleActive(u.id, u.is_active, u.is_bootstrap)} disabled={u.is_bootstrap} data-testid="toggle-active-btn" className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 min-h-[44px] py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${u.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />{u.is_active ? 'Active' : 'Inactive'}</button></td>
               <td className="hidden md:table-cell px-4 py-2.5 text-sm text-text-muted">{u.login_count ?? 0}</td>
               <td className="hidden md:table-cell px-4 py-2.5 text-sm text-text-muted">{formatDateTime(u.created_at)}</td>
-              <td className="hidden md:table-cell px-4 py-2.5" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setRevokeSessionsId(u.id)} className="text-text-muted hover:text-semantic-warning" title="Revoke sessions"><LogOut size={14} /></button>{!u.is_federated && <button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button>}{!u.is_federated && <button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button>}</div></td>
+              <td className="hidden md:table-cell px-4 py-2.5" onClick={e => e.stopPropagation()}><div className="flex gap-2"><button onClick={() => setRevokeSessionsId(u.id)} className="text-text-muted hover:text-semantic-warning" title="Revoke sessions"><LogOut size={14} /></button>{!u.is_federated && <button onClick={() => setResetMfaId(u.id)} className="text-text-muted hover:text-text-secondary" title="Reset MFA"><ShieldOff size={14} /></button>}{!u.is_federated && !u.is_bootstrap && <button onClick={() => setDeleteId(u.id)} className="text-text-muted hover:text-semantic-error" title="Delete"><UserX size={14} /></button>}</div></td>
             </tr>)}
           </tbody></table>
         </div>

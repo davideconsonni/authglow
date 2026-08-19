@@ -206,6 +206,62 @@ class TestUpdateUserFields:
 
         assert exc_info.value.status_code == 404
 
+    def test_bootstrap_admin_cannot_be_deactivated(self):
+        import asyncio
+        from fastapi import HTTPException
+        from authglow.api.admin import update_user
+        from authglow.models.admin import UserUpdate
+
+        existing = _make_existing_user()
+        existing.is_bootstrap = True
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_audit = AsyncMock()
+
+        update_data = UserUpdate(is_active=False)
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.get_event_loop().run_until_complete(
+                update_user(
+                    user_id="user-to-update",
+                    update_data=update_data,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        assert exc_info.value.status_code == 400
+        mock_storage.update_user.assert_not_called()
+
+    def test_bootstrap_admin_can_still_be_updated_and_activated(self):
+        import asyncio
+        from authglow.api.admin import update_user
+        from authglow.models.admin import UserUpdate
+
+        existing = _make_existing_user()
+        existing.is_bootstrap = True
+        existing.is_active = True
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_storage.update_user = AsyncMock(return_value=existing)
+        mock_audit = AsyncMock()
+
+        update_data = UserUpdate(first_name="NewFirst", is_active=True)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            update_user(
+                user_id="user-to-update",
+                update_data=update_data,
+                current_user=_make_admin_user(),
+                storage=mock_storage,
+                audit_service=mock_audit,
+            )
+        )
+
+        assert result.first_name == "NewFirst"
+        assert result.is_active is True
+
 
 class TestUpdateUserScopes:
     def test_update_scopes_replaces_list(self):
@@ -285,6 +341,65 @@ class TestUpdateUserScopes:
         )
 
         assert result.scopes == ["read", "write"]
+
+
+class TestBulkUserOperationBootstrap:
+    def test_bulk_deactivate_skips_bootstrap_admin(self):
+        import asyncio
+        from authglow.api.admin import bulk_user_operation
+        from authglow.models.admin import BulkUserOperation
+
+        admin = _make_admin_user()
+        bootstrap = _make_existing_user()
+        bootstrap.id = "bootstrap-id"
+        bootstrap.is_bootstrap = True
+        bootstrap.is_active = True
+
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=bootstrap)
+        mock_audit = AsyncMock()
+
+        operation = BulkUserOperation(user_ids=["bootstrap-id"], operation="deactivate")
+
+        result = asyncio.get_event_loop().run_until_complete(
+            bulk_user_operation(
+                request=_make_request(),
+                operation=operation,
+                current_user=admin,
+                storage=mock_storage,
+                audit_service=mock_audit,
+            )
+        )
+
+        assert result["success"] == 0
+        assert result["failed"] == 1
+        assert "bootstrap" in result["errors"][0].lower()
+        assert bootstrap.is_active is True
+        mock_storage.update_user.assert_not_called()
+
+    def test_bulk_deactivate_skips_own_account(self):
+        import asyncio
+        from authglow.api.admin import bulk_user_operation
+        from authglow.models.admin import BulkUserOperation
+
+        admin = _make_admin_user()
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=admin)
+        mock_audit = AsyncMock()
+
+        operation = BulkUserOperation(user_ids=[admin.id], operation="deactivate")
+
+        result = asyncio.get_event_loop().run_until_complete(
+            bulk_user_operation(
+                request=_make_request(),
+                operation=operation,
+                current_user=admin,
+                storage=mock_storage,
+                audit_service=mock_audit,
+            )
+        )
+
+        assert result["failed"] == 1
 
 
 class TestUpdateUserAuditLogging:
