@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AdminUsersPage } from './AdminUsersPage'
 
@@ -52,6 +52,12 @@ vi.mock('../../hooks/useDocumentTitle', () => ({
   useDocumentTitle: vi.fn(),
 }))
 
+const mockDemoMode = vi.hoisted(() => ({ enabled: false }))
+
+vi.mock('../../hooks/useDemoMeta', () => ({
+  useDemoMeta: () => ({ meta: { demo_mode: mockDemoMode.enabled }, loaded: true }),
+}))
+
 function makeUsers(count: number, overrides: Record<string, unknown> = {}) {
   return Array.from({ length: count }, (_, i) => ({
     id: `user-${i}`,
@@ -71,6 +77,7 @@ const renderPage = () => render(<AdminUsersPage />, { wrapper: Wrapper })
 describe('AdminUsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDemoMode.enabled = false
     mockQueryData.users = { items: makeUsers(3), total: 3, limit: 15, offset: 0 }
     mockQueryData.userDetail = null
     mockQueryData.userKeys = []
@@ -501,6 +508,25 @@ describe('AdminUsersPage', () => {
     expect(screen.getByTestId('user-tab-events')).toBeInTheDocument()
     expect(screen.getByTestId('user-tab-apps')).toBeInTheDocument()
     expect(screen.getByTestId('user-tab-admin-log')).toBeInTheDocument()
+    expect(screen.queryByTestId('user-tab-demo-inbox')).not.toBeInTheDocument()
+  })
+
+  it('shows the Demo Inbox tab in demo mode and renders the inbox for the user email', async () => {
+    mockDemoMode.enabled = true
+    mockApi.get.mockResolvedValue({ emails: [] })
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    const demoTab = screen.getByTestId('user-tab-demo-inbox')
+    expect(demoTab).toBeInTheDocument()
+    fireEvent.mouseDown(demoTab)
+
+    const demoInbox = screen.getByTestId('demo-inbox')
+    expect(demoInbox).toBeInTheDocument()
+    expect(within(demoInbox).getByText(/user0@test\.com/)).toBeInTheDocument()
   })
 
   it('Profile tab is the default and shows the edit form', () => {

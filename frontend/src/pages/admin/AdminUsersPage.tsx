@@ -3,8 +3,10 @@ import { Search, Loader2, ShieldOff, Shield, UserX, UserPlus, Mail, Save, Plus, 
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { useApiQuery } from '../../hooks/useApi'
+import { useDemoMeta } from '../../hooks/useDemoMeta'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { Banner } from '../../components/shared/Banner'
+import { DemoInbox } from '../../components/shared/DemoInbox'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { formatDateTime } from '../../lib/utils'
@@ -239,6 +241,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previouslyFocusedRef = useRef<HTMLElement | null>(null)
   const [activeTab, setActiveTab] = useState('profile')
+  const { meta: demoMeta } = useDemoMeta()
 
   const { data: user, isLoading } = useApiQuery<AdminUserDetail>(['user-detail', userId], `/api/admin/users/${userId}`)
   const { data: keys } = useApiQuery<unknown[]>(['user-keys', userId], `/api/admin/users/${userId}/keys`)
@@ -628,6 +631,11 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               <TabsTrigger value="admin-log" data-testid="user-tab-admin-log" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
                 Admin Log{adminActions ? ` (${adminActions.total})` : ''}
               </TabsTrigger>
+              {demoMeta.demo_mode && (
+                <TabsTrigger value="demo-inbox" data-testid="user-tab-demo-inbox" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                  Demo Inbox
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* Scrollable body */}
@@ -1023,6 +1031,16 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                   )}
                 </div>
               </TabsContent>
+              {demoMeta.demo_mode && (
+                <TabsContent value="demo-inbox" className="m-0 focus-visible:outline-none">
+                  <div className="p-6 space-y-3">
+                    <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                      Emails captured for this user (demo mode)
+                    </h3>
+                    <DemoInbox email={user.email} />
+                  </div>
+                </TabsContent>
+              )}
             </div>
 
             {/* Sticky footer */}
