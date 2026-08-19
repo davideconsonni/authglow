@@ -49,6 +49,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 - Rate limiting, CSRF protection, configurable CORS, OWASP security headers, HTTPS enforcement
 - Structured audit log for every auth event and admin action
 - **White-labeling** — logo, colors, company name, and legal links via environment variables, applied uniformly across login, dashboard, admin, and consent pages, with light/dark mode
+- **Demo mode** — opt-in public sandbox (`demo_mode=true`): a seeded demo admin with a boot-time password (rotated every restart) and a warning banner, for letting anonymous visitors try the product without persistent storage
 
 **Infrastructure**
 - **No database** — file-based storage by default, swaps to S3, GCS, or Azure Blob with one `STORAGE_BACKEND` value
@@ -209,7 +210,7 @@ For production email, set `EMAIL_FROM_ADDRESS` to a verified sender. SMTP uses S
 authglow/
 ├── backend/
 │   ├── authglow/
-│   │   ├── api/            18 FastAPI routers — the HTTP surface
+│   │   ├── api/            19 FastAPI routers — the HTTP surface
 │   │   ├── core/           config, crypto, rate limiting, concurrency
 │   │   ├── middleware/     security headers, HTTPS enforcement, body-size limits
 │   │   ├── models/         Pydantic schemas

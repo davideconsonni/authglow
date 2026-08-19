@@ -304,7 +304,7 @@ backend/
 frontend/src/
   lib/            # api.ts, utils.ts, constants.ts, jwt.ts, loginStorage.ts
   stores/         # Zustand stores (authStore, toastStore, playgroundStore)
-  hooks/          # Custom hooks (useApi, useAuth, useTheme, useDocumentTitle)
+  hooks/          # Custom hooks (useApi, useAuth, useTheme, useDocumentTitle, useDemoMeta)
   components/
     ui/           # shadcn/ui primitives
     layout/       # AppShell, Sidebar, TopBar

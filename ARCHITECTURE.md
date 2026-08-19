@@ -46,7 +46,7 @@ authglow/
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
 │       ├── api/               # 19 FastAPI routers (HTTP layer, one per domain)
-│       ├── services/          # 31 modules / 37 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
+│       ├── services/          # 41 modules / 47 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
@@ -61,7 +61,7 @@ authglow/
 │   │   ├── pages/             # Route-level components (auth/, admin/)
 │   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/
 │   │   ├── stores/            # Zustand: authStore, toastStore, playgroundStore
-│   │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle
+│   │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle, useDemoMeta
 │   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts, jwt.ts, loginStorage.ts
 │   │   └── styles/            # globals.css (Tailwind + design tokens)
 │   └── e2e/                   # Playwright E2E specs
