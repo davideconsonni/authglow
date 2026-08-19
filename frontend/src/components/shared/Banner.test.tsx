@@ -21,6 +21,10 @@ describe('Banner', () => {
 
     rerender(<Banner variant="info">FYI</Banner>)
     expect(screen.getByRole('status')).toHaveTextContent('FYI')
+
+    rerender(<Banner variant="demo">Demo</Banner>)
+    expect(screen.getByRole('status')).toHaveTextContent('Demo')
+    expect(screen.getByRole('status')).toHaveAttribute('data-variant', 'demo')
   })
 
   it('renders a default icon for each variant', () => {

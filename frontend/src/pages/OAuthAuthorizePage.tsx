@@ -479,7 +479,7 @@ export function OAuthAuthorizePage() {
             <>
               {meta.demo_mode && (
                 <div data-testid="demo-mode-banner" className="mb-4">
-                  <Banner variant="warning">
+                  <Banner variant="demo">
                     {meta.demo_banner_text || 'Demo environment — accounts and data are reset on every server restart.'}
                   </Banner>
                 </div>

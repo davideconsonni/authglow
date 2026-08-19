@@ -1,8 +1,8 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, type LucideIcon } from 'lucide-react'
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, Sparkles, X, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 
-export type BannerVariant = 'error' | 'success' | 'warning' | 'info'
+export type BannerVariant = 'error' | 'success' | 'warning' | 'info' | 'demo'
 export type BannerSize = 'sm' | 'md'
 
 interface BannerProps {
@@ -27,6 +27,7 @@ const ICONS: Record<BannerVariant, LucideIcon> = {
   success: CheckCircle2,
   warning: AlertTriangle,
   info: Info,
+  demo: Sparkles,
 }
 
 const STYLES: Record<BannerVariant, string> = {
@@ -34,6 +35,7 @@ const STYLES: Record<BannerVariant, string> = {
   success: 'border-semantic-success/30 bg-semantic-success/10 text-semantic-success',
   warning: 'border-semantic-warning/30 bg-semantic-warning/10 text-semantic-warning',
   info: 'border-semantic-info/30 bg-semantic-info/10 text-semantic-info',
+  demo: 'border-brand-violet/30 bg-brand-violet/10 text-brand-violet',
 }
 
 const SIZE_STYLES: Record<BannerSize, string> = {

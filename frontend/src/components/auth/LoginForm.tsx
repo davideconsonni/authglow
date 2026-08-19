@@ -61,7 +61,7 @@ export function LoginForm() {
         </Banner>
       )}
       {meta.demo_mode && (
-        <Banner variant="warning" data-testid="demo-mode-banner">
+        <Banner variant="demo" data-testid="demo-mode-banner">
           {meta.demo_banner_text || 'Demo environment — accounts and data are reset on every server restart.'}
         </Banner>
       )}
