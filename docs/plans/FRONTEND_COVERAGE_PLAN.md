@@ -31,7 +31,7 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
       Menu "Parti da un template" in `TokenClaimsTab` / `ApiKeyClaimsTab` alimentato da `GET /api/admin/claim-templates`.
 - [x] **Fase 3 — Stato pubblico JWKS**
       Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.
-- [ ] **Fase 4 — Admin Settings schema-driven**
+- [x] **Fase 4 — Admin Settings schema-driven** _(chiusa: premessa errata — vedi nota)_
       Usare `GET /api/admin/settings/schema` per generare/validare i campi di `AdminSettingsPage`.
 - [x] **Fase 5 — Playground: flow DCR + RP-Initiated Logout**
       Due nuovi flow component registrati in `components/playground/flows.ts`.
@@ -49,6 +49,17 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 > blocchi `describe.skip` mai implementati nei test dei tab. Verifica: 38 test passati,
 > tsc/eslint puliti. Comportamento: click su template → aggiunta diretta al draft,
 > persistenza solo al Save esistente.
+
+> **Note di chiusura Fase 4 (2026-08-25)** — premessa errata, nessun lavoro necessario.
+> La verifica approfondita ha mostrato che `AdminSettingsPage` è GIÀ schema-driven: carica
+> `/api/admin/settings` (stessa funzione `_get_settings_fields` dell'endpoint `/schema`) e
+> renderizza dinamicamente i campi per tipo (toggle/number/text), con sidebar categorie dai
+> dati server, badge "Restart required" + dialog di conferma e PATCH salvataggio.
+> L'endpoint `/api/admin/settings/schema` risulta ridondante (aggiunge solo il raggruppamento
+> per categoria che l'UI fa già lato client). Eventuale polish futuro (non bloccante):
+> aggiungere `description` ai metadati `_FIELD_META` + tooltip nell'UI — tocca ~100 campi.
+
+---
 
 > **Note di completamento Fase 3 (2026-08-25)**: card "Public JWKS" su `AdminJwkKeysPage`
 > (active kid, contatore "N of M keys published" con nota sui revoked, link a
@@ -160,3 +171,26 @@ _(da compilare a fine fase: commit SHA o riepilogo)_
 - **Debito di test pre-esistente ripagato**: i 6 fallimenti di `TestTokenEndpointClientAuth` erano causati dal WIP (decorator rate-limit sul token endpoint, envelope RFC 6749 §5.2, PKCE spostato su authorize) non riflesso nei test. Riparati solo i test, nessun cambio produzione.
 - **Verifica**: 11/11 unit backend nuovi, 6/6 component test frontend, 19/19 `test_auth_api.py`, tsc/eslint/ruff puliti. Flusso manuale expire→cambio→rilogin confermato dall'utente.
 - Commit di riferimento: incluso in `3e895f1` (feat: implement forced password change for expired accounts and update OAuth2 error handling).
+
+---
+
+# ESITO FINALE DEL PIANO (2026-08-25)
+
+**7 fasi affrontate, 5 migliorie consegnate, 2 bug reali scoperti e corretti lungo la strada.**
+
+| Fase | Esito |
+|------|-------|
+| 1 — Cambio password forzato | ✅ Implementata end-to-end + fix cache `set_password` (loop infinito) |
+| 2 — Claim Templates | ✅ Picker inline nei due tab + test riattivati |
+| 3 — Stato pubblico JWKS | ✅ Card + legenda + fix invalidazione query + bug backend `revoke_key` senza `await` |
+| 4 — Settings schema-driven | ✅ Chiusa come "già coperta" (premessa errata) |
+| 5 — Playground DCR + RP-Logout | ✅ Due flow interattivi nuovi |
+| 6 — Il mio token | ✅ Sezione claims in Sessioni |
+| 7 — Pulizia endpoint | ✅ 2 endpoint rimossi, revoca sessioni portata nel profilo, 1 conservato |
+
+Verifica complessiva: suite frontend completa verde (428+ test), aree backend toccate tutte
+verdi (162+ test), ruff/tsc/eslint puliti a ogni fase, verifiche live sul server demo
+dell'utente per le fasi 1/3/7.
+
+Polish futuro opzionale (non bloccante): descrizioni nei metadati settings + tooltip UI;
+eventuale hardening server-side della validazione password nel cambio da profilo.
