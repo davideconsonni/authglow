@@ -27,11 +27,10 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 
 - [x] **Fase 1 — Cambio password forzato (`password_expired`)** ⚠️ gap funzionale
       Login verifica il flag → pagina dedicata di cambio password → reset flag via `set_password(require_change=False)`.
-- [ ] **Fase 2 — Claim Templates nel UI**
+- [x] **Fase 2 — Claim Templates nel UI**
       Menu "Parti da un template" in `TokenClaimsTab` / `ApiKeyClaimsTab` alimentato da `GET /api/admin/claim-templates`.
-- [ ] **Fase 3 — Stato pubblico JWKS**
-      Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.
-- [ ] **Fase 4 — Admin Settings schema-driven**
+- [x] **Fase 3 — Stato pubblico JWKS**
+      Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.- [ ] **Fase 4 — Admin Settings schema-driven**
       Usare `GET /api/admin/settings/schema` per generare/validare i campi di `AdminSettingsPage`.
 - [ ] **Fase 5 — Playground: flow DCR + RP-Initiated Logout**
       Due nuovi flow component registrati in `components/playground/flows.ts`.
@@ -39,6 +38,25 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
       Surface di `GET /api/auth/my-token` con il componente `JwtDecoder` esistente (Dashboard o Sessioni).
 - [ ] **Fase 7 — Pulizia endpoint ridondanti**
       Deprecazione/rimozione backend di `/api/password/change`, `GET /api/users`, `GET /api/admin/keys/{id}` (decisione dopo verifica d'uso).
+
+> **Note di completamento Fase 2 (2026-08-25)**: nuovo `ClaimTemplatePicker.tsx` inline
+> (fetch `GET /api/admin/claim-templates`, card con claim_name già namespaced, filtro
+> `excludeSources` per contesto); integrato in `TokenClaimsTab` (esclusi i template
+> `api_key_field`) e in `ApiKeyClaimsTab` (tutti gli 11); riattivati e riscritti i due
+> blocchi `describe.skip` mai implementati nei test dei tab. Verifica: 38 test passati,
+> tsc/eslint puliti. Comportamento: click su template → aggiunta diretta al draft,
+> persistenza solo al Save esistente.
+
+> **Note di completamento Fase 3 (2026-08-25)**: card "Public JWKS" su `AdminJwkKeysPage`
+> (active kid, contatore "N of M keys published" con nota sui revoked, link a
+> `/.well-known/jwks.json`), nuova colonna Retired/Revoked, legenda del ciclo di vita
+> (Active/Verifying/Revoked). Fix collaterale: dopo Rotate/Revoke ora vengono invalidate
+> ENTRAMBE le query React Query (`admin-jwk-keys` + `jwks-status`) — prima la card restava
+> congelata dallo staleTime globale di 5 min. Verifica live sul server demo dell'utente:
+> rotazioni via API tracciate correttamente su disco/status/tabella (nessun bug di staleness);
+> 5/5 test pagina (nuovo file), suite frontend completa 428+ passed, tsc/eslint puliti.
+> Nota: in demo mode le chiavi NON si azzerrano al riavvio (persistono su disco) — solo gli
+> utenti/dati demo.
 
 ---
 

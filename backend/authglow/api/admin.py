@@ -1631,7 +1631,9 @@ async def revoke_jwk_key(
 ):
     """Revoke a JWK key. Active key cannot be revoked."""
     jwt_service = await get_jwt_service()
-    success = jwt_service.revoke_key(kid)
+    # ``revoke_key`` is async — an un-awaited call here silently no-op'd
+    # (coroutine never run, truthy result masked the 400 branch).
+    success = await jwt_service.revoke_key(kid)
 
     if not success:
         raise HTTPException(

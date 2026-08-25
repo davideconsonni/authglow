@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { RefreshCw, Ban, Loader2, Key } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { RefreshCw, Ban, Loader2, Key, ExternalLink } from 'lucide-react'
 import { api } from '../../lib/api'
+import { API_URL } from '../../lib/constants'
 import { useApiQuery } from '../../hooks/useApi'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -14,25 +16,52 @@ interface JwkKey {
   algorithm: string
   key_size: number
   created_at: string
+  retired_at?: string | null
+  revoked_at?: string | null
+}
+
+interface JwksStatus {
+  active_kid: string
+  keys: JwkKey[]
 }
 
 export function AdminJwkKeysPage() {
   useDocumentTitle('JWK Keys')
+  const queryClient = useQueryClient()
   const [revokeKid, setRevokeKid] = useState<string | null>(null)
   const [rotating, setRotating] = useState(false)
 
-  const { data, refetch, isLoading } = useApiQuery<JwkKey[] | { items?: JwkKey[]; keys?: JwkKey[] }>(
+  const { data, isLoading } = useApiQuery<JwkKey[] | { items?: JwkKey[]; keys?: JwkKey[] }>(
     ['admin-jwk-keys'],
     '/api/admin/jwk-keys',
   )
   const keys: JwkKey[] = Array.isArray(data) ? data : (data?.items || data?.keys || [])
+
+  // Public JWKS status (same data clients see via /.well-known/jwks.json).
+  const { data: jwksStatus } = useApiQuery<JwksStatus>(
+    ['jwks-status'],
+    '/oauth2/jwks/status',
+  )
+  const totalKeys = jwksStatus?.keys.length ?? 0
+  // /.well-known/jwks.json publishes active + verifying keys only —
+  // revoked ones disappear from the public set.
+  const publishedKeys = jwksStatus?.keys.filter(k => k.status !== 'revoked').length ?? 0
+
+  // Both views must refresh together after a mutation — the status
+  // endpoint has its own query key and a 5-minute global staleTime,
+  // so refetching only the admin list would leave the card frozen.
+  const refreshAll = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['admin-jwk-keys'] }),
+      queryClient.invalidateQueries({ queryKey: ['jwks-status'] }),
+    ])
 
   const handleRotate = async () => {
     setRotating(true)
     try {
       await api.post('/api/admin/jwk-keys/rotate')
       notify.success('Keys rotated.')
-      await refetch()
+      await refreshAll()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to rotate keys')
     } finally {
@@ -46,7 +75,7 @@ export function AdminJwkKeysPage() {
       await api.post(`/api/admin/jwk-keys/${revokeKid}/revoke`)
       setRevokeKid(null)
       notify.success('Key revoked.')
-      await refetch()
+      await refreshAll()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to revoke key')
     }
@@ -70,6 +99,67 @@ export function AdminJwkKeysPage() {
         }
       />
 
+      {/* ----- Status lifecycle legend ----- */}
+      <div
+        data-testid="jwks-status-legend"
+        className="mb-4 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-text-muted"
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-semantic-success" />
+          <strong className="font-semibold text-text-secondary">Active</strong> signs new
+          tokens
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-semantic-warning" />
+          <strong className="font-semibold text-text-secondary">Verifying</strong> only
+          validates tokens issued before a rotation
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-surface-3" />
+          <strong className="font-semibold text-text-secondary">Revoked</strong> removed
+          from the client-facing JWKS
+        </span>
+      </div>
+
+      {jwksStatus && (
+        <div
+          data-testid="jwks-public-card"
+          className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border border-surface-2 bg-surface-1 px-5 py-4"
+        >
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              Public JWKS
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Active key:{' '}
+              <code data-testid="jwks-active-kid" className="text-xs font-semibold text-text-primary">
+                {jwksStatus.active_kid}
+              </code>
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              Visible to clients
+            </p>
+            <p data-testid="jwks-published-count" className="mt-1 text-sm text-text-secondary">
+              {publishedKeys} of {totalKeys} keys published
+              {totalKeys - publishedKeys > 0 && (
+                <span className="ml-1 text-text-muted">(revoked keys are excluded)</span>
+              )}
+            </p>
+          </div>
+          <a
+            data-testid="jwks-public-link"
+            href={`${API_URL}/.well-known/jwks.json`}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-brand-violet transition-colors hover:bg-brand-violet/5 hover:text-brand-blue"
+          >
+            View /.well-known/jwks.json <ExternalLink size={12} />
+          </a>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
       ) : !keys || keys.length === 0 ? (
@@ -88,6 +178,7 @@ export function AdminJwkKeysPage() {
                 <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Algorithm</th>
                 <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Key Size</th>
                 <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Created</th>
+                <th className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-text-muted uppercase">Retired / Revoked</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
@@ -107,6 +198,13 @@ export function AdminJwkKeysPage() {
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-secondary">{k.algorithm}</td>
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{k.key_size} bit</td>
                   <td className="hidden md:table-cell px-6 py-3 text-sm text-text-muted">{formatDateTime(k.created_at)}</td>
+                  <td className="hidden lg:table-cell px-6 py-3 text-sm text-text-muted">
+                    {k.revoked_at
+                      ? formatDateTime(k.revoked_at)
+                      : k.retired_at
+                        ? formatDateTime(k.retired_at)
+                        : '—'}
+                  </td>
                   <td className="px-6 py-3">
                     {k.status !== 'revoked' && k.status !== 'active' && (
                       <button
