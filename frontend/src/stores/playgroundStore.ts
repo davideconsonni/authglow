@@ -14,6 +14,8 @@ export type PlaygroundFlow =
   | 'device-code'
   | 'token-preview'
   | 'generic'
+  | 'dcr'
+  | 'rp-logout'
 
 export interface PlaygroundState {
   currentFlow: PlaygroundFlow

@@ -33,7 +33,7 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
       Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.
 - [ ] **Fase 4 — Admin Settings schema-driven**
       Usare `GET /api/admin/settings/schema` per generare/validare i campi di `AdminSettingsPage`.
-- [ ] **Fase 5 — Playground: flow DCR + RP-Initiated Logout**
+- [x] **Fase 5 — Playground: flow DCR + RP-Initiated Logout**
       Due nuovi flow component registrati in `components/playground/flows.ts`.
 - [x] **Fase 6 — "Il mio token"**
       Surface di `GET /api/auth/my-token` con il componente `JwtDecoder` esistente (Dashboard o Sessioni).
@@ -72,6 +72,18 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 > `GET /api/auth/my-token` lo fa da echo lato server, il cookie non tocca mai JS). Placeholder
 > "No active access token." quando vuoto. Nuovo `SessionsPage.test.tsx` (4 test: collapsed di
 > default, claims decodificati, re-collapse, placeholder). Verifica: 4/4, tsc/eslint puliti.
+
+> **Note di completamento Fase 5 (2026-08-25)**: due nuovi flow nel Playground.
+> - `DcrFlow.tsx` — RFC 7591/7592: form guidato (nome, redirect URIs) → POST `/oauth2/register`
+>   (client_secret mostrato una sola volta, condiviso con lo store playground per gli altri
+>   flow) → step Manage con PUT update + DELETE autenticati via HTTP Basic → step Deleted.
+> - `RpInitiatedLogoutFlow.tsx` — OIDC RP-Initiated Logout: id_token_hint pre-compilato dallo
+>   store (se un flow precedente ne ha prodotto uno), post_logout_redirect_uri editabile,
+>   URL costruito live con state opaco, avviso che termina la sessione SSO dell'admin,
+>   esecuzione via navigazione reale.
+> Registrazione: union `PlaygroundFlow` + voci FLOWS + case in `AdminPlaygroundPage`.
+> Test nuovi: 5 (DcrFlow ×2, RpInitiatedLogoutFlow ×3). Verifica: 34/34 flow tests,
+> tsc/eslint puliti.
 
 ---
 

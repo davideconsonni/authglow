@@ -15,6 +15,8 @@ import { UserInfoFlow } from '../../components/playground/flows/UserInfoFlow'
 import { DeviceCodeFlow } from '../../components/playground/flows/DeviceCodeFlow'
 import { TokenPreviewFlow } from '../../components/playground/flows/TokenPreviewFlow'
 import { GenericRequestFlow } from '../../components/playground/flows/GenericRequestFlow'
+import { DcrFlow } from '../../components/playground/flows/DcrFlow'
+import { RpInitiatedLogoutFlow } from '../../components/playground/flows/RpInitiatedLogoutFlow'
 
 const FLOW_TITLES: Record<PlaygroundFlow, string> = {
   'authorization-code': 'Authorization Code Flow',
@@ -67,6 +69,8 @@ export function AdminPlaygroundPage() {
       case 'device-code': return <DeviceCodeFlow />
       case 'token-preview': return <TokenPreviewFlow />
       case 'generic': return <GenericRequestFlow />
+case 'dcr': return <DcrFlow />
+case 'rp-logout': return <RpInitiatedLogoutFlow />
     }
   }
 

@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  LogOut,
   Building2,
   Eye,
   Fingerprint,
@@ -11,6 +12,7 @@ import {
   Braces,
   Smartphone,
   Sparkles,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react'
 import type { PlaygroundFlow } from '../../stores/playgroundStore'
@@ -94,5 +96,17 @@ export const FLOWS: FlowDef[] = [
     label: 'Generic Request',
     icon: Braces,
     description: 'Free-form API request builder',
+  },
+  {
+    id: 'dcr',
+    label: 'Dynamic Client Registration',
+    icon: UserPlus,
+    description: 'RFC 7591 - register, update and delete a client via API',
+  },
+  {
+    id: 'rp-logout',
+    label: 'RP-Initiated Logout',
+    icon: LogOut,
+    description: 'OIDC logout initiated by the app with post-login redirect',
   },
 ]
