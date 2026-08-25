@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useApiQuery } from '../hooks/useApi'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { PageHeader } from '../components/layout/PageHeader'
+import { JwtDecoder } from '../components/playground/JwtDecoder'
 import { formatDateTime } from '../lib/utils'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { notify } from '../stores/toastStore'
@@ -20,10 +21,18 @@ export function SessionsPage() {
   useDocumentTitle('Sessions')
   const [revokingAll, setRevokingAll] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
+  const [showToken, setShowToken] = useState(false)
 
   const { data: rawData, refetch, isLoading } = useApiQuery<Session[] | { items?: Session[]; sessions?: Session[]; tokens?: Session[] }>(
     ['my-sessions'],
     '/api/tokens/refresh/list',
+  )
+
+  // Fase 6: decoded claims of the access token this browser is using now.
+  // The httpOnly cookie never reaches JS — the backend echoes the token.
+  const { data: myToken } = useApiQuery<{ access_token?: string }>(
+    ['my-token'],
+    '/api/auth/my-token',
   )
 
   const sessions: Session[] = Array.isArray(rawData) ? rawData : (rawData?.sessions || rawData?.items || rawData?.tokens || [])
@@ -172,6 +181,39 @@ export function SessionsPage() {
           </div>
         </>
       )}
+
+      {/* ----- My current access token (Fase 6) ----- */}
+      <div className="mt-6 rounded-2xl border border-surface-2 bg-surface-1 p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-text-primary">My current access token</h3>
+            <p className="mt-0.5 text-xs text-text-muted">
+              Decoded claims of the token this browser is using right now. The httpOnly cookie
+              never reaches JavaScript — the backend echoes it on request.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowToken(s => !s)}
+            aria-expanded={showToken}
+            data-testid="my-token-toggle"
+            className="shrink-0 rounded-xl border border-surface-2 px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-violet/40 hover:text-brand-violet"
+          >
+            {showToken ? 'Hide' : 'Show claims'}
+          </button>
+        </div>
+        {showToken && (
+          <div className="mt-4" data-testid="my-token-panel">
+            {myToken?.access_token ? (
+              <JwtDecoder response={JSON.stringify(myToken)} />
+            ) : (
+              <p className="rounded-xl border border-surface-2 bg-surface-2/50 p-4 text-xs text-text-muted">
+                No active access token.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       <ConfirmDialog
         open={!!revokeId}

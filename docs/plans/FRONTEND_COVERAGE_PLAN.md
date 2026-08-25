@@ -30,11 +30,12 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 - [x] **Fase 2 — Claim Templates nel UI**
       Menu "Parti da un template" in `TokenClaimsTab` / `ApiKeyClaimsTab` alimentato da `GET /api/admin/claim-templates`.
 - [x] **Fase 3 — Stato pubblico JWKS**
-      Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.- [ ] **Fase 4 — Admin Settings schema-driven**
+      Card "Stato JWKS pubblico" in `AdminJwkKeysPage` alimentata da `GET /oauth2/jwks/status`.
+- [ ] **Fase 4 — Admin Settings schema-driven**
       Usare `GET /api/admin/settings/schema` per generare/validare i campi di `AdminSettingsPage`.
 - [ ] **Fase 5 — Playground: flow DCR + RP-Initiated Logout**
       Due nuovi flow component registrati in `components/playground/flows.ts`.
-- [ ] **Fase 6 — "Il mio token"**
+- [x] **Fase 6 — "Il mio token"**
       Surface di `GET /api/auth/my-token` con il componente `JwtDecoder` esistente (Dashboard o Sessioni).
 - [ ] **Fase 7 — Pulizia endpoint ridondanti**
       Deprecazione/rimozione backend di `/api/password/change`, `GET /api/users`, `GET /api/admin/keys/{id}` (decisione dopo verifica d'uso).
@@ -57,6 +58,20 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 > 5/5 test pagina (nuovo file), suite frontend completa 428+ passed, tsc/eslint puliti.
 > Nota: in demo mode le chiavi NON si azzerrano al riavvio (persistono su disco) — solo gli
 > utenti/dati demo.
+>
+> **Bug backend scoperto dal test manuale dell'utente**: `POST /api/admin/jwk-keys/{kid}/revoke`
+> chiamava `jwt_service.revoke_key(kid)` SENZA `await` — coroutine mai eseguita, revoca
+> silenziosamente no-op (RuntimeWarning + falso 200 + audit di successo fittizio). Fix:
+> `await` in `api/admin.py:1636`; regressione in `tests/unit/test_admin_jwk_revoke.py`
+> (3 test: sorgente anti-regressione, persistenza+audit, 400 su attiva/inesistente).
+> Verificato live sul server demo: revoca ora persiste e la chiave sparisce da jwks.json.
+
+> **Note di completamento Fase 6 (2026-08-25)**: sezione richiudibile "My current access
+> token" in fondo a `SessionsPage` — toggle → `JwtDecoder` (componente playground riusato)
+> decodifica e colora i claim del token httpOnly che il browser sta usando (l'endpoint
+> `GET /api/auth/my-token` lo fa da echo lato server, il cookie non tocca mai JS). Placeholder
+> "No active access token." quando vuoto. Nuovo `SessionsPage.test.tsx` (4 test: collapsed di
+> default, claims decodificati, re-collapse, placeholder). Verifica: 4/4, tsc/eslint puliti.
 
 ---
 
