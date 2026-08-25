@@ -2,14 +2,13 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from authglow.api.auth import _clear_auth_cookies, get_current_user, get_password_validator
+from authglow.api.auth import get_current_user, get_password_validator
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.password_reset import (
     ExpiredPasswordChange,
-    PasswordChange,
     PasswordResetConfirm,
     PasswordResetRequest,
     PasswordResetResponse,
@@ -213,97 +212,6 @@ async def confirm_password_reset(
     )
 
     return {"message": "Password reset successful"}
-
-
-@router.post("/api/password/change")
-@limiter.limit("20/hour")
-async def change_password(
-    request: Request,
-    response: Response,
-    password_change: PasswordChange,
-    current_user: User = Depends(get_current_user),
-    user_storage: UserStorage = Depends(get_user_storage),
-    audit_service: AuditService = Depends(get_audit_service),
-    password_validator: PasswordValidator = Depends(get_password_validator),
-):
-    """Change password for authenticated user.
-
-    Requires current password for verification.  Revokes all existing
-    sessions (access token JTI blacklist + all refresh tokens) so an
-    attacker with a stolen token cannot retain access.
-    """
-    from authglow.core.jwt_singleton import get_jwt_service
-    from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
-
-    settings = get_settings()
-
-    # Verify current password
-    if not await verify_password_async(
-        password_change.current_password, current_user.hashed_password
-    ):
-        await audit_service.log_event(
-            event_type="password_change_failed",
-            user_id=current_user.id,
-            email=current_user.email,
-            metadata={"reason": "incorrect_current_password"},
-            severity="warning",
-            ip_address=request.client.host if request.client else None,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect",
-        )
-
-    # Validate new password strength
-    is_valid, errors = password_validator.validate(password_change.new_password)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="; ".join(errors) if errors else "Password does not meet requirements",
-        )
-
-    # Check if new password is same as current
-    if await verify_password_async(password_change.new_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from current password",
-        )
-
-    # Hash new password
-    hashed_password = await hash_password_async(password_change.new_password)
-
-    # Update user password
-    current_user.hashed_password = hashed_password
-    await user_storage.update_user(current_user)
-
-    # Revoke all sessions: blacklist current access token JTI, revoke all refresh tokens
-    auth_header = request.headers.get("Authorization", "")
-    access_token = auth_header[7:] if auth_header.startswith("Bearer ") else None
-    if not access_token:
-        access_token = request.cookies.get(settings.auth_cookie_access_name)
-    if access_token:
-        jwt_svc = await get_jwt_service()
-        at_data = jwt_svc.decode_token(access_token)
-        if at_data and at_data.jti:
-            await get_blacklist().revoke(at_data.jti, at_data.exp.timestamp())
-
-    from authglow.services.refresh_token import RefreshTokenService
-
-    rt_service = RefreshTokenService()
-    await rt_service.revoke_user_tokens(current_user.id)
-
-    _clear_auth_cookies(response, settings)
-
-    # Log successful change
-    await audit_service.log_event(
-        event_type="password_changed",
-        user_id=current_user.id,
-        email=current_user.email,
-        metadata={"sessions_revoked": True},
-        ip_address=request.client.host if request.client else None,
-    )
-
-    return {"message": "Password changed successfully"}
 
 
 @router.post("/api/auth/expired-password/change")

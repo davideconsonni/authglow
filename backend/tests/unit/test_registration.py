@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from starlette.requests import Request
-from starlette.datastructures import Headers, QueryParams
+
 from authglow.models.user import RegisterUser
 
 
@@ -54,7 +55,12 @@ class TestRegisterEndpointExists:
                     register_methods.add(m)
 
         assert "POST" in register_methods, "POST /api/users route must exist"
-        assert "GET" in register_methods, "GET /api/users route must still exist"
+        # Fase 7 cleanup: the legacy admin-scoped list endpoint was removed
+        # (superseded by GET /api/admin/users). Only the registration POST
+        # may live on this path.
+        assert "GET" not in register_methods, (
+            "GET /api/users was removed — use /api/admin/users instead"
+        )
 
 
 class TestRegisterEndpointLogic:
@@ -70,8 +76,9 @@ class TestRegisterEndpointLogic:
 
     @pytest.mark.asyncio
     async def test_register_disabled_setting(self):
-        from authglow.api.auth import register_user
         from fastapi import HTTPException
+
+        from authglow.api.auth import register_user
 
         self.mock_settings.allow_public_registration = False
         self.mock_validator.validate.return_value = (True, [])
@@ -98,8 +105,9 @@ class TestRegisterEndpointLogic:
 
     @pytest.mark.asyncio
     async def test_register_duplicate_email(self):
-        from authglow.api.auth import register_user
         from fastapi import HTTPException
+
+        from authglow.api.auth import register_user
 
         self.mock_validator.validate.return_value = (True, [])
 
@@ -129,8 +137,9 @@ class TestRegisterEndpointLogic:
 
     @pytest.mark.asyncio
     async def test_register_weak_password(self):
-        from authglow.api.auth import register_user
         from fastapi import HTTPException
+
+        from authglow.api.auth import register_user
 
         self.mock_validator.validate.return_value = (
             False,
@@ -280,10 +289,10 @@ class TestVapt039RegistrationRejectsLongPassword:
         from fastapi import FastAPI
 
         from authglow.api.auth import (
-            router,
-            get_user_storage,
-            get_password_validator,
             get_audit_service,
+            get_password_validator,
+            get_user_storage,
+            router,
         )
 
         app = FastAPI()

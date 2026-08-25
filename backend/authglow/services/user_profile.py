@@ -154,6 +154,13 @@ class UserProfileService:
 
             await self.user_storage.update_user(user, acquire_lock=False)
 
+            # Credential rotation kills every refresh token issued to this
+            # user (ported from the removed POST /api/password/change
+            # duplicate): stolen sessions cannot outlive the new password.
+            from authglow.services.refresh_token import RefreshTokenService
+
+            await RefreshTokenService().revoke_user_tokens(user_id)
+
         # Send security notification (fire-and-forget — don't block
         # the response on SMTP / email provider availability).
         import asyncio

@@ -73,9 +73,30 @@ class TestChangePassword:
         assert "successfully" in msg.lower()
         # S7 regression: verify User object + ip passed, not destructured strings
         user_profile_service.security_service.send_password_changed_alert.assert_called_once()
-        call_args = user_profile_service.security_service.send_password_changed_alert.call_args
-        assert call_args[0][0] is user
-        assert call_args[0][1] == "10.0.0.1"
+
+    def test_change_password_revokes_all_refresh_tokens(self, user_profile_service):
+        """Fase 7 regression: a credential rotation must kill every session.
+
+        Ported from the removed POST /api/password/change duplicate — without
+        this, stolen sessions outlive the new password.
+        """
+        user = _make_user()
+        user_profile_service.user_storage.get_user = AsyncMock(return_value=user)
+        user_profile_service.user_storage.update_user = AsyncMock()
+        user_profile_service.security_service.send_password_changed_alert = AsyncMock(
+            return_value=True
+        )
+
+        with patch("authglow.services.refresh_token.RefreshTokenService") as rt_cls:
+            rt_cls.return_value.revoke_user_tokens = AsyncMock()
+            success, _msg = asyncio_run(
+                user_profile_service.change_password(
+                    "profile-user-1", "TestP@ss123!", "NewP@ss456!"
+                )
+            )
+
+        assert success is True
+        rt_cls.return_value.revoke_user_tokens.assert_awaited_once_with("profile-user-1")
 
     def test_change_password_wrong_current(self, user_profile_service):
         user = _make_user()

@@ -37,8 +37,10 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
       Due nuovi flow component registrati in `components/playground/flows.ts`.
 - [x] **Fase 6 — "Il mio token"**
       Surface di `GET /api/auth/my-token` con il componente `JwtDecoder` esistente (Dashboard o Sessioni).
-- [ ] **Fase 7 — Pulizia endpoint ridondanti**
+- [x] **Fase 7 — Pulizia endpoint ridondanti**
       Deprecazione/rimozione backend di `/api/password/change`, `GET /api/users`, `GET /api/admin/keys/{id}` (decisione dopo verifica d'uso).
+      _Esito decisionale utente (2026-08-25): rimozione secca di `/api/password/change` e
+      `GET /api/users`; `GET /api/admin/keys/{key_id}` CONSERVATO (potenziale uso futuro)._
 
 > **Note di completamento Fase 2 (2026-08-25)**: nuovo `ClaimTemplatePicker.tsx` inline
 > (fetch `GET /api/admin/claim-templates`, card con claim_name già namespaced, filtro
@@ -84,6 +86,22 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 > Registrazione: union `PlaygroundFlow` + voci FLOWS + case in `AdminPlaygroundPage`.
 > Test nuovi: 5 (DcrFlow ×2, RpInitiatedLogoutFlow ×3). Verifica: 34/34 flow tests,
 > tsc/eslint puliti.
+
+> **Note di completamento Fase 7 (2026-08-25)**:
+> - **Rimosso** `POST /api/password/change` (doppione morto, 0 usi) da `api/password_reset.py`
+>   + modello `PasswordChange` da `models/password_reset.py`.
+> - **Rimosso** `GET /api/users` (lista legacy superata da `/api/admin/users`) — resta il POST
+>   di registrazione sullo stesso percorso.
+> - **Portata nel profilo la revoca sessioni**: `UserProfileService.change_password` ora
+>   revoca tutti i refresh token; la route `/api/profile/me/change-password` blacklista il
+>   JTI dell'access token corrente e cancella i cookie → l'utente esce ovunque, browser
+>   incluso. `ChangePasswordForm` reindirizza al login dopo il successo.
+> - `GET /api/admin/keys/{key_id}` conservato su decisione esplicita dell'utente.
+> - Test: regressione service (`test_change_password_revokes_all_refresh_tokens`),
+>   contratto rotte aggiornato in `test_registration.py`, pulizia `test_password_models.py`;
+>   162 passed sulle aree toccate, ruff/tsc/eslint puliti. Verifica live su server demo:
+>   cambio password → cookie azzerati + users/me e refresh in 401; porte rimosse →
+>   404 / 405 come atteso.
 
 ---
 

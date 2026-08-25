@@ -58,18 +58,6 @@ class PasswordResetConfirm(BaseModel):
         return data
 
 
-class PasswordChange(BaseModel):
-    """Change password for authenticated user."""
-
-    current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
-
-    @field_validator("new_password")
-    @classmethod
-    def _vapt039_password_byte_cap(cls, v: str) -> str:
-        return check_password_byte_length(v)
-
-
 class ExpiredPasswordChange(BaseModel):
     """Complete a forced password change for an admin-expired account.
 

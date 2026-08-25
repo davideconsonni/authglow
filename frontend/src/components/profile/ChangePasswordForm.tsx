@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useNavigate } from 'react-router-dom'
 import { Loader2, Eye, EyeOff, Lock } from 'lucide-react'
 import { api } from '../../lib/api'
+import { ROUTES } from '../../lib/constants'
 import { useAuth } from '../../hooks/useAuth'
 
 const changePasswordSchema = z
@@ -27,6 +29,7 @@ type FormData = z.infer<typeof changePasswordSchema>
 
 export function ChangePasswordForm() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -49,6 +52,10 @@ export function ChangePasswordForm() {
       })
       setSuccess(true)
       reset()
+      // The backend revokes every session on password change (including
+      // this browser's cookies) — bounce to login after a short beat so
+      // the success message is actually readable.
+      setTimeout(() => navigate(ROUTES.AUTH.LOGIN, { replace: true }), 1500)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : ''
       setError(message || 'Password change failed')
@@ -62,7 +69,7 @@ export function ChangePasswordForm() {
         <h3 className="text-sm font-semibold text-text-primary">Change Password</h3>
       </div>
 
-      {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">Password changed successfully</div>}
+      {success && <div className="rounded-xl bg-semantic-success/10 px-4 py-2 text-xs text-semantic-success">Password changed. All sessions were revoked — redirecting you to sign in again...</div>}
       {error && <div className="rounded-xl bg-semantic-error/10 px-4 py-2 text-xs text-semantic-error">{error}</div>}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">

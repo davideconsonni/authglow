@@ -2168,16 +2168,6 @@ async def register_user(
     return UserResponse(**user.model_dump())
 
 
-@router.get("/api/users", response_model=list[UserResponse])
-async def list_users(
-    limit: int = 100,
-    offset: int = 0,
-    current_user: User = Depends(get_current_user),
-    storage: UserStorage = Depends(get_user_storage),
-):
-    """List all users (admin only)."""
-    if "admin" not in current_user.scopes:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    users, _ = await storage.list_users(limit=limit, offset=offset)
-    return [UserResponse(**user.model_dump()) for user in users]
+# NOTE: the legacy admin-scoped ``GET /api/users`` list endpoint was removed
+# (Fase 7 cleanup) — ``GET /api/admin/users`` supersedes it with filtering
+# and pagination. The path now 404s like any unknown route.

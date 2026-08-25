@@ -3,7 +3,7 @@ that accepts a NEW password (registration, password change,
 password reset confirm, admin set password).
 
 The cap is intentionally NOT applied to the verify-only password
-fields (``UserLogin.password``, ``PasswordChange.current_password``,
+fields (``UserLogin.password``,
 ``ChangePasswordRequest.current_password``, etc.) so that
 legacy accounts with stored long-password hashes (from the
 pre-fix silent-truncation era) can still authenticate.
@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from authglow.core.password import BCRYPT_MAX_PASSWORD_BYTES
 from authglow.models.admin import SetPasswordRequest
-from authglow.models.password_reset import PasswordChange, PasswordResetConfirm
+from authglow.models.password_reset import PasswordResetConfirm
 from authglow.models.user import RegisterUser, UserCreate
 from authglow.models.user_profile import ChangePasswordRequest
 
@@ -40,10 +40,6 @@ class TestVapt039NewPasswordCap:
                 "new_password",
             ),
             (
-                lambda pw: PasswordChange(current_password="OldP@ss123!", new_password=pw),
-                "new_password",
-            ),
-            (
                 lambda pw: ChangePasswordRequest(current_password="OldP@ss123!", new_password=pw),
                 "new_password",
             ),
@@ -53,7 +49,6 @@ class TestVapt039NewPasswordCap:
             "UserCreate",
             "RegisterUser",
             "PasswordResetConfirm",
-            "PasswordChange",
             "ChangePasswordRequest",
             "SetPasswordRequest",
         ],
@@ -75,10 +70,6 @@ class TestVapt039NewPasswordCap:
                 "new_password",
             ),
             (
-                lambda pw: PasswordChange(current_password="OldP@ss123!", new_password=pw),
-                "new_password",
-            ),
-            (
                 lambda pw: ChangePasswordRequest(current_password="OldP@ss123!", new_password=pw),
                 "new_password",
             ),
@@ -96,7 +87,6 @@ class TestVapt039NewPasswordCap:
             lambda pw: UserCreate(email="a@b.com", password=pw),
             lambda pw: RegisterUser(email="a@b.com", password=pw),
             lambda pw: PasswordResetConfirm(reset_code="ABCD-EFGH-JKMN", new_password=pw),
-            lambda pw: PasswordChange(current_password="OldP@ss123!", new_password=pw),
             lambda pw: ChangePasswordRequest(current_password="OldP@ss123!", new_password=pw),
             lambda pw: SetPasswordRequest(password=pw),
         ],
@@ -135,11 +125,6 @@ class TestVapt039VerifyPasswordFieldsNotCapped:
     def test_change_password_current_uncapped(self):
         long_pw = "A" * 100
         m = ChangePasswordRequest(current_password=long_pw, new_password="NewP@ss123!")
-        assert m.current_password == long_pw
-
-    def test_password_change_current_uncapped(self):
-        long_pw = "A" * 100
-        m = PasswordChange(current_password=long_pw, new_password="NewP@ss123!")
         assert m.current_password == long_pw
 
     def test_change_email_password_uncapped(self):

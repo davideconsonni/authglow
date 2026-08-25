@@ -1,8 +1,10 @@
 """User profile and account management API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from authglow.api.auth import get_current_user
+from authglow.api.auth import _clear_auth_cookies, get_current_user
+from authglow.core.config import get_settings
+from authglow.core.jwt_singleton import get_jwt_service
 from authglow.models.user import User
 from authglow.models.user_profile import (
     ChangeEmailRequest,
@@ -13,6 +15,7 @@ from authglow.models.user_profile import (
     UserProfileResponse,
     UserProfileUpdate,
 )
+from authglow.services.auth.token_blacklist import token_blacklist
 from authglow.services.user_profile import UserProfileService
 
 router = APIRouter(tags=["User Profile"])
@@ -50,9 +53,16 @@ async def update_my_profile(
 async def change_my_password(
     password_request: ChangePasswordRequest,
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
 ):
-    """Change current user's password."""
+    """Change current user's password.
+
+    Session revocation (ported from the removed POST /api/password/change):
+    all refresh tokens are revoked by the service, the current access token
+    JTI is blacklisted, and auth cookies are cleared — the user is signed
+    out everywhere, including this browser.
+    """
     profile_service = UserProfileService()
 
     ip_address = request.client.host if request.client else None
@@ -67,7 +77,16 @@ async def change_my_password(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
-    return {"message": message}
+    settings = get_settings()
+    access_token = request.cookies.get(settings.auth_cookie_access_name)
+    if access_token:
+        jwt_service = await get_jwt_service()
+        token_data = jwt_service.decode_token(access_token)
+        if token_data and token_data.jti:
+            await token_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
+    _clear_auth_cookies(response, settings)
+
+    return {"message": "Password changed. Please sign in again with your new password."}
 
 
 @router.post("/api/profile/me/change-email")
