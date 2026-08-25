@@ -25,6 +25,7 @@ from authglow.api.meta import router as meta_router
 from authglow.api.mfa import router as mfa_router
 from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 from authglow.api.oauth_client import router as oauth_client_router
+from authglow.api.oauth_errors import register_oauth2_error_handler
 from authglow.api.oauth_consent_handler import router as consent_router
 from authglow.api.oidc import router as oidc_router
 from authglow.api.passkey import router as passkey_router
@@ -107,6 +108,11 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+
+# RFC 6749 §5.2: protocol endpoints answer with a top-level
+# {"error": ..., "error_description": ...} body instead of FastAPI's
+# default {"detail": ...} envelope.
+register_oauth2_error_handler(app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -349,11 +349,20 @@ class UserService:
         hashed_password: str,
         require_change: bool = False,
     ) -> Optional[User]:
-        """Set a new password for a user."""
+        """Set a new password for a user.
+
+        Invalidates BOTH caches (by-id and by-email). The login flow
+        resolves users through ``get_user_by_email``, so a stale
+        email-keyed entry would keep verifying credentials against the OLD
+        hash (and report the OLD ``password_expired`` flag) until the TTL
+        expires — an infinite forced-change loop.
+        """
         async with self._lock(f"user:{user_id}"):
             result = await self._user_repo.set_password(user_id, hashed_password, require_change)
-            await user_by_id_cache.delete(self._user_cache_key(user_id))
-            return result
+        if result is not None:
+            await user_cache.delete(self._email_cache_key(result.email))
+        await user_by_id_cache.delete(self._user_cache_key(user_id))
+        return result
 
     async def verify_and_maybe_rehash_password(
         self, user: User, plain_password: str

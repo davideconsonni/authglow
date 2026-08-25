@@ -70,6 +70,24 @@ class PasswordChange(BaseModel):
         return check_password_byte_length(v)
 
 
+class ExpiredPasswordChange(BaseModel):
+    """Complete a forced password change for an admin-expired account.
+
+    Reached when ``POST /api/oauth2/authorize`` returns
+    ``{"password_expired": true}``: the credentials were verified there, but
+    no session or authorization code is issued until the password is rotated.
+    """
+
+    email: EmailStr
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _vapt039_password_byte_cap(cls, v: str) -> str:
+        return check_password_byte_length(v)
+
+
 class PasswordResetResponse(BaseModel):
     """Response after initiating password reset."""
 

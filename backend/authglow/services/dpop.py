@@ -142,15 +142,23 @@ async def replay_protect_dpop_jti(jti: str, ttl: int) -> bool:
 
 
 def _dpop_error(code: str, description: str) -> HTTPException:
-    return HTTPException(
+    from authglow.api.oauth_errors import INVALID_REQUEST, OAuth2Error
+
+    return OAuth2Error(
+        INVALID_REQUEST,
+        description,
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={
-            "error": "invalid_dpop_proof",
-            "error_description": description,
-            "error_code": code,
-        },
+        error_code=code,
         headers={"WWW-Authenticate": 'DPoP error="invalid_dpop_proof"'},
     )
+
+
+def _normalize_htu(url: str) -> str:
+    """Strip query and fragment from an ``htu`` URI (RFC 9449 §4.2)."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
 def _public_key_from_jwk(jwk: Dict[str, Any]) -> Any:
@@ -251,7 +259,10 @@ async def verify_dpop_proof(
             "htm_mismatch",
             f"DPoP proof htm must be {expected_htm!r}, got {htm!r}",
         )
-    if htu != expected_htu:
+    if _normalize_htu(htu or "") != _normalize_htu(expected_htu):
+        # A6 / RFC 9449 §4.2: htu is compared WITHOUT query and
+        # fragment components, so a resource request carrying query
+        # parameters does not break proof validation.
         raise _dpop_error(
             "htu_mismatch",
             f"DPoP proof htu must be {expected_htu!r}, got {htu!r}",

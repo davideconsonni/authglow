@@ -8,6 +8,7 @@ from authglow.api.auth import _clear_auth_cookies, get_current_user, get_passwor
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.password_reset import (
+    ExpiredPasswordChange,
     PasswordChange,
     PasswordResetConfirm,
     PasswordResetRequest,
@@ -303,6 +304,74 @@ async def change_password(
     )
 
     return {"message": "Password changed successfully"}
+
+
+@router.post("/api/auth/expired-password/change")
+@limiter.limit("5/minute")
+async def change_expired_password(
+    request: Request,
+    payload: ExpiredPasswordChange,
+    storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
+    password_validator: PasswordValidator = Depends(get_password_validator),
+):
+    """Complete a forced password change for an admin-expired account.
+
+    Reached when ``POST /api/oauth2/authorize`` returns
+    ``{"password_expired": true}``. Re-verifies the current password (the
+    caller never holds a session), applies the same strength policy as every
+    other password setter, and clears the ``password_expired`` flag via
+    ``set_password(require_change=False)``.
+    """
+    user = await storage.get_user_by_email(payload.email)
+    if (
+        user is None
+        or not user.is_active
+        or not await verify_password_async(payload.current_password, user.hashed_password)
+    ):
+        await audit_service.log_event(
+            event_type="expired_password_change_failed",
+            email=payload.email,
+            metadata={"reason": "invalid_credentials"},
+            severity="warning",
+            ip_address=request.client.host if request.client else None,
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not user.password_expired:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password change is not required for this account",
+        )
+
+    is_valid, errors = password_validator.validate(payload.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(errors) if errors else "Password does not meet requirements",
+        )
+
+    if await verify_password_async(payload.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password",
+        )
+
+    hashed_password = await hash_password_async(payload.new_password)
+
+    # set_password acquires the per-user lock and resets the expiry flag
+    # (``password_expired = require_change``) plus ``password_changed_at``.
+    await storage.set_password(user.id, hashed_password, require_change=False)
+
+    await audit_service.log_event(
+        event_type="password_changed_after_expiry",
+        user_id=user.id,
+        email=user.email,
+        metadata={},
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {"message": "Password changed successfully. You can now sign in."}
 
 
 # Admin endpoints

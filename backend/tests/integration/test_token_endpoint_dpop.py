@@ -135,6 +135,9 @@ def _build_app_and_client(*, dpop_bound: bool, jwt_key_ciphertext: str = None):
 
     app = FastAPI()
     app.include_router(auth_router)
+    from authglow.api.oauth_errors import register_oauth2_error_handler
+
+    register_oauth2_error_handler(app)
     return app, storage, jwt_service, oauth2_service, refresh_token_service, audit_service, client
 
 
@@ -209,7 +212,8 @@ class TestDpopBoundAuthorizationCode:
             )
         assert res.status_code == 400, res.text
         body = res.json()
-        assert body["detail"]["error_code"] == "missing_dpop_proof"
+        assert body["error"] == "invalid_request"
+        assert body["error_code"] == "missing_dpop_proof"
 
     def test_valid_proof_returns_dpop_token_type(self, test_settings):
         app, storage, jwt_svc, oauth2_svc, rt_svc, audit, client = _build_app_and_client(
@@ -241,9 +245,8 @@ class TestDpopBoundAuthorizationCode:
         # that the DPoP proof WAS accepted (no 400
         # ``missing_dpop_proof``).
         if res.status_code == 400:
-            detail = res.json().get("detail")
-            if isinstance(detail, dict):
-                assert detail.get("error_code") != "missing_dpop_proof", res.text
+            body = res.json()
+            assert body.get("error_code") != "missing_dpop_proof", res.text
         # DPoP legacy path (verify_client with secret) was not
         # touched — DPoP proof bypasses it.
         oauth2_svc.verify_client.assert_called()
@@ -274,8 +277,8 @@ class TestDpopBoundAuthorizationCode:
                 headers={"DPoP": proof},
             )
         assert res.status_code == 401, res.text
-        detail = res.json()["detail"]
-        assert detail.get("error_code") == "htm_mismatch"
+        body = res.json()
+        assert body["error_code"] == "htm_mismatch"
 
 
 # ---------------------------------------------------------------------------

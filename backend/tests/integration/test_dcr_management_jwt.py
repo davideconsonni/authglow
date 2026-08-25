@@ -83,6 +83,9 @@ def _build_app_and_client(
 
     app = FastAPI()
     app.include_router(router)
+    from authglow.api.oauth_errors import register_oauth2_error_handler
+
+    register_oauth2_error_handler(app)
     return app, storage, audit, client
 
 
@@ -229,7 +232,7 @@ class TestDcrManagementBearer:
                 headers={"Authorization": f"Bearer {token}"},
             )
         assert res.status_code == 401, res.text
-        assert res.json()["detail"]["error_code"] in (
+        assert res.json()["error_code"] in (
             "invalid_token",
             "missing_key",
         )

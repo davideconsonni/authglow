@@ -12,6 +12,7 @@ export const ROUTES = {
     RESET_PASSWORD: '/auth/reset-password',
     MFA_VERIFY: '/auth/mfa-verify',
     VERIFY_EMAIL: '/auth/verify-email',
+    PASSWORD_EXPIRED: '/auth/password-expired',
   },
   OAUTH_AUTHORIZE: '/oauth2/authorize',
   OAUTH_DEVICE_VERIFY: '/oauth2/device/verify',

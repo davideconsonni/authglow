@@ -33,6 +33,9 @@ def _revoke_app():
 
     app = FastAPI()
     app.include_router(router)
+    from authglow.api.oauth_errors import register_oauth2_error_handler
+
+    register_oauth2_error_handler(app)
 
     mock_rt_svc = MagicMock()
     mock_rt_svc.get_refresh_token = AsyncMock(return_value=None)
@@ -137,6 +140,7 @@ class TestRevokeEndpoint:
             exp=future,
             iat=utcnow(),
             jti="test-jti-revoke-001",
+            aud="test-client",
         )
         _revoke_app._mock_jwt_svc.decode_token = MagicMock(return_value=mock_token_data)
 
@@ -186,6 +190,40 @@ class TestRevokeEndpoint:
         assert response.status_code == 200
         assert response.json() == {}
 
+    def test_revoke_cross_client_access_token_noop(self, _revoke_app):
+        """A client MUST NOT revoke an access token whose aud is another client."""
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.models.token import TokenData
+        from authglow.services.auth.token_blacklist import token_blacklist
+
+        future = utcnow() + timedelta(minutes=30)
+        mock_token_data = TokenData(
+            sub="user-1",
+            email="user-1@example.com",
+            scopes=["openid"],
+            exp=future,
+            iat=utcnow(),
+            jti="cross-client-at-jti",
+            aud="victim-client",
+        )
+        _revoke_app._mock_jwt_svc.decode_token = MagicMock(return_value=mock_token_data)
+
+        response = _revoke_app.post(
+            "/oauth2/revoke",
+            data={
+                "token": "victim-access-token",
+                "token_type_hint": "access_token",
+                "client_id": "test-client",
+                "client_secret": "test-secret",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {}
+        assert not token_blacklist().is_revoked("cross-client-at-jti")
+
     def test_revoke_with_client_credentials(self, _revoke_app):
         mock_rt = _make_refresh_token()
         _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
@@ -206,7 +244,8 @@ class TestRevokeEndpoint:
         )
         _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
 
-    def test_revoke_with_invalid_client_returns_200(self, _revoke_app):
+    def test_revoke_with_invalid_client_returns_401(self, _revoke_app):
+        """RFC 7009 §2.1: bad client credentials → RFC 6749 §5.2 invalid_client."""
         mock_rt = _make_refresh_token()
         _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
         _revoke_app._mock_oauth2_svc.verify_client = AsyncMock(return_value=False)
@@ -220,8 +259,9 @@ class TestRevokeEndpoint:
             },
         )
 
-        assert response.status_code == 200
-        assert response.json() == {}
+        assert response.status_code == 401
+        body = response.json()
+        assert body["error"] == "invalid_client"
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
             "invalid-client", "invalid-secret"
         )
@@ -248,7 +288,8 @@ class TestRevokeEndpoint:
         response = _revoke_app.post("/oauth2/revoke", data={})
         assert response.status_code == 422
 
-    def test_revoke_without_credentials_noops(self, _revoke_app):
+    def test_revoke_without_credentials_returns_401(self, _revoke_app):
+        """RFC 7009 §2.1: missing client credentials → invalid_client (401)."""
         mock_rt = _make_refresh_token()
         _revoke_app._mock_rt_svc.get_refresh_token = AsyncMock(return_value=mock_rt)
         _revoke_app._mock_rt_svc.revoke_token = AsyncMock(return_value=True)
@@ -258,8 +299,8 @@ class TestRevokeEndpoint:
             data={"token": "refresh-token-value"},
         )
 
-        assert response.status_code == 200
-        assert response.json() == {}
+        assert response.status_code == 401
+        assert response.json()["error"] == "invalid_client"
         _revoke_app._mock_rt_svc.get_refresh_token.assert_not_awaited()
         _revoke_app._mock_rt_svc.revoke_token.assert_not_awaited()
 
@@ -388,6 +429,9 @@ class TestTokenBlacklist:
 
         app = FastAPI()
         app.include_router(router)
+        from authglow.api.oauth_errors import register_oauth2_error_handler
+
+        register_oauth2_error_handler(app)
 
         future = utcnow() + timedelta(minutes=30)
         mock_token_data = TokenData(
@@ -466,9 +510,13 @@ class TestTokenBlacklist:
             get_refresh_token_service,
             router,
         )
+        from authglow.core.config import get_settings
 
         app = FastAPI()
         app.include_router(router)
+        from authglow.api.oauth_errors import register_oauth2_error_handler
+
+        register_oauth2_error_handler(app)
 
         mock_rt_svc = MagicMock()
         mock_rt_svc.get_refresh_token = AsyncMock(return_value=None)
@@ -487,7 +535,9 @@ class TestTokenBlacklist:
         resp = client.post(
             "/oauth2/revoke",
             data={"token": real_token, "token_type_hint": "access_token"},
-            auth=("test-client", "test-secret"),
+            # Legacy internal tokens (no ``aud``) may only be revoked by
+            # the configured first-party client.
+            auth=(get_settings().oauth2_client_id, "unused-mock"),
         )
 
         assert resp.status_code == 200
@@ -525,9 +575,13 @@ class TestTokenBlacklist:
             get_refresh_token_service,
             router,
         )
+        from authglow.core.config import get_settings
 
         app = FastAPI()
         app.include_router(router)
+        from authglow.api.oauth_errors import register_oauth2_error_handler
+
+        register_oauth2_error_handler(app)
 
         mock_rt_svc = MagicMock()
         mock_rt_svc.get_refresh_token = AsyncMock(return_value=None)
@@ -546,7 +600,9 @@ class TestTokenBlacklist:
         resp = client.post(
             "/oauth2/revoke",
             data={"token": real_token, "token_type_hint": "access_token"},
-            auth=("test-client", "test-secret"),
+            # Legacy internal tokens (no ``aud``) may only be revoked by
+            # the configured first-party client.
+            auth=(get_settings().oauth2_client_id, "unused-mock"),
         )
 
         assert resp.status_code == 200

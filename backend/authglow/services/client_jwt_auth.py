@@ -295,14 +295,14 @@ def verify_private_key_jwt(jwt_str: str, public_jwk: Dict[str, Any]) -> Dict[str
 
 
 def _client_jwt_error(code: str, description: str) -> HTTPException:
-    """Build a 401 ``HTTPException`` with the standard OAuth2 error shape."""
-    return HTTPException(
+    """Build a 401 ``invalid_client`` RFC 6749 §5.2 protocol error."""
+    from authglow.api.oauth_errors import INVALID_CLIENT, OAuth2Error
+
+    return OAuth2Error(
+        INVALID_CLIENT,
+        description,
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={
-            "error": "invalid_client",
-            "error_description": description,
-            "error_code": code,
-        },
+        error_code=code,
         headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
     )
 

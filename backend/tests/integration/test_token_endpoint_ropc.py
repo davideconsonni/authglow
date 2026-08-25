@@ -62,7 +62,7 @@ class TestROPCRejection:
         assert resp.status_code == 400, (
             f"ROPC must be rejected with 400, got {resp.status_code}: {resp.text}"
         )
-        assert "grant_type" in resp.json()["detail"].lower()
+        assert resp.json()["error"] == "unsupported_grant_type"
 
     def test_unknown_grant_type_rejected(self, client):
         """Sanity check: a totally unknown grant_type is also rejected.
@@ -76,7 +76,7 @@ class TestROPCRejection:
             data={"grant_type": "totally-not-a-real-grant"},
         )
         assert resp.status_code == 400
-        assert "grant_type" in resp.json()["detail"].lower()
+        assert resp.json()["error"] == "unsupported_grant_type"
 
     def test_password_grant_no_token_leaked(self, client):
         """CONFORMANCE T.1: an ROPC attempt must NOT return a token.

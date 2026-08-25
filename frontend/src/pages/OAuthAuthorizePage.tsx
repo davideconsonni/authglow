@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Shield, Loader2, LogIn } from 'lucide-react'
 import { api } from '../lib/api'
+import { ROUTES } from '../lib/constants'
 import { useAuth } from '../hooks/useAuth'
 import { useDemoMeta } from '../hooks/useDemoMeta'
 import { ConsentScreen } from '../components/oauth/ConsentScreen'
@@ -25,6 +26,8 @@ interface AuthorizeResponse {
   consent_required?: boolean
   session_token?: string
   mfa_required?: string
+  password_expired?: boolean
+  email?: string
   client_name?: string
   client_description?: string | null
   client_logo_uri?: string | null
@@ -206,6 +209,7 @@ const NEUTRAL_CSS = `
 
 export function OAuthAuthorizePage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
   const [phase, setPhase] = useState<Phase>('loading')
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null)
@@ -380,6 +384,11 @@ export function OAuthAuthorizePage() {
       }
       if (data.mfa_required) {
         window.location.href = `/auth/mfa-verify?session_token=${encodeURIComponent(data.session_token || '')}&oauth=1`
+        return
+      }
+      if (data.password_expired) {
+        // Forced credential rotation: route to the change-password screen.
+        navigate(ROUTES.AUTH.PASSWORD_EXPIRED, { state: { email } })
         return
       }
     } catch (err: unknown) {

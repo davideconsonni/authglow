@@ -2,16 +2,26 @@
 
 import base64
 import hashlib
+import inspect
 import re
 from datetime import timedelta
 from typing import Annotated, Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 
 import jwt
 import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
 
+from authglow.api.oauth_errors import (
+    INVALID_CLIENT,
+    INVALID_GRANT,
+    INVALID_REQUEST,
+    INVALID_SCOPE,
+    UNAUTHORIZED_CLIENT,
+    UNSUPPORTED_GRANT_TYPE,
+    OAuth2Error,
+)
 from authglow.core.config import Settings, get_settings
 from authglow.core.crypto import decrypt_totp_secret
 from authglow.core.datetime import utcnow
@@ -131,7 +141,10 @@ def _extract_basic_auth(request: Request) -> Tuple[Optional[str], Optional[str]]
         if ":" not in decoded:
             return None, None
         cid, csec = decoded.split(":", 1)
-        return cid, csec
+        # RFC 6749 §2.3.1: client_id and client_secret are
+        # ``application/x-www-form-urlencoded`` before being combined
+        # into the Basic credentials — decode both sides before use.
+        return unquote(cid), unquote(csec)
     except Exception:
         return None, None
 
@@ -210,6 +223,62 @@ def _build_oauth_redirect(redirect_uri: str, **parameters: Optional[str]) -> str
     return f"{redirect_uri}{separator}{urlencode(values)}"
 
 
+def _oauth_error_redirect(
+    redirect_uri: str,
+    error: str,
+    description: Optional[str] = None,
+    state: Optional[str] = None,
+):
+    """RFC 6749 §4.1.2.1 error redirect (302 with ``error`` params).
+
+    Used once ``client_id`` + ``redirect_uri`` are validated — every
+    later authorization-request failure MUST be reported by
+    redirecting back to the client rather than a bare JSON 400.
+    A tainted/absent ``state`` is simply not echoed.
+    """
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(
+        url=_build_oauth_redirect(
+            redirect_uri,
+            error=error,
+            error_description=description,
+            state=state,
+        ),
+        status_code=302,
+    )
+
+
+async def _enforce_grant_allowed(
+    oauth2_service: OAuth2Service,
+    *,
+    client_id: str,
+    grant_type: str,
+) -> None:
+    """RFC 6749 §5.2 ``unauthorized_client`` guard (workstream A4).
+
+    A registered client may only exercise the grant types listed in
+    its ``grant_types`` registration. The check existed in
+    :meth:`OAuth2Service.verify_grant_type` but was never invoked from
+    production code, so any active client could mint tokens through
+    any supported grant.     A registration that does not include the grant raises the §5.2
+    ``unauthorized_client`` protocol error.
+    """
+    # ``inspect.isawaitable`` mirrors the MagicMock-tolerant pattern used
+    # by ``_require_dpop_proof_if_bound``: unit-test doubles often stub
+    # ``verify_grant_type`` with a plain MagicMock (sync, truthy).
+    result = oauth2_service.verify_grant_type(client_id, grant_type)
+    if inspect.isawaitable(result):
+        result = await result
+    if result:
+        return
+    raise OAuth2Error(
+        UNAUTHORIZED_CLIENT,
+        f"Client is not authorized to use the {grant_type} grant",
+        status_code=400,
+    )
+
+
 async def _require_dpop_proof_if_bound(
     request: Request,
     client: OAuth2Client,
@@ -239,16 +308,12 @@ async def _require_dpop_proof_if_bound(
 
     proof = extract_dpop_proof(request)
     if not proof:
-        raise HTTPException(
+        raise OAuth2Error(
+            INVALID_REQUEST,
+            "DPoP proof is required for this client "
+            "(token_endpoint_auth_method is DPoP-bound).",
             status_code=400,
-            detail={
-                "error": "invalid_request",
-                "error_description": (
-                    "DPoP proof is required for this client "
-                    "(token_endpoint_auth_method is DPoP-bound)."
-                ),
-                "error_code": "missing_dpop_proof",
-            },
+            error_code="missing_dpop_proof",
             headers={"WWW-Authenticate": 'DPoP algs="ES256"'},
         )
 
@@ -266,9 +331,11 @@ async def _require_dpop_proof_if_bound(
     if not jwk:
         # Should not happen — verify_dpop_proof already enforces
         # the jwk header — defensive fallback.
-        raise HTTPException(
+        raise OAuth2Error(
+            INVALID_REQUEST,
+            "DPoP proof is missing the jwk header.",
             status_code=401,
-            detail={"error": "invalid_dpop_proof", "error_code": "missing_jwk"},
+            error_code="missing_jwk",
         )
     return build_cnf_claim(jwk)
 
@@ -291,10 +358,10 @@ async def _authenticate_client_at_token_endpoint(
     legacy secret-based path (``oauth2_service.verify_client``).
 
     For the legacy path the helper preserves the pre-T.2 error
-    contract: a confidential client with a missing secret is
-    rejected with ``401 "Client authentication required for
-    confidential clients"`` and a public client with a bad
-    ``client_id`` is rejected with ``400 "Invalid client_id"``.
+    contract, expressed as RFC 6749 §5.2 bodies: a confidential
+    client with a missing secret is rejected with
+    ``invalid_client`` (401) and a public client with a bad
+    ``client_id`` is rejected with ``invalid_client`` (400).
 
     Returns the authenticated :class:`OAuth2Client` when one can be
     located, otherwise ``None``. The caller is responsible for the
@@ -306,12 +373,13 @@ async def _authenticate_client_at_token_endpoint(
     if client_assertion_type or client_assertion:
         if not resolved_client_id:
             # JWT-Bearer needs a registered client to find the key.
-            raise HTTPException(status_code=400, detail="Missing client_id")
+            raise OAuth2Error(INVALID_REQUEST, "Missing client_id", status_code=400)
         client = await oauth2_service.client_storage.get_client(resolved_client_id)
         if not client or not client.is_active:
-            raise HTTPException(
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication failed (unknown or inactive client).",
                 status_code=401,
-                detail="Client authentication failed (unknown or inactive client).",
             )
         from authglow.services.client_jwt_auth import (
             verify_client_assertion,
@@ -346,16 +414,17 @@ async def _authenticate_client_at_token_endpoint(
 
     if is_confidential:
         if not resolved_client_secret:
-            raise HTTPException(
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication required for confidential clients",
                 status_code=401,
-                detail="Client authentication required for confidential clients",
                 headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
             )
         if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-            raise HTTPException(status_code=401, detail="Invalid client credentials")
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
     else:
         if not await oauth2_service.verify_client(resolved_client_id):
-            raise HTTPException(status_code=400, detail="Invalid client_id")
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client_id", status_code=400)
     return client
 
 
@@ -538,6 +607,10 @@ async def authorize_post(
     password: Optional[str] = Form(None),
     client_id: str = Form(...),
     redirect_uri: str = Form(...),
+    # A5: ``response_type`` was historically not accepted at all — the
+    # SPA validated it client-side, so direct API calls could skip
+    # implicit-rejection. It is now a first-class server-side param.
+    response_type: Optional[str] = Form(None),
     scope: str = Form("read"),
     state: Optional[str] = Form(None),
     code_challenge: Optional[str] = Form(None),
@@ -583,6 +656,22 @@ async def authorize_post(
 
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
+    # A5 / RFC 6749 §4.1.2.1 + OIDC Core §3.1.2.1: with client_id and
+    # redirect_uri validated, further request errors are reported by
+    # redirecting back with ``error``/``error_description``.
+    # An ABSENT ``response_type`` defaults to ``code`` — the first-party
+    # SPA form contract predates the parameter; any explicit non-``code``
+    # value (implicit, hybrid) is rejected server-side.
+    if response_type and response_type != "code":
+        return _oauth_error_redirect(
+            redirect_uri,
+            error="unsupported_response_type",
+            description=(
+                "Only the 'code' response_type is supported (implicit flow disabled)."
+            ),
+            state=_validate_state(state),
+        )
 
     # VAPT-044: validate the ``state`` parameter. A short or
     # predictable state loses CSRF protection on the
@@ -696,6 +785,26 @@ async def authorize_post(
                 status_code=status.HTTP_423_LOCKED,
                 detail=f"Account suspended until {user.suspended_until.isoformat()}",
             )
+        # A3 / OIDC Core §3.1.2.1: ``prompt=none`` permits NO
+        # interaction — including the consent screen. A code may only
+        # be minted silently when the client does not require consent
+        # or a covering consent is already on record; otherwise the
+        # request fails with ``error=consent_required``.
+        if client.require_consent:
+            from authglow.services.oauth_consent import OAuth2ConsentService
+
+            has_consent, _ = await OAuth2ConsentService().check_consent(
+                user_id=user.id,
+                client_id=client_id,
+                required_scopes=validated_scope.split() if validated_scope else ["read"],
+            )
+            if not has_consent:
+                return _oauth_error_redirect(
+                    redirect_uri,
+                    error="consent_required",
+                    description="Consent has not been granted for this client and scope",
+                    state=state,
+                )
         auth_code = await oauth2_service.create_authorization_code(
             client_id=client_id,
             user_id=user.id,
@@ -806,6 +915,15 @@ async def authorize_post(
                 status_code=status.HTTP_423_LOCKED,
                 detail=f"Account suspended until {user.suspended_until.isoformat()}",
             )
+
+        # Forced credential rotation: an admin-flagged expired password must
+        # complete a password change before any session or authorization code
+        # is issued. The credentials were verified above, so this is NOT a
+        # failed login — return early without ``record_login``,
+        # ``update_last_login``, an MFA challenge, or an auth code. The SPA
+        # routes to the forced-change screen on this response shape.
+        if user.password_expired:
+            return {"password_expired": True, "email": user.email}
 
         from authglow.services.login_history import LoginHistoryService
 
@@ -945,6 +1063,7 @@ async def first_party_oidc_config():
 
 
 @router.post("/oauth2/token", response_model=Token)
+@limiter.limit("30/minute")
 async def token_endpoint(
     request: Request,
     response: Response,
@@ -978,11 +1097,15 @@ async def token_endpoint(
     if grant_type == "authorization_code":
         # Validate authorization code
         if not code or not redirect_uri:
-            raise HTTPException(status_code=400, detail="Missing required parameters")
+            raise OAuth2Error(INVALID_REQUEST, "Missing required parameters", status_code=400)
 
         auth_code = await oauth2_service.get_authorization_code(code)
         if not auth_code:
-            raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
+            raise OAuth2Error(
+                INVALID_GRANT,
+                "Invalid or expired authorization code",
+                status_code=400,
+            )
 
         # --- Client Authentication (RFC 6749 Section 4.1.3) ---
         # Extract client credentials from HTTP Basic Auth (client_secret_basic)
@@ -994,10 +1117,10 @@ async def token_endpoint(
 
         # client_id is required and must match the authorization code
         if not resolved_client_id:
-            raise HTTPException(status_code=400, detail="Missing client_id")
+            raise OAuth2Error(INVALID_REQUEST, "Missing client_id", status_code=400)
 
         if resolved_client_id != auth_code.client_id:
-            raise HTTPException(status_code=400, detail="Client ID mismatch")
+            raise OAuth2Error(INVALID_GRANT, "Client ID mismatch", status_code=400)
 
         # T.2: when client_assertion is present, the helper routes to
         # the JWT-Bearer verifier (HS256 or RS256 depending on the
@@ -1019,13 +1142,21 @@ async def token_endpoint(
             if stored:
                 is_confidential = stored.is_confidential
             if is_confidential:
-                raise HTTPException(
+                raise OAuth2Error(
+                    INVALID_CLIENT,
+                    "Client authentication required for confidential clients",
                     status_code=401,
-                    detail="Client authentication required for confidential clients",
                     headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
                 )
-            raise HTTPException(status_code=400, detail="Invalid client_id")
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client_id", status_code=400)
         # --- End Client Authentication ---
+
+        # A4: the client must be registered for the authorization_code grant.
+        await _enforce_grant_allowed(
+            oauth2_service,
+            client_id=resolved_client_id,
+            grant_type="authorization_code",
+        )
 
         # T.3: DPoP-bound clients must supply a fresh DPoP proof
         # JWT. The check sits between client authentication and
@@ -1035,12 +1166,16 @@ async def token_endpoint(
         dpop_cnf = await _require_dpop_proof_if_bound(request, oauth_client, "POST")
 
         if auth_code.redirect_uri != redirect_uri:
-            raise HTTPException(status_code=400, detail="Redirect URI mismatch")
+            raise OAuth2Error(INVALID_GRANT, "Redirect URI mismatch", status_code=400)
 
         # --- PKCE Validation ---
         if auth_code.code_challenge:
             if not code_verifier:
-                raise HTTPException(status_code=400, detail="Missing code_verifier for PKCE flow")
+                raise OAuth2Error(
+                    INVALID_REQUEST,
+                    "Missing code_verifier for PKCE flow",
+                    status_code=400,
+                )
 
             # Validate S256 method
             if auth_code.code_challenge_method == "S256":
@@ -1050,14 +1185,19 @@ async def token_endpoint(
                 )
             else:
                 # Per RFC 7636, plain is not recommended. We only support S256.
-                raise HTTPException(status_code=400, detail="Unsupported code_challenge_method")
+                raise OAuth2Error(
+                    INVALID_REQUEST,
+                    "Unsupported code_challenge_method",
+                    status_code=400,
+                )
 
             if recreated_challenge != auth_code.code_challenge:
-                raise HTTPException(status_code=401, detail="Invalid code_verifier")
+                raise OAuth2Error(INVALID_GRANT, "Invalid code_verifier", status_code=401)
         else:
-            raise HTTPException(
+            raise OAuth2Error(
+                INVALID_REQUEST,
+                "PKCE is required for all clients (RFC 7636, Security BCP).",
                 status_code=400,
-                detail="PKCE is required for all clients (RFC 7636, Security BCP).",
             )
         # --- End PKCE Validation ---
 
@@ -1067,7 +1207,7 @@ async def token_endpoint(
         # Get user
         user = await storage.get_user(auth_code.user_id)
         if not user:
-            raise HTTPException(status_code=400, detail="User not found")
+            raise OAuth2Error(INVALID_GRANT, "User not found", status_code=400)
 
         # Parse and process scopes from the authorization code
         requested_scopes = auth_code.scope.split() if auth_code.scope else []
@@ -1077,7 +1217,7 @@ async def token_endpoint(
                 auth_code.client_id, requested_scopes
             )
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid scope")
+            raise OAuth2Error(INVALID_SCOPE, "Invalid scope", status_code=400)
 
         # Final check: ensure the user has the scopes that were approved and are valid for the client
         # OIDC standard scopes (openid, profile, email, phone, address) are always allowed
@@ -1240,7 +1380,7 @@ async def token_endpoint(
         resolved_client_secret = client_secret or basic_client_secret
 
         if not resolved_client_id:
-            raise HTTPException(status_code=400, detail="Missing client credentials")
+            raise OAuth2Error(INVALID_CLIENT, "Missing client credentials", status_code=400)
 
         # T.2: JWT-Bearer auth is acceptable for client_credentials
         # (FAPI 2.0 §5.2.2) when ``client_assertion`` is supplied.
@@ -1256,12 +1396,21 @@ async def token_endpoint(
                 client_assertion=client_assertion,
             )
             if not oauth_client:
-                raise HTTPException(status_code=401, detail="Invalid client credentials")
+                raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
         else:
             if not resolved_client_secret:
-                raise HTTPException(status_code=400, detail="Missing client credentials")
+                raise OAuth2Error(
+                    INVALID_CLIENT, "Missing client credentials", status_code=400
+                )
             if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-                raise HTTPException(status_code=401, detail="Invalid client credentials")
+                raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
+
+        # A4: the client must be registered for the client_credentials grant.
+        await _enforce_grant_allowed(
+            oauth2_service,
+            client_id=resolved_client_id,
+            grant_type="client_credentials",
+        )
 
         # Process and validate scopes
         requested_scopes = scope.split() if scope else []
@@ -1270,7 +1419,7 @@ async def token_endpoint(
                 resolved_client_id, requested_scopes
             )
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid scope")
+            raise OAuth2Error(INVALID_SCOPE, "Invalid scope", status_code=400)
 
         # T.3: DPoP-bound clients must supply a fresh DPoP proof.
         # We re-load the client from storage to check the flag —
@@ -1310,9 +1459,13 @@ async def token_endpoint(
         resolved_client_id = client_id or basic_client_id
         resolved_client_secret = client_secret or basic_client_secret
         if basic_client_id and client_id and basic_client_id != client_id:
-            raise HTTPException(status_code=400, detail="Client ID mismatch")
+            raise OAuth2Error(INVALID_REQUEST, "Client ID mismatch", status_code=400)
         if not refresh_token or not resolved_client_id:
-            raise HTTPException(status_code=400, detail="Missing refresh_token or client_id")
+            raise OAuth2Error(
+                INVALID_REQUEST,
+                "Missing refresh_token or client_id",
+                status_code=400,
+            )
 
         oauth_client = await _authenticate_client_at_token_endpoint(
             request,
@@ -1323,7 +1476,18 @@ async def token_endpoint(
             client_assertion=client_assertion,
         )
         if not oauth_client:
-            raise HTTPException(status_code=401, detail="Invalid client credentials")
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
+
+        # A4: the client must be registered for the refresh_token grant.
+        await _enforce_grant_allowed(
+            oauth2_service,
+            client_id=resolved_client_id,
+            grant_type="refresh_token",
+        )
+
+        # A6 / RFC 9449 §5: DPoP-bound clients must prove key
+        # possession on EVERY token-endpoint request, including refresh.
+        dpop_cnf = await _require_dpop_proof_if_bound(request, oauth_client, "POST")
 
         # Validate and rotate refresh token
         new_rt, error = await refresh_token_service.validate_and_rotate(
@@ -1333,13 +1497,13 @@ async def token_endpoint(
         )
 
         if error:
-            raise HTTPException(status_code=401, detail=error)
+            raise OAuth2Error(INVALID_GRANT, error, status_code=401)
         assert new_rt is not None  # help mypy narrow after error check
 
         # Get user
         user = await storage.get_user(new_rt.user_id)
         if not user or not user.is_active:
-            raise HTTPException(status_code=401, detail="Invalid user")
+            raise OAuth2Error(INVALID_GRANT, "Invalid user", status_code=401)
         assert user is not None  # help mypy narrow after raise
 
         # Generate new JWT access token — the claim policy for
@@ -1361,6 +1525,8 @@ async def token_endpoint(
             include_refresh=False,
             audience=resolved_client_id,
             azp=resolved_client_id,
+            cnf=dpop_cnf,
+            token_type="DPoP" if dpop_cnf else "Bearer",
             extra_claims=extra_claims,
         )
 
@@ -1373,10 +1539,36 @@ async def token_endpoint(
         return access_token_response
 
     elif grant_type == "urn:ietf:params:oauth:grant-type:device_code":
-        # Device Authorization Grant (RFC 8628 §3.4)
+        # Device Authorization Grant (RFC 8628 §3.4) — A2 hardening:
+        # client authentication, grant registration, ownership check,
+        # scope processing and opaque rotated refresh tokens now match
+        # every other grant branch.
         if not code or not client_id:
-            raise HTTPException(status_code=400, detail="Missing device_code or client_id")
+            raise OAuth2Error(INVALID_REQUEST, "Missing device_code or client_id", status_code=400)
         device_code = code  # reuse the `code` param for device_code
+
+        # --- Client Authentication (same contract as other grants) ---
+        basic_client_id, basic_client_secret = _extract_basic_auth(request)
+        resolved_device_client_id = client_id or basic_client_id
+        resolved_device_client_secret = client_secret or basic_client_secret
+
+        oauth_client = await _authenticate_client_at_token_endpoint(
+            request,
+            oauth2_service,
+            resolved_client_id=resolved_device_client_id,
+            resolved_client_secret=resolved_device_client_secret,
+            client_assertion_type=client_assertion_type,
+            client_assertion=client_assertion,
+        )
+        if not oauth_client:
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
+
+        await _enforce_grant_allowed(
+            oauth2_service, client_id=resolved_device_client_id, grant_type=grant_type
+        )
+
+        # A6 / RFC 9449 §5: DPoP proof required for bound clients here too.
+        device_dpop_cnf = await _require_dpop_proof_if_bound(request, oauth_client, "POST")
 
         from authglow.services.device_auth import DeviceAuthorizationService
 
@@ -1384,48 +1576,62 @@ async def token_endpoint(
         auth = await device_service.poll(device_code)
 
         if auth is None:
-            raise HTTPException(
+            raise OAuth2Error(
+                "expired_token",
+                "The device code has expired.",
                 status_code=400,
-                detail={
-                    "error": "expired_token",
-                    "error_description": "The device code has expired.",
-                },
+            )
+
+        # Ownership: a polled authorization may only be redeemed by
+        # the client it was issued to.
+        if auth.client_id != resolved_device_client_id:
+            raise OAuth2Error(
+                INVALID_GRANT,
+                "device_code was issued to a different client",
+                status_code=400,
             )
 
         if auth.status == "pending":
             now_time = utcnow()
             if auth.last_poll_at and (now_time - auth.last_poll_at).total_seconds() < auth.interval:
-                raise HTTPException(
+                # RFC 8628 §3.5: escalate the polling interval by 5s.
+                new_interval = await device_service.escalate_interval(device_code)
+                raise OAuth2Error(
+                    "slow_down",
+                    f"Polling too fast; retry in {new_interval} seconds.",
                     status_code=400,
-                    detail={"error": "slow_down", "error_description": "Polling too fast."},
                 )
-            raise HTTPException(
+            raise OAuth2Error(
+                "authorization_pending",
+                "User has not yet authorized.",
                 status_code=400,
-                detail={
-                    "error": "authorization_pending",
-                    "error_description": "User has not yet authorized.",
-                },
             )
 
         if auth.status == "denied":
-            raise HTTPException(
+            raise OAuth2Error(
+                "access_denied",
+                "The user denied the request.",
                 status_code=400,
-                detail={
-                    "error": "access_denied",
-                    "error_description": "The user denied the request.",
-                },
             )
 
         if auth.status == "authorized" and auth.user_id:
             user = await storage.get_user(auth.user_id)
             if not user or not user.is_active:
-                raise HTTPException(status_code=401, detail="Invalid user")
+                raise OAuth2Error(INVALID_GRANT, "Invalid user", status_code=401)
 
-            scopes_list = auth.scope.split()
+            # Scope processing — previously raw scopes from the stored
+            # request were minted verbatim.
+            try:
+                scopes_list = await oauth2_service.process_scopes(
+                    resolved_device_client_id, auth.scope.split()
+                )
+            except ValueError as exc:
+                raise OAuth2Error(INVALID_SCOPE, str(exc), status_code=400) from exc
+
             claim_policy_service = ClaimPolicyService()
             extra_claims = await claim_policy_service.build_claims(
                 user,
-                client_id=client_id,
+                client_id=resolved_device_client_id,
                 scopes=scopes_list,
                 target=ClaimTarget.ACCESS_TOKEN,
             )
@@ -1433,16 +1639,30 @@ async def token_endpoint(
                 user.id,
                 user.email,
                 scopes_list,
-                include_refresh=True,
-                audience=client_id,
-                azp=client_id,
+                include_refresh=False,
+                audience=resolved_device_client_id,
+                azp=resolved_device_client_id,
+                cnf=device_dpop_cnf,
+                token_type="DPoP" if device_dpop_cnf else "Bearer",
                 extra_claims=extra_claims,
             )
+
+            # Opaque persisted refresh token with rotation + theft
+            # detection — previously a JWT the refresh endpoint could
+            # never accept.
+            rt = await refresh_token_service.create_refresh_token(
+                user_id=user.id,
+                client_id=resolved_device_client_id,
+                scopes=scopes_list,
+                issued_ip=request.client.host if request.client else None,
+                expires_in_days=30,
+            )
+            access_token_response.refresh_token = rt.token
 
             await device_service.cleanup_expired()
             return access_token_response
 
-        raise HTTPException(status_code=400, detail="Unexpected device authorization state")
+        raise OAuth2Error(INVALID_REQUEST, "Unexpected device authorization state", status_code=400)
 
     else:
         # CONFORMANCE T.1: AuthGlow explicitly rejects `grant_type=password`
@@ -1454,7 +1674,11 @@ async def token_endpoint(
         #   - urn:ietf:params:oauth:grant-type:device_code
         # Password grant is not supported. Browser login uses the same
         # Authorization Code + PKCE flow as every public client.
-        raise HTTPException(status_code=400, detail="Unsupported grant_type")
+        raise OAuth2Error(
+            UNSUPPORTED_GRANT_TYPE,
+            "Unsupported grant_type",
+            status_code=400,
+        )
 
 @router.post("/api/token/api-key")
 @limiter.limit("20/minute")

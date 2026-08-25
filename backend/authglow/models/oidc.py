@@ -105,7 +105,19 @@ class OpenIDConfiguration(BaseModel):
 
     # Session management / logout
     frontchannel_logout_supported: bool = True
+    frontchannel_logout_session_supported: bool = True
     backchannel_logout_supported: bool = False
+
+    # Parameter support declarations (A8 — advertise exactly what is
+    # implemented; OIDC Discovery RECOMMENDED fields)
+    claims_parameter_supported: bool = True
+    request_parameter_supported: bool = False
+    request_uri_parameter_supported: bool = False
+    require_request_uri_registration: bool = False
+
+    # Algorithms allowed for client_secret_jwt / private_key_jwt
+    # client authentication assertions (RFC 7523).
+    token_endpoint_auth_signing_alg_values_supported: List[str] = ["HS256", "RS256"]
 
 
 class JWKSResponse(BaseModel):

@@ -4,14 +4,25 @@ Exposes the client-facing device authorization endpoint and
 the user-facing verification endpoints for browser-based approval.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from pydantic import BaseModel
 
 from authglow.api.auth import get_current_user  # noqa: E402
+from authglow.api.oauth_errors import (
+    INVALID_CLIENT,
+    INVALID_SCOPE,
+    UNAUTHORIZED_CLIENT,
+    OAuth2Error,
+)
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
 from authglow.services.device_auth import DeviceAuthorizationService
+from authglow.services.oauth2 import OAuth2Service
+
+DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 
 router = APIRouter(tags=["Device Authorization"])
 
@@ -47,19 +58,67 @@ async def device_authorize(
     request: Request,
     client_id: str = Form(...),
     scope: str = Form("read"),
+    # A2: confidential clients SHOULD authenticate here (RFC 8628 §3.1);
+    # the secret also lets the server bind the authorization to a
+    # verified client instead of an arbitrary ``client_id`` string.
+    client_secret: Optional[str] = Form(None),
 ):
     """Device Authorization endpoint (RFC 8628 §3.1).
 
     Called by the device (CLI, IoT, TV) to initiate the flow.
     Returns a ``device_code`` for polling and a ``user_code``
     for the user to enter on a secondary device.
+
+    A2 hardening (previously this endpoint accepted ANY client_id):
+
+    * the client must exist and be active → else ``invalid_client``;
+    * confidential clients must present their secret;
+    * the client registration must include the device grant
+      → else ``unauthorized_client``;
+    * the requested scope is processed against the client's
+      ``allowed_scopes`` → unknown scopes raise ``invalid_scope``.
     """
     settings = get_settings()
+
+    oauth2_service = OAuth2Service()
+    client = await oauth2_service.client_storage.get_client(client_id)
+    if client is None and client_id == settings.oauth2_client_id:
+        from authglow.api.auth import _first_party_oauth_client
+
+        client = _first_party_oauth_client(settings)
+    if not client or not getattr(client, "is_active", True):
+        raise OAuth2Error(INVALID_CLIENT, "Unknown or inactive client", status_code=401)
+
+    if bool(getattr(client, "is_confidential", True)):
+        if not client_secret:
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication required for confidential clients",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
+            )
+        if not await oauth2_service.verify_client(client_id, client_secret):
+            raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
+
+    if DEVICE_GRANT not in set(client.grant_types):
+        raise OAuth2Error(
+            UNAUTHORIZED_CLIENT,
+            f"Client is not authorized to use the {DEVICE_GRANT} grant",
+            status_code=400,
+        )
+
+    try:
+        processed_scopes = await oauth2_service.process_scopes(client_id, scope.split())
+    except ValueError as exc:
+        raise OAuth2Error(INVALID_SCOPE, str(exc), status_code=400) from exc
+
     base_url = settings.frontend_base_url or str(request.base_url).rstrip("/")
     verification_uri = f"{base_url}/oauth2/device/verify"
 
     service = DeviceAuthorizationService()
-    auth = await service.create_device_authorization(client_id, scope, verification_uri)
+    auth = await service.create_device_authorization(
+        client_id, " ".join(processed_scopes), verification_uri
+    )
 
     return DeviceAuthorizationResponse(
         device_code=auth.device_code,

@@ -20,6 +20,7 @@ import { PlaygroundOAuthCallbackPage } from './pages/admin/PlaygroundOAuthCallba
 import { DeviceVerificationPage } from './pages/DeviceVerificationPage'
 import { MFAVerifyPage } from './pages/auth/MFAVerifyPage'
 import { OAuthCallbackPage } from './pages/auth/OAuthCallbackPage'
+import { ForceChangePasswordPage } from './pages/auth/ForceChangePasswordPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { SessionsPage } from './pages/SessionsPage'
@@ -198,6 +199,14 @@ function App() {
           <Route path={ROUTES.AUTH.MFA_VERIFY} element={<MFAVerifyPage />} />
           <Route path={ROUTES.AUTH.CALLBACK} element={<OAuthCallbackPage />} />
           <Route path={ROUTES.AUTH.VERIFY_EMAIL} element={<EmailVerifiedPage />} />
+          <Route
+            path={ROUTES.AUTH.PASSWORD_EXPIRED}
+            element={
+              <GuestRoute>
+                <ForceChangePasswordPage />
+              </GuestRoute>
+            }
+          />
           <Route path={ROUTES.OAUTH_AUTHORIZE} element={<OAuthAuthorizePage />} />
           <Route path={ROUTES.OAUTH_DEVICE_VERIFY} element={<DeviceVerificationPage />} />
           <Route path={ROUTES.SETUP} element={<SetupPage />} />

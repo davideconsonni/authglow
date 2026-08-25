@@ -171,6 +171,9 @@ def _build_app_and_storage(
 
     app = FastAPI()
     app.include_router(auth_router)
+    from authglow.api.oauth_errors import register_oauth2_error_handler
+
+    register_oauth2_error_handler(app)
 
     return (
         app,
@@ -250,7 +253,7 @@ class TestAuthorizationCodeWithClientSecretJwt:
         # ``invalid_client`` — that's the path that proves the
         # assertion was accepted.
         if res.status_code == 401:
-            assert res.json()["detail"]["error"] != "invalid_client", res.text
+            assert res.json()["error"] != "invalid_client", res.text
         # Storage should NOT have been queried for verify_client_secret
         # (the JWT path bypasses the legacy bcrypt verification).
         storage.client_storage.verify_client_secret.assert_not_called()
@@ -302,7 +305,7 @@ class TestAuthorizationCodeWithClientSecretJwt:
                 },
             )
         assert res.status_code == 401, res.text
-        assert res.json()["detail"]["error"] == "invalid_client"
+        assert res.json()["error"] == "invalid_client"
 
     def test_replay_rejected_on_second_use(self, test_settings):
         jwt_plain = "shared-hs256-key"
@@ -364,7 +367,7 @@ class TestAuthorizationCodeWithClientSecretJwt:
                 stack.enter_context(p)
             res2 = http.post("/oauth2/token", data=data)
         assert res2.status_code == 401, res2.text
-        assert res2.json()["detail"]["error_code"] == "replay_detected"
+        assert res2.json()["error_code"] == "replay_detected"
 
     def test_wrong_issuer_rejected(self, test_settings):
         jwt_plain = "shared-hs256-key"
@@ -413,7 +416,7 @@ class TestAuthorizationCodeWithClientSecretJwt:
                 },
             )
         assert res.status_code == 401
-        assert res.json()["detail"]["error_code"] in ("invalid_issuer", "invalid_token")
+        assert res.json()["error_code"] in ("invalid_issuer", "invalid_token")
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +478,7 @@ class TestAuthorizationCodeWithPrivateKeyJwt:
                 },
             )
         if res.status_code == 401:
-            assert res.json()["detail"]["error"] != "invalid_client", res.text
+            assert res.json()["error"] != "invalid_client", res.text
         storage.client_storage.verify_client_secret.assert_not_called()
 
     def test_wrong_rsa_key_rejected(self, test_settings):
@@ -530,7 +533,7 @@ class TestAuthorizationCodeWithPrivateKeyJwt:
                 },
             )
         assert res.status_code == 401
-        assert res.json()["detail"]["error_code"] in (
+        assert res.json()["error_code"] in (
             "invalid_token",
             "invalid_signature",
         )
@@ -598,7 +601,7 @@ class TestClientCredentialsWithClientSecretJwt:
         # assert 200 because downstream validation (scopes, user)
         # may fail; the JWT layer is the unit under test.
         if res.status_code == 401:
-            assert res.json()["detail"]["error"] != "invalid_client", res.text
+            assert res.json()["error"] != "invalid_client", res.text
         # And the legacy secret path must not have been called.
         oauth2_svc.verify_client.assert_not_called()
 
@@ -668,8 +671,7 @@ class TestClientAssertionTypeEnforced:
         # with ``invalid_token`` because the key is wrong. We assert
         # we do NOT see that.
         if res.status_code == 401:
-            detail = res.json()["detail"]
-            error_code = detail.get("error_code") if isinstance(detail, dict) else None
+            error_code = res.json().get("error_code")
             assert error_code not in (
                 "invalid_token",
                 "invalid_issuer",

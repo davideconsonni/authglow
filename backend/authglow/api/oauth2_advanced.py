@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from authglow.api.auth import _extract_basic_auth, get_current_user
+from authglow.api.oauth_errors import INVALID_CLIENT, OAuth2Error
+from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
@@ -61,6 +63,10 @@ async def revoke_token(
     Allows clients to revoke access or refresh tokens.
     Requires authenticated client credentials (HTTP Basic or form post).
 
+    RFC 7009 §2.1: client authentication failures are answered with
+    the RFC 6749 §5.2 ``invalid_client`` envelope (401) — the previous
+    "always 200" behaviour silently accepted unauthenticated callers.
+
     https://datatracker.ietf.org/doc/html/rfc7009
     """
     basic_client_id, basic_client_secret = _extract_basic_auth(request)
@@ -68,10 +74,15 @@ async def revoke_token(
     resolved_client_secret = client_secret or basic_client_secret
 
     if not resolved_client_id or not resolved_client_secret:
-        return JSONResponse(status_code=200, content={})
+        raise OAuth2Error(
+            INVALID_CLIENT,
+            "Client authentication required",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
+        )
 
     if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-        return JSONResponse(status_code=200, content={})
+        raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
     # Determine token type
     if token_type_hint == "refresh_token" or not token_type_hint:
@@ -99,6 +110,24 @@ async def revoke_token(
     if token_type_hint == "access_token" or not token_type_hint:
         token_data = jwt_service.decode_token(token)
         if token_data and token_data.jti:
+            # Ownership check — a client may only revoke tokens issued
+            # to itself. Without it, any authenticated client could
+            # blacklist any other client's bearer tokens (cross-client
+            # DoS primitive):
+            #   * ``aud``-bearing tokens (third-party flows): ``aud``
+            #     must equal the authenticated ``client_id``;
+            #   * legacy internal tokens without ``aud`` (first-party
+            #     refresh / MFA-session JWTs): only the configured
+            #     first-party client may revoke them.
+            # Disallowed combinations are silently ignored and the
+            # endpoint still answers 200 per RFC 7009 §2.2.
+            settings = get_settings()
+            aud_ok = token_data.aud == resolved_client_id or (
+                token_data.aud is None
+                and resolved_client_id == settings.oauth2_client_id
+            )
+            if not aud_ok:
+                return JSONResponse(status_code=200, content={})
             # Actually revoke: add jti to in-process blacklist
             await token_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
             await audit_service.log_event(
@@ -143,17 +172,15 @@ async def introspect_token(
     resolved_client_secret = client_secret or basic_client_secret
 
     if not resolved_client_id or not resolved_client_secret:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Client authentication required",
+        raise OAuth2Error(
+            INVALID_CLIENT,
+            "Client authentication required",
+            status_code=401,
             headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
         )
 
     if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid client credentials",
-        )
+        raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
     # Try as refresh token
     if token_type_hint == "refresh_token" or not token_type_hint:

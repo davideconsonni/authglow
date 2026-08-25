@@ -29,6 +29,10 @@ logger = structlog.get_logger("authglow.audit")
 class DeviceAuthorizationService:
     """Business logic for the OAuth 2.0 Device Authorization Grant."""
 
+    #: RFC 8628 §3.5 — on every ``slow_down`` response the polling
+    #: interval MUST be increased by 5 seconds.
+    SLOW_DOWN_INCREMENT_SECONDS = 5
+
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
         self._repo: DeviceAuthorizationRepository = self._default_repository()
@@ -89,6 +93,21 @@ class DeviceAuthorizationService:
             auth.last_poll_at = now
             await self._repo.update(auth)
         return auth
+
+    async def escalate_interval(self, device_code: str) -> int:
+        """RFC 8628 §3.5: bump the polling interval after ``slow_down``.
+
+        Persists ``interval += 5`` so the next poll window honours the
+        escalated value across instances sharing the storage backend.
+        Returns the new interval (the configured base when the code is
+        already gone).
+        """
+        auth: Optional[DeviceAuthorization] = await self._repo.get_by_device_code(device_code)
+        if auth is None:
+            return self.settings.device_poll_interval_seconds
+        auth.interval += self.SLOW_DOWN_INCREMENT_SECONDS
+        await self._repo.update(auth)
+        return auth.interval
 
     async def verify_user_code(self, user_code: str) -> Optional[DeviceAuthorization]:
         """Look up a device authorization by user_code."""

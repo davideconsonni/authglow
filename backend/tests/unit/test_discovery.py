@@ -106,6 +106,45 @@ class TestOpenIDConfigurationDiscovery:
         assert body["end_session_endpoint"].endswith("/oauth2/logout")
 
 
+class TestDiscoveryMetadataHonesty:
+    """A8: the document advertises exactly what is implemented and
+    includes the RECOMMENDED parameter-support declarations."""
+
+    def _get(self, test_settings):
+        from authglow.api.oidc import router
+
+        app = _build_test_app(router)
+        client = TestClient(app)
+        response = client.get("/.well-known/openid-configuration")
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_form_post_not_advertised(self, test_settings):
+        """``form_post`` was advertised for years without any handler."""
+        body = self._get(test_settings)
+        assert "form_post" not in body["response_modes_supported"]
+
+    def test_parameter_support_flags(self, test_settings):
+        body = self._get(test_settings)
+        # The ``claims`` request parameter IS implemented (§5.5).
+        assert body["claims_parameter_supported"] is True
+        # Request objects are NOT supported — declared honestly.
+        assert body["request_parameter_supported"] is False
+        assert body["request_uri_parameter_supported"] is False
+        assert body["require_request_uri_registration"] is False
+
+    def test_frontchannel_logout_session_supported(self, test_settings):
+        """Front-channel logout fires with iss/sid → declare the pair."""
+        body = self._get(test_settings)
+        assert body["frontchannel_logout_supported"] is True
+        assert body["frontchannel_logout_session_supported"] is True
+
+    def test_client_auth_signing_algorithms_advertised(self, test_settings):
+        body = self._get(test_settings)
+        algs = body["token_endpoint_auth_signing_alg_values_supported"]
+        assert "HS256" in algs and "RS256" in algs
+
+
 # ---------------------------------------------------------------------------
 # Dynamic Client Registration — reject the implicit grant
 # ---------------------------------------------------------------------------

@@ -85,7 +85,10 @@ class TestPromptNone:
     """G.3 + G.7: ``prompt=none`` — silent re-auth or OIDC redirect error."""
 
     def test_none_with_cookie_redirects_with_code(self, test_settings):
-        """User is authenticated via cookie → redirect with auth code."""
+        """User is authenticated via cookie and consent is on record
+        → silent redirect with auth code."""
+        from unittest.mock import patch
+
         from authglow.models.user import User
         from authglow.services.jwt import JWTService
         from authglow.services.password import hash_password
@@ -110,18 +113,27 @@ class TestPromptNone:
             test_settings.auth_cookie_access_name, access_token, domain="testserver.local"
         )
 
-        response = http_client.post(
-            "/api/oauth2/authorize",
-            data={
-                "client_id": "client-abc",
-                "redirect_uri": "https://example.com/callback",
-                "scope": "read",
-                "code_challenge": "challenge123",
-                "code_challenge_method": "S256",
-                "prompt": "none",
-                "state": secrets.token_urlsafe(32),
-            },
-        )
+        # A3 (OIDC §3.1.2.1): prompt=none must not mint a code when
+        # consent is outstanding — patch an existing consent so the
+        # silent path is exercised.
+        consent_svc = MagicMock()
+        consent_svc.check_consent = AsyncMock(return_value=(True, None))
+
+        with patch(
+            "authglow.services.oauth_consent.OAuth2ConsentService", return_value=consent_svc
+        ):
+            response = http_client.post(
+                "/api/oauth2/authorize",
+                data={
+                    "client_id": "client-abc",
+                    "redirect_uri": "https://example.com/callback",
+                    "scope": "read",
+                    "code_challenge": "challenge123",
+                    "code_challenge_method": "S256",
+                    "prompt": "none",
+                    "state": secrets.token_urlsafe(32),
+                },
+            )
 
         assert response.status_code == 302, response.text
         location = response.headers["location"]

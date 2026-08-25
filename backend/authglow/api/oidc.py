@@ -118,7 +118,9 @@ async def openid_configuration(request: Request, response: Response):
         registration_endpoint=f"{base_url}/oauth2/register",
         scopes_supported=scopes_supported,
         response_types_supported=response_types_supported,
-        response_modes_supported=["query", "fragment", "form_post"],
+        # A8: ``form_post`` was advertised but never implemented —
+        # advertise only what is shipped.
+        response_modes_supported=["query", "fragment"],
         grant_types_supported=grant_types_supported,
         subject_types_supported=["public"],
         id_token_signing_alg_values_supported=[settings.jwt_algorithm],
@@ -132,6 +134,8 @@ async def openid_configuration(request: Request, response: Response):
             "private_key_jwt",
             "none",
         ],
+        # A8: assertion algorithms for the JWT client-auth methods.
+        token_endpoint_auth_signing_alg_values_supported=["HS256", "RS256"],
         # T.3: DPoP support (RFC 9449). Opt-in per client via the
         # ``dpop_bound`` field on OAuth2Client. ES256 is the only
         # accepted algorithm — see services/dpop.py.
