@@ -369,7 +369,7 @@ describe.skip('ApiKeyClaimsTab - preview shows MERGE (default + saved)', () => {
   })
 })
 
-describe.skip('ApiKeyClaimsTab - templates', () => {
+describe('ApiKeyClaimsTab - templates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockQueryData.policy = {
@@ -403,61 +403,36 @@ describe.skip('ApiKeyClaimsTab - templates', () => {
     ]
   })
 
-  it('lists the API key templates as clickable cards', async () => {
+  it('lists the API key templates as clickable cards (all sources shown)', async () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    fireEvent.click(screen.getByTestId('api-key-claim-policy-add-btn'))
+    await screen.findByTestId('api-key-claim-policy-modal')
+    fireEvent.click(screen.getByTestId('api-key-claim-template-btn'))
     expect(screen.getByTestId('api-key-claim-template-api-key-name')).toBeInTheDocument()
     expect(screen.getByTestId('api-key-claim-template-api-key-tier')).toBeInTheDocument()
   })
 
-  it('templates carry the NAMESPACE-EXPANDED claim_name (server contract)', async () => {
-    // The server now expands relative template claim names
-    // (e.g. 'api_key_tier') into the absolute form
-    // (e.g. 'https://authglow.example.com/claims/api_key_tier')
-    // before returning. This avoids the OIDC-validation
-    // error the admin would otherwise see when applying a
-    // template (a non-namespaced claim name is rejected by
-    // the §5.1.2 validator). The mock here mirrors the
-    // server-side contract.
+  it('applies a template directly to the draft with its namespaced claim_name', async () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    fireEvent.click(screen.getByTestId('api-key-claim-policy-add-btn'))
+    await screen.findByTestId('api-key-claim-policy-modal')
+    fireEvent.click(screen.getByTestId('api-key-claim-template-btn'))
     fireEvent.click(screen.getByTestId('api-key-claim-template-api-key-tier'))
-    const nameInput = screen.getByTestId('api-key-claim-name-input') as HTMLInputElement
-    // Absolute URI form, not the relative 'api_key_tier'
-    expect(nameInput.value).toBe(
-      'https://authglow.example.com/claims/api_key_tier',
-    )
-    // The status banner should NOT show the "must be a URI" error
-    const status = screen.getByTestId('api-key-claim-name-status')
-    expect(status.textContent).not.toMatch(/must be a URI/i)
-    // The Add to policy button is enabled
-    const addBtn = screen.getByTestId('api-key-claim-policy-add-confirm-btn') as HTMLButtonElement
-    expect(addBtn.disabled).toBe(false)
-  })
 
-  it('applies a template when clicked (pre-fills the add form)', async () => {
-    render(
-      <Wrapper>
-        <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
-      </Wrapper>,
-    )
-    fireEvent.click(screen.getByTestId('api-key-claim-policy-add-btn'))
-    fireEvent.click(screen.getByTestId('api-key-claim-template-api-key-tier'))
-    const nameInput = screen.getByTestId('api-key-claim-name-input') as HTMLInputElement
-    expect(nameInput.value).toBe(
+    // The rule appears in the draft without any form round-trip.
+    const cards = screen.getAllByTestId('api-key-claim-rule-card')
+    expect(cards).toHaveLength(1)
+    expect(screen.getByTestId('api-key-rule-claim-name').textContent).toBe(
       'https://authglow.example.com/claims/api_key_tier',
     )
-    // The API key field select should be populated
-    const fieldSelect = screen.getByTestId('api-key-source-config-api-key-field') as HTMLSelectElement
-    expect(fieldSelect.value).toBe('tier')
+    // Purely additive: nothing is persisted until Save.
+    expect(mockApi.put).not.toHaveBeenCalled()
   })
 })
 

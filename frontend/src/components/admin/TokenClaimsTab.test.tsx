@@ -280,7 +280,7 @@ describe('TokenClaimsTab - save flow', () => {
   })
 })
 
-describe.skip('TokenClaimsTab - templates', () => {
+describe('TokenClaimsTab - templates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockQueryData.policy = {
@@ -310,61 +310,63 @@ describe.skip('TokenClaimsTab - templates', () => {
         required_scope: null,
         source_config: { user_field: 'tenant_id' },
       },
+      {
+        id: 'api-key-name',
+        label: 'API Key Name',
+        description: 'API key record field — irrelevant for OAuth clients',
+        claim_name: 'https://authglow.example.com/claims/api_key_name',
+        source: 'api_key_field',
+        include_in: ['access_token'],
+        required_scope: null,
+        source_config: { api_key_field: 'name' },
+      },
     ]
   })
 
-  it('lists built-in templates as clickable cards', async () => {
+  it('lists built-in templates as clickable cards, filtering API-key sources', async () => {
     render(
       <Wrapper>
         <TokenClaimsTab clientId="c1" clientName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    fireEvent.click(screen.getByTestId('claim-policy-add-btn'))
+    await screen.findByTestId('claim-policy-modal')
+    fireEvent.click(screen.getByTestId('claim-template-btn'))
     expect(screen.getByTestId('claim-template-rbac-roles')).toBeInTheDocument()
     expect(screen.getByTestId('claim-template-user-tenant')).toBeInTheDocument()
+    // api_key_field templates only make sense in the API-key modal.
+    expect(screen.queryByTestId('claim-template-api-key-name')).not.toBeInTheDocument()
   })
 
-  it('templates carry the NAMESPACE-EXPANDED claim_name (server contract)', async () => {
-    // The server now expands relative template claim names
-    // before returning. This avoids the OIDC-validation error
-    // the admin would otherwise see when applying a template
-    // (a non-namespaced claim name is rejected by the §5.1.2
-    // validator). The mock here mirrors the server-side
-    // contract.
+  it('applies a template directly to the draft with its namespaced claim_name', async () => {
     render(
       <Wrapper>
         <TokenClaimsTab clientId="c1" clientName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    fireEvent.click(screen.getByTestId('claim-policy-add-btn'))
+    await screen.findByTestId('claim-policy-modal')
+    fireEvent.click(screen.getByTestId('claim-template-btn'))
     fireEvent.click(screen.getByTestId('claim-template-user-tenant'))
-    const nameInput = screen.getByTestId('claim-name-input') as HTMLInputElement
-    expect(nameInput.value).toBe(
+
+    // The rule appears in the draft without any form round-trip.
+    const cards = screen.getAllByTestId('claim-rule-card')
+    expect(cards).toHaveLength(1)
+    expect(screen.getByTestId('rule-claim-name').textContent).toBe(
       'https://authglow.example.com/claims/tenant_id',
     )
-    // The status banner should NOT show the "must be a URI" error
-    const status = screen.getByTestId('claim-name-status')
-    expect(status.textContent).not.toMatch(/must be a URI/i)
-    // The Add to policy button is enabled
-    const addBtn = screen.getByTestId('claim-policy-add-confirm-btn') as HTMLButtonElement
-    expect(addBtn.disabled).toBe(false)
+    // Purely additive: nothing is persisted until Save.
+    expect(mockApi.put).not.toHaveBeenCalled()
   })
 
-  it('applies a template when clicked (pre-fills the add form)', async () => {
+  it('collapses the gallery after applying a template', async () => {
     render(
       <Wrapper>
         <TokenClaimsTab clientId="c1" clientName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    fireEvent.click(screen.getByTestId('claim-policy-add-btn'))
-    fireEvent.click(screen.getByTestId('claim-template-user-tenant'))
-    const nameInput = screen.getByTestId('claim-name-input') as HTMLInputElement
-    expect(nameInput.value).toBe(
-      'https://authglow.example.com/claims/tenant_id',
-    )
-    // The user_field select should be populated
-    const userFieldSelect = screen.getByTestId('source-config-user-field') as HTMLSelectElement
-    expect(userFieldSelect.value).toBe('tenant_id')
+    await screen.findByTestId('claim-policy-modal')
+    fireEvent.click(screen.getByTestId('claim-template-btn'))
+    fireEvent.click(screen.getByTestId('claim-template-rbac-roles'))
+    expect(screen.queryByTestId('claim-template-list')).not.toBeInTheDocument()
   })
 })
 

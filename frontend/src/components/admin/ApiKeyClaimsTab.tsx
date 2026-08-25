@@ -35,6 +35,7 @@ import { useApiQuery } from '../../hooks/useApi'
 import { cn } from '../../lib/utils'
 import { Banner } from '../../components/shared/Banner'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { ClaimTemplatePicker, type ClaimTemplate } from './ClaimTemplatePicker'
 import { notify } from '../../stores/toastStore'
 
 // ---------------------------------------------------------------------------
@@ -389,6 +390,21 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
     }
   }
 
+  // ----- Template gallery -----
+  const applyTemplate = (t: ClaimTemplate) => {
+    // The server already resolved the namespaced claim_name, so the
+    // template maps straight onto a rule — no form round-trip needed.
+    addRule({
+      claim_name: t.claim_name,
+      source: t.source as ClaimSource,
+      source_config: { ...t.source_config } as ClaimSourceConfig,
+      include_in: [...t.include_in] as ClaimTarget[],
+      required_scope: t.required_scope ?? null,
+      description: null,
+    })
+    notify.success(`Added "${t.label}" from the template gallery.`)
+  }
+
   // ----- beforeunload + dirty close -----
   useEffect(() => {
     if (!dirty) return
@@ -671,6 +687,16 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                 >
                   <Plus size={12} /> Add custom field
                 </button>
+              )}
+
+              {/* ----- Template gallery (manual build alternative) ----- */}
+              {formMode === 'closed' && (
+                <div className="mt-2">
+                  <ClaimTemplatePicker
+                    onSelect={applyTemplate}
+                    testPrefix="api-key-claim-template"
+                  />
+                </div>
               )}
 
               {/* ----- Add/Edit form ----- */}
