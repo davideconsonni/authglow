@@ -112,21 +112,41 @@ class TestTokenEndpointClientAuth:
             expires_at=utcnow() + timedelta(minutes=10),
         )
 
+    @staticmethod
+    def _make_request(extra_headers=None):
+        """Build a real ``starlette.requests.Request`` for direct calls.
+
+        ``token_endpoint`` is rate-limited (``@limiter.limit("30/minute")``)
+        and slowapi's wrapper raises on non-Request objects, so direct
+        invocation tests must pass a genuine Request built from an ASGI
+        scope (same pattern as the VAPT-022 email-leak test below).
+        """
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/oauth2/token",
+            "raw_path": b"/oauth2/token",
+            "query_string": b"",
+            "headers": [(b"user-agent", b"TestAgent/1.0")] + list(extra_headers or []),
+            "client": ("127.0.0.1", 50000),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+        return Request(scope)
+
     @pytest.mark.asyncio
     async def test_confidential_client_requires_secret(self, oauth2_service):
         """C4: Confidential client MUST provide client_secret."""
         from fastapi import HTTPException
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
 
-        mock_request = MagicMock()
-        mock_request.headers = Headers({})
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        mock_request = self._make_request()
 
         mock_storage = AsyncMock()
         mock_jwt = MagicMock()
@@ -158,23 +178,22 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 401
-        assert "client authentication required" in exc_info.value.detail.lower()
+        # RFC 6749 §5.2 envelope: ``detail`` carries the flat wire body.
+        detail = exc_info.value.detail
+        assert detail["error"] == "invalid_client"
+        assert "client authentication required" in detail["error_description"].lower()
 
     @pytest.mark.asyncio
     async def test_confidential_client_wrong_secret_rejected(self, oauth2_service):
         """C4: Confidential client with wrong secret must be rejected."""
         from fastapi import HTTPException
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
 
-        mock_request = MagicMock()
-        mock_request.headers = Headers({})
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        mock_request = self._make_request()
 
         mock_storage = AsyncMock()
         mock_jwt = MagicMock()
@@ -206,23 +225,21 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 401
-        assert "invalid client credentials" in exc_info.value.detail.lower()
+        detail = exc_info.value.detail
+        assert detail["error"] == "invalid_client"
+        assert "invalid client credentials" in detail["error_description"].lower()
 
     @pytest.mark.asyncio
     async def test_client_id_mismatch_rejected(self, oauth2_service):
         """C4: client_id must match the authorization code's client_id."""
         from fastapi import HTTPException
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code(client_id="correct-client")
         auth_code_used = auth_code.model_copy(update={"used": False})
 
-        mock_request = MagicMock()
-        mock_request.headers = Headers({})
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        mock_request = self._make_request()
 
         mock_storage = AsyncMock()
         mock_jwt = MagicMock()
@@ -248,23 +265,21 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 400
-        assert "mismatch" in exc_info.value.detail.lower()
+        detail = exc_info.value.detail
+        assert detail["error"] == "invalid_grant"
+        assert "client id mismatch" in detail["error_description"].lower()
 
     @pytest.mark.asyncio
     async def test_missing_client_id_rejected(self, oauth2_service):
         """C4: Missing client_id must be rejected."""
         from fastapi import HTTPException
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
         auth_code_used = auth_code.model_copy(update={"used": False})
 
-        mock_request = MagicMock()
-        mock_request.headers = Headers({})
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        mock_request = self._make_request()
 
         oauth2_service.get_authorization_code = AsyncMock(return_value=auth_code_used)
 
@@ -290,29 +305,34 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 400
-        assert "missing client_id" in exc_info.value.detail.lower()
+        detail = exc_info.value.detail
+        assert detail["error"] == "invalid_request"
+        assert "missing client_id" in detail["error_description"].lower()
 
     @pytest.mark.asyncio
     async def test_public_client_without_pkce_rejected(self, oauth2_service):
-        """C4: Public clients without PKCE must be rejected."""
+        """C4: An authorization code issued with a PKCE challenge cannot be
+        exchanged without the matching ``code_verifier``.
+
+        Note: global PKCE requiredness moved server-side to
+        ``/api/oauth2/authorize`` (``enforce_pkce``); at the token endpoint
+        the check is per-code: a challenge-bearing code MUST present the
+        verifier (RFC 7636 §4.6).
+        """
         from fastapi import HTTPException
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
         auth_code = self._make_auth_code()
-        auth_code_no_pkce = auth_code.model_copy(
+        auth_code_pkce = auth_code.model_copy(
             update={
                 "used": False,
-                "code_challenge": None,
-                "code_challenge_method": None,
+                "code_challenge": "some-s256-challenge",
+                "code_challenge_method": "S256",
             }
         )
 
-        mock_request = MagicMock()
-        mock_request.headers = Headers({})
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        mock_request = self._make_request()
 
         mock_storage = AsyncMock()
         mock_jwt = MagicMock()
@@ -323,7 +343,8 @@ class TestTokenEndpointClientAuth:
         mock_client.is_active = True
         oauth2_service.client_storage = MagicMock()
         oauth2_service.client_storage.get_client = AsyncMock(return_value=mock_client)
-        oauth2_service.get_authorization_code = AsyncMock(return_value=auth_code_no_pkce)
+        oauth2_service.client_storage.is_grant_type_allowed = AsyncMock(return_value=True)
+        oauth2_service.get_authorization_code = AsyncMock(return_value=auth_code_pkce)
         oauth2_service.verify_client = AsyncMock(return_value=True)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -344,14 +365,14 @@ class TestTokenEndpointClientAuth:
                 refresh_token_service=mock_rt_service,
             )
         assert exc_info.value.status_code == 400
-        assert "PKCE" in exc_info.value.detail or "code_challenge" in exc_info.value.detail
+        detail = exc_info.value.detail
+        assert detail["error"] == "invalid_request"
+        assert "code_verifier" in detail["error_description"].lower()
 
     @pytest.mark.asyncio
     async def test_basic_auth_credentials_extracted(self, oauth2_service):
         """C4: Client credentials from HTTP Basic Auth should be accepted."""
         import hashlib
-
-        from starlette.datastructures import Headers
 
         from authglow.api.auth import token_endpoint
 
@@ -368,13 +389,8 @@ class TestTokenEndpointClientAuth:
             }
         )
 
-        creds = base64.b64encode(b"test-client-id:test-client-secret").decode()
-        headers = Headers({"Authorization": f"Basic {creds}"})
-
-        mock_request = MagicMock()
-        mock_request.headers = headers
-        mock_request.client = MagicMock()
-        mock_request.client.host = "127.0.0.1"
+        creds = base64.b64encode(b"test-client-id:test-client-secret")
+        mock_request = self._make_request([(b"authorization", b"Basic " + creds)])
 
         mock_user = User(
             id="user-1",
@@ -399,12 +415,14 @@ class TestTokenEndpointClientAuth:
         mock_client.is_active = True
         oauth2_service.client_storage = MagicMock()
         oauth2_service.client_storage.get_client = AsyncMock(return_value=mock_client)
+        oauth2_service.client_storage.is_grant_type_allowed = AsyncMock(return_value=True)
+        oauth2_service.client_storage.update_last_used = AsyncMock(return_value=None)
         oauth2_service.get_authorization_code = AsyncMock(return_value=auth_code_pkce)
         oauth2_service.mark_code_as_used = AsyncMock(return_value=True)
         oauth2_service.verify_client = AsyncMock(return_value=True)
         oauth2_service.process_scopes = AsyncMock(return_value=["read"])
 
-        result = await token_endpoint(
+        await token_endpoint(
             request=mock_request,
             response=MagicMock(),
             grant_type="authorization_code",

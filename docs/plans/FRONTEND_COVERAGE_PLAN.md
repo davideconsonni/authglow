@@ -25,7 +25,7 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 
 ## Checklist fasi
 
-- [ ] **Fase 1 — Cambio password forzato (`password_expired`)** ⚠️ gap funzionale
+- [x] **Fase 1 — Cambio password forzato (`password_expired`)** ⚠️ gap funzionale
       Login verifica il flag → pagina dedicata di cambio password → reset flag via `set_password(require_change=False)`.
 - [ ] **Fase 2 — Claim Templates nel UI**
       Menu "Parti da un template" in `TokenClaimsTab` / `ApiKeyClaimsTab` alimentato da `GET /api/admin/claim-templates`.
@@ -88,3 +88,12 @@ passkey delete usato (`PasskeyManager.tsx:68`); `GET /api/users` sostituito da `
 ### Note di completamento
 
 _(da compilare a fine fase: commit SHA o riepilogo)_
+
+**✅ Completata 2026-08-25.** Riepilogo:
+
+- **Backend**: gate `password_expired` in `authorize_post` (`api/auth.py`, ritorna `{"password_expired": true, "email": ...}` senza cookie/auth-code/MFA); endpoint `POST /api/auth/expired-password/change` in `api/password_reset.py` (rate limit 5/min, audit `password_changed_after_expiry`); modello `ExpiredPasswordChange` in `models/password_reset.py`.
+- **Frontend**: `ForceChangePasswordPage.tsx` (nuovo, su `AuthLayout`) + rotta `/auth/password-expired` in `GuestRoute` + branch `password_expired` in `OAuthAuthorizePage.handleLogin`.
+- **Bug fix collaterale** (emerso dal test manuale): `UserService.set_password` invalidava solo la cache per-id; ora invalida anche quella per-email — senza di che il rilogin post-cambio verificava l'hash STALE → loop di cambio password infinito. Regression test con servizio+repo+cache reali: `TestSetPasswordCacheInvalidation`.
+- **Debito di test pre-esistente ripagato**: i 6 fallimenti di `TestTokenEndpointClientAuth` erano causati dal WIP (decorator rate-limit sul token endpoint, envelope RFC 6749 §5.2, PKCE spostato su authorize) non riflesso nei test. Riparati solo i test, nessun cambio produzione.
+- **Verifica**: 11/11 unit backend nuovi, 6/6 component test frontend, 19/19 `test_auth_api.py`, tsc/eslint/ruff puliti. Flusso manuale expire→cambio→rilogin confermato dall'utente.
+- Commit di riferimento: incluso in `3e895f1` (feat: implement forced password change for expired accounts and update OAuth2 error handling).
