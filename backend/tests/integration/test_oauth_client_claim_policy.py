@@ -117,9 +117,9 @@ class TestGetClaimPolicy:
 
             svc = ClaimPolicyService()
             rule = ClaimRule(
-                claim_name="https://authglow/tenant",
+                claim_name="https://authglow/first_name",
                 source=ClaimSource.USER_FIELD,
-                source_config=ClaimSourceConfig(user_field="tenant_id"),
+                source_config=ClaimSourceConfig(user_field="first_name"),
                 include_in=[ClaimTarget.ACCESS_TOKEN],
             )
             asyncio.run(svc.save_policy("c-saved", [rule]))
@@ -131,7 +131,7 @@ class TestGetClaimPolicy:
             data = resp.json()
             assert data["is_custom"] is True
             assert len(data["rules"]) == 1
-            assert data["rules"][0]["claim_name"] == "https://authglow/tenant"
+            assert data["rules"][0]["claim_name"] == "https://authglow/first_name"
 
 
 class TestPutClaimPolicy:
@@ -145,9 +145,9 @@ class TestPutClaimPolicy:
             body = {
                 "rules": [
                     {
-                        "claim_name": "https://authglow/tenant",
+                        "claim_name": "https://authglow/first_name",
                         "source": "user_field",
-                        "source_config": {"user_field": "tenant_id"},
+                        "source_config": {"user_field": "first_name"},
                         "include_in": ["access_token"],
                     }
                 ]
@@ -159,7 +159,7 @@ class TestPutClaimPolicy:
             data = resp.json()
             assert data["is_custom"] is True
             assert len(data["rules"]) == 1
-            assert data["rules"][0]["claim_name"] == "https://authglow/tenant"
+            assert data["rules"][0]["claim_name"] == "https://authglow/first_name"
 
     def test_put_with_empty_rules_deletes_saved(self, admin_client, test_settings):
         with patch(
@@ -346,7 +346,6 @@ class TestListClaimTemplates:
         expected_pairs = [
             ("rbac-roles", f"{ns}/roles"),
             ("rbac-permissions", f"{ns}/permissions"),
-            ("user-tenant", f"{ns}/tenant_id"),
             ("api-key-name", f"{ns}/api_key_name"),
             ("api-key-tier", f"{ns}/api_key_tier"),
         ]

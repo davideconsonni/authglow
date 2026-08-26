@@ -120,7 +120,13 @@ class APIKeyCreateResponse(APIKeyWithSecret):
 
 
 class APIKeyUpdate(BaseModel):
-    """Request model for updating an API key."""
+    """Request model for updating an API key.
+
+    Expiration semantics: ``expires_in_days`` (when provided)
+    recomputes ``expires_at`` from *now* and clears
+    ``never_expires``; ``never_expires=True`` clears the expiry
+    altogether. Omitted fields leave the key untouched.
+    """
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
@@ -128,6 +134,8 @@ class APIKeyUpdate(BaseModel):
     is_active: Optional[bool] = None
     allowed_ips: Optional[List[str]] = None
     tier: Optional[str] = Field(None, max_length=64)
+    expires_in_days: Optional[int] = Field(None, ge=1, le=365)
+    never_expires: Optional[bool] = None
 
 
 class APIKeyUsageStats(BaseModel):

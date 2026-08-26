@@ -406,44 +406,6 @@ BUILTIN_TEMPLATES: List[ClaimTemplate] = [
         source=ClaimSource.RBAC_PERMISSIONS,
         include_in=[ClaimTarget.ACCESS_TOKEN],
     ),
-    ClaimTemplate(
-        id="user-tenant",
-        label="Tenant ID (from user)",
-        description=(
-            "Reads the 'tenant_id' attribute from the User model "
-            "and emits it as a namespaced claim. The user record "
-            "must have the attribute set."
-        ),
-        claim_name="tenant_id",
-        source=ClaimSource.USER_FIELD,
-        source_config=ClaimSourceConfig(user_field="tenant_id"),
-        include_in=[ClaimTarget.ACCESS_TOKEN, ClaimTarget.ID_TOKEN],
-    ),
-    ClaimTemplate(
-        id="user-organization",
-        label="Organization (from user)",
-        description=(
-            "Reads the 'organization' attribute from the User "
-            "model and emits it as a namespaced claim."
-        ),
-        claim_name="organization",
-        source=ClaimSource.USER_FIELD,
-        source_config=ClaimSourceConfig(user_field="organization"),
-        include_in=[ClaimTarget.ACCESS_TOKEN, ClaimTarget.USERINFO],
-    ),
-    ClaimTemplate(
-        id="user-subscription",
-        label="Subscription Level (from user)",
-        description=(
-            "Reads the 'subscription_level' attribute from the "
-            "User model (e.g. 'free', 'pro', 'enterprise') and "
-            "emits it as a namespaced claim."
-        ),
-        claim_name="subscription_level",
-        source=ClaimSource.USER_FIELD,
-        source_config=ClaimSourceConfig(user_field="subscription_level"),
-        include_in=[ClaimTarget.ACCESS_TOKEN, ClaimTarget.ID_TOKEN],
-    ),
     # --- API key claim templates ---
     # The following templates expose attributes of the API key
     # used at exchange time (name, key_prefix, scopes,

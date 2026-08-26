@@ -110,7 +110,9 @@ class TestVapt025TrustedProxyXForwardedFor:
 
         assert fake_app.last_scope["client"] == ("10.0.0.1", 443)
 
-    def test_xff_multiple_ips_takes_leftmost(self):
+    def test_xff_takes_rightmost_untrusted(self):
+        """Appending proxies add the real client on the RIGHT: anything
+        to its left is client-controlled and must never be picked."""
         from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 
         settings = _make_settings(trusted_proxies="10.0.0.1")
@@ -127,7 +129,70 @@ class TestVapt025TrustedProxyXForwardedFor:
 
         asyncio.run(mw(scope, _FakeReceive(), send))
 
+        assert fake_app.last_scope["client"] == ("9.10.11.12", 443)
+
+    def test_xff_spoofed_leftmost_entry_ignored(self):
+        """Attacker sends 'X-Forwarded-For: 6.6.6.6'; the appending proxy
+        adds the real IP on the right. The spoofed entry must NOT win."""
+        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        settings = _make_settings(trusted_proxies="10.0.0.1")
+        fake_app = _FakeApp()
+        mw = ProxyHeadersMiddleware(fake_app, settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-for", b"6.6.6.6, 198.51.100.7"),
+        ]
+        scope = _http_scope(client=("10.0.0.1", 443), headers=headers)
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert fake_app.last_scope["client"] == ("198.51.100.7", 443)
+
+    def test_xff_internal_trusted_hops_skipped(self):
+        """Multi-tier proxy chain: internal trusted hops are skipped until
+        the first untrusted (real client) address is reached."""
+        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        settings = _make_settings(trusted_proxies="10.0.0.0/24")
+        fake_app = _FakeApp()
+        mw = ProxyHeadersMiddleware(fake_app, settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-for", b"1.2.3.4, 10.0.0.9"),
+        ]
+        scope = _http_scope(client=("10.0.0.1", 443), headers=headers)
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
         assert fake_app.last_scope["client"] == ("1.2.3.4", 443)
+
+    def test_xff_all_entries_trusted_falls_back_to_leftmost(self):
+        """Every entry belongs to the trusted chain (end-to-end proxies):
+        fall back to the leftmost valid entry instead of dropping."""
+        from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        settings = _make_settings(trusted_proxies="10.0.0.0/24")
+        fake_app = _FakeApp()
+        mw = ProxyHeadersMiddleware(fake_app, settings=settings)
+
+        headers = [
+            (b"host", b"example.com"),
+            (b"x-forwarded-for", b"10.0.0.5, 10.0.0.9"),
+        ]
+        scope = _http_scope(client=("10.0.0.1", 443), headers=headers)
+        send = _FakeSend()
+        import asyncio
+
+        asyncio.run(mw(scope, _FakeReceive(), send))
+
+        assert fake_app.last_scope["client"] == ("10.0.0.5", 443)
 
     def test_cidr_range_trusted(self):
         from authglow.middleware.proxy_headers import ProxyHeadersMiddleware

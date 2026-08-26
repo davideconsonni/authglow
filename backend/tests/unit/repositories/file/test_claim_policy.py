@@ -34,9 +34,9 @@ def _make_policy(
         client_id=client_id,
         rules=[
             ClaimRule(
-                claim_name="https://authglow.example.com/claims/tenant_id",
+                claim_name="https://authglow.example.com/claims/first_name",
                 source=ClaimSource.USER_FIELD,
-                source_config=ClaimSourceConfig(user_field="tenant_id"),
+                source_config=ClaimSourceConfig(user_field="first_name"),
                 include_in=[ClaimTarget.ACCESS_TOKEN, ClaimTarget.ID_TOKEN],
             )
         ],
@@ -84,7 +84,7 @@ class TestFileClientClaimPolicyRepositoryGet:
         assert result is not None
         assert result.client_id == "rt-1"
         assert len(result.rules) == 1
-        assert result.rules[0].claim_name == "https://authglow.example.com/claims/tenant_id"
+        assert result.rules[0].claim_name == "https://authglow.example.com/claims/first_name"
         assert result.rules[0].source == ClaimSource.USER_FIELD
 
     async def test_corrupt_payload_returns_none(self, test_settings):
@@ -112,9 +112,9 @@ class TestFileClientClaimPolicyRepositorySave:
             client_id="overwrite",
             rules=[
                 ClaimRule(
-                    claim_name="https://authglow.example.com/claims/org",
+                    claim_name="https://authglow.example.com/claims/name",
                     source=ClaimSource.USER_FIELD,
-                    source_config=ClaimSourceConfig(user_field="organization"),
+                    source_config=ClaimSourceConfig(user_field="last_name"),
                     include_in=[ClaimTarget.ACCESS_TOKEN],
                 )
             ],
@@ -123,7 +123,7 @@ class TestFileClientClaimPolicyRepositorySave:
         result = await repo.get_by_client("overwrite")
         assert result is not None
         assert len(result.rules) == 1
-        assert result.rules[0].claim_name == "https://authglow.example.com/claims/org"
+        assert result.rules[0].claim_name == "https://authglow.example.com/claims/name"
 
 
 class TestFileClientClaimPolicyRepositoryDelete:

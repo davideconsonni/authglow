@@ -131,14 +131,14 @@ const TARGET_OPTIONS: { id: ClaimTarget; label: string; description: string }[] 
   { id: 'userinfo', label: 'UserInfo', description: 'Profile data endpoint' },
 ]
 
-// Available user profile fields.
+// User profile fields actually managed by AuthGlow (editable via the
+// admin API) — do not list model attributes without a write path.
 const AVAILABLE_USER_FIELDS = [
-  { value: 'tenant_id', label: 'tenant_id', desc: 'Multi-tenant ID' },
-  { value: 'organization', label: 'organization', desc: 'Org / company name' },
-  { value: 'subscription_level', label: 'subscription_level', desc: 'Free / pro / enterprise' },
   { value: 'email', label: 'email', desc: 'User email' },
   { value: 'first_name', label: 'first_name', desc: 'First name' },
   { value: 'last_name', label: 'last_name', desc: 'Last name' },
+  { value: 'phone', label: 'phone', desc: 'Phone number' },
+  { value: 'avatar_url', label: 'avatar_url', desc: 'Avatar image URL' },
 ]
 
 // Available API key fields.

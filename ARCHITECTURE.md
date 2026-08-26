@@ -287,7 +287,7 @@ into the access token, against
 **Reserved-claim namespacing rule** (OIDC §5.1.2): every
 non-OIDC-standard claim name MUST be a URI. Enforced at
 the model layer by `_validate_claim_name` — plain claim
-names like `roles`, `tenant_id`, `subscription_level` are
+names like `roles`, `org_id`, `plan` are
 rejected unless they are in the `OIDC_STANDARD_CLAIMS`
 whitelist (which only contains the OIDC Core / RFC 9068 /
 RFC 9449 standard names).

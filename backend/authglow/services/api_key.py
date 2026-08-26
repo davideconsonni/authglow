@@ -18,6 +18,7 @@ are serialised.
 """
 
 import asyncio
+import ipaddress
 import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -53,6 +54,36 @@ def _enforce_scope_subset(
         return list(requested)
     allowed = set(caller_scopes or [])
     return [s for s in (requested or []) if s in allowed]
+
+
+def _ip_allowed(client_ip: Optional[str], allowed_ips: List[str]) -> bool:
+    """Return True when *client_ip* matches any allowlist entry.
+
+    Entries may be single IPs (``"203.0.113.5"``, IPv4/IPv6) or CIDR
+    networks (``"198.51.100.0/24"``). Unparseable entries are skipped,
+    never matched — an admin typo must fail CLOSED, not open.
+    """
+    if not client_ip:
+        return False
+    try:
+        addr = ipaddress.ip_address(client_ip.strip())
+    except ValueError:
+        return False
+    for entry in allowed_ips or []:
+        entry = (entry or "").strip()
+        if not entry:
+            continue
+        try:
+            if addr == ipaddress.ip_address(entry):
+                return True
+        except ValueError:
+            pass
+        try:
+            if addr in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 class APIKeyLockedException(Exception):
@@ -303,15 +334,14 @@ class APIKeyService:
             if api_key.expires_at and api_key.expires_at < utcnow():
                 return None
 
-            if api_key.allowed_ips:
-                if not ip_address or ip_address not in api_key.allowed_ips:
-                    logger.warning(
-                        "api_key_ip_blocked",
-                        key_id=key_id,
-                        key_name=api_key.name,
-                        client_ip=ip_address,
-                    )
-                    return None
+            if api_key.allowed_ips and not _ip_allowed(ip_address, api_key.allowed_ips):
+                logger.warning(
+                    "api_key_ip_blocked",
+                    key_id=key_id,
+                    key_name=api_key.name,
+                    client_ip=ip_address,
+                )
+                return None
 
             async with self._lock(f"api_key:{key_id}"):
                 api_key = await self._repo.get_by_id(key_id)
@@ -420,7 +450,16 @@ class APIKeyService:
         provided, the requested scopes are filtered to be a strict
         subset of the caller's own scopes (unless ``is_admin`` is True).
         BOPLA guard against privilege escalation via PATCH.
+
+        Expiration fields are DERIVED, not written verbatim:
+        ``never_expires=True`` clears ``expires_at``; an
+        ``expires_in_days`` value recomputes ``expires_at`` from now
+        (and re-arms ``never_expires=False``). When both are sent the
+        explicit day-window wins.
         """
+        clear_expiry = updates.pop("never_expires", None) is True
+        expires_in_days = updates.pop("expires_in_days", None)
+
         if "scopes" in updates and caller_scopes is not None:
             requested = updates.get("scopes") or []
             effective = _enforce_scope_subset(
@@ -444,6 +483,15 @@ class APIKeyService:
             api_key = await self._repo.get_by_id(key_id)
             if not api_key:
                 return None
+
+            if clear_expiry or expires_in_days:
+                if expires_in_days:
+                    # Explicit day-window wins over a simultaneous clear.
+                    api_key.expires_at = utcnow() + timedelta(days=expires_in_days)
+                    api_key.never_expires = False
+                else:
+                    api_key.expires_at = None
+                    api_key.never_expires = True
 
             for field, value in updates.items():
                 if hasattr(api_key, field):
@@ -488,7 +536,7 @@ class APIKeyService:
                 return False
 
             if api_key.allowed_ips and ip_address:
-                if ip_address not in api_key.allowed_ips:
+                if not _ip_allowed(ip_address, api_key.allowed_ips):
                     return False
 
             api_key.last_used_at = utcnow()

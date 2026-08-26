@@ -43,16 +43,34 @@ class ProxyHeadersMiddleware:
                 return True
         return False
 
-    def _extract_forwarded_client(self, xff_value: str) -> Optional[str]:
+    def _extract_forwarded_client(self, xff_value: str, trusted: list) -> Optional[str]:
+        """Return the client IP from an X-Forwarded-For chain, anti-spoofing safe.
+
+        Appending proxies (nginx/haproxy default) ADD the caller's IP to the
+        RIGHT side of the header, so anything to its LEFT is client-controlled
+        and must never be trusted. The walk therefore starts from the
+        RIGHTMOST entry and returns the first hop that is NOT a trusted
+        proxy ("rightmost-untrusted"). Only when every valid entry belongs
+        to the trusted chain do we fall back to the leftmost one — meaning
+        the request traversed proxies end-to-end and the originator itself
+        is a trusted proxy.
+        """
         parts = [p.strip() for p in xff_value.split(",") if p.strip()]
-        if not parts:
-            return None
-        leftmost = parts[0]
-        try:
-            ipaddress.ip_address(leftmost)
-            return leftmost
-        except ValueError:
-            return None
+        for part in reversed(parts):
+            try:
+                ipaddress.ip_address(part)
+            except ValueError:
+                continue
+            if self._is_trusted_proxy(part, trusted):
+                continue
+            return part
+        for part in parts:
+            try:
+                ipaddress.ip_address(part)
+                return part
+            except ValueError:
+                continue
+        return None
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -81,7 +99,7 @@ class ProxyHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
-        real_ip = self._extract_forwarded_client(xff_value)
+        real_ip = self._extract_forwarded_client(xff_value, trusted)
         if real_ip is None:
             await self.app(scope, receive, send)
             return

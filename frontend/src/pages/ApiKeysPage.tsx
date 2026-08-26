@@ -36,6 +36,7 @@ interface EditForm {
   description: string
   scopes: string
   allowed_ips: string
+  expires_in_days: string
 }
 
 export function ApiKeysPage() {
@@ -54,7 +55,8 @@ export function ApiKeysPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', scopes: '', allowed_ips: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', scopes: '', allowed_ips: '', expires_in_days: '' })
+  const [editNeverExpires, setEditNeverExpires] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
   const { data: keys, refetch } = useApiQuery<ApiKeyData[]>(['my-keys'], '/api/keys')
@@ -98,12 +100,15 @@ export function ApiKeysPage() {
       description: k.description || '',
       scopes: k.scopes.join(', '),
       allowed_ips: (k.allowed_ips || []).join(', '),
+      expires_in_days: '',
     })
+    setEditNeverExpires(false)
   }
 
   const closeEdit = () => {
     setEditingId(null)
-    setEditForm({ name: '', description: '', scopes: '', allowed_ips: '' })
+    setEditForm({ name: '', description: '', scopes: '', allowed_ips: '', expires_in_days: '' })
+    setEditNeverExpires(false)
   }
 
   const handleSaveEdit = async () => {
@@ -118,6 +123,11 @@ export function ApiKeysPage() {
           .split(',')
           .map((s: string) => s.trim())
           .filter(Boolean),
+        ...(editNeverExpires
+          ? { never_expires: true }
+          : editForm.expires_in_days
+            ? { expires_in_days: parseInt(editForm.expires_in_days, 10) }
+            : {}),
       })
       closeEdit()
       notify.success('Key updated.')
@@ -271,7 +281,7 @@ export function ApiKeysPage() {
                 <input
                   value={newAllowedIps}
                   onChange={(e) => setNewAllowedIps(e.target.value)}
-                  placeholder="Restrict to IPs (comma-separated, optional)"
+                  placeholder="Restrict to IPs or CIDR ranges (comma-separated, optional)"
                   data-testid="key-allowed-ips-input"
                   className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
                 />
@@ -498,7 +508,7 @@ export function ApiKeysPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Allowed IPs (comma-separated)</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Allowed IPs (comma-separated, IP or CIDR)</label>
               <input
                 value={editForm.allowed_ips}
                 onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
@@ -506,6 +516,36 @@ export function ApiKeysPage() {
                 data-testid="key-edit-allowed-ips-input"
                 className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Expiration</label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={editForm.expires_in_days}
+                onChange={(e) => setEditForm({ ...editForm, expires_in_days: e.target.value })}
+                disabled={editNeverExpires}
+                placeholder="Expires in days (empty = unchanged)"
+                data-testid="key-edit-expires-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none disabled:opacity-50"
+              />
+              <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={editNeverExpires}
+                  onChange={(e) => setEditNeverExpires(e.target.checked)}
+                  data-testid="key-edit-never-expires-toggle"
+                  className="accent-brand-violet"
+                />
+                Never expires
+                {(() => {
+                  const editingKey = keys?.find((k) => k.key_id === editingId)
+                  return editingKey?.expires_at ? (
+                    <span className="text-text-muted">(currently: {formatDateTime(editingKey.expires_at)})</span>
+                  ) : null
+                })()}
+              </label>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={closeEdit} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>

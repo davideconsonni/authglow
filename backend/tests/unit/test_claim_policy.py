@@ -454,19 +454,19 @@ class TestResolveUserField:
                 client_id="c1",
                 rules=[
                     ClaimRule(
-                        claim_name="https://authglow/tenant_id",
+                        claim_name="https://authglow/first_name",
                         source=ClaimSource.USER_FIELD,
-                        source_config=ClaimSourceConfig(user_field="tenant_id"),
+                        source_config=ClaimSourceConfig(user_field="first_name"),
                         include_in=[ClaimTarget.ACCESS_TOKEN],
                     )
                 ],
             )
         )
-        user = _make_user(tenant_id="acme")
+        user = _make_user(first_name="Jane")
         claims = _run(
             svc.build_claims(user, client_id="c1", scopes=[], target=ClaimTarget.ACCESS_TOKEN)
         )
-        assert claims["https://authglow/tenant_id"] == "acme"
+        assert claims["https://authglow/first_name"] == "Jane"
 
     def test_user_field_missing_attribute_yields_no_claim(self, test_settings):
         svc = ClaimPolicyService()
@@ -476,7 +476,7 @@ class TestResolveUserField:
                 client_id="c1",
                 rules=[
                     ClaimRule(
-                        claim_name="https://authglow/tenant_id",
+                        claim_name="https://authglow/first_name",
                         source=ClaimSource.USER_FIELD,
                         source_config=ClaimSourceConfig(user_field="nonexistent"),
                         include_in=[ClaimTarget.ACCESS_TOKEN],
@@ -489,7 +489,7 @@ class TestResolveUserField:
                 _make_user(), client_id="c1", scopes=[], target=ClaimTarget.ACCESS_TOKEN
             )
         )
-        assert "https://authglow/tenant_id" not in claims
+        assert "https://authglow/first_name" not in claims
 
     def test_user_field_with_no_user_yields_no_claim(self, test_settings):
         """``client_credentials`` grant: no user, USER_FIELD
@@ -501,9 +501,9 @@ class TestResolveUserField:
                 client_id="c1",
                 rules=[
                     ClaimRule(
-                        claim_name="https://authglow/tenant_id",
+                        claim_name="https://authglow/first_name",
                         source=ClaimSource.USER_FIELD,
-                        source_config=ClaimSourceConfig(user_field="tenant_id"),
+                        source_config=ClaimSourceConfig(user_field="first_name"),
                         include_in=[ClaimTarget.ACCESS_TOKEN],
                     )
                 ],
@@ -514,7 +514,7 @@ class TestResolveUserField:
                 user=None, client_id="c1", scopes=[], target=ClaimTarget.ACCESS_TOKEN
             )
         )
-        assert "https://authglow/tenant_id" not in claims
+        assert "https://authglow/first_name" not in claims
 
 
 class TestResolveStatic:

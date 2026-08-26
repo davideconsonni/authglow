@@ -1131,3 +1131,134 @@ class TestAPIKeyDescription:
         )
         updated = _run(api_key_service.update_key(api_key.key_id, {"description": None}))
         assert updated.description is None
+
+    def test_update_expires_in_days_recomputes_expiry_from_now(self, api_key_service):
+        key_data = APIKeyCreate(name="Expiring Soon", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-exp-1", key_data=key_data, created_by="user-exp-1"
+            )
+        )
+        assert api_key.expires_at is None
+
+        updated = _run(
+            api_key_service.update_key(api_key.key_id, {"expires_in_days": 30})
+        )
+        assert updated is not None
+        assert updated.never_expires is False
+        assert updated.expires_at is not None
+        remaining = (updated.expires_at - utcnow()).total_seconds()
+        assert 29 * 86400 < remaining <= 30 * 86400
+
+    def test_update_never_expires_clears_existing_expiry(self, api_key_service):
+        key_data = APIKeyCreate(name="Will Expire", scopes=["read"], expires_in_days=7)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-exp-2", key_data=key_data, created_by="user-exp-2"
+            )
+        )
+        assert api_key.expires_at is not None
+
+        updated = _run(
+            api_key_service.update_key(api_key.key_id, {"never_expires": True})
+        )
+        assert updated is not None
+        assert updated.expires_at is None
+        assert updated.never_expires is True
+
+    def test_update_days_window_wins_over_simultaneous_clear(self, api_key_service):
+        key_data = APIKeyCreate(name="Both Flags", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-exp-3", key_data=key_data, created_by="user-exp-3"
+            )
+        )
+
+        updated = _run(
+            api_key_service.update_key(
+                api_key.key_id, {"never_expires": True, "expires_in_days": 14}
+            )
+        )
+        assert updated is not None
+        # Explicit day-window wins over the simultaneous clear.
+        assert updated.never_expires is False
+        assert updated.expires_at is not None
+        remaining = (updated.expires_at - utcnow()).total_seconds()
+        assert 13 * 86400 < remaining <= 14 * 86400
+
+    def test_update_without_expiry_fields_leaves_expiry_untouched(self, api_key_service):
+        key_data = APIKeyCreate(name="Untouched Exp", scopes=["read"], expires_in_days=10)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-exp-4", key_data=key_data, created_by="user-exp-4"
+            )
+        )
+
+        updated = _run(api_key_service.update_key(api_key.key_id, {"name": "Renamed"}))
+        assert updated is not None
+        assert updated.name == "Renamed"
+        assert updated.expires_at == api_key.expires_at
+
+    def test_allowed_ips_cidr_network_accepts_member_rejects_outside(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="Cidr Key",
+            scopes=["read"],
+            allowed_ips=["198.51.100.0/24"],
+            never_expires=True,
+        )
+        api_key, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-cidr-1", key_data=key_data, created_by="user-cidr-1"
+            )
+        )
+
+        member = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="198.51.100.77")
+        )
+        assert member is not None
+        assert member.key_id == api_key.key_id
+
+        outside = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="203.0.113.5")
+        )
+        assert outside is None
+
+    def test_allowed_ips_exact_ip_entry_still_matches(self, api_key_service):
+        key_data = APIKeyCreate(
+            name="Exact Ip Key",
+            scopes=["read"],
+            allowed_ips=["203.0.113.5"],
+            never_expires=True,
+        )
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-cidr-2", key_data=key_data, created_by="user-cidr-2"
+            )
+        )
+        ok = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="203.0.113.5")
+        )
+        assert ok is not None
+        other = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="203.0.113.6")
+        )
+        assert other is None
+
+    def test_allowed_ips_unparseable_entry_fails_closed(self, api_key_service):
+        """A typo in the allowlist must never open the door: unparseable
+        entries match nothing."""
+        key_data = APIKeyCreate(
+            name="Typo Key",
+            scopes=["read"],
+            allowed_ips=["not-an-ip-or-cidr"],
+            never_expires=True,
+        )
+        _, plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-cidr-3", key_data=key_data, created_by="user-cidr-3"
+            )
+        )
+        blocked = _run(
+            api_key_service.validate_and_track(plaintext, ip_address="198.51.100.77")
+        )
+        assert blocked is None

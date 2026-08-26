@@ -41,6 +41,7 @@ interface EditForm {
   scopes: string
   allowed_ips: string
   tier: string
+  expires_in_days: string
 }
 
 interface CreatedKey {
@@ -69,6 +70,7 @@ const initialEdit: EditForm = {
   scopes: '',
   allowed_ips: '',
   tier: '',
+  expires_in_days: '',
 }
 
 export function AdminApiKeysPage() {
@@ -86,6 +88,7 @@ export function AdminApiKeysPage() {
   const [copied, setCopied] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>(initialEdit)
+  const [editNeverExpires, setEditNeverExpires] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   // Token Claims policy editor modal — opened from the per-row
   // KeyRound button. Tracks the key so the modal can call the
@@ -207,12 +210,15 @@ export function AdminApiKeysPage() {
       scopes: (k.scopes || []).join(', '),
       allowed_ips: (k.allowed_ips || []).join(', '),
       tier: k.tier || '',
+      expires_in_days: '',
     })
+    setEditNeverExpires(false)
   }
 
   const closeEdit = () => {
     setEditingId(null)
     setEditForm(initialEdit)
+    setEditNeverExpires(false)
   }
 
   const handleSaveEdit = async () => {
@@ -228,6 +234,11 @@ export function AdminApiKeysPage() {
           .map((s) => s.trim())
           .filter(Boolean),
         tier: editForm.tier.trim() || null,
+        ...(editNeverExpires
+          ? { never_expires: true }
+          : editForm.expires_in_days
+            ? { expires_in_days: parseInt(editForm.expires_in_days, 10) }
+            : {}),
       })
       closeEdit()
       notify.success('Key updated.')
@@ -530,7 +541,7 @@ export function AdminApiKeysPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Restrict to IPs (comma-separated, optional)</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Restrict to IPs or CIDR ranges (comma-separated, optional)</label>
               <input
                 value={form.allowed_ips}
                 onChange={(e) => setForm({ ...form, allowed_ips: e.target.value })}
@@ -676,7 +687,7 @@ export function AdminApiKeysPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Allowed IPs (comma-separated)</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Allowed IPs (comma-separated, IP or CIDR)</label>
               <input
                 value={editForm.allowed_ips}
                 onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
@@ -694,6 +705,36 @@ export function AdminApiKeysPage() {
                 data-testid="key-edit-tier-input"
                 className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Expiration</label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={editForm.expires_in_days}
+                onChange={(e) => setEditForm({ ...editForm, expires_in_days: e.target.value })}
+                disabled={editNeverExpires}
+                placeholder="Expires in days (empty = unchanged)"
+                data-testid="key-edit-expires-input"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none disabled:opacity-50"
+              />
+              <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={editNeverExpires}
+                  onChange={(e) => setEditNeverExpires(e.target.checked)}
+                  data-testid="key-edit-never-expires-toggle"
+                  className="accent-brand-violet"
+                />
+                Never expires
+                {(() => {
+                  const editingKey = keys?.find((k) => k.key_id === editingId)
+                  return editingKey?.expires_at ? (
+                    <span className="text-text-muted">(currently: {formatDateTime(editingKey.expires_at)})</span>
+                  ) : null
+                })()}
+              </label>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={closeEdit} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
