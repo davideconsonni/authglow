@@ -40,5 +40,6 @@ export const ROUTES = {
     DEVICE_AUTHORIZATIONS_NEW: '/admin/device-authorizations/new',
     SETTINGS: '/admin/settings',
     RATE_LIMITS: '/admin/rate-limits',
+    WEBHOOKS: '/admin/webhooks',
   },
 } as const

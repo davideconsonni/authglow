@@ -79,6 +79,9 @@ const AdminSettingsPage = lazy(() =>
 const AdminRateLimitsPage = lazy(() =>
   import('./pages/admin/AdminRateLimitsPage').then((m) => ({ default: m.AdminRateLimitsPage })),
 )
+const AdminWebhooksPage = lazy(() =>
+  import('./pages/admin/AdminWebhooksPage').then((m) => ({ default: m.AdminWebhooksPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -232,6 +235,7 @@ function App() {
             <Route path={ROUTES.ADMIN.FEDERATION} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminFederationPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.SETTINGS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminSettingsPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.RATE_LIMITS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminRateLimitsPage /></Suspense></PageTransition>} />
+            <Route path={ROUTES.ADMIN.WEBHOOKS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminWebhooksPage /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS_NEW} element={<PageTransition><Suspense fallback={<LazyFallback />}><DeviceAuthNewTool /></Suspense></PageTransition>} />
             <Route path={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS} element={<PageTransition><Suspense fallback={<LazyFallback />}><AdminDeviceAuthsPage /></Suspense></PageTransition>} />
           </Route>

@@ -39,8 +39,9 @@ if TYPE_CHECKING:
         TrustedDeviceRepository,
         UserPreferencesRepository,
         UserRepository,
-        UserRoleRepository,
         WebAuthnChallengeRepository,
+        WebhookDeliveryRepository,
+        WebhookRepository,
     )
 
 
@@ -622,3 +623,37 @@ def get_api_key_claim_policy_repository(
     )
 
     return FileAPIKeyClaimPolicyRepository(settings=settings)
+
+
+def get_webhook_repository(
+    settings: "Settings | None" = None,
+) -> "WebhookRepository":
+    """FastAPI factory for the webhook-endpoint repository.
+
+    Returns a fresh ``FileWebhookRepository`` per request — the repository
+    holds no mutable state, only fsspec handles. The webhook API routes
+    inject this via ``Depends``; tests can pass ``settings=`` explicitly to
+    bypass any cached settings (same pattern as the other factories).
+    """
+    from authglow.repositories.file.webhook import FileWebhookRepository
+
+    if settings is not None:
+        return FileWebhookRepository(settings=settings)
+    return FileWebhookRepository()
+
+
+def get_webhook_delivery_repository(
+    settings: "Settings | None" = None,
+) -> "WebhookDeliveryRepository":
+    """FastAPI factory for the webhook-delivery repository.
+
+    Returns a fresh ``FileWebhookDeliveryRepository`` per request. The
+    dispatcher (``services/webhook_dispatcher.py``) creates its own default
+    repository by default; this factory exists for FastAPI injection and
+    tests.
+    """
+    from authglow.repositories.file.webhook import FileWebhookDeliveryRepository
+
+    if settings is not None:
+        return FileWebhookDeliveryRepository(settings=settings)
+    return FileWebhookDeliveryRepository()

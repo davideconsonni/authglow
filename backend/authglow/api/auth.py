@@ -903,6 +903,21 @@ async def authorize_post(
         is_valid, _ = await storage.verify_and_maybe_rehash_password(user, password)
         if not is_valid:
             await storage.record_failed_login(user.id)
+
+            # B3: main-path failed logins bypass LoginHistoryService entirely
+            # (pre-existing gap — they only bump the lockout counter), so the
+            # webhook emission hooks here rather than in the history service.
+            from authglow.models.webhook_events import LOGIN_FAILED
+            from authglow.services.webhook_dispatcher import emit_webhook_event
+
+            emit_webhook_event(
+                LOGIN_FAILED,
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "ip_address": request.client.host if request.client else None,
+                },
+            )
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not user.is_active:

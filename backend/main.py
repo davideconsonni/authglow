@@ -17,22 +17,23 @@ from authglow.api.admin_settings import router as admin_settings_router
 from authglow.api.api_key import router as api_key_router
 from authglow.api.auth import router as auth_router
 from authglow.api.claim_policy import router as claim_policy_router
-from authglow.api.device_auth import router as device_auth_router
 from authglow.api.demo import router as demo_router
+from authglow.api.device_auth import router as device_auth_router
 from authglow.api.email_verification import router as email_verification_router
 from authglow.api.federation import router as federation_router
 from authglow.api.meta import router as meta_router
 from authglow.api.mfa import router as mfa_router
 from authglow.api.oauth2_advanced import router as oauth2_advanced_router
 from authglow.api.oauth_client import router as oauth_client_router
-from authglow.api.oauth_errors import register_oauth2_error_handler
 from authglow.api.oauth_consent_handler import router as consent_router
+from authglow.api.oauth_errors import register_oauth2_error_handler
 from authglow.api.oidc import router as oidc_router
 from authglow.api.passkey import router as passkey_router
 from authglow.api.password_reset import router as password_reset_router
 from authglow.api.rbac import router as rbac_router
 from authglow.api.setup import router as setup_router
 from authglow.api.user_profile import router as user_profile_router
+from authglow.api.webhooks import router as webhooks_router
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.middleware.csrf import CSRFMiddleware
@@ -152,6 +153,7 @@ app.include_router(email_verification_router, tags=["Email Verification"])
 app.include_router(consent_router, tags=["OAuth2 Consent"])
 app.include_router(rbac_router, tags=["RBAC"])
 app.include_router(user_profile_router, tags=["User Profile"])
+app.include_router(webhooks_router, tags=["Webhooks"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
 app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 app.include_router(federation_router, tags=["Federation"])

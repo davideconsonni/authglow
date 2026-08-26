@@ -123,6 +123,14 @@ class UserProfileService:
             # for PII encryption + atomic write).
             await self.user_storage.update_user(user, acquire_lock=False)
 
+        from authglow.models.webhook_events import USER_UPDATED
+        from authglow.services.webhook_dispatcher import emit_webhook_event
+
+        emit_webhook_event(
+            USER_UPDATED,
+            {"user_id": user_id, "updated_fields": sorted(update_data.keys())},
+        )
+
         return await self.get_user_profile(user_id)
 
     # Password Management
@@ -160,6 +168,11 @@ class UserProfileService:
             from authglow.services.refresh_token import RefreshTokenService
 
             await RefreshTokenService().revoke_user_tokens(user_id)
+
+        from authglow.models.webhook_events import PASSWORD_CHANGED
+        from authglow.services.webhook_dispatcher import emit_webhook_event
+
+        emit_webhook_event(PASSWORD_CHANGED, {"user_id": user_id})
 
         # Send security notification (fire-and-forget — don't block
         # the response on SMTP / email provider availability).

@@ -134,6 +134,11 @@ class UserService:
                 raise ValueError(f"User with email {user.email} already exists")
             await self._user_repo.create(user)
             await self._email_index_repo.insert(user.email.lower(), user.id)
+
+        from authglow.models.webhook_events import USER_CREATED
+        from authglow.services.webhook_dispatcher import emit_webhook_event
+
+        emit_webhook_event(USER_CREATED, {"user_id": user.id, "email": user.email})
         return user
 
     async def update_email(self, user_id: str, new_email: str) -> Optional[User]:
@@ -176,7 +181,13 @@ class UserService:
             if deleted:
                 await user_cache.delete(self._email_cache_key(user.email))
                 await user_by_id_cache.delete(self._user_cache_key(user_id))
-            return deleted
+
+        if deleted:
+            from authglow.models.webhook_events import USER_DELETED
+            from authglow.services.webhook_dispatcher import emit_webhook_event
+
+            emit_webhook_event(USER_DELETED, {"user_id": user_id, "email": user.email})
+        return deleted
 
     async def get_by_external_id(self, provider_id: str, external_id: str) -> Optional[User]:
         """Find a user by their federated identity

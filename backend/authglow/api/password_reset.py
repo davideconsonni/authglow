@@ -202,6 +202,11 @@ async def confirm_password_reset(
     rt_service = RefreshTokenService()
     await rt_service.revoke_user_tokens(user.id)
 
+    from authglow.models.webhook_events import PASSWORD_CHANGED
+    from authglow.services.webhook_dispatcher import emit_webhook_event
+
+    emit_webhook_event(PASSWORD_CHANGED, {"user_id": user.id})
+
     # Log successful reset
     await audit_service.log_event(
         event_type="password_reset_completed",
@@ -270,6 +275,11 @@ async def change_expired_password(
     # set_password acquires the per-user lock and resets the expiry flag
     # (``password_expired = require_change``) plus ``password_changed_at``.
     await storage.set_password(user.id, hashed_password, require_change=False)
+
+    from authglow.models.webhook_events import PASSWORD_CHANGED
+    from authglow.services.webhook_dispatcher import emit_webhook_event
+
+    emit_webhook_event(PASSWORD_CHANGED, {"user_id": user.id})
 
     await audit_service.log_event(
         event_type="password_changed_after_expiry",

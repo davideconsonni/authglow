@@ -51,6 +51,8 @@ from authglow.models.session import MFASession
 from authglow.models.token import AuthorizationCode, DeviceAuthorization
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferences
+from authglow.models.webhook import WebhookEndpoint
+from authglow.models.webhook_delivery import WebhookDelivery
 
 # Type alias for the "dict-based" records that do not yet have a
 # dedicated Pydantic model (login history, admin actions, security
@@ -1183,3 +1185,44 @@ _ALL_PROTOCOLS: tuple[type, ...] = (
     UserRepository,
     WebAuthnChallengeRepository,
 )
+
+
+# ---------------------------------------------------------------------------
+# Webhook Endpoint domain
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class WebhookRepository(Protocol):
+    """Persistence for admin-registered Webhook Endpoints (initiative B)."""
+
+    async def create(self, webhook: WebhookEndpoint) -> None:
+        """Persist a new webhook endpoint."""
+
+    async def get_by_id(self, webhook_id: str) -> Optional[WebhookEndpoint]:
+        """Return the webhook endpoint, or ``None``."""
+
+    async def update(
+        self, webhook_id: str, updates: Dict[str, Any]
+    ) -> Optional[WebhookEndpoint]:
+        """Apply the given non-``None`` field updates and persist. Returns
+        the updated webhook, or ``None`` if it was missing."""
+
+    async def delete(self, webhook_id: str) -> bool:
+        """Remove the endpoint. Returns ``True`` if it existed."""
+
+    async def list(self, active_only: bool = False) -> List[WebhookEndpoint]:
+        """Return every endpoint, optionally filtered by ``active``."""
+
+
+@runtime_checkable
+class WebhookDeliveryRepository(Protocol):
+    """Persistence for webhook delivery attempt records (capped per endpoint)."""
+
+    async def append(self, delivery: WebhookDelivery) -> None:
+        """Record one delivery attempt (newest first, capped storage)."""
+
+    async def list_for_webhook(
+        self, webhook_id: str, limit: int = 20
+    ) -> List[WebhookDelivery]:
+        """Return the most recent deliveries for the endpoint."""

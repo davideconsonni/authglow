@@ -15,6 +15,7 @@ import {
   Play,
   Menu,
   X,
+  Webhook,
   Globe,
   Smartphone,
   SlidersHorizontal,
@@ -75,8 +76,9 @@ export function Sidebar() {
         { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
         { label: 'Federation', icon: Globe, to: ROUTES.ADMIN.FEDERATION },
         { label: 'Device Auths', icon: Smartphone, to: ROUTES.ADMIN.DEVICE_AUTHORIZATIONS },
-        { label: 'Settings', icon: SlidersHorizontal, to: ROUTES.ADMIN.SETTINGS },
-        { label: 'Rate Limits', icon: Gauge, to: ROUTES.ADMIN.RATE_LIMITS },
+  { label: 'Settings', icon: SlidersHorizontal, to: ROUTES.ADMIN.SETTINGS },
+  { label: 'Rate Limits', icon: Gauge, to: ROUTES.ADMIN.RATE_LIMITS },
+  { label: 'Webhooks', icon: Webhook, to: ROUTES.ADMIN.WEBHOOKS },
       ],
     })
   }

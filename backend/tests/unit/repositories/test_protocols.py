@@ -30,6 +30,7 @@ of every edge case lives in the per-impl
 from __future__ import annotations
 
 import pytest
+
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferences
 from authglow.repositories.file.api_key import FileAPIKeyRepository
@@ -82,9 +83,13 @@ from authglow.repositories.file.token_blacklist import (
 from authglow.repositories.file.user_preferences import (
     FileUserPreferencesRepository,
 )
+from authglow.repositories.file.webhook import (
+    FileWebhookDeliveryRepository,
+    FileWebhookRepository,
+)
 from authglow.repositories.protocols import (
-    APIKeyRepository,
     APIKeyClaimPolicyRepository,
+    APIKeyRepository,
     AuthorizationCodeRepository,
     ClientClaimPolicyRepository,
     CSRFTokenRepository,
@@ -103,8 +108,9 @@ from authglow.repositories.protocols import (
     TokenBlacklistRepository,
     UserPreferencesRepository,
     UserRoleRepository,
+    WebhookDeliveryRepository,
+    WebhookRepository,
 )
-
 
 # (impl class, Protocol, kwargs_to_ctor, friendly_name)
 _IMPL_TABLE = [
@@ -202,6 +208,16 @@ _IMPL_TABLE = [
         FileFederationProviderRepository,
         FederationProviderRepository,
         "FederationProvider",
+    ),
+    (
+        FileWebhookRepository,
+        WebhookRepository,
+        "Webhook",
+    ),
+    (
+        FileWebhookDeliveryRepository,
+        WebhookDeliveryRepository,
+        "WebhookDelivery",
     ),
     (
         FileUserPreferencesRepository,

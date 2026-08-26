@@ -124,6 +124,11 @@ async def verify_mfa_enrollment(
     current_user.mfa_verified = True
     await storage.update_user(current_user)
 
+    from authglow.models.webhook_events import MFA_ENROLLED
+    from authglow.services.webhook_dispatcher import emit_webhook_event
+
+    emit_webhook_event(MFA_ENROLLED, {"user_id": current_user.id})
+
     # Log MFA enabled
     await audit_service.log_event(
         event_type="mfa_enabled", user_id=current_user.id, email=current_user.email

@@ -175,6 +175,19 @@ class LoginHistoryService:
             timestamp=masked["timestamp"],
         )
         await self._cleanup_old_entries(entry.user_id)
+
+        from authglow.models.webhook_events import LOGIN_FAILED, LOGIN_SUCCESS
+        from authglow.services.webhook_dispatcher import emit_webhook_event
+
+        emit_webhook_event(
+            LOGIN_SUCCESS if success else LOGIN_FAILED,
+            {
+                "user_id": user_id,
+                "email": email,
+                "ip_address": ip_address,
+                "failure_reason": failure_reason,
+            },
+        )
         return entry
 
     async def get_login_history(

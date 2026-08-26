@@ -249,6 +249,14 @@ class RefreshTokenService:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
                 await refresh_token_cache.delete(rt.token_lookup)
+
+                from authglow.models.webhook_events import SESSION_REVOKED
+                from authglow.services.webhook_dispatcher import emit_webhook_event
+
+                emit_webhook_event(
+                    SESSION_REVOKED,
+                    {"user_id": rt.user_id, "token_id": rt.token_id, "reason": reason},
+                )
                 return True
             except Exception:
                 return False
@@ -273,6 +281,14 @@ class RefreshTokenService:
                 await self._repo.update(rt)
                 await self._repo.remove_from_active_index(rt.token_id)
                 await refresh_token_cache.delete(rt.token_lookup)
+
+                from authglow.models.webhook_events import SESSION_REVOKED
+                from authglow.services.webhook_dispatcher import emit_webhook_event
+
+                emit_webhook_event(
+                    SESSION_REVOKED,
+                    {"user_id": rt.user_id, "token_id": rt.token_id, "reason": reason},
+                )
                 return True
             except Exception:
                 return False
@@ -319,7 +335,13 @@ class RefreshTokenService:
 
     async def revoke_user_tokens(self, user_id: str, client_id: Optional[str] = None) -> int:
         """Revoke all refresh tokens for a user."""
-        return await self._repo.revoke_user_tokens(user_id=user_id, client_id=client_id)
+        revoked = await self._repo.revoke_user_tokens(user_id=user_id, client_id=client_id)
+
+        from authglow.models.webhook_events import SESSION_REVOKED
+        from authglow.services.webhook_dispatcher import emit_webhook_event
+
+        emit_webhook_event(SESSION_REVOKED, {"user_id": user_id, "revoked_count": revoked})
+        return revoked
 
     # ------------------------------------------------------------------
     # Listing + cleanup
