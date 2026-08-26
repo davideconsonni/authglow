@@ -28,9 +28,10 @@ PUBLIC_URL = "https://93.184.216.34/x"
 
 
 def _wh(id="wh_disp000001", url=PUBLIC_URL, events=None,
-        secret="whsec_testsecret123", active=True):
+        secret="whsec_testsecret123", active=True, insecure=False):
     return WebhookEndpoint(
-        id=id, url=url, events=events or [USER_CREATED], secret=secret, active=active
+        id=id, url=url, events=events or [USER_CREATED], secret=secret, active=active,
+        insecure=insecure,
     )
 
 
@@ -102,6 +103,19 @@ class TestSsrfGuard:
 
         post.assert_not_called()
         assert summary["delivered"] is False
+
+    async def test_insecure_endpoint_bypasses_ssrf_guard(self, test_settings):
+        """Un endpoint flaggato ``insecure`` può consegnare a host privati."""
+        post = AsyncMock(return_value=_resp(200))
+        disp, patcher = self._dispatcher(test_settings, post)
+
+        with patcher:
+            summary = await disp.deliver_to_endpoint(
+                _wh(url="http://127.0.0.1:9999/hook", insecure=True), USER_CREATED
+            )
+
+        post.assert_awaited_once()
+        assert summary["delivered"] is True
 
     async def test_private_dns_resolution_blocked(self, test_settings, monkeypatch):
         # Hostname resolving into a PRIVATE range = HARD block: single

@@ -7,7 +7,9 @@ in the ``POST`` and rotate responses; every read returns a masked prefix.
 
 import secrets as pysecrets
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -50,16 +52,36 @@ def _mask_secret(secret: str) -> str:
     return f"{secret[:10]}…"
 
 
-def _validate_registration_url(url: str) -> None:
-    """Enforce the URL Policy: HTTPS always, localhost-HTTP only debug/demo.
+def _validate_registration_url(url: str, *, insecure: bool) -> None:
+    """Enforce the Webhook URL policy.
 
-    Reuses the DCR URI validator so the project has ONE URI validation
-    philosophy. Raises ``ValueError`` with a human-readable message.
+    * the URL must parse with scheme ``http``/``https`` AND a non-empty
+      hostname (rejects bare ``http://`` / ``https://`` placeholders);
+    * ``https`` is always accepted;
+    * plain ``http`` requires the per-endpoint ``insecure`` opt-in — an
+      explicit admin choice for extreme cases (e.g. an internal receiver
+      without TLS in production).
+
+    Deliberately does NOT reuse the OAuth redirect-URI validator: the two
+    policies differ (redirect URIs allow loopback-http unconditionally,
+    webhooks do not). Raises ``ValueError`` with a human-readable message.
     """
-    # Lazy import: oidc.py is large and pulls JWT machinery.
-    from authglow.api.oidc import _validate_redirect_uri
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
 
-    _validate_redirect_uri(url)
+    if not host:
+        raise ValueError(f"webhook url '{url}' is missing a hostname")
+    if scheme == "https":
+        return
+    if scheme == "http":
+        if insecure:
+            return
+        raise ValueError(
+            f"webhook url '{url}' uses http: enable the 'insecure' flag "
+            "for this endpoint or use https"
+        )
+    raise ValueError(f"webhook url '{url}' has invalid scheme '{scheme}'")
 
 
 def _validate_events(events: List[str]) -> List[str]:
@@ -83,6 +105,7 @@ def _to_response(webhook: WebhookEndpoint, *, include_secret: bool = False,
         "url": webhook.url,
         "events": webhook.events,
         "active": webhook.active,
+        "insecure": webhook.insecure,
         "masked_secret": _mask_secret(webhook.secret),
         "created_at": webhook.created_at.isoformat(),
         "updated_at": webhook.updated_at.isoformat(),
@@ -95,12 +118,14 @@ def _to_response(webhook: WebhookEndpoint, *, include_secret: bool = False,
 class WebhookCreate(BaseModel):
     url: str
     events: List[str]
+    insecure: bool = False
 
 
 class WebhookUpdate(BaseModel):
     url: Optional[str] = None
     events: Optional[List[str]] = None
     active: Optional[bool] = None
+    insecure: Optional[bool] = None
 
 
 @router.post("/api/admin/webhooks", status_code=status.HTTP_201_CREATED)
@@ -112,7 +137,7 @@ async def create_webhook(
 ):
     """Register a new webhook endpoint. Returns the Signing Secret ONCE."""
     try:
-        _validate_registration_url(payload.url.strip())
+        _validate_registration_url(payload.url.strip(), insecure=payload.insecure)
         events = _validate_events(payload.events)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -123,10 +148,19 @@ async def create_webhook(
         events=events,
         secret=_new_signing_secret(),
         active=True,
+        insecure=payload.insecure,
     )
 
     async with _LOCKS("webhooks"):
         await repo.create(webhook)
+
+    if webhook.insecure:
+        structlog.get_logger("authglow.audit").warning(
+            "webhook_insecure_registered",
+            webhook_id=webhook.id,
+            url=webhook.url,
+            admin_id=current_user.id,
+        )
 
     data = _to_response(webhook, include_secret=True, plaintext_secret=webhook.secret)
     return data
@@ -165,25 +199,49 @@ async def update_webhook(
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     updates: Dict[str, Any] = {}
-    if payload.url is not None:
-        try:
-            _validate_registration_url(payload.url.strip())
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        updates["url"] = payload.url.strip()
-    if payload.events is not None:
-        try:
-            updates["events"] = _validate_events(payload.events)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    if payload.active is not None:
-        updates["active"] = payload.active
 
+    # The URL policy applies to the EFFECTIVE combination (new/existing
+    # url × new/existing insecure flag), so a PATCH that flips only one
+    # side of the pair is validated against the resulting state.
     async with _LOCKS("webhooks"):
+        current = await repo.get_by_id(webhook_id)
+        if current is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+        if payload.url is not None or payload.insecure is not None:
+            effective_url = payload.url.strip() if payload.url is not None else current.url
+            effective_insecure = (
+                payload.insecure if payload.insecure is not None else current.insecure
+            )
+            try:
+                _validate_registration_url(effective_url, insecure=effective_insecure)
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+        if payload.url is not None:
+            updates["url"] = payload.url.strip()
+        if payload.insecure is not None:
+            updates["insecure"] = payload.insecure
+        if payload.events is not None:
+            try:
+                updates["events"] = _validate_events(payload.events)
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        if payload.active is not None:
+            updates["active"] = payload.active
+
         webhook = await repo.update(webhook_id, updates)
 
     if webhook is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+    if webhook.insecure and ("insecure" in updates or "url" in updates):
+        structlog.get_logger("authglow.audit").warning(
+            "webhook_insecure_updated",
+            webhook_id=webhook.id,
+            url=webhook.url,
+            admin_id=current_user.id,
+        )
     return _to_response(webhook)
 
 

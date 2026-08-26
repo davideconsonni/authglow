@@ -33,11 +33,31 @@ const WEBHOOK_EVENT_TYPES = [
   'webhook.test',
 ] as const
 
+// Mirror of the backend URL policy (authglow/api/webhooks.py:
+// _validate_registration_url). Returns an error message or null.
+function validateWebhookUrl(url: string, insecure: boolean): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return "Invalid URL (e.g. 'http://' with no hostname)."
+  }
+  if (!parsed.hostname) return 'URL is missing a hostname.'
+  if (parsed.protocol === 'https:') return null
+  if (parsed.protocol === 'http:') {
+    return insecure
+      ? null
+      : 'HTTP requires the "Allow insecure HTTP" flag for this endpoint.'
+  }
+  return `Unsupported scheme: ${parsed.protocol.replace(':', '')}.`
+}
+
 interface WebhookEndpointRow {
   id: string
   url: string
   events: string[]
   active: boolean
+  insecure: boolean
   masked_secret: string
   created_at: string
   updated_at: string
@@ -67,6 +87,9 @@ export function AdminWebhooksPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [createUrl, setCreateUrl] = useState('https://')
   const [createEvents, setCreateEvents] = useState<string[]>([])
+  const [createInsecure, setCreateInsecure] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [urlTouched, setUrlTouched] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const [secretReveal, setSecretReveal] = useState<string | null>(null)
@@ -81,6 +104,17 @@ export function AdminWebhooksPage() {
       queryClient.invalidateQueries({ queryKey: ['webhook-deliveries'] }),
     ])
 
+  // Live validation drives the Save button; the inline alert appears only
+  // once the field has been touched (or a save was attempted) so the form
+  // doesn't open shouting about its own default placeholder value.
+  const urlError = validateWebhookUrl(createUrl, createInsecure)
+
+  const resetFormState = () => {
+    setCreateInsecure(false)
+    setFormError(null)
+    setUrlTouched(false)
+  }
+
   // ----- Create -----
   const toggleEvent = (t: string) =>
     setCreateEvents((prev) =>
@@ -91,6 +125,7 @@ export function AdminWebhooksPage() {
     setEditingId(null)
     setCreateUrl('https://')
     setCreateEvents([])
+    resetFormState()
     setShowCreate(true)
   }
 
@@ -98,29 +133,38 @@ export function AdminWebhooksPage() {
     setEditingId(wh.id)
     setCreateUrl(wh.url)
     setCreateEvents([...wh.events])
+    setCreateInsecure(wh.insecure)
+    setFormError(null)
+    setUrlTouched(false)
     setShowCreate(true)
   }
 
   const closeForm = () => {
     setShowCreate(false)
     setEditingId(null)
+    resetFormState()
   }
 
   const handleCreate = async () => {
     if (creating) return
+    const validationError = validateWebhookUrl(createUrl, createInsecure)
+    if (validationError || createEvents.length === 0) {
+      setFormError(validationError ?? 'Seleziona almeno un evento.')
+      return
+    }
     setCreating(true)
     try {
       let res: WebhookEndpointRow & { secret?: string }
       if (editingId) {
-        // PATCH: url + events; il flag `active` si gestisce dal toggle di riga.
+        // PATCH: url + events + insecure; il flag `active` si gestisce dal toggle di riga.
         res = await api.patch<WebhookEndpointRow>(
           `/api/admin/webhooks/${editingId}`,
-          { url: createUrl.trim(), events: createEvents },
+          { url: createUrl.trim(), events: createEvents, insecure: createInsecure },
         ) as WebhookEndpointRow & { secret?: string }
       } else {
         res = await api.post<WebhookEndpointRow & { secret: string }>(
           '/api/admin/webhooks',
-          { url: createUrl.trim(), events: createEvents },
+          { url: createUrl.trim(), events: createEvents, insecure: createInsecure },
         )
       }
       if (!editingId && res.secret) {
@@ -217,16 +261,48 @@ export function AdminWebhooksPage() {
         <div className="mb-6 rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4" data-testid="webhooks-create-form">
           <div className="space-y-2">
             <label htmlFor="wh-url" className="block text-xs font-medium text-text-secondary">
-              Endpoint URL <span className="text-text-muted">(HTTPS; HTTP solo per localhost in sviluppo)</span>
+              Endpoint URL <span className="text-text-muted">(HTTPS; HTTP only with the insecure flag)</span>
             </label>
             <input
               id="wh-url"
               type="url"
               value={createUrl}
-              onChange={(e) => setCreateUrl(e.target.value)}
+              onChange={(e) => {
+                setCreateUrl(e.target.value)
+                setUrlTouched(true)
+                setFormError(null)
+              }}
               placeholder="https://mio-sito.it/hooks/authglow"
               className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm font-mono text-text-primary focus:border-brand-violet focus:outline-none"
             />
+            {formError && (
+              <p role="alert" data-testid="webhooks-form-error" className="text-xs text-semantic-error">
+                {formError}
+              </p>
+            )}
+            {!formError && urlError && urlTouched && (
+              <p role="alert" data-testid="webhooks-form-error" className="text-xs text-semantic-error">
+                {urlError}
+              </p>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs text-text-secondary">
+              <input
+                type="checkbox"
+                checked={createInsecure}
+                onChange={(e) => {
+                  setCreateInsecure(e.target.checked)
+                  setFormError(null)
+                }}
+                data-testid="webhooks-insecure-toggle"
+                className="accent-brand-violet"
+              />
+              Allow insecure HTTP <span className="text-text-muted">(extreme cases only: internal receivers without TLS)</span>
+            </label>
+            {createInsecure && (
+              <p className="text-[11px] text-semantic-warning">
+                Warning: events will be delivered in plaintext and the SSRF guard will be disabled for this endpoint.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <p className="text-xs font-medium text-text-secondary">Events</p>
@@ -247,7 +323,7 @@ export function AdminWebhooksPage() {
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
-              disabled={creating || !createUrl.startsWith('http') || createEvents.length === 0}
+              disabled={creating || !!urlError || createEvents.length === 0}
               data-testid="webhooks-create-confirm"
               className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50"
             >
@@ -284,6 +360,15 @@ export function AdminWebhooksPage() {
                 >
                   {wh.active ? 'active' : 'disabled'}
                 </span>
+                {wh.insecure && (
+                  <span
+                    data-testid={`webhook-insecure-${wh.id}`}
+                    title="Insecure HTTP endpoint: plaintext deliveries, SSRF guard disabled"
+                    className="inline-flex rounded-lg bg-semantic-warning/10 px-2 py-0.5 text-xs font-medium text-semantic-warning"
+                  >
+                    HTTP
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-xs text-text-primary">{wh.url}</p>
                   <p className="mt-0.5 flex flex-wrap gap-1">
@@ -369,7 +454,7 @@ export function AdminWebhooksPage() {
               </button>
             </div>
             <p className="mt-2 text-xs text-semantic-warning">
-              Copialo ora: viene mostrato <strong>una sola volta</strong>. Perderlo significa ruotare il secret.
+              Copy it now: it is shown <strong>only once</strong>. Losing it means rotating the secret.
             </p>
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2/50 p-3">
               <code className="min-w-0 flex-1 break-all font-mono text-xs text-text-primary" data-testid="secret-reveal-value">{secretReveal}</code>
@@ -379,7 +464,7 @@ export function AdminWebhooksPage() {
               onClick={() => setSecretReveal(null)}
               className="mt-4 w-full rounded-xl bg-gradient-cta py-2 text-sm font-semibold text-white"
             >
-              Ho copiato il secret
+              I've copied the secret
             </button>
           </div>
         </div>
@@ -388,7 +473,7 @@ export function AdminWebhooksPage() {
       <ConfirmDialog
         open={!!rotateId}
         title="Rotate Signing Secret"
-        message="Il vecchio secret cessa IMMEDIATAMENTE di valere: aggiorna la verifica del tuo endpoint nello stesso momento."
+        message="The old secret stops working IMMEDIATELY: update your endpoint's verification at the same time."
         confirmLabel="Rotate now"
         variant="danger"
         onConfirm={handleRotate}
@@ -398,7 +483,7 @@ export function AdminWebhooksPage() {
       <ConfirmDialog
         open={!!deleteId}
         title="Delete Webhook"
-        message="L'endpoint smetterà di ricevere eventi e il suo log consegne verrà rimosso."
+        message="The endpoint will stop receiving events and its delivery log will be removed."
         confirmLabel="Delete"
         variant="danger"
         onConfirm={handleDelete}
@@ -424,14 +509,14 @@ function DeliveriesPanel({ webhookId }: { webhookId: string }) {
   if (!deliveries || deliveries.length === 0) {
     return (
       <div className="border-t border-surface-2 px-5 py-3" data-testid="deliveries-panel-empty">
-        <p className="text-xs text-text-muted">Nessuna consegna registrata.</p>
+        <p className="text-xs text-text-muted">No deliveries recorded yet.</p>
       </div>
     )
   }
   return (
     <div className="border-t border-surface-2 px-5 py-3" data-testid="deliveries-panel">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-        Ultime consegne (nuove → vecchie, max 20)
+        Recent deliveries (newest → oldest, max 20)
       </p>
       <div className="space-y-1">
         {deliveries.map((d) => (

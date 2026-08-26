@@ -35,13 +35,15 @@ def _build(test_settings):
 DEFAULT_EVENTS = ["user.created"]
 
 
-def _create(client, url="https://example.com/hook", events=None):
+def _create(client, url="https://example.com/hook", events=None, insecure=None):
     body = {
         "url": url,
         # ``None`` → default catalog entry; an explicit ``[]`` is passed
         # through so the rejection path can be tested.
         "events": DEFAULT_EVENTS if events is None else events,
     }
+    if insecure is not None:
+        body["insecure"] = insecure
     return client.post("/api/admin/webhooks", json=body)
 
 
@@ -82,16 +84,35 @@ class TestCreateWebhook:
         assert resp.status_code == 201
         assert resp.json()["events"] == ["user.created"]
 
-    def test_create_enforces_https_for_remote_urls(self, test_settings):
-        client = _build(test_settings)
-        resp = _create(client, url="http://evil.example.com/hook")
-        assert resp.status_code == 400
-        assert "https" in resp.json()["detail"]
+    def test_create_rejects_http_without_insecure_flag(self, test_settings):
+        for url in ("http://evil.example.com/hook", "http://localhost:9000/hook"):
+            client = _build(test_settings)
+            resp = _create(client, url=url)
+            assert resp.status_code == 400, resp.text
+            assert "http" in resp.json()["detail"]
+            assert "insecure" in resp.json()["detail"]
 
-    def test_create_allows_localhost_http(self, test_settings):
+    def test_create_allows_http_with_insecure_flag(self, test_settings):
         client = _build(test_settings)
-        resp = _create(client, url="http://localhost:9000/hook")
+        resp = _create(client, url="http://localhost:9000/hook", insecure=True)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["insecure"] is True
+
+    def test_create_rejects_bare_scheme_placeholders(self, test_settings):
+        """'http://' / 'https://' senza hostname non sono URL validi."""
+        for url in ("http://", "https://"):
+            client = _build(test_settings)
+            resp = _create(client, url=url, insecure=True)
+            assert resp.status_code == 400, resp.text
+            assert "hostname" in resp.json()["detail"]
+
+    def test_create_defaults_to_secure(self, test_settings):
+        client = _build(test_settings)
+        resp = _create(client)
         assert resp.status_code == 201
+        assert resp.json()["insecure"] is False
+        listed = client.get("/api/admin/webhooks").json()
+        assert listed[0]["insecure"] is False
 
 
 class TestUpdateDeleteRotate:
@@ -107,6 +128,49 @@ class TestUpdateDeleteRotate:
         )
         assert patched.status_code == 200
         assert patched.json()["active"] is False
+
+    def test_patch_http_url_without_flag_rejected_on_secure_webhook(self, test_settings):
+        """PATCH del solo url http su endpoint secure → 400 (combo effettiva)."""
+        client = _build(test_settings)
+        wh = self._seed(client)
+
+        resp = client.patch(f"/api/admin/webhooks/{wh['id']}", json={"url": "http://x.example/h"})
+        assert resp.status_code == 400
+        # L'endpoint conserva url e stato insecure originali.
+        detail = client.get(f"/api/admin/webhooks/{wh['id']}").json()
+        assert detail["url"] == wh["url"]
+        assert detail["insecure"] is False
+
+    def test_patch_insecure_false_rejected_while_url_stays_http(self, test_settings):
+        """Spegnere il flag su un endpoint http esistente → 400."""
+        client = _build(test_settings)
+        wh = _create(client, url="http://10.0.0.5/hook", insecure=True).json()
+
+        resp = client.patch(f"/api/admin/webhooks/{wh['id']}", json={"insecure": False})
+        assert resp.status_code == 400
+        detail = client.get(f"/api/admin/webhooks/{wh['id']}").json()
+        assert detail["insecure"] is True
+
+    def test_patch_can_move_http_endpoint_to_https_and_drop_flag(self, test_settings):
+        client = _build(test_settings)
+        wh = _create(client, url="http://localhost:9000/hook", insecure=True).json()
+
+        resp = client.patch(
+            f"/api/admin/webhooks/{wh['id']}",
+            json={"url": "https://x.example/hook", "insecure": False},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["url"] == "https://x.example/hook"
+        assert body["insecure"] is False
+
+    def test_patch_bare_placeholder_url_rejected_even_with_flag(self, test_settings):
+        client = _build(test_settings)
+        wh = self._seed(client)
+        resp = client.patch(
+            f"/api/admin/webhooks/{wh['id']}", json={"url": "http://", "insecure": True}
+        )
+        assert resp.status_code == 400
 
     def test_patch_missing_returns_404(self, test_settings):
         client = _build(test_settings)

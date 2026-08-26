@@ -206,7 +206,9 @@ class WebhookDispatcher:
                 # SSRF guard per attempt: an IP literal in a private range is
                 # a HARD block (no retry); a transient DNS failure is treated
                 # like any other delivery error and participates in retries.
-                assert_public_url(webhook.url)
+                # Endpoints flagged ``insecure`` opted out at registration.
+                if not webhook.insecure:
+                    assert_public_url(webhook.url)
 
                 client = await get_http_client()
                 resp = await client.post(

@@ -1,8 +1,10 @@
 """Webhook Endpoint domain model.
 
-A Webhook Endpoint is an HTTPS URL registered by an admin that receives
-signed IdP events (see CONTEXT.md). The ``secret`` field carries the
-Signing Secret in PLAINTEXT at the domain layer — the repository is
+A Webhook Endpoint is a URL registered by an admin that receives signed
+IdP events (see CONTEXT.md). HTTPS endpoints are the norm; plain-HTTP
+endpoints require the explicit per-endpoint ``insecure`` opt-in (the
+dispatcher skips its SSRF guard for them). The ``secret`` field carries
+the Signing Secret in PLAINTEXT at the domain layer — the repository is
 responsible for encrypting it at rest (same pattern as User PII fields).
 """
 
@@ -23,6 +25,10 @@ class WebhookEndpoint(BaseModel):
     events: List[str]
     secret: str  # plaintext in the DOMAIN; encrypted at rest by the repository
     active: bool = True
+    # Explicit opt-out from HTTPS enforcement and from the delivery-time
+    # SSRF guard. Default False covers legacy documents stored before the
+    # field existed (no migration needed).
+    insecure: bool = False
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

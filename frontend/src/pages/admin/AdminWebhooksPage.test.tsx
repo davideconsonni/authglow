@@ -46,6 +46,7 @@ const WH = {
   url: 'https://hooks.example.com/x',
   events: ['user.created', 'login.failed'],
   active: true,
+  insecure: false,
   masked_secret: 'whsec_ab12…',
   created_at: '2026-08-25T10:00:00Z',
   updated_at: '2026-08-25T10:00:00Z',
@@ -85,10 +86,65 @@ describe('AdminWebhooksPage', () => {
       expect(postMock).toHaveBeenCalledWith('/api/admin/webhooks', {
         url: 'https://nuovo.example/hook',
         events: ['user.created'],
+        insecure: false,
       })
     })
     expect(await screen.findByTestId('secret-reveal-modal')).toBeInTheDocument()
     expect(screen.getByTestId('secret-reveal-value').textContent).toBe('whsec_NEWSECRET123')
+  })
+
+  it('blocks a bare http:// placeholder client-side without any network call', async () => {
+    const postMock = api.post as ReturnType<typeof vi.fn>
+    render(<Wrapper><AdminWebhooksPage /></Wrapper>)
+    fireEvent.click(screen.getByTestId('webhooks-create-btn'))
+
+    fireEvent.change(screen.getByLabelText(/Endpoint URL/), { target: { value: 'http://' } })
+    fireEvent.click(screen.getByLabelText('user.created'))
+
+    // Alert live dopo il touch + bottone disabilitato.
+    expect(screen.getByRole('alert')).toHaveTextContent('Invalid URL')
+    expect(screen.getByTestId('webhooks-create-confirm')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('webhooks-create-confirm'))
+    expect(postMock).not.toHaveBeenCalled()
+  })
+
+  it('allows plain http only with the insecure opt-in and posts the flag', async () => {
+    const postMock = api.post as ReturnType<typeof vi.fn>
+    postMock.mockResolvedValueOnce({ ...WH, id: 'wh_insec000001', insecure: true })
+
+    render(<Wrapper><AdminWebhooksPage /></Wrapper>)
+    fireEvent.click(screen.getByTestId('webhooks-create-btn'))
+
+    fireEvent.change(screen.getByLabelText(/Endpoint URL/), {
+      target: { value: 'http://10.0.0.5/hook' },
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('HTTP requires')
+
+    fireEvent.click(screen.getByTestId('webhooks-insecure-toggle'))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('user.created'))
+    fireEvent.click(screen.getByTestId('webhooks-create-confirm'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/api/admin/webhooks', {
+        url: 'http://10.0.0.5/hook',
+        events: ['user.created'],
+        insecure: true,
+      })
+    })
+  })
+
+  it('shows the HTTP badge only for insecure endpoints', () => {
+    mockState.webhooks = [{ ...WH, insecure: true }]
+    const { unmount } = render(<Wrapper><AdminWebhooksPage /></Wrapper>)
+    expect(screen.getByTestId(`webhook-insecure-${WH.id}`)).toBeInTheDocument()
+    unmount()
+
+    mockState.webhooks = [WH]
+    render(<Wrapper><AdminWebhooksPage /></Wrapper>)
+    expect(screen.queryByTestId(`webhook-insecure-${WH.id}`)).not.toBeInTheDocument()
   })
 
   it('sends a test event and opens the deliveries panel', async () => {
@@ -152,6 +208,7 @@ describe('AdminWebhooksPage', () => {
       expect(patchMock).toHaveBeenCalledWith(`/api/admin/webhooks/${WH.id}`, {
         url: 'https://modificata.example/hook',
         events: ['user.created', 'login.failed', 'login.success'],
+        insecure: false,
       })
     })
   })
