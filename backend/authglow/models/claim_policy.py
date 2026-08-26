@@ -407,17 +407,6 @@ BUILTIN_TEMPLATES: List[ClaimTemplate] = [
         include_in=[ClaimTarget.ACCESS_TOKEN],
     ),
     ClaimTemplate(
-        id="rbac-groups",
-        label="RBAC Groups (namespaced, alias of Roles)",
-        description=(
-            "Same as RBAC Roles but under the 'groups' name — some "
-            "OIDC clients (e.g. AWS Cognito) expect 'groups'."
-        ),
-        claim_name="groups",
-        source=ClaimSource.RBAC_ROLES,
-        include_in=[ClaimTarget.ACCESS_TOKEN, ClaimTarget.USERINFO],
-    ),
-    ClaimTemplate(
         id="user-tenant",
         label="Tenant ID (from user)",
         description=(
