@@ -74,6 +74,7 @@ async def create_oauth_client(
         client_name=client_data.client_name,
         client_secret=plaintext_secret,  # Will be hashed in storage
         redirect_uris=client_data.redirect_uris,
+        allowed_post_logout_redirect_uris=client_data.allowed_post_logout_redirect_uris,
         allowed_scopes=client_data.allowed_scopes,
         grant_types=client_data.grant_types,
         is_confidential=client_data.is_confidential,

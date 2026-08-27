@@ -20,6 +20,16 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 ---
 
+## 🎯 Key Features
+
+- 🔐 **OAuth 2.0 / OIDC Authorization Server** — Full implementation with PKCE, JWKS auto-rotation, DPoP (RFC 9449), Device Authorization Grant (RFC 8628), and refresh token theft detection
+- 🛡️ **Multi-Factor Authentication** — TOTP, backup codes, trusted devices, seamlessly integrated into OAuth2 flows
+- 🔑 **Passkeys / WebAuthn / FIDO2** — Passwordless authentication with biometrics (Touch ID, Windows Hello) and security keys (YubiKey)
+- 🌍 **Identity Federation** — Login via CIE, SPID, Google, Microsoft/Entra ID, Apple, Keycloak, Auth0, Okta — any OIDC provider works out of the box
+- ☁️ **Serverless & Simple** — No database required, deploy anywhere in 30 seconds. Storage backend swappable via environment variable (file, S3, GCS, Azure Blob)
+
+---
+
 ## ✨ Features
 
 **Authentication & protocols**

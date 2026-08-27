@@ -21,6 +21,7 @@ interface OAuthClient {
   name?: string
   is_confidential: boolean
   redirect_uris: string[]
+  allowed_post_logout_redirect_uris?: string[]
   grant_types: string[]
   scopes?: string[]
   allowed_scopes?: string[]
@@ -37,14 +38,8 @@ interface OAuthClient {
   custom_css?: string | null
   branding?: Record<string, unknown> | null
   token_endpoint_auth_method?: string
-  // T.2: server-managed symmetric key for ``client_secret_jwt`` clients.
-  // The backend never returns the encrypted blob, only a boolean flag.
   has_client_secret_jwt_key?: boolean
-  // T.2: embedded public JWK for ``private_key_jwt`` clients.
   public_jwk?: Record<string, unknown> | null
-  // T.3: DPoP binding (RFC 9449 / FAPI 2.0). When ``true`` the
-  // client must send a DPoP proof JWT on every token endpoint
-  // and resource server request.
   dpop_bound?: boolean
 }
 
@@ -84,6 +79,7 @@ interface Template {
   require_pkce: boolean
   require_consent: boolean
   show_redirect_uris: boolean
+  show_logout_uris: boolean
   access_token_lifetime: number
   refresh_token_lifetime: number
 }
@@ -93,19 +89,19 @@ const TEMPLATES: Template[] = [
     id: 'web', label: 'Web App', desc: 'Backend server with users',
     icon: Globe, grant_types: ['authorization_code', 'refresh_token'], is_confidential: true,
     auth_method: 'client_secret_basic', require_pkce: false, require_consent: true,
-    show_redirect_uris: true, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
+    show_redirect_uris: true, show_logout_uris: true, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
   },
   {
     id: 'service', label: 'Service / API', desc: 'Machine-to-machine',
     icon: Cog, grant_types: ['client_credentials', 'refresh_token'], is_confidential: true,
     auth_method: 'client_secret_basic', require_pkce: false, require_consent: false,
-    show_redirect_uris: false, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
+    show_redirect_uris: false, show_logout_uris: false, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
   },
   {
     id: 'mobile', label: 'Mobile / SPA', desc: 'No backend, PKCE secured',
     icon: Smartphone, grant_types: ['authorization_code', 'refresh_token'], is_confidential: false,
     auth_method: 'none', require_pkce: true, require_consent: true,
-    show_redirect_uris: true, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
+    show_redirect_uris: true, show_logout_uris: true, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
   },
 ]
 
@@ -153,6 +149,7 @@ export function AdminOAuthClientsPage() {
   const [isConfidential, setIsConfidential] = useState(true)
   const [authMethod, setAuthMethod] = useState<AuthMethod>('client_secret_basic')
   const [redirectUris, setRedirectUris] = useState<string[]>([''])
+  const [allowedPostLogoutRedirectUris, setAllowedPostLogoutRedirectUris] = useState<string[]>([''])
   const [requirePkce, setRequirePkce] = useState(false)
   const [requireConsent, setRequireConsent] = useState(true)
   const [homepageUri, setHomepageUri] = useState('')
@@ -194,7 +191,7 @@ export function AdminOAuthClientsPage() {
 
   const resetForm = () => {
     setName(''); setDescription(''); setGrantTypes([]); setIsConfidential(true)
-    setAuthMethod('client_secret_basic'); setRedirectUris([''])
+    setAuthMethod('client_secret_basic'); setRedirectUris(['']); setAllowedPostLogoutRedirectUris([''])
     setRequirePkce(false); setRequireConsent(true)
     setHomepageUri(''); setLogoUri(''); setTermsUri(''); setPrivacyUri('')
     setAllowedScopes('openid profile email'); setCustomCss('')
@@ -221,6 +218,11 @@ export function AdminOAuthClientsPage() {
     } else {
       setRedirectUris([])
     }
+    if (t.show_logout_uris) {
+      setAllowedPostLogoutRedirectUris([''])
+    } else {
+      setAllowedPostLogoutRedirectUris([])
+    }
     setFormErrors({})
     // T.2: a template switch implies a fresh symmetric key will be
     // minted server-side, so drop any leftover JWK content.
@@ -239,6 +241,7 @@ export function AdminOAuthClientsPage() {
     setIsConfidential(c.is_confidential)
     setAuthMethod((c.token_endpoint_auth_method as AuthMethod) || (c.is_confidential ? 'client_secret_basic' : 'none'))
     setRedirectUris(c.redirect_uris?.length ? c.redirect_uris : [''])
+    setAllowedPostLogoutRedirectUris(c.allowed_post_logout_redirect_uris?.length ? c.allowed_post_logout_redirect_uris : [''])
     setRequirePkce(c.require_pkce ?? false)
     setRequireConsent(c.require_consent ?? true)
     setHomepageUri(c.homepage_uri || '')
@@ -341,6 +344,7 @@ export function AdminOAuthClientsPage() {
     }
     if (grantTypes.includes('authorization_code')) {
       payload.redirect_uris = redirectUris.map(u => u.trim()).filter(Boolean)
+      payload.allowed_post_logout_redirect_uris = allowedPostLogoutRedirectUris.map(u => u.trim()).filter(Boolean)
     }
     // T.2: attach the public_jwk only when the selected method
     // requires it. The textarea is JSON-encoded; validation
@@ -417,7 +421,15 @@ export function AdminOAuthClientsPage() {
     setRedirectUris(next); setFormErrors({...formErrors, redirect_uris: ''})
   }
 
+  const addLogoutUri = () => setAllowedPostLogoutRedirectUris([...allowedPostLogoutRedirectUris, ''])
+  const removeLogoutUri = (i: number) => setAllowedPostLogoutRedirectUris(allowedPostLogoutRedirectUris.filter((_, idx) => idx !== i))
+  const updateLogoutUri = (i: number, v: string) => {
+    const next = [...allowedPostLogoutRedirectUris]; next[i] = v
+    setAllowedPostLogoutRedirectUris(next)
+  }
+
   const showRedirectUris = grantTypes.includes('authorization_code')
+  const showLogoutUris = grantTypes.includes('authorization_code')
   const showBreakingChangeWarning = editClientId && (
     JSON.stringify([...grantTypes].sort()) !== JSON.stringify([...originalGrantTypes].sort()) ||
     isConfidential !== originalIsConfidential
@@ -813,6 +825,22 @@ export function AdminOAuthClientsPage() {
                       </div>
                       <button type="button" onClick={addRedirectUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
                       {formErrors.redirect_uris && <FieldError id="client-redirect-uris-error">{formErrors.redirect_uris}</FieldError>}
+                    </div>
+                  )}
+
+                  {showLogoutUris && (
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logout Redirect URIs <span className="text-text-muted">(optional)</span></label>
+                      <p className="mb-1.5 text-[10px] text-text-muted">Where to redirect users after logout (OIDC post_logout_redirect_uri)</p>
+                      <div className="space-y-1.5">
+                        {allowedPostLogoutRedirectUris.map((uri, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <input value={uri} onChange={e => updateLogoutUri(i, e.target.value)} placeholder={`https://app.example.com/logout${allowedPostLogoutRedirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-logout-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                            {allowedPostLogoutRedirectUris.length > 1 && <button type="button" onClick={() => removeLogoutUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={12} /></button>}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={addLogoutUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
                     </div>
                   )}
 

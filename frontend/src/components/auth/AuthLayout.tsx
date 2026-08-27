@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Shield, Zap, Globe, Sparkles } from 'lucide-react'
+import { Key, ShieldCheck, Fingerprint, Globe, Cloud } from 'lucide-react'
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -8,10 +8,11 @@ interface AuthLayoutProps {
 }
 
 const FEATURES = [
-  { icon: Shield, label: 'Zero-Trust Security', desc: 'Bank-grade encryption for every session' },
-  { icon: Zap, label: 'Lightning Fast', desc: 'Sub-100ms authentication responses' },
-  { icon: Globe, label: 'Federated Identity', desc: 'Google, SAML, OIDC — one login' },
-  { icon: Sparkles, label: 'AI-Native', desc: 'Smart risk scoring & anomaly detection' },
+  { icon: Key, label: 'OAuth 2.0 / OIDC Server', desc: 'Full authorization server with PKCE, JWKS rotation, and DPoP' },
+  { icon: ShieldCheck, label: 'Multi-Factor Authentication', desc: 'TOTP, backup codes, and trusted devices' },
+  { icon: Fingerprint, label: 'Passkeys / WebAuthn', desc: 'Passwordless auth with biometrics and security keys' },
+  { icon: Globe, label: 'Identity Federation', desc: 'CIE, SPID, Google, Microsoft, Apple — one login' },
+  { icon: Cloud, label: 'Serverless & Simple', desc: 'No database required, deploy anywhere in 30 seconds' },
 ] as const
 
 export function AuthLayout({ children, title, description }: AuthLayoutProps) {
