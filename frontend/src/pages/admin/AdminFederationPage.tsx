@@ -5,6 +5,7 @@ import { useApiQuery } from '../../hooks/useApi'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { Banner } from '../../components/shared/Banner'
+import { ScopePicker } from '../../components/shared/ScopePicker'
 import { notify } from '../../stores/toastStore'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
@@ -283,12 +284,11 @@ export function AdminFederationPage() {
                 <TextInput label="Client ID *" value={form.client_id} onChange={(v) => setForm({ ...form, client_id: v })} placeholder="your-client-id" />
                 <TextInput label="Client Secret *" type="password" value={clientSecret} onChange={(v) => setClientSecret(v)} placeholder="●●●●●●●●" />
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-text-muted">Scopes (space-separated)</label>
-                  <input
+                  <label className="mb-1 block text-[11px] font-medium text-text-muted">Scopes</label>
+                  <ScopePicker
                     value={rawScopes}
-                    onChange={(e) => setRawScopes(e.target.value)}
-                    placeholder="openid profile email"
-                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                    onChange={setRawScopes}
+                    placeholder="Add custom scope"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">

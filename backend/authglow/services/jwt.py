@@ -54,7 +54,7 @@ def _extract_extra_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
     modelling each one.
     """
     excluded = _RESERVED_CLAIMS | {
-        "scopes",
+        "scope",
         "email",
         "token_version",  # internal sentinel
     }
@@ -90,6 +90,7 @@ _RESERVED_CLAIMS: frozenset[str] = frozenset(
         "jti",
         "azp",
         "cnf",
+        "scope",
         "token_type",
     }
 )
@@ -341,7 +342,9 @@ class JWTService:
             "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
-            "scopes": scopes,
+            # RFC 9068 §2.2: the ``scope`` claim is a single
+            # space-delimited string.
+            "scope": " ".join(scopes),
             "exp": expire,
             "iat": datetime.now(timezone.utc),
             "token_type": "access",
@@ -375,7 +378,8 @@ class JWTService:
             "jti": str(uuid4()),
             "sub": user_id,
             "email": email,
-            "scopes": scopes,
+            # RFC 9068 §2.2: space-delimited ``scope`` string here too.
+            "scope": " ".join(scopes),
             "exp": expire,
             "iat": datetime.now(timezone.utc),
             "token_type": "refresh",
@@ -434,7 +438,13 @@ class JWTService:
         token_data = TokenData(
             sub=sub,
             email=email,
-            scopes=payload.get("scopes", []),
+            # RFC 9068 §2.2: ``scope`` arrives as a space-delimited
+            # string; TokenData keeps the parsed list internally.
+            scopes=(
+                payload["scope"].split()
+                if isinstance(payload.get("scope"), str)
+                else []
+            ),
             exp=datetime.fromtimestamp(exp_val, tz=timezone.utc),
             iat=datetime.fromtimestamp(iat_val, tz=timezone.utc),
             token_type=str(payload.get("token_type", "access")),

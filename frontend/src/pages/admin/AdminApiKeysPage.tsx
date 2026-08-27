@@ -6,7 +6,9 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { Banner } from '../../components/shared/Banner'
 import { ApiKeyClaimsTab } from '../../components/admin/ApiKeyClaimsTab'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { ScopePicker } from '../../components/shared/ScopePicker'
 import { formatDateTime } from '../../lib/utils'
+import { parseScopeInput } from '../../lib/scopes'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { notify } from '../../stores/toastStore'
 
@@ -163,16 +165,18 @@ export function AdminApiKeysPage() {
     setSaving(true)
     setFormError(null)
     try {
-      const scopes = form.scopes
-        ? form.scopes.split(',').map((s) => s.trim()).filter(Boolean)
-        : []
+      const { tokens: parsedScopes, invalid } = parseScopeInput(form.scopes)
+      if (invalid.length > 0) {
+        setFormError(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+        return
+      }
       const allowed_ips = form.allowed_ips
         ? form.allowed_ips.split(',').map((s) => s.trim()).filter(Boolean)
         : []
       const body: Record<string, unknown> = {
         name: form.name,
         description: form.description.trim() || null,
-        scopes,
+        scopes: parsedScopes,
         user_email: form.user_email,
         allowed_ips,
         tier: form.tier.trim() || null,
@@ -223,12 +227,17 @@ export function AdminApiKeysPage() {
 
   const handleSaveEdit = async () => {
     if (!editingId) return
+    const { tokens: editScopes, invalid } = parseScopeInput(editForm.scopes)
+    if (invalid.length > 0) {
+      notify.error(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+      return
+    }
     setSavingEdit(true)
     try {
       await api.patch(`/api/keys/${editingId}`, {
         name: editForm.name,
         description: editForm.description.trim() || null,
-        scopes: editForm.scopes.split(',').map((s) => s.trim()).filter(Boolean),
+        scopes: editScopes,
         allowed_ips: editForm.allowed_ips
           .split(',')
           .map((s) => s.trim())
@@ -507,12 +516,12 @@ export function AdminApiKeysPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label>
-              <input
+              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
+              <ScopePicker
                 value={form.scopes}
-                onChange={(e) => setForm({ ...form, scopes: e.target.value })}
-                placeholder="read, write"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                onChange={(value) => setForm({ ...form, scopes: value })}
+                placeholder="Add custom scope"
+                testId="key-scopes"
               />
             </div>
 
@@ -678,12 +687,12 @@ export function AdminApiKeysPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label>
-              <input
+              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
+              <ScopePicker
                 value={editForm.scopes}
-                onChange={(e) => setEditForm({ ...editForm, scopes: e.target.value })}
-                data-testid="key-edit-scopes-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                onChange={(value) => setEditForm({ ...editForm, scopes: value })}
+                placeholder="Add custom scope"
+                testId="key-edit-scopes"
               />
             </div>
             <div>

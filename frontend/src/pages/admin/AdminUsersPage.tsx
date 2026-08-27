@@ -9,7 +9,9 @@ import { Banner } from '../../components/shared/Banner'
 import { DemoInbox } from '../../components/shared/DemoInbox'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
+import { ScopePicker } from '../../components/shared/ScopePicker'
 import { formatDateTime } from '../../lib/utils'
+import { parseScopeInput } from '../../lib/scopes'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuthStore } from '../../stores/authStore'
 import { notify } from '../../stores/toastStore'
@@ -106,18 +108,28 @@ export function AdminUsersPage() {
   }
 
   const handleInvite = async () => {
-    if (!inviteForm.email) return; setInviting(true)
+    if (!inviteForm.email) return
+    const { tokens, invalid } = parseScopeInput(inviteForm.scopes)
+    if (invalid.length > 0) {
+      notify.error(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+      return
+    }
+    setInviting(true)
     try {
-      const scopes = inviteForm.scopes ? inviteForm.scopes.split(',').map(s => s.trim()).filter(Boolean) : []
-      await api.post('/api/users/invite', { email: inviteForm.email, first_name: inviteForm.first_name, last_name: inviteForm.last_name, scopes })
+      await api.post('/api/users/invite', { email: inviteForm.email, first_name: inviteForm.first_name, last_name: inviteForm.last_name, scopes: tokens })
       setShowInvite(false); setInviteForm({ email: '', first_name: '', last_name: '', scopes: '' }); notify.success('User invited.'); await refetch()
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
   }
 
   const handleCreate = async () => {
-    if (!createForm.email || !createForm.password) return; setCreating(true)
+    if (!createForm.email || !createForm.password) return
+    const { tokens, invalid } = parseScopeInput(createForm.scopes)
+    if (invalid.length > 0) {
+      notify.error(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+      return
+    }
+    setCreating(true)
     try {
-      const scopes = createForm.scopes ? createForm.scopes.split(',').map(s => s.trim()).filter(Boolean) : []
       await api.post('/api/admin/users/create', {
         email: createForm.email,
         password: createForm.password,
@@ -125,7 +137,7 @@ export function AdminUsersPage() {
         last_name: createForm.last_name || null,
         phone: createForm.phone || null,
         avatar_url: createForm.avatar_url || null,
-        scopes,
+        scopes: tokens,
       })
       setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' }); notify.success('User created.'); await refetch()
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
@@ -221,7 +233,15 @@ export function AdminUsersPage() {
         <div><label className="mb-1 block text-xs font-medium text-text-muted">Password</label><input value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 8 characters" type="password" data-testid="create-user-password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
         <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
         <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">Phone</label><input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} placeholder="+1234567890" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Avatar URL</label><input value={createForm.avatar_url} onChange={e => setCreateForm({...createForm, avatar_url: e.target.value})} placeholder="https://..." className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
-        <div><label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label><input value={createForm.scopes} onChange={e => setCreateForm({...createForm, scopes: e.target.value})} placeholder="openid, profile, email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
+          <ScopePicker
+            value={createForm.scopes}
+            onChange={(value) => setCreateForm({...createForm, scopes: value})}
+            placeholder="Add custom scope"
+            testId="create-user-scopes"
+          />
+        </div>
         <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
       </div></div>}
 
@@ -229,7 +249,15 @@ export function AdminUsersPage() {
         <h3 className="text-lg font-semibold text-text-primary">Invite User</h3>
         <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="user@example.com" type="email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
         <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={inviteForm.first_name} onChange={e => setInviteForm({...inviteForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={inviteForm.last_name} onChange={e => setInviteForm({...inviteForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
-        <div><label className="mb-1 block text-xs font-medium text-text-muted">Initial scopes (comma-separated)</label><input value={inviteForm.scopes} onChange={e => setInviteForm({...inviteForm, scopes: e.target.value})} placeholder="openid, profile, email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-text-muted">Initial scopes</label>
+          <ScopePicker
+            value={inviteForm.scopes}
+            onChange={(value) => setInviteForm({...inviteForm, scopes: value})}
+            placeholder="Add custom scope"
+            testId="invite-user-scopes"
+          />
+        </div>
         <div className="flex gap-3 pt-2"><button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleInvite} disabled={inviting || !inviteForm.email} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{inviting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Create User</button></div>
       </div></div>}
 

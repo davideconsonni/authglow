@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from authglow.core.datetime import utcnow
 from authglow.core.password import check_password_byte_length
+from authglow.core.scopes import validate_scope_tokens
 
 
 class User(BaseModel):
@@ -88,6 +89,11 @@ class UserCreate(BaseModel):
     scopes: List[str] = Field(default_factory=lambda: ["read"])
     email_verified: bool = False
 
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_rfc6749_charset(cls, v: List[str]) -> List[str]:
+        return validate_scope_tokens(v)
+
     @field_validator("password")
     @classmethod
     def _vapt039_password_byte_cap(cls, v: str) -> str:
@@ -141,3 +147,8 @@ class InviteUser(BaseModel):
     scopes: List[str] = Field(default_factory=lambda: ["read"])
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_rfc6749_charset(cls, v: List[str]) -> List[str]:
+        return validate_scope_tokens(v)

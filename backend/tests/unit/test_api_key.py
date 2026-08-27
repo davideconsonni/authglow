@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from authglow.core.datetime import utcnow
-from authglow.models.api_key import APIKeyCreate, APIKeyCreateResponse
+from authglow.models.api_key import APIKeyCreate, APIKeyCreateResponse, APIKeyUpdate
 from authglow.services.api_key import APIKeyLockedException, _enforce_scope_subset
 
 
@@ -1262,3 +1262,23 @@ class TestAPIKeyDescription:
             api_key_service.validate_and_track(plaintext, ip_address="198.51.100.77")
         )
         assert blocked is None
+
+    def test_create_rejects_comma_joined_scope_token(self):
+        """RFC 6749 §3.3: scopes are space-delimited. 'read,write' is a
+        CSV habit, never a valid token — rejected at the model layer."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="Invalid scope token"):
+            APIKeyCreate(name="Csv Key", scopes=["read", "read,write"])
+
+    def test_update_rejects_comma_joined_scope_token(self, api_key_service):
+        from pydantic import ValidationError
+
+        key_data = APIKeyCreate(name="Patch Csv", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-cidr-4", key_data=key_data, created_by="user-cidr-4"
+            )
+        )
+        with pytest.raises(ValidationError, match="Invalid scope token"):
+            APIKeyUpdate(scopes=["write,admin"])

@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from authglow.core.datetime import utcnow
 from authglow.core.password import check_password_byte_length
+from authglow.core.scopes import validate_scope_tokens
 
 if TYPE_CHECKING:
     from authglow.models.user import User
@@ -105,6 +106,11 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_rfc6749_charset(cls, v):
+        return validate_scope_tokens(v) if v is not None else v
 
 
 class SetPasswordRequest(BaseModel):

@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { usePlaygroundStore } from '../../../stores/playgroundStore'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
+import { ScopePicker } from '../../shared/ScopePicker'
 
 const STEPS = [
   { id: 'config', label: 'Configure' },
@@ -41,7 +42,7 @@ export function ClientCredentialsFlow() {
     try {
       const formBody: Record<string, string> = {
         grant_type: 'client_credentials',
-        scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
+        scope: localScopes.replace(/\s+/g, ' ').trim(),
       }
       const headers: Record<string, string> = {}
       if (localClientId && localClientSecret) {
@@ -95,7 +96,7 @@ export function ClientCredentialsFlow() {
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Scopes</label>
-            <input value={localScopes} onChange={(e) => setLocalScopes(e.target.value)} placeholder="read write" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
           </div>
           <button onClick={handleConfigNext} disabled={!localClientId || !localClientSecret} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />

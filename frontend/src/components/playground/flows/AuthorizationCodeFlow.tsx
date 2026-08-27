@@ -5,6 +5,7 @@ import { usePlaygroundStore, generateState } from '../../../stores/playgroundSto
 import { generateOAuthNonce, generatePkceChallenge, generatePkceVerifier, parseAuthorizationCallback, PLAYGROUND_TRANSACTION_KEY, readJwtClaim } from '../../../lib/oauthCrypto'
 import { FlowStepper } from '../FlowStepper'
 import { ResponsePanel } from '../ResponsePanel'
+import { ScopePicker } from '../../shared/ScopePicker'
 
 const STEPS = [
   { id: 'config', label: 'Configure' },
@@ -45,7 +46,7 @@ export function AuthorizationCodeFlow() {
       response_type: 'code',
       client_id: localClientId,
       redirect_uri: localRedirectUri,
-      scope: localScopes.replace(/,/g, ' ').replace(/\s+/g, ' ').trim(),
+      scope: localScopes.replace(/\s+/g, ' ').trim(),
       state: localState,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
@@ -163,7 +164,7 @@ export function AuthorizationCodeFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Scopes</label>
-              <input value={localScopes} onChange={(e) => setLocalScopes(e.target.value)} placeholder="openid profile email" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
             </div>
             <div className="flex items-end gap-2">
               <div className="flex-1">

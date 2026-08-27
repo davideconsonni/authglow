@@ -1077,6 +1077,18 @@ async def first_party_oidc_config():
     }
 
 
+@router.get("/api/scopes")
+async def list_available_scopes():
+    """Return the list of available OAuth scopes.
+
+    This endpoint helps frontend components (like scope pickers) know
+    which scopes are available for selection.
+    """
+    return {
+        "scopes": FIRST_PARTY_OAUTH_SCOPES.split(),
+    }
+
+
 @router.post("/oauth2/token", response_model=Token)
 @limiter.limit("30/minute")
 async def token_endpoint(

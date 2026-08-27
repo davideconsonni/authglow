@@ -16,6 +16,7 @@ import { useApiQuery } from '../../../hooks/useApi'
 import { useAuth } from '../../../hooks/useAuth'
 import { cn } from '../../../lib/utils'
 import { FlowStepper } from '../FlowStepper'
+import { ScopePicker } from '../../shared/ScopePicker'
 
 interface ClaimSourceConfig {
   user_field?: string | null
@@ -391,15 +392,9 @@ export function TokenPreviewFlow() {
           {/* Scopes input */}
           <div>
             <label className="mb-1 block text-[10px] font-semibold text-text-muted uppercase">
-              Scopes (space-separated)
+              Scopes
             </label>
-            <input
-              value={scopesText}
-              onChange={e => setScopesText(e.target.value)}
-              placeholder="openid profile email"
-              data-testid="preview-scopes-input"
-              className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
-            />
+            <ScopePicker value={scopesText} onChange={setScopesText} placeholder="Add custom scope" />
             <p className="mt-1 text-[10px] text-text-muted">
               Claims gated by a <code className="font-mono">required_scope</code> are only emitted when the matching scope is present.
             </p>
@@ -450,7 +445,7 @@ export function TokenPreviewFlow() {
                 </p>
               )}
               <p className="mt-2 text-[10px] text-text-muted">
-                The token also carries the standard JWT claims (iss, sub, aud, exp, iat, jti, scopes, email) - managed by the JWT service.
+                The token also carries the standard JWT claims (iss, sub, aud, exp, iat, jti, scope, email) - managed by the JWT service.
               </p>
             </div>
           )}

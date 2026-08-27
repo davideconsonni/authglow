@@ -4,7 +4,9 @@ import { api } from '../lib/api'
 import { useApiQuery } from '../hooks/useApi'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { PageHeader } from '../components/layout/PageHeader'
+import { ScopePicker } from '../components/shared/ScopePicker'
 import { formatDateTime } from '../lib/utils'
+import { parseScopeInput } from '../lib/scopes'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { notify } from '../stores/toastStore'
 
@@ -71,10 +73,15 @@ export function ApiKeysPage() {
   const handleCreate = async () => {
     setCreating(true)
     try {
+      const { tokens: scopes, invalid } = parseScopeInput(newScopes)
+      if (invalid.length > 0) {
+        notify.error(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+        return
+      }
       const data = await api.post<CreatedKey>('/api/keys', {
         name: newName || 'My Key',
         description: newDescription.trim() || null,
-        scopes: newScopes.split(',').map((s: string) => s.trim()).filter(Boolean),
+        scopes,
         expires_in_days: newExpires ? parseInt(newExpires) : null,
         allowed_ips: newAllowedIps
           .split(',')
@@ -113,12 +120,17 @@ export function ApiKeysPage() {
 
   const handleSaveEdit = async () => {
     if (!editingId) return
+    const { tokens: scopes, invalid } = parseScopeInput(editForm.scopes)
+    if (invalid.length > 0) {
+      notify.error(`Invalid scope token(s): ${invalid.join(', ')} — scopes are space-separated (RFC 6749).`)
+      return
+    }
     setSavingEdit(true)
     try {
       await api.patch(`/api/keys/${editingId}`, {
         name: editForm.name,
         description: editForm.description.trim() || null,
-        scopes: editForm.scopes.split(',').map((s: string) => s.trim()).filter(Boolean),
+        scopes,
         allowed_ips: editForm.allowed_ips
           .split(',')
           .map((s: string) => s.trim())
@@ -276,7 +288,15 @@ export function ApiKeysPage() {
                   data-testid="key-description-input"
                   className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
                 />
-                <input value={newScopes} onChange={(e) => setNewScopes(e.target.value)} placeholder="Scopes (comma-separated)" data-testid="key-scopes-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
+                  <ScopePicker
+                    value={newScopes}
+                    onChange={setNewScopes}
+                    placeholder="Add custom scope"
+                    testId="key-scopes"
+                  />
+                </div>
                 <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
                 <input
                   value={newAllowedIps}
@@ -499,12 +519,12 @@ export function ApiKeysPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes (comma-separated)</label>
-              <input
+              <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
+              <ScopePicker
                 value={editForm.scopes}
-                onChange={(e) => setEditForm({ ...editForm, scopes: e.target.value })}
-                data-testid="key-edit-scopes-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                onChange={(value) => setEditForm({ ...editForm, scopes: value })}
+                placeholder="Add custom scope"
+                testId="key-edit-scopes"
               />
             </div>
             <div>

@@ -65,7 +65,7 @@ class TestExtraClaimsAccessToken:
         ]
         # The standard owned-claims list:
         owned = {"iss", "sub", "aud", "exp", "iat", "jti", "azp", "cnf", "token_type",
-                 "scopes", "email", "https://authglow.example.com/claims/roles",
+                 "scope", "email", "https://authglow.example.com/claims/roles",
                  "https://authglow.example.com/claims/permissions"}
         # When no extra_claims is passed, the payload has only
         # the JWT-service-owned claims + email + scopes.

@@ -10,6 +10,7 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import { CopyButton } from '../../components/shared/CopyButton'
 import { ConsentScreen } from '../../components/oauth/ConsentScreen'
 import { TokenClaimsTab } from '../../components/admin/TokenClaimsTab'
+import { ScopePicker } from '../../components/shared/ScopePicker'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { notify } from '../../stores/toastStore'
 
@@ -872,8 +873,8 @@ export function AdminOAuthClientsPage() {
             {showAdvanced && (
               <div className="space-y-4 rounded-xl border border-surface-2 bg-nested-panel p-4 mb-5">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Allowed scopes (space-separated)</label>
-                  <input value={allowedScopes} onChange={e => setAllowedScopes(e.target.value)} placeholder="openid profile email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                  <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Allowed scopes</label>
+                  <ScopePicker value={allowedScopes} onChange={setAllowedScopes} placeholder="Add custom scope" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

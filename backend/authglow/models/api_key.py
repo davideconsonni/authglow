@@ -4,9 +4,10 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from authglow.core.datetime import utcnow
+from authglow.core.scopes import validate_scope_tokens
 
 
 class APIKey(BaseModel):
@@ -69,6 +70,11 @@ class APIKeyCreate(BaseModel):
     allowed_ips: List[str] = Field(default_factory=list)
     tier: Optional[str] = Field(None, max_length=64)
     user_email: Optional[str] = Field(None, max_length=254)
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_rfc6749_charset(cls, v):
+        return validate_scope_tokens(v)
 
 
 class APIKeyResponse(BaseModel):
@@ -136,6 +142,11 @@ class APIKeyUpdate(BaseModel):
     tier: Optional[str] = Field(None, max_length=64)
     expires_in_days: Optional[int] = Field(None, ge=1, le=365)
     never_expires: Optional[bool] = None
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_rfc6749_charset(cls, v):
+        return validate_scope_tokens(v) if v is not None else v
 
 
 class APIKeyUsageStats(BaseModel):
