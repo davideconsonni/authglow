@@ -73,8 +73,12 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 ## 🖥️ Screenshots
 
 <p align="center">
-  <img src="images/homepage.png" alt="AuthGlow sign-in screen with passkey support" width="48%">
-  <img src="images/profile.png" alt="AuthGlow admin dashboard and user profile" width="48%">
+  <img src="images/01-sign-in.png" alt="AuthGlow sign-in screen with passkey support" width="48%">
+  <img src="images/02-security.png" alt="AuthGlow security settings and MFA" width="48%">
+</p>
+<p align="center">
+  <img src="images/03-jwk-keys.png" alt="AuthGlow JWK keys management" width="48%">
+  <img src="images/04-admin.png" alt="AuthGlow admin dashboard" width="48%">
 </p>
 
 ---
