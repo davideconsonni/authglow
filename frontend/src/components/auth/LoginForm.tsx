@@ -12,6 +12,7 @@ export function LoginForm() {
   const [searchParams] = useSearchParams()
   const redirect = searchParams.get('redirect')
   const [starting, setStarting] = useState(false)
+  const [demoCopied, setDemoCopied] = useState(false)
   const { meta } = useDemoMeta()
 
   const startLogin = async () => {
@@ -68,9 +69,34 @@ export function LoginForm() {
       {meta.demo_mode && meta.demo_user_email && meta.demo_user_password && (
         <div
           data-testid="demo-credentials"
-          className="rounded-xl border border-surface-2 bg-surface-1/50 p-4 text-sm"
+          role="button"
+          tabIndex={0}
+          title="Click to copy credentials"
+          aria-label="Click to copy demo credentials"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(`${meta.demo_user_email} / ${meta.demo_user_password}`)
+            } catch {
+              // ignore clipboard errors
+            }
+            try {
+              sessionStorage.setItem('authglow_demo_email', meta.demo_user_email || '')
+              sessionStorage.setItem('authglow_demo_password', meta.demo_user_password || '')
+            } catch {
+              // ignore storage errors
+            }
+            setDemoCopied(true)
+            setTimeout(() => setDemoCopied(false), 2000)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              ;(e.currentTarget as HTMLElement).click()
+            }
+          }}
+          className="cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 p-4 text-sm transition-colors hover:border-brand-violet/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/30"
         >
-          <p className="mb-2 font-medium text-text-primary">Demo credentials</p>
+          <p className="mb-2 font-medium text-text-primary">Demo credentials <span className="font-normal text-text-muted">— click to copy</span>{demoCopied && <span className="ml-2 text-xs font-medium text-semantic-success">Copied!</span>}</p>
           <p className="break-all font-mono text-xs text-text-secondary">
             <span className="text-text-muted">Email: </span>{meta.demo_user_email}
           </p>

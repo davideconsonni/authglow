@@ -220,6 +220,20 @@ export function OAuthAuthorizePage() {
   const [error, setError] = useState('')
   const { meta } = useDemoMeta()
 
+  // If demo credentials were copied on the previous LoginForm screen,
+  // pre-fill the OAuth sign-in inputs (no auto-submit).
+  useEffect(() => {
+    if (!meta.demo_mode) return
+    try {
+      const storedEmail = sessionStorage.getItem('authglow_demo_email')
+      const storedPassword = sessionStorage.getItem('authglow_demo_password')
+      if (storedEmail) setEmail((prev) => prev || storedEmail)
+      if (storedPassword) setPassword((prev) => prev || storedPassword)
+    } catch {
+      // ignore storage errors
+    }
+  }, [meta.demo_mode])
+
   const clientId = searchParams.get('client_id') || ''
   const redirectUri = searchParams.get('redirect_uri') || ''
   const scope = searchParams.get('scope') || 'read'
@@ -496,9 +510,24 @@ export function OAuthAuthorizePage() {
               {meta.demo_mode && meta.demo_user_email && meta.demo_user_password && (
                 <div
                   data-testid="demo-credentials"
-                  className="mb-4 rounded-xl border border-surface-2 bg-surface-1/50 px-4 py-3 text-sm"
+                  role="button"
+                  tabIndex={0}
+                  title="Click to fill credentials"
+                  aria-label="Click to fill demo credentials into the sign-in form"
+                  onClick={() => {
+                    setEmail(meta.demo_user_email || '')
+                    setPassword(meta.demo_user_password || '')
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setEmail(meta.demo_user_email || '')
+                      setPassword(meta.demo_user_password || '')
+                    }
+                  }}
+                  className="mb-4 cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 px-4 py-3 text-sm transition-colors hover:border-brand-violet/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/30"
                 >
-                  <p className="mb-1 font-semibold text-text-primary">Demo credentials</p>
+                  <p className="mb-1 font-semibold text-text-primary">Demo credentials <span className="font-normal text-text-muted">— click to fill</span></p>
                   <p className="break-all font-mono text-xs text-text-secondary">
                     <span className="text-text-muted">Email: </span>{meta.demo_user_email}
                   </p>

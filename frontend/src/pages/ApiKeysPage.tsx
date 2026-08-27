@@ -18,6 +18,7 @@ interface ApiKeyData {
   key_prefix: string
   is_active: boolean
   expires_at: string | null
+  never_expires?: boolean
   last_used_at: string | null
   created_at: string
   allowed_ips: string[]
@@ -105,11 +106,11 @@ export function ApiKeysPage() {
     setEditForm({
       name: k.name,
       description: k.description || '',
-      scopes: k.scopes.join(', '),
+      scopes: k.scopes.join(' '),
       allowed_ips: (k.allowed_ips || []).join(', '),
       expires_in_days: '',
     })
-    setEditNeverExpires(false)
+    setEditNeverExpires(!!k.never_expires || k.expires_at === null)
   }
 
   const closeEdit = () => {
