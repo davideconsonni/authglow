@@ -83,6 +83,16 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 ---
 
+## 🧪 Demo
+
+Live demo (link non cliccabile anti-bot — copia e aggiungi `https://` davanti):
+
+```
+authglow-demo[.]onrender[.]com
+```
+
+---
+
 ## 🚀 Quick Start
 
 The full experience — login screen, MFA, passkeys, admin dashboard, OAuth Playground — needs **both** the backend (API) and the frontend (UI) running. It's two terminals and about three minutes.
