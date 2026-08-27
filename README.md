@@ -83,9 +83,9 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 
 ---
 
-## 🧪 Demo
+## 🧪 Live Demo
 
-Live demo (link non cliccabile anti-bot — copia e aggiungi `https://` davanti):
+Live demo (non-clickable link to avoid bots — copy and prepend `https://`):
 
 ```
 authglow-demo[.]onrender[.]com
