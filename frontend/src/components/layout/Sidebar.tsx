@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   User,
@@ -41,10 +41,36 @@ export function Sidebar() {
   const [isMobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useAuth()
+  const location = useLocation()
   const mobileNavRef = useRef<HTMLElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
-
+  const railNavRef = useRef<HTMLDivElement>(null)
+  const [trail, setTrail] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
   const isAdmin = user?.scopes?.includes('admin')
+
+  const updateTrail = useCallback(() => {
+    const nav = railNavRef.current
+    if (!nav) return
+    const active = nav.querySelector<HTMLElement>('a[aria-current]')
+    if (!active) {
+      setTrail(null)
+      return
+    }
+    const n = nav.getBoundingClientRect()
+    const a = active.getBoundingClientRect()
+    setTrail({ top: a.top - n.top, left: a.left - n.left, width: a.width, height: a.height })
+  }, [])
+
+  useLayoutEffect(() => {
+    updateTrail()
+    const t = setTimeout(updateTrail, 340)
+    return () => clearTimeout(t)
+  }, [updateTrail, collapsed, isAdmin, location.pathname])
+
+  useEffect(() => {
+    window.addEventListener('resize', updateTrail)
+    return () => window.removeEventListener('resize', updateTrail)
+  }, [updateTrail])
 
   const sections: NavSection[] = [
     {
@@ -147,13 +173,12 @@ export function Sidebar() {
     <div
       className={cn(
         'flex h-full flex-col bg-surface-1 border-r border-surface-2 transition-all duration-300 scrollbar-dark',
-        collapsed && !isMobile ? 'w-16' : 'w-64',
+        collapsed && !isMobile ? 'w-20' : 'w-64',
+        !isMobile && 'sidebar-rail',
       )}
     >
-      <div className="flex h-16 items-center justify-between px-4 border-b border-surface-2">
-        {!collapsed && (
-          <span className="text-lg font-bold gradient-text">AuthGlow</span>
-        )}
+      <div className={cn('flex h-16 items-center justify-between px-4 border-b border-surface-2', collapsed && !isMobile && 'px-3')}>
+        <span className="text-lg font-bold gradient-text">{collapsed && !isMobile ? 'AG' : 'AuthGlow'}</span>
         {!isMobile && (
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -174,7 +199,15 @@ export function Sidebar() {
         )}
       </div>
 
-      <nav ref={isMobile ? mobileNavRef : undefined} className="flex-1 overflow-y-auto py-4 space-y-6">
+      <nav ref={isMobile ? mobileNavRef : undefined} className="flex-1 overflow-y-auto py-4">
+        <div ref={!isMobile ? railNavRef : undefined} className="relative space-y-6">
+        {!isMobile && trail && (
+          <div
+            className="sidebar-active-trail"
+            aria-hidden="true"
+            style={{ top: trail.top, left: trail.left, width: trail.width, height: trail.height }}
+          />
+        )}
         {sections.map((section) => (
           <div key={section.label} className="px-3">
             {!collapsed && (
@@ -193,16 +226,16 @@ export function Sidebar() {
                         onClick={isMobile ? closeMobile : undefined}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-xl px-3 min-h-[44px] py-2.5 text-sm font-medium transition-all duration-150',
+                        'relative z-[1] flex items-center gap-3 rounded-xl px-3 min-h-[44px] py-2.5 text-sm font-medium transition-all duration-150',
                         isActive
-                          ? 'bg-brand-violet/15 text-brand-violet shadow-glow-violet'
+                          ? 'bg-brand-wash text-brand-accent shadow-glow-accent'
                           : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
                         collapsed && !isMobile && 'justify-center px-2',
                       )
                     }
                     title={collapsed && !isMobile ? item.label : undefined}
                   >
-                    <item.icon size={20} />
+                    <item.icon size={collapsed && !isMobile ? 22 : 20} />
                     {!collapsed && <span>{item.label}</span>}
                   </NavLink>
                 </li>
@@ -210,6 +243,7 @@ export function Sidebar() {
             </ul>
           </div>
         ))}
+        </div>
       </nav>
     </div>
   )

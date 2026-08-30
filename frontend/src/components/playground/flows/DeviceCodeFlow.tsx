@@ -171,14 +171,14 @@ export function DeviceCodeFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your-client-id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your-client-id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Scopes</label>
               <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
             </div>
           </div>
-          <button onClick={() => { store.setClientId(localClientId); store.setScopes(localScopes); setCompleted(['config']); setCurrentStep('request') }} disabled={!localClientId} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={() => { store.setClientId(localClientId); store.setScopes(localScopes); setCompleted(['config']); setCurrentStep('request') }} disabled={!localClientId} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -187,7 +187,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'request' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Send the device authorization request. This creates a device_code and user_code.</p>
-          <button onClick={handleRequest} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleRequest} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Request Device Code
           </button>
@@ -201,7 +201,7 @@ export function DeviceCodeFlow() {
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">User Code</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg bg-surface-2 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-brand-violet font-mono">{deviceAuth.user_code}</code>
+                <code className="flex-1 rounded-lg bg-surface-2 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-brand-accent font-mono">{deviceAuth.user_code}</code>
                 <button
                   onClick={() => { navigator.clipboard.writeText(deviceAuth.user_code); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
                   className="rounded-lg bg-surface-2 p-3 text-text-muted hover:text-text-secondary transition-colors"
@@ -220,7 +220,7 @@ export function DeviceCodeFlow() {
               <div>Poll interval: <span className="text-text-primary">{deviceAuth.interval}s</span></div>
             </div>
           </div>
-          <button onClick={() => { setCompleted(['config', 'request', 'display']); setCurrentStep('verify') }} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]">
+          <button onClick={() => { setCompleted(['config', 'request', 'display']); setCurrentStep('verify') }} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next: Verify <ArrowRight size={16} />
           </button>
         </div>
@@ -229,7 +229,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'verify' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Simulate the user approving the device authorization. (Requires an authenticated admin session.)</p>
-          <button onClick={handleVerify} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleVerify} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Approve Device
           </button>
@@ -239,7 +239,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'poll' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Start polling the token endpoint until the device is authorized or the code expires.</p>
-          <button onClick={handleStartPolling} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleStartPolling} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Start Polling
           </button>

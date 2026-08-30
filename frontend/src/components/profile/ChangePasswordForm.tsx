@@ -65,7 +65,7 @@ export function ChangePasswordForm() {
   return (
     <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4">
       <div className="flex items-center gap-3">
-        <Lock size={20} className="text-brand-violet" />
+        <Lock size={20} className="text-brand-accent" />
         <h3 className="text-sm font-semibold text-text-primary">Change Password</h3>
       </div>
 
@@ -89,7 +89,7 @@ export function ChangePasswordForm() {
                   autoComplete={field === 'current_password' ? 'current-password' : 'new-password'}
                   {...register(field)}
                   placeholder={placeholder}
-                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
                 />
                 <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" aria-label="Toggle visibility">
                   {show ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -105,14 +105,14 @@ export function ChangePasswordForm() {
             autoComplete="new-password"
             {...register('confirm_password')}
             placeholder="Confirm new password"
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
           />
           {errors.confirm_password && <p className="mt-1 text-xs text-semantic-error">{errors.confirm_password.message}</p>}
         </div>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
         >
           {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
           Update password

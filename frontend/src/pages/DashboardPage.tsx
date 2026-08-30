@@ -105,7 +105,7 @@ export function DashboardPage() {
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-violet/15 text-lg font-bold text-brand-violet">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-wash text-lg font-bold text-brand-accent">
                 {(user?.first_name || profile?.first_name || '?').charAt(0).toUpperCase()}
                 {(user?.last_name || profile?.last_name || '').charAt(0).toUpperCase()}
               </div>
@@ -211,23 +211,23 @@ export function DashboardPage() {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => navigate(ROUTES.SECURITY)}
-              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-accent/30 transition-all"
             >
-              <Key size={16} className="text-brand-violet" />
+              <Key size={16} className="text-brand-accent" />
               Change Password
             </button>
             <button
               onClick={() => navigate(ROUTES.SECURITY)}
-              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-accent/30 transition-all"
             >
-              <Shield size={16} className="text-brand-violet" />
+              <Shield size={16} className="text-brand-accent" />
               Setup MFA
             </button>
             <button
               onClick={() => navigate(ROUTES.API_KEYS)}
-              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-violet/30 transition-all"
+              className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm font-medium text-text-primary hover:border-brand-accent/30 transition-all"
             >
-              <Plus size={16} className="text-brand-violet" />
+              <Plus size={16} className="text-brand-accent" />
               Create API Key
             </button>
           </div>
@@ -238,20 +238,20 @@ export function DashboardPage() {
         <div className="flex flex-wrap gap-4">
           <StatCard
             icon={Monitor} label="Active sessions"
-            value={String(sessionCount)} color="brand-violet"
+            value={String(sessionCount)} color="brand-accent"
             onClick={() => navigate(ROUTES.SESSIONS)}
             detail={sessionCount === 1 ? '1 device' : `${sessionCount} devices`}
           />
           <StatCard
             icon={Key} label="API keys"
-            value={String(keyCount)} color="brand-magenta"
+            value={String(keyCount)} color="brand-alt"
             onClick={() => navigate(ROUTES.API_KEYS)}
             detail={keyCount === 1 ? '1 key' : `${keyCount} keys active`}
           />
           {isAdmin && (
             <StatCard
               icon={Users} label="Total users"
-              value={String(stats?.total_users ?? 0)} color="brand-blue"
+              value={String(stats?.total_users ?? 0)} color="brand-cool"
               onClick={() => navigate(ROUTES.ADMIN.USERS)}
               detail="total users"
             />
@@ -263,10 +263,10 @@ export function DashboardPage() {
         <Section title="Administration">
           <button
             onClick={() => navigate(ROUTES.ADMIN.DASHBOARD)}
-            className="flex w-full items-center justify-between rounded-2xl border border-surface-2 bg-surface-1 px-6 py-4 text-left transition-all hover:border-brand-violet/30 hover:shadow-glow-violet"
+            className="flex w-full items-center justify-between rounded-2xl border border-surface-2 bg-surface-1 px-6 py-4 text-left transition-all hover:border-brand-accent/30 hover:shadow-glow-accent"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-violet/10 text-brand-violet">
+              <div className="icon-chip flex h-10 w-10 items-center justify-center rounded-xl">
                 <Users size={20} />
               </div>
               <div>
@@ -274,7 +274,7 @@ export function DashboardPage() {
                 <p className="text-xs text-text-muted">Manage users, sessions, OAuth clients and more.</p>
               </div>
             </div>
-            <span className="text-xs font-medium text-brand-violet">&rarr;</span>
+            <span className="text-xs font-medium text-brand-accent">&rarr;</span>
           </button>
         </Section>
       )}
@@ -286,17 +286,17 @@ function StatCard({ icon: Icon, label, value, color, onClick, hint, detail }: {
   icon: typeof Shield; label: string; value: string; color: string; onClick?: () => void; hint?: string; detail?: string
 }) {
   const colors: Record<string, string> = {
-    'brand-violet': 'text-brand-violet bg-brand-violet/10',
-    'brand-blue': 'text-brand-blue bg-brand-blue/10',
-    'brand-magenta': 'text-brand-magenta bg-brand-magenta/10',
+    'brand-accent': 'icon-chip',
+    'brand-cool': 'icon-chip',
+    'brand-alt': 'icon-chip',
   }
   return (
     <div
-      className="rounded-2xl border border-surface-2 bg-surface-1 p-4 transition-all duration-300 hover:shadow-glow-violet cursor-pointer min-w-[200px] flex-1"
+      className="rounded-2xl border border-surface-2 bg-surface-1 p-4 transition-all duration-300 hover:shadow-glow-accent cursor-pointer min-w-[200px] flex-1"
       onClick={onClick}
     >
       <div className="flex items-center gap-3">
-        <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', colors[color] || colors['brand-violet'])}>
+        <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', colors[color] || colors['brand-accent'])}>
           <Icon size={18} />
         </div>
         <div className="min-w-0 flex-1">

@@ -26,7 +26,7 @@ export function FlowStepper({ steps, currentStep, completedSteps }: FlowStepperP
               className={cn(
                 'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors',
                 isCompleted && 'bg-semantic-success/10 text-semantic-success',
-                isCurrent && 'bg-brand-violet/15 text-brand-violet',
+                isCurrent && 'bg-brand-wash text-brand-accent',
                 isFuture && 'text-text-muted',
               )}
             >

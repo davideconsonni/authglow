@@ -34,7 +34,7 @@ function highlight(json: string): string {
       let j = i
       while (j < json.length && json[j] === ' ') j++
       if (j < json.length && json[j] === ':') {
-        html += '<span class="text-brand-violet">"' + content + '"</span>:'
+        html += '<span class="text-brand-accent">"' + content + '"</span>:'
         i = j + 1
       } else {
         html += '<span class="text-semantic-success">"' + content + '"</span>'
@@ -48,7 +48,7 @@ function highlight(json: string): string {
         num += json[i]
         i++
       }
-      html += '<span class="text-brand-blue">' + num + '</span>'
+      html += '<span class="text-brand-cool">' + num + '</span>'
       continue
     }
 

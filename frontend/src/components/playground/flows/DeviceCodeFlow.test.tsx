@@ -20,6 +20,7 @@ vi.mock('../../../lib/api', () => ({
   api: {
     postForm: vi.fn(),
     post: vi.fn(),
+    get: vi.fn(async (endpoint: string) => (endpoint === '/api/scopes' ? { scopes: [] } : {})),
   },
 }))
 

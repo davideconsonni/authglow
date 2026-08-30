@@ -50,7 +50,7 @@ export function ClaimTemplatePicker({
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
         data-testid={`${testPrefix}-btn`}
-        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-surface-2 py-2 text-[11px] font-semibold text-text-muted transition-all hover:border-brand-violet/30 hover:text-brand-violet hover:bg-brand-violet/5"
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-surface-2 py-2 text-[11px] font-semibold text-text-muted transition-all hover:border-brand-accent/30 hover:text-brand-accent hover:bg-brand-wash-faint"
       >
         <LayoutTemplate size={12} /> Start from a template
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -81,7 +81,7 @@ export function ClaimTemplatePicker({
               }}
               title={t.description}
               data-testid={`${testPrefix}-${t.id}`}
-              className="rounded-xl border border-surface-2 bg-surface-1 p-2.5 text-left transition-all hover:border-brand-violet/40 hover:bg-brand-violet/5"
+              className="rounded-xl border border-surface-2 bg-surface-1 p-2.5 text-left transition-all hover:border-brand-accent/40 hover:bg-brand-wash-faint"
             >
               <p className="text-[11px] font-semibold text-text-primary">{t.label}</p>
               <p className="mt-0.5 truncate font-mono text-[9px] text-text-muted">{t.claim_name}</p>

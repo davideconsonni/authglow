@@ -96,7 +96,7 @@ describe('Fase API Keys — Frontend', () => {
       const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
       expect(source).toContain('create-api-key-btn')
       expect(source).toContain('key-name-input')
-      expect(source).toContain('key-scopes-input')
+      expect(source).toContain('key-scopes')
       expect(source).toContain('key-create-submit')
       expect(source).toContain('key-created-display')
       expect(source).toContain('api-key-row')

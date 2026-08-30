@@ -289,7 +289,7 @@ export function AdminApiKeysPage() {
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus size={16} />
               Create Key
@@ -305,14 +305,14 @@ export function AdminApiKeysPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter by user email..."
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
           />
         </div>
       </div>
 
       {isLoading ? (
         <div className="py-8 text-center">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" />
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" />
         </div>
       ) : !keys || keys.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-surface-2 bg-surface-1 py-16 text-center">
@@ -328,7 +328,7 @@ export function AdminApiKeysPage() {
           {!search && (
             <button
               onClick={() => setShowCreate(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus size={16} />
               Create Key
@@ -384,7 +384,7 @@ export function AdminApiKeysPage() {
                   <td className="hidden md:table-cell px-6 py-3" data-testid="key-ips-display">
                     {k.allowed_ips && k.allowed_ips.length > 0 ? (
                       <span
-                        className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
+                        className="rounded-lg bg-brand-wash px-2 py-0.5 text-xs text-brand-accent"
                         title={k.allowed_ips.join(', ')}
                       >
                         {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
@@ -402,7 +402,7 @@ export function AdminApiKeysPage() {
                       <button
                         onClick={() => openEdit(k)}
                         data-testid="key-edit-btn"
-                        className="text-text-muted hover:text-brand-violet transition-colors"
+                        className="text-text-muted hover:text-brand-accent transition-colors"
                         title="Edit key"
                       >
                         <Pencil size={14} />
@@ -410,7 +410,7 @@ export function AdminApiKeysPage() {
                       <button
                         onClick={() => setClaimsKey({ id: k.key_id, name: k.name })}
                         data-testid="open-claims-btn"
-                        className="text-text-muted hover:text-brand-violet transition-colors"
+                        className="text-text-muted hover:text-brand-accent transition-colors"
                         title="Token Claims (customize JWT claims)"
                       >
                         <Key size={14} />
@@ -481,7 +481,7 @@ export function AdminApiKeysPage() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowCreate(false); setForm(initialForm); setFormError(null) }} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
             <h3 className="text-lg font-semibold text-text-primary">Create API Key</h3>
 
             {formError && (
@@ -502,7 +502,7 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setForm({ ...form, user_email: e.target.value })}
                 placeholder="user@example.com"
                 type="email"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
 
@@ -512,7 +512,7 @@ export function AdminApiKeysPage() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Production API key"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
 
@@ -534,7 +534,7 @@ export function AdminApiKeysPage() {
                 placeholder="e.g. Production server backup automation, rotated 2026-Q3"
                 rows={2}
                 data-testid="key-description-input"
-                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
               />
             </div>
 
@@ -546,7 +546,7 @@ export function AdminApiKeysPage() {
                 placeholder="365"
                 type="number"
                 min="1"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
 
@@ -557,7 +557,7 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setForm({ ...form, allowed_ips: e.target.value })}
                 placeholder="203.0.113.5, 198.51.100.0/24"
                 data-testid="key-allowed-ips-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
 
@@ -568,7 +568,7 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setForm({ ...form, tier: e.target.value })}
                 placeholder="production, staging, dev"
                 data-testid="key-tier-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
 
@@ -582,7 +582,7 @@ export function AdminApiKeysPage() {
               <button
                 onClick={handleCreate}
                 disabled={saving || !form.name || !form.user_email}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Create Key
@@ -595,7 +595,7 @@ export function AdminApiKeysPage() {
       {createdKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeCreatedKey} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
             <div className="text-center space-y-2">
               <div className="rounded-2xl bg-semantic-success/10 p-3 inline-block">
                 <Key size={24} className="text-semantic-success" />
@@ -649,7 +649,7 @@ export function AdminApiKeysPage() {
 
             <button
               onClick={closeCreatedKey}
-              className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
+              className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
             >
               Done
             </button>
@@ -660,7 +660,7 @@ export function AdminApiKeysPage() {
       {editingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeEdit} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="key-edit-modal">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="key-edit-modal">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-text-primary">Edit API Key</h3>
               <button onClick={closeEdit} className="text-text-muted hover:text-text-primary" aria-label="Close">
@@ -673,7 +673,7 @@ export function AdminApiKeysPage() {
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 data-testid="key-edit-name-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -684,7 +684,7 @@ export function AdminApiKeysPage() {
                 placeholder="e.g. Production server backup automation, rotated 2026-Q3"
                 rows={2}
                 data-testid="key-edit-description-input"
-                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
               />
             </div>
             <div>
@@ -703,7 +703,7 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
                 placeholder="203.0.113.5, 198.51.100.0/24"
                 data-testid="key-edit-allowed-ips-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -713,7 +713,7 @@ export function AdminApiKeysPage() {
                 onChange={(e) => setEditForm({ ...editForm, tier: e.target.value })}
                 placeholder="production, staging, dev"
                 data-testid="key-edit-tier-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -727,7 +727,7 @@ export function AdminApiKeysPage() {
                 disabled={editNeverExpires}
                 placeholder="Expires in days (empty = unchanged)"
                 data-testid="key-edit-expires-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
               />
               <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
                 <input
@@ -735,7 +735,7 @@ export function AdminApiKeysPage() {
                   checked={editNeverExpires}
                   onChange={(e) => setEditNeverExpires(e.target.checked)}
                   data-testid="key-edit-never-expires-toggle"
-                  className="accent-brand-violet"
+                  className="accent-brand-accent"
                 />
                 Never expires
                 {(() => {
@@ -752,7 +752,7 @@ export function AdminApiKeysPage() {
                 onClick={handleSaveEdit}
                 disabled={savingEdit}
                 data-testid="key-edit-submit"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >
                 {savingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save

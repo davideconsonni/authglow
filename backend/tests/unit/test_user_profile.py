@@ -372,7 +372,7 @@ class TestUserPreferences:
         assert prefs is not None
         assert prefs.user_id == "nonexistent-user"
         assert prefs.email_notifications is True
-        assert prefs.theme == "light"
+        assert prefs.theme == "professional"
 
     def test_update_preferences(self, user_profile_service):
         user = _make_user()

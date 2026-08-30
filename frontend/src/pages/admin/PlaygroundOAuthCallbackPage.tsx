@@ -64,7 +64,7 @@ export function PlaygroundOAuthCallbackPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
       <div className="w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center">
-        {!error && !complete && <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-violet" />}
+        {!error && !complete && <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-accent" />}
         {complete && (
           <>
             <ShieldCheck className="mx-auto h-10 w-10 text-semantic-success" />

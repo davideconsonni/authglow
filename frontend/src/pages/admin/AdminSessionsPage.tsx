@@ -72,7 +72,7 @@ export function AdminSessionsPage() {
 
 
       {isLoading ? (
-        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
+        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
       ) : !sessions || sessions.length === 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-12 text-center">
           <Monitor className="mx-auto h-8 w-8 text-text-muted" />

@@ -94,7 +94,7 @@ export function LoginForm() {
               ;(e.currentTarget as HTMLElement).click()
             }
           }}
-          className="cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 p-4 text-sm transition-colors hover:border-brand-violet/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/30"
+          className="cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 p-4 text-sm transition-colors hover:border-brand-accent/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30"
         >
           <p className="mb-2 font-medium text-text-primary">Demo credentials <span className="font-normal text-text-muted">— click to copy</span>{demoCopied && <span className="ml-2 text-xs font-medium text-semantic-success">Copied!</span>}</p>
           <p className="break-all font-mono text-xs text-text-secondary">
@@ -114,7 +114,7 @@ export function LoginForm() {
         onClick={startLogin}
         disabled={starting}
         data-testid="login-submit"
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
         {starting ? 'Starting secure sign-in...' : 'Sign in with AuthGlow'}

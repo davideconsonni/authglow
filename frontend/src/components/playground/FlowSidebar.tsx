@@ -24,7 +24,7 @@ export function FlowSidebar({ currentFlow, onSelect }: FlowSidebarProps) {
             className={cn(
               'flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
               currentFlow === flow.id
-                ? 'bg-brand-violet/15 text-brand-violet'
+                ? 'bg-brand-wash text-brand-accent'
                 : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
             )}
           >

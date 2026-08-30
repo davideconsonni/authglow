@@ -96,9 +96,9 @@ export function AdminPasswordResetsPage() {
             value={revokeEmail}
             onChange={e => setRevokeEmail(e.target.value)}
             placeholder="user@example.com"
-            className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+            className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
           />
-          <button onClick={handleRevokeForUser} disabled={!revokeEmail.trim()} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">
+          <button onClick={handleRevokeForUser} disabled={!revokeEmail.trim()} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50">
             <Ban size={14} /> Revoke
           </button>
         </div>
@@ -106,7 +106,7 @@ export function AdminPasswordResetsPage() {
 
       {/* Tokens table */}
       {isLoading ? (
-        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
+        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
       ) : tokens.length === 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 py-12 text-center">
           <KeyRound className="mx-auto h-8 w-8 text-text-muted" />

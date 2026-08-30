@@ -141,11 +141,11 @@ export function PkceFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID *</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="public_client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="public_client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Redirect URI *</label>
-              <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -156,12 +156,12 @@ export function PkceFlow() {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <label className="block mb-1 text-xs font-medium text-text-muted">State</label>
-                <input value={localState} onChange={(e) => setLocalState(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary focus:border-brand-violet focus:outline-none" />
+                <input value={localState} onChange={(e) => setLocalState(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary focus:border-brand-accent focus:outline-none" />
               </div>
               <button onClick={() => setLocalState(generateState())} className="rounded-xl bg-surface-2 px-3 py-2.5 text-text-muted hover:text-text-secondary" title="Regenerate"><RefreshCw size={14} /></button>
             </div>
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -178,7 +178,7 @@ export function PkceFlow() {
             <label className="block mb-1 text-xs font-medium text-text-muted">Code Challenge (SHA-256)</label>
             <input value={localChallenge} readOnly className="w-full rounded-xl border border-surface-2 bg-surface-2/50 py-2.5 px-3 font-mono text-xs text-text-secondary focus:outline-none" />
           </div>
-          <button onClick={handleGeneratePkce} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]">
+          <button onClick={handleGeneratePkce} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Generate PKCE & Continue <ArrowRight size={16} />
           </button>
         </div>
@@ -189,12 +189,12 @@ export function PkceFlow() {
           <div className="rounded-xl border border-surface-2 bg-surface-2/50 p-4 space-y-3">
             <code className="block break-all text-xs font-mono text-text-secondary">{authUrl}</code>
             <div className="flex gap-2">
-              <a href={authUrl} className="flex items-center gap-1.5 rounded-lg bg-brand-violet/20 px-3 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/30">
+              <a href={authUrl} className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-3 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint">
                 <ExternalLink size={14} /> Open in Browser
               </a>
             </div>
           </div>
-          <button onClick={() => { setCompleted(['config', 'pkce', 'authorize']); setCurrentStep('exchange') }} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]">
+          <button onClick={() => { setCompleted(['config', 'pkce', 'authorize']); setCurrentStep('exchange') }} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             I have the code <ArrowRight size={16} />
           </button>
         </div>
@@ -205,13 +205,13 @@ export function PkceFlow() {
           <p className="text-xs text-text-muted">Paste the full callback URL to validate state automatically, or enter only the code for compatibility.</p>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Callback URL</label>
-            <input value={callbackUrl} onChange={(e) => setCallbackUrl(e.target.value)} placeholder={`${localRedirectUri}?code=...&state=...`} data-testid="pkce-callback-url" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={callbackUrl} onChange={(e) => setCallbackUrl(e.target.value)} placeholder={`${localRedirectUri}?code=...&state=...`} data-testid="pkce-callback-url" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Authorization Code *</label>
-            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl('') }} placeholder="Paste code from callback" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl('') }} placeholder="Paste code from callback" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
-          <button onClick={handleExchangeCode} disabled={loading || (!localCode && !callbackUrl.trim())} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleExchangeCode} disabled={loading || (!localCode && !callbackUrl.trim())} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Exchange Code
           </button>

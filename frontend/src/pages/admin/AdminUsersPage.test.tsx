@@ -9,7 +9,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 const mockApi = vi.hoisted(() => ({
-  get: vi.fn(),
+  get: vi.fn(async (_endpoint: string): Promise<Record<string, unknown>> => ({ scopes: [] })),
   put: vi.fn().mockResolvedValue({}),
   post: vi.fn(),
   delete: vi.fn(),
@@ -651,9 +651,9 @@ describe('AdminUsersPage', () => {
 
     const toggles = screen.getAllByTestId('toggle-active-btn')
     expect(toggles.length).toBeGreaterThan(0)
-    expect(toggles.every(t => !t.disabled)).toBe(true)
+    toggles.forEach((t) => expect(t).not.toBeDisabled())
 
     const selectCheckboxes = screen.getAllByTestId('user-select-checkbox')
-    expect(selectCheckboxes.every(c => !c.disabled)).toBe(true)
+    selectCheckboxes.forEach((c) => expect(c).not.toBeDisabled())
   })
 })

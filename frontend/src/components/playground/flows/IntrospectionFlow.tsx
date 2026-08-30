@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Eye, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { decodeJwt } from '../../../lib/jwt'
+import { JwtRibbon } from '../../shared/JwtRibbon'
 import { usePlaygroundStore } from '../../../stores/playgroundStore'
 import { FlowStepper } from '../FlowStepper'
 import { JsonHighlight } from '../JsonHighlight'
@@ -84,11 +85,11 @@ export function IntrospectionFlow() {
           </p>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Token *</label>
-            <textarea value={localToken} onChange={(e) => setLocalToken(e.target.value)} placeholder="eyJhbGciOiJSUzI1NiIs..." data-testid="introspect-token-input" rows={4} className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y" />
+            <textarea value={localToken} onChange={(e) => setLocalToken(e.target.value)} placeholder="eyJhbGciOiJSUzI1NiIs..." data-testid="introspect-token-input" rows={4} className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none resize-y" />
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Token Type Hint</label>
-            <select value={localHint} onChange={(e) => setLocalHint(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+            <select value={localHint} onChange={(e) => setLocalHint(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 text-sm text-text-primary focus:border-brand-accent focus:outline-none">
               <option value="">Auto-detect</option>
               <option value="access_token">Access Token</option>
               <option value="refresh_token">Refresh Token</option>
@@ -106,6 +107,10 @@ export function IntrospectionFlow() {
               {showDecoded && (
                 <div className="border-t border-surface-2">
                   <div className="px-3 py-2 border-b border-surface-2">
+                    <p className="text-[11px] font-medium text-text-muted mb-1">JWT</p>
+                    <JwtRibbon token={localToken} />
+                  </div>
+                  <div className="px-3 py-2 border-b border-surface-2">
                     <p className="text-[11px] font-medium text-text-muted mb-1">Header</p>
                     <JsonHighlight json={JSON.stringify(decodedClaims.header, null, 2)} maxHeight="max-h-[160px]" />
                   </div>
@@ -117,7 +122,7 @@ export function IntrospectionFlow() {
               )}
             </div>
           )}
-          <button onClick={handleInputNext} disabled={!localToken} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleInputNext} disabled={!localToken} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             Next <Eye size={16} />
           </button>
         </div>
@@ -129,14 +134,14 @@ export function IntrospectionFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client Secret</label>
-              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
-          <button onClick={handleIntrospect} disabled={loading} data-testid="introspect-btn" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleIntrospect} disabled={loading} data-testid="introspect-btn" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
             Introspect Token
           </button>

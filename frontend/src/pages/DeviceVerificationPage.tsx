@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Loader2, CheckCircle, XCircle, Smartphone } from 'lucide-react'
+import { Loader2, XCircle, Smartphone } from 'lucide-react'
+import { SealStamp } from '../components/shared/SealStamp'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import { ROUTES } from '../lib/constants'
@@ -38,7 +39,7 @@ export function DeviceVerificationPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-primary">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-violet" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand-accent" />
       </div>
     )
   }
@@ -48,14 +49,14 @@ export function DeviceVerificationPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
         <div className="w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-violet/10">
-            <Smartphone className="h-7 w-7 text-brand-violet" />
+          <div className="icon-chip mx-auto flex h-14 w-14 items-center justify-center rounded-2xl">
+            <Smartphone className="h-7 w-7" />
           </div>
           <h2 className="text-xl font-semibold text-text-primary">Device Verification</h2>
           <p className="text-sm text-text-muted">Sign in to verify a device code.</p>
           <a
             href={loginPath}
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             Sign In
           </a>
@@ -125,9 +126,7 @@ export function DeviceVerificationPage() {
         <div className="w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center space-y-4">
           {result === 'approved' ? (
             <>
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-emerald/10">
-                <CheckCircle className="h-7 w-7 text-brand-emerald" />
-              </div>
+              <SealStamp className="mx-auto h-14 w-14" />
               <h2 className="text-xl font-semibold text-text-primary">Device Authorized</h2>
               <p className="text-sm text-text-muted">You can return to your device now.</p>
             </>
@@ -142,7 +141,7 @@ export function DeviceVerificationPage() {
           )}
           <button
             onClick={() => { setStep('input'); setUserCode(''); setResult('') }}
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             Verify another code
           </button>
@@ -155,8 +154,8 @@ export function DeviceVerificationPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-3">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-violet/10">
-            <Smartphone className="h-7 w-7 text-brand-violet" />
+          <div className="icon-chip mx-auto flex h-14 w-14 items-center justify-center rounded-2xl">
+            <Smartphone className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold text-text-primary">Device Verification</h1>
         </div>
@@ -172,14 +171,14 @@ export function DeviceVerificationPage() {
               onChange={(e) => setUserCode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
               placeholder="ABCD-EFGH"
-              className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-center text-lg font-mono tracking-widest text-text-primary placeholder:text-text-muted/50 focus:border-brand-violet focus:outline-none focus:ring-1 focus:ring-brand-violet uppercase"
+              className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-center text-lg font-mono tracking-widest text-text-primary placeholder:text-text-muted/50 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent uppercase"
               maxLength={9}
             />
             {error && <p className="text-sm text-semantic-error" role="alert">{error}</p>}
             <button
               onClick={() => handleLookup()}
               disabled={submitting || !userCode.trim()}
-              className="w-full inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Verify Code
@@ -222,7 +221,7 @@ export function DeviceVerificationPage() {
               <button
                 onClick={handleApprove}
                 disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                className="flex-1 inline-flex items-center justify-center rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Approve

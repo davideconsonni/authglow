@@ -22,7 +22,7 @@ export function ScopePicker({
 
   useEffect(() => {
     api.get<{ scopes: string[] }>('/api/scopes')
-      .then((data) => setAvailableScopes(data.scopes))
+      .then((data) => setAvailableScopes(Array.isArray(data?.scopes) ? data.scopes : []))
       .catch(() => setAvailableScopes([]))
   }, [])
 
@@ -65,7 +65,7 @@ export function ScopePicker({
                 disabled={disabled}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   isSelected
-                    ? 'bg-brand-violet text-white'
+                    ? 'bg-brand-accent text-white'
                     : 'bg-surface-2 text-text-secondary hover:bg-surface-2/80'
                 } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
@@ -82,14 +82,14 @@ export function ScopePicker({
           {selectedScopes.map((scope) => (
             <span
               key={scope}
-              className="inline-flex items-center gap-1 rounded-lg bg-brand-violet/10 px-2.5 py-1 text-xs font-medium text-brand-violet"
+              className="inline-flex items-center gap-1 rounded-lg bg-brand-wash px-2.5 py-1 text-xs font-medium text-brand-accent"
             >
               {scope}
               {!disabled && (
                 <button
                   type="button"
                   onClick={() => removeScope(scope)}
-                  className="hover:text-brand-violet/70"
+                  className="hover:text-brand-accent/70"
                   aria-label={`Remove ${scope}`}
                 >
                   <X size={12} />
@@ -115,7 +115,7 @@ export function ScopePicker({
           placeholder={placeholder}
           disabled={disabled}
           data-testid={testId ? `${testId}-custom-input` : undefined}
-          className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none disabled:opacity-50"
+          className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
         />
         <button
           type="button"

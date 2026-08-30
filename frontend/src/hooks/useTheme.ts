@@ -2,40 +2,46 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 
-export type Theme = 'light' | 'dark' | 'auto'
+export type Theme = 'professional' | 'dark' | 'auto'
+
+type ResolvedTheme = 'professional' | 'dark'
 
 const THEME_KEY = 'auth-theme'
 
 let serverSyncDone = false
 let serverSyncPromise: Promise<void> | null = null
 
-function getSystemTheme(): 'light' | 'dark' {
+function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined') return 'dark'
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'professional' : 'dark'
 }
 
-function resolveTheme(theme: Theme): 'light' | 'dark' {
+function resolveTheme(theme: Theme): ResolvedTheme {
   if (theme === 'auto') return getSystemTheme()
   return theme
 }
 
-function applyTheme(resolved: 'light' | 'dark') {
+function applyTheme(resolved: ResolvedTheme) {
   const root = document.documentElement
-  if (resolved === 'dark') {
-    root.classList.add('dark')
-  } else {
-    root.classList.remove('dark')
-  }
+  root.classList.toggle('dark', resolved === 'dark')
+  root.removeAttribute('data-theme')
+}
+
+function normalizeTheme(value: string | null): Theme | null {
+  // 'light' was the old default theme; it is now 'professional'.
+  if (value === 'light' || value === 'professional') return 'professional'
+  if (value === 'dark' || value === 'auto') return value
+  return null
 }
 
 function readLocalTheme(): Theme {
   try {
-    const saved = localStorage.getItem(THEME_KEY)
-    if (saved === 'light' || saved === 'dark' || saved === 'auto') return saved
+    const saved = normalizeTheme(localStorage.getItem(THEME_KEY))
+    if (saved) return saved
   } catch {
     /* localStorage unavailable */
   }
-  return 'light'
+  return 'professional'
 }
 
 function saveLocalTheme(theme: Theme) {
@@ -52,16 +58,16 @@ async function syncFromServer(): Promise<void> {
 
   serverSyncPromise = (async () => {
     try {
-      const prefs = await api.get<{ theme?: Theme }>('/api/profile/me/preferences')
-      const serverTheme = prefs.theme ?? 'light'
+      const prefs = await api.get<{ theme?: string }>('/api/profile/me/preferences')
+      const serverTheme = normalizeTheme(prefs.theme ?? 'professional') ?? 'professional'
       const localTheme = readLocalTheme()
 
       if (localTheme !== 'auto' && serverTheme === localTheme) {
         return
       }
 
-      applyTheme(resolveTheme(serverTheme as Theme))
-      saveLocalTheme(serverTheme as Theme)
+      applyTheme(resolveTheme(serverTheme))
+      saveLocalTheme(serverTheme)
     } catch {
       /* offline: keep local theme */
     } finally {
@@ -102,7 +108,7 @@ export function useTheme() {
 
   const toggleTheme = useCallback(async () => {
     const currentResolved = resolveTheme(theme)
-    const next: Theme = currentResolved === 'dark' ? 'light' : 'dark'
+    const next: Theme = currentResolved === 'dark' ? 'professional' : 'dark'
     await setTheme(next)
   }, [theme, setTheme])
 

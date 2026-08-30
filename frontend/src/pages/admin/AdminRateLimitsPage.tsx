@@ -25,7 +25,7 @@ interface RateLimitsStatus {
 
 const METHOD_COLORS: Record<string, string> = {
   GET: 'bg-semantic-success/10 text-semantic-success',
-  POST: 'bg-brand-blue/10 text-brand-blue',
+  POST: 'bg-brand-cool/10 text-brand-cool',
   PUT: 'bg-semantic-warning/10 text-semantic-warning',
   PATCH: 'bg-semantic-warning/10 text-semantic-warning',
   DELETE: 'bg-semantic-error/10 text-semantic-error',
@@ -147,7 +147,7 @@ export function AdminRateLimitsPage() {
                     <code className="text-xs text-text-secondary">{l.route}</code>
                   </td>
                   <td className="px-6 py-3">
-                    <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">
+                    <span className="inline-flex rounded-lg bg-brand-wash px-2 py-0.5 text-xs font-medium text-brand-accent">
                       {l.limit}
                     </span>
                   </td>

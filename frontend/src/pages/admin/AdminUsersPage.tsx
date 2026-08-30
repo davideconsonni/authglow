@@ -53,7 +53,7 @@ interface AdminUserDetail {
 
 function UserAvatar({ first, last }: { first?: string; last?: string }) {
   const initials = ((first?.[0] ?? '') + (last?.[0] ?? '')).toUpperCase() || '?'
-  return <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet/20 text-xs font-semibold text-brand-violet">{initials}</span>
+  return <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-wash text-xs font-semibold text-brand-accent">{initials}</span>
 }
 
 export function AdminUsersPage() {
@@ -164,35 +164,35 @@ export function AdminUsersPage() {
   return (
     <div>
       <PageHeader title="Users" description="Manage registered users."
-        actions={<div className="flex gap-2"><button onClick={() => setShowCreate(true)} data-testid="create-user-btn" className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"><UserPlus size={16} />Create User</button><button onClick={() => setShowInvite(true)} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"><Mail size={16} />Invite User</button></div>}
+        actions={<div className="flex gap-2"><button onClick={() => setShowCreate(true)} data-testid="create-user-btn" className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"><UserPlus size={16} />Create User</button><button onClick={() => setShowInvite(true)} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"><Mail size={16} />Invite User</button></div>}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Search by email or name..." data-testid="user-search-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Search by email or name..." data-testid="user-search-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
         </div>
-        <select value={statusFilter} onChange={e => handleFilterChange(setStatusFilter)(e.target.value)} data-testid="filter-status" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+        <select value={statusFilter} onChange={e => handleFilterChange(setStatusFilter)(e.target.value)} data-testid="filter-status" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none">
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
-        <select value={mfaFilter} onChange={e => handleFilterChange(setMfaFilter)(e.target.value)} data-testid="filter-mfa" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+        <select value={mfaFilter} onChange={e => handleFilterChange(setMfaFilter)(e.target.value)} data-testid="filter-mfa" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none">
           <option value="all">All MFA</option>
           <option value="enabled">MFA Enabled</option>
           <option value="disabled">MFA Disabled</option>
         </select>
-        <select value={verifiedFilter} onChange={e => handleFilterChange(setVerifiedFilter)(e.target.value)} data-testid="filter-verified" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+        <select value={verifiedFilter} onChange={e => handleFilterChange(setVerifiedFilter)(e.target.value)} data-testid="filter-verified" className="rounded-xl border border-surface-2 bg-surface-1 px-3 py-2.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none">
           <option value="all">All Verified</option>
           <option value="verified">Email Verified</option>
           <option value="unverified">Email Unverified</option>
         </select>
       </div>
 
-      {isLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
-      : users.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-center"><div className="rounded-2xl bg-surface-2 p-4"><Mail className="h-8 w-8 text-text-muted" /></div><h3 className="mt-4 text-lg font-semibold text-text-primary">No users found</h3><p className="mt-2 max-w-sm text-sm text-text-muted">{search || statusFilter !== 'all' || mfaFilter !== 'all' || verifiedFilter !== 'all' ? 'No matches. Try different filters.' : 'Get started by inviting your first user.'}</p>{!search && statusFilter === 'all' && mfaFilter === 'all' && verifiedFilter === 'all' && <button onClick={() => setShowInvite(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]"><UserPlus size={16} />Invite User</button>}</div>
+      {isLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
+      : users.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-center"><div className="rounded-2xl bg-surface-2 p-4"><Mail className="h-8 w-8 text-text-muted" /></div><h3 className="mt-4 text-lg font-semibold text-text-primary">No users found</h3><p className="mt-2 max-w-sm text-sm text-text-muted">{search || statusFilter !== 'all' || mfaFilter !== 'all' || verifiedFilter !== 'all' ? 'No matches. Try different filters.' : 'Get started by inviting your first user.'}</p>{!search && statusFilter === 'all' && mfaFilter === 'all' && verifiedFilter === 'all' && <button onClick={() => setShowInvite(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]"><UserPlus size={16} />Invite User</button>}</div>
       : <>
-        {selected.size > 0 && <div className="mb-3 flex items-center gap-3 rounded-xl bg-brand-violet/10 border border-brand-violet/20 px-4 py-3" data-testid="bulk-action-bar"><span className="text-sm text-brand-violet font-medium">{selected.size} selected</span><div className="flex gap-2 ml-auto"><button onClick={() => setBulkAction('activate')} disabled={bulking} className="rounded-lg bg-semantic-success/10 px-3 py-1 text-xs font-medium text-semantic-success hover:bg-semantic-success/20 disabled:opacity-50">Activate</button><button onClick={() => setBulkAction('deactivate')} disabled={bulking} data-testid="bulk-deactivate-btn" className="rounded-lg bg-semantic-warning/10 px-3 py-1 text-xs font-medium text-semantic-warning hover:bg-semantic-warning/20 disabled:opacity-50">Deactivate</button><button onClick={() => setBulkAction('delete')} disabled={bulking} className="rounded-lg bg-semantic-error/10 px-3 py-1 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 disabled:opacity-50">Delete</button><button onClick={() => { setSelected(new Set()); setBulkAction(null) }} className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-text-secondary hover:bg-surface-3">Clear</button></div></div>}
+        {selected.size > 0 && <div className="mb-3 flex items-center gap-3 rounded-xl bg-brand-wash border border-brand-accent/20 px-4 py-3" data-testid="bulk-action-bar"><span className="text-sm text-brand-accent font-medium">{selected.size} selected</span><div className="flex gap-2 ml-auto"><button onClick={() => setBulkAction('activate')} disabled={bulking} className="rounded-lg bg-semantic-success/10 px-3 py-1 text-xs font-medium text-semantic-success hover:bg-semantic-success/20 disabled:opacity-50">Activate</button><button onClick={() => setBulkAction('deactivate')} disabled={bulking} data-testid="bulk-deactivate-btn" className="rounded-lg bg-semantic-warning/10 px-3 py-1 text-xs font-medium text-semantic-warning hover:bg-semantic-warning/20 disabled:opacity-50">Deactivate</button><button onClick={() => setBulkAction('delete')} disabled={bulking} className="rounded-lg bg-semantic-error/10 px-3 py-1 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 disabled:opacity-50">Delete</button><button onClick={() => { setSelected(new Set()); setBulkAction(null) }} className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-text-secondary hover:bg-surface-3">Clear</button></div></div>}
 
         <div className="rounded-2xl border border-surface-2 bg-surface-1 overflow-x-auto">
           <table className="w-full"><thead className="border-b border-surface-2"><tr>
@@ -206,7 +206,7 @@ export function AdminUsersPage() {
             <th className="hidden md:table-cell px-4 py-2.5" />
           </tr></thead>
           <tbody className="divide-y divide-surface-2">
-            {users.map(u => <tr key={u.id} className={`hover:bg-surface-2/50 cursor-pointer ${selected.has(u.id) ? 'bg-brand-violet/5' : ''}`} onClick={() => setDetailUserId(u.id)} data-testid="user-table-row">
+            {users.map(u => <tr key={u.id} className={`hover:bg-surface-2/50 cursor-pointer ${selected.has(u.id) ? 'bg-brand-wash-faint' : ''}`} onClick={() => setDetailUserId(u.id)} data-testid="user-table-row">
               <td className="px-4 py-3" onClick={e => e.stopPropagation()}><button onClick={() => toggleSelect(u.id)} disabled={u.is_bootstrap} title={u.is_bootstrap ? 'The bootstrap admin cannot be bulk-operated' : undefined} data-testid="user-select-checkbox" className="rounded p-0.5 text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30">{selected.has(u.id) ? '✓' : '☐'}</button></td>
               <td className="px-4 py-2.5"><div className="flex items-center gap-3"><UserAvatar first={u.first_name} last={u.last_name} /><span className="text-sm font-medium text-text-primary">{u.first_name} {u.last_name}</span></div></td>
               <td className="px-4 py-2.5 text-sm text-text-secondary">{u.email}</td>
@@ -219,7 +219,7 @@ export function AdminUsersPage() {
           </tbody></table>
         </div>
 
-        {totalPages > 1 && <div className="mt-4 flex items-center justify-between"><span className="text-xs text-text-muted">{total} user{total !== 1 ? 's' : ''} total</span><div className="flex gap-2">{Array.from({ length: totalPages }, (_, i) => <button key={i} onClick={() => setPage(i + 1)} className={`rounded-lg px-3 py-1 text-sm ${page === i + 1 ? 'bg-brand-violet text-white' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'}`}>{i + 1}</button>)}</div></div>}
+        {totalPages > 1 && <div className="mt-4 flex items-center justify-between"><span className="text-xs text-text-muted">{total} user{total !== 1 ? 's' : ''} total</span><div className="flex gap-2">{Array.from({ length: totalPages }, (_, i) => <button key={i} onClick={() => setPage(i + 1)} className={`rounded-lg px-3 py-1 text-sm ${page === i + 1 ? 'bg-brand-accent text-white' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'}`}>{i + 1}</button>)}</div></div>}
       </>}
 
       <ConfirmDialog open={!!deleteId} title="Delete User" message="This action cannot be undone." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
@@ -227,12 +227,12 @@ export function AdminUsersPage() {
       <ConfirmDialog open={!!revokeSessionsId} title="Revoke All Sessions" message="This will log out the user from all devices immediately." confirmLabel="Revoke All" variant="danger" onConfirm={handleRevokeSessions} onCancel={() => setRevokeSessionsId(null)} />
       <ConfirmDialog open={!!bulkAction} title={`${bulkAction} ${selected.size} Users`} message={`${bulkAction === 'delete' ? 'Permanently delete' : bulkAction === 'activate' ? 'Activate' : 'Deactivate'} ${selected.size} selected user${selected.size !== 1 ? 's' : ''}.`} confirmLabel="Confirm" variant="danger" onConfirm={handleBulkAction} onCancel={() => setBulkAction(null)} />
 
-      {showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowCreate(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+      {showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowCreate(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
         <h3 className="text-lg font-semibold text-text-primary">Create User</h3>
-        <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} placeholder="user@example.com" type="email" data-testid="create-user-email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
-        <div><label className="mb-1 block text-xs font-medium text-text-muted">Password</label><input value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 8 characters" type="password" data-testid="create-user-password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
-        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
-        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">Phone</label><input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} placeholder="+1234567890" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Avatar URL</label><input value={createForm.avatar_url} onChange={e => setCreateForm({...createForm, avatar_url: e.target.value})} placeholder="https://..." className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} placeholder="user@example.com" type="email" data-testid="create-user-email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Password</label><input value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 8 characters" type="password" data-testid="create-user-password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div>
+        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div></div>
+        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">Phone</label><input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} placeholder="+1234567890" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Avatar URL</label><input value={createForm.avatar_url} onChange={e => setCreateForm({...createForm, avatar_url: e.target.value})} placeholder="https://..." className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div></div>
         <div>
           <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
           <ScopePicker
@@ -242,13 +242,13 @@ export function AdminUsersPage() {
             testId="create-user-scopes"
           />
         </div>
-        <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
+        <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
       </div></div>}
 
-      {showInvite && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowInvite(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+      {showInvite && <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="absolute inset-0 bg-black/50" onClick={() => setShowInvite(false)} /><div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
         <h3 className="text-lg font-semibold text-text-primary">Invite User</h3>
-        <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="user@example.com" type="email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div>
-        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={inviteForm.first_name} onChange={e => setInviteForm({...inviteForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={inviteForm.last_name} onChange={e => setInviteForm({...inviteForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" /></div></div>
+        <div><label className="mb-1 block text-xs font-medium text-text-muted">Email</label><input value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="user@example.com" type="email" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div>
+        <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-medium text-text-muted">First name</label><input value={inviteForm.first_name} onChange={e => setInviteForm({...inviteForm, first_name: e.target.value})} placeholder="First name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div><div><label className="mb-1 block text-xs font-medium text-text-muted">Last name</label><input value={inviteForm.last_name} onChange={e => setInviteForm({...inviteForm, last_name: e.target.value})} placeholder="Last name" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" /></div></div>
         <div>
           <label className="mb-1 block text-xs font-medium text-text-muted">Initial scopes</label>
           <ScopePicker
@@ -258,7 +258,7 @@ export function AdminUsersPage() {
             testId="invite-user-scopes"
           />
         </div>
-        <div className="flex gap-3 pt-2"><button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleInvite} disabled={inviting || !inviteForm.email} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50">{inviting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Create User</button></div>
+        <div className="flex gap-3 pt-2"><button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleInvite} disabled={inviting || !inviteForm.email} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50">{inviting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Create User</button></div>
       </div></div>}
 
       {detailUserId && <UserDrawer userId={detailUserId} onClose={() => setDetailUserId(null)} onUserUpdated={refetch} />}
@@ -615,12 +615,12 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-drawer-title"
-        className="relative z-10 flex w-full flex-col bg-surface-1 border-l border-surface-2 shadow-glow-violet animate-slide-in-right sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl"
+        className="relative z-10 flex w-full flex-col bg-surface-1 border-l border-surface-2 shadow-glow-accent animate-slide-in-right sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl"
         data-testid="user-detail-drawer"
       >
         {/* Sticky header */}
         <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-2 bg-surface-1/95 px-6 py-4 backdrop-blur">
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-violet/20 text-sm font-bold text-brand-violet">{initials}</span>
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-wash text-sm font-bold text-brand-accent">{initials}</span>
           <div className="min-w-0 flex-1">
             <h2 id="user-drawer-title" className="truncate text-base font-semibold text-text-primary">
               {user?.first_name} {user?.last_name}
@@ -637,33 +637,33 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           </button>
         </div>
 
-        {isLoading ? <div className="flex-1 overflow-y-auto p-6"><div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div></div>
+        {isLoading ? <div className="flex-1 overflow-y-auto p-6"><div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div></div>
         : !user ? <div className="flex-1 overflow-y-auto p-6"><p className="text-sm text-text-muted text-center py-8">Could not load user details.</p></div>
         : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
             {/* Tab strip (sticky under header) */}
             <TabsList className="sticky top-[73px] z-10 flex h-12 w-full justify-start gap-1 overflow-x-auto whitespace-nowrap border-b border-surface-2 bg-surface-1/95 px-2 backdrop-blur">
-              <TabsTrigger value="profile" data-testid="user-tab-profile" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">Profile</TabsTrigger>
-              <TabsTrigger value="sessions" data-testid="user-tab-sessions" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="profile" data-testid="user-tab-profile" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">Profile</TabsTrigger>
+              <TabsTrigger value="sessions" data-testid="user-tab-sessions" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Sessions{sessionsData ? ` (${sessionsData.total})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="passkeys" data-testid="user-tab-passkeys" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="passkeys" data-testid="user-tab-passkeys" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Passkeys{passkeys ? ` (${passkeys.length})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="history" data-testid="user-tab-history" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="history" data-testid="user-tab-history" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Login History{loginHistory ? ` (${loginHistory.total})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="events" data-testid="user-tab-events" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="events" data-testid="user-tab-events" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Security Events{securityEvents ? ` (${securityEvents.total})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="apps" data-testid="user-tab-apps" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="apps" data-testid="user-tab-apps" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Connected Apps{oauthConsents ? ` (${oauthConsents.length})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="admin-log" data-testid="user-tab-admin-log" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+              <TabsTrigger value="admin-log" data-testid="user-tab-admin-log" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                 Admin Log{adminActions ? ` (${adminActions.total})` : ''}
               </TabsTrigger>
               {demoMeta.demo_mode && (
-                <TabsTrigger value="demo-inbox" data-testid="user-tab-demo-inbox" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-violet data-[state=active]:text-brand-violet rounded-none bg-transparent px-3 py-1 text-sm">
+                <TabsTrigger value="demo-inbox" data-testid="user-tab-demo-inbox" className="data-[state=active]:border-b-2 data-[state=active]:border-brand-accent data-[state=active]:text-brand-accent rounded-none bg-transparent px-3 py-1 text-sm">
                   Demo Inbox
                 </TabsTrigger>
               )}
@@ -684,7 +684,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                   {/* Aside — sticky within the scroll container on lg+ */}
                   <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
                     <div className="flex flex-col items-center rounded-2xl border border-surface-2 bg-surface-1 p-5 text-center">
-                      <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-brand-violet/20 text-2xl font-bold text-brand-violet">{initials}</span>
+                      <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-brand-wash text-2xl font-bold text-brand-accent">{initials}</span>
                       <p className="mt-3 text-sm font-semibold text-text-primary">{user.first_name} {user.last_name}</p>
                       <p className="text-xs text-text-muted">{user.email}</p>
                       <div className="mt-3 flex flex-wrap justify-center gap-1.5">
@@ -692,7 +692,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                           <span className={`h-1.5 w-1.5 rounded-full ${user.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
-                        {user.mfa_enabled && <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-[11px] font-medium text-brand-violet">MFA</span>}
+                        {user.mfa_enabled && <span className="inline-flex rounded-lg bg-brand-wash px-2 py-0.5 text-[11px] font-medium text-brand-accent">MFA</span>}
                         {isSuspended && <span className="inline-flex rounded-lg bg-semantic-warning/10 px-2 py-0.5 text-[11px] font-medium text-semantic-warning">Suspended</span>}
                       </div>
                     </div>
@@ -709,15 +709,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
                       <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Edit Profile</h3>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-                        <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">First name</label><input value={edit.first} onChange={e => dispatch({ type: 'SET_FIRST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">Last name</label><input value={edit.last} onChange={e => dispatch({ type: 'SET_LAST', value: e.target.value })} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none" /></div>
                       </div>
-                      <div><label className="mb-1 block text-xs text-text-muted">Email</label><input value={edit.email} onChange={e => dispatch({ type: 'SET_EMAIL', value: e.target.value })} type="email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                      <div><label className="mb-1 block text-xs text-text-muted">Email</label><input value={edit.email} onChange={e => dispatch({ type: 'SET_EMAIL', value: e.target.value })} type="email" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none" /></div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div><label className="mb-1 block text-xs text-text-muted">Phone</label><input value={edit.phone} onChange={e => dispatch({ type: 'SET_PHONE', value: e.target.value })} placeholder="+1234567890" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
-                        <div><label className="mb-1 block text-xs text-text-muted">Avatar URL</label><input value={edit.avatar_url} onChange={e => dispatch({ type: 'SET_AVATAR', value: e.target.value })} placeholder="https://..." className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">Phone</label><input value={edit.phone} onChange={e => dispatch({ type: 'SET_PHONE', value: e.target.value })} placeholder="+1234567890" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none" /></div>
+                        <div><label className="mb-1 block text-xs text-text-muted">Avatar URL</label><input value={edit.avatar_url} onChange={e => dispatch({ type: 'SET_AVATAR', value: e.target.value })} placeholder="https://..." className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none" /></div>
                       </div>
-                      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" /><span className="text-text-primary">Email verified</span></label>
+                      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.verified} onChange={e => dispatch({ type: 'SET_VERIFIED', value: e.target.checked })} className="rounded border-surface-2 text-brand-accent focus:ring-brand-accent" /><span className="text-text-primary">Email verified</span></label>
                     </div>
 
                     <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">
@@ -732,8 +732,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                         {edit.scopes.length === 0 && <span className="text-[11px] text-text-muted italic">No scopes</span>}
                       </div>
                       <div className="flex gap-2">
-                        <input value={newScope} onChange={e => setNewScope(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScope() } }} placeholder="Add scope..." className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
-                        <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-violet/10 px-2.5 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-40"><Plus size={14} /></button>
+                        <input value={newScope} onChange={e => setNewScope(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScope() } }} placeholder="Add scope..." className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-accent focus:outline-none" />
+                        <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-wash px-2.5 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint disabled:opacity-40"><Plus size={14} /></button>
                       </div>
                     </div>
 
@@ -843,7 +843,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     )}
                   </div>
                   {!sessionsData ? (
-                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : sessionsData.items.length === 0 ? (
                     <p className="text-xs text-text-muted italic py-2">No active sessions</p>
                   ) : (
@@ -883,7 +883,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 <div className="p-6 space-y-3">
                   <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Passkeys {passkeys ? `(${passkeys.length})` : ''}</h3>
                   {!passkeys ? (
-                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : passkeys.length === 0 ? (
                     <div className="flex flex-col items-center py-8 text-center rounded-xl border border-surface-2 bg-surface-1">
                       <Fingerprint size={32} className="text-text-muted mb-2 opacity-40" />
@@ -922,7 +922,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <History size={12} />Login History {loginHistory ? `(${loginHistory.total})` : ''}
                   </h3>
                   {!loginHistory ? (
-                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : loginHistory.items.length === 0 ? (
                     <p className="text-xs text-text-muted italic py-2">No login history</p>
                   ) : (
@@ -958,7 +958,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <AlertTriangle size={12} />Security Events {securityEvents ? `(${securityEvents.total})` : ''}
                   </h3>
                   {!securityEvents ? (
-                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : securityEvents.items.length === 0 ? (
                     <p className="text-xs text-text-muted italic py-2">No security events</p>
                   ) : (
@@ -973,7 +973,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                           {securityEvents.items.slice(0, 20).map(e => (
                             <tr key={e.id} className="hover:bg-surface-2/30">
                               <td className="px-3 py-2">
-                                <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-xs text-brand-violet">
+                                <span className="rounded bg-brand-wash px-1.5 py-0.5 font-mono text-xs text-brand-accent">
                                   {e.event_type.replace(/_/g, ' ')}
                                 </span>
                               </td>
@@ -994,7 +994,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <Globe size={12} />Connected Apps {oauthConsents ? `(${oauthConsents.length})` : ''}
                   </h3>
                   {!oauthConsents ? (
-                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : oauthConsents.length === 0 ? (
                     <p className="text-xs text-text-muted italic py-2">No connected apps</p>
                   ) : (
@@ -1033,7 +1033,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <History size={12} />Admin Actions {adminActions ? `(${adminActions.total})` : ''}
                   </h3>
                   {!adminActions ? (
-                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-violet" /></div>
+                    <div className="py-3 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-brand-accent" /></div>
                   ) : adminActions.items.length === 0 ? (
                     <p className="text-xs text-text-muted italic py-2">No admin actions</p>
                   ) : (
@@ -1048,7 +1048,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                           {adminActions.items.slice(0, 20).map(a => (
                             <tr key={a.id} className="hover:bg-surface-2/30">
                               <td className="px-3 py-2">
-                                <span className="rounded bg-brand-violet/10 px-1.5 py-0.5 font-mono text-xs text-brand-violet">
+                                <span className="rounded bg-brand-wash px-1.5 py-0.5 font-mono text-xs text-brand-accent">
                                   {a.action_type.replace(/_/g, ' ')}
                                 </span>
                               </td>
@@ -1079,7 +1079,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
               <button onClick={handleExport} className="flex items-center justify-center gap-2 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary hover:bg-surface-2">
                 <Download size={16} />Export
               </button>
-              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save Changes
               </button>
@@ -1090,11 +1090,11 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           {showSetPassword && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/50" onClick={() => { setShowSetPassword(false); setSetPasswordError('') }} />
-              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-accent">
                 <h4 className="text-sm font-semibold text-text-primary">Set Password</h4>
                 <div>
                   <label className="mb-1 block text-xs text-text-muted">New password</label>
-                  <input type="password" value={setPasswordForm.password} onChange={e => { setSetPasswordForm({ ...setPasswordForm, password: e.target.value }); if (setPasswordError) setSetPasswordError('') }} data-testid="set-password-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                  <input type="password" value={setPasswordForm.password} onChange={e => { setSetPasswordForm({ ...setPasswordForm, password: e.target.value }); if (setPasswordError) setSetPasswordError('') }} data-testid="set-password-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                   {setPasswordForm.password.length > 0 && (
                     <ul className="mt-2 space-y-1" data-testid="set-password-rules">
                       {PASSWORD_RULES.map((rule) => {
@@ -1110,7 +1110,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                   )}
                 </div>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={setPasswordForm.requireChange} onChange={e => setSetPasswordForm({ ...setPasswordForm, requireChange: e.target.checked })} className="rounded border-surface-2 text-brand-violet focus:ring-brand-violet" />
+                  <input type="checkbox" checked={setPasswordForm.requireChange} onChange={e => setSetPasswordForm({ ...setPasswordForm, requireChange: e.target.checked })} className="rounded border-surface-2 text-brand-accent focus:ring-brand-accent" />
                   <span className="text-text-primary">Require change at next login</span>
                 </label>
                 {setPasswordError && (
@@ -1125,7 +1125,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 )}
                 <div className="flex gap-3 pt-1">
                   <button onClick={() => { setShowSetPassword(false); setSetPasswordForm({ password: '', requireChange: false }); setSetPasswordError(null) }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-xs text-text-secondary hover:bg-surface-2">Cancel</button>
-                  <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password || !passwordIsValid(setPasswordForm.password)} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button onClick={handleSetPassword} disabled={saving || !setPasswordForm.password || !passwordIsValid(setPasswordForm.password)} data-testid="set-password-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Set Password
                   </button>
@@ -1149,7 +1149,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           {backupCodes && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/50" onClick={() => setBackupCodes(null)} />
-              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-accent">
                 <h4 className="text-sm font-semibold text-text-primary">New Backup Codes</h4>
                 <p className="text-xs text-text-muted">Share these codes with the user. Each code can only be used once.</p>
                 <div className="space-y-1.5">
@@ -1159,7 +1159,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setBackupCodes(null)} className="w-full rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet">
+                <button onClick={() => setBackupCodes(null)} className="w-full rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent">
                   Done
                 </button>
               </div>
@@ -1169,12 +1169,12 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
           {showSuspend && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/50" onClick={() => setShowSuspend(false)} />
-              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-violet">
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-surface-2 bg-surface-1 p-5 space-y-4 shadow-glow-accent">
                 <h4 className="text-sm font-semibold text-text-primary">Suspend User</h4>
                 <p className="text-xs text-text-muted">The user will not be able to log in for the selected duration.</p>
                 <div>
                   <label className="mb-1 block text-xs text-text-muted">Duration</label>
-                  <select value={suspendHours} onChange={e => { setSuspendHours(Number(e.target.value)); if (suspendError) setSuspendError('') }} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none">
+                  <select value={suspendHours} onChange={e => { setSuspendHours(Number(e.target.value)); if (suspendError) setSuspendError('') }} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none">
                     <option value={1}>1 hour</option>
                     <option value={6}>6 hours</option>
                     <option value={12}>12 hours</option>

@@ -10,8 +10,8 @@ export function MFAVerifyPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-violet/10 ring-1 ring-brand-violet/20 shadow-glow-violet">
-            <Shield className="h-8 w-8 text-brand-violet" />
+          <div className="icon-chip mx-auto flex h-16 w-16 items-center justify-center rounded-2xl">
+            <Shield className="h-8 w-8" />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-text-primary">Two-Factor Authentication</h1>
           <p className="mt-2 text-sm text-text-muted">

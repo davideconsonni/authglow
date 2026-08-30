@@ -87,18 +87,18 @@ export function ClientCredentialsFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID *</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client Secret *</label>
-              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Scopes</label>
             <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localClientSecret} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localClientSecret} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -115,7 +115,7 @@ export function ClientCredentialsFlow() {
           <button
             onClick={handleRequest}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Request Token

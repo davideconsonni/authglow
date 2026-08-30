@@ -74,7 +74,7 @@ export function ResetPasswordForm() {
         </p>
         <Link
           to={ROUTES.AUTH.LOGIN}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           Sign in
         </Link>
@@ -90,7 +90,7 @@ export function ResetPasswordForm() {
 
       <div className="rounded-xl border border-surface-2 bg-surface-1/50 p-3 text-xs text-text-muted">
         <div className="flex items-start gap-2">
-          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-violet" />
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
           <p>
             Enter the reset code we sent to your email (format{' '}
             <span className="font-mono">XXXX-XXXX-XXXX</span>) and choose a new password.
@@ -112,7 +112,7 @@ export function ResetPasswordForm() {
           placeholder="XXXX-XXXX-XXXX"
           aria-describedby="reset-code-help"
           {...register('reset_code')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center font-mono text-base tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center font-mono text-base tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         <p id="reset-code-help" className="text-xs text-text-muted">
           Found in the password reset email we just sent you.
@@ -131,7 +131,7 @@ export function ResetPasswordForm() {
             autoComplete="new-password"
             placeholder="Enter new password"
             {...register('password')}
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
           />
           <button
             type="button"
@@ -155,7 +155,7 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
           placeholder="Confirm new password"
           {...register('confirm_password')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         {errors.confirm_password && <FieldError id="reset-confirm-error">{errors.confirm_password.message}</FieldError>}
       </div>
@@ -163,7 +163,7 @@ export function ResetPasswordForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {isSubmitting ? 'Resetting...' : 'Reset password'}
@@ -173,7 +173,7 @@ export function ResetPasswordForm() {
         Lost the code?{' '}
         <Link
           to={ROUTES.AUTH.FORGOT_PASSWORD}
-          className="font-medium text-brand-violet hover:text-brand-blue transition-colors"
+          className="font-medium text-brand-accent hover:text-brand-cool transition-colors"
         >
           Request a new one
         </Link>

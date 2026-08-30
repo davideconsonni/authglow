@@ -119,7 +119,7 @@ export function SessionsPage() {
                     <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
                       <td className="px-4 py-2.5">
                         {s.id === thisDeviceId && (
-                          <span className="inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs font-medium text-brand-violet">This device</span>
+                          <span className="inline-flex rounded-lg bg-brand-wash px-2 py-0.5 text-xs font-medium text-brand-accent">This device</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-sm text-text-primary">{s.client}</td>
@@ -156,7 +156,7 @@ export function SessionsPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-text-primary truncate">{s.client}</p>
                       {s.id === thisDeviceId && (
-                        <span className="shrink-0 inline-flex rounded-lg bg-brand-violet/10 px-2 py-0.5 text-[10px] font-medium text-brand-violet">This device</span>
+                        <span className="shrink-0 inline-flex rounded-lg bg-brand-wash px-2 py-0.5 text-[10px] font-medium text-brand-accent">This device</span>
                       )}
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
@@ -197,7 +197,7 @@ export function SessionsPage() {
             onClick={() => setShowToken(s => !s)}
             aria-expanded={showToken}
             data-testid="my-token-toggle"
-            className="shrink-0 rounded-xl border border-surface-2 px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-violet/40 hover:text-brand-violet"
+            className="shrink-0 rounded-xl border border-surface-2 px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-accent/40 hover:text-brand-accent"
           >
             {showToken ? 'Hide' : 'Show claims'}
           </button>

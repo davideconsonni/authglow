@@ -47,7 +47,7 @@ export function AdminRbacPage() {
             onClick={() => setTab(t)}
             className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition-colors ${
               tab === t
-                ? 'bg-brand-violet text-white'
+                ? 'bg-brand-accent text-white'
                 : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
             }`}
           >
@@ -146,7 +146,7 @@ function RolesTab() {
       <div className="mb-4">
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           <Plus size={16} /> Create Role
         </button>
@@ -154,7 +154,7 @@ function RolesTab() {
 
       {isLoading ? (
         <div className="py-8 text-center">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" />
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" />
         </div>
       ) : roleList.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-surface-2 bg-surface-1 py-16 text-center">
@@ -167,7 +167,7 @@ function RolesTab() {
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus size={16} />
             Create Role
@@ -246,7 +246,7 @@ function RolesTab() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={resetForm} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet max-h-[90vh] overflow-y-auto">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-text-primary">
               {editId ? 'Edit Role' : 'Create Role'}
             </h3>
@@ -256,7 +256,7 @@ function RolesTab() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="admin"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -265,7 +265,7 @@ function RolesTab() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Administrator role"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -282,7 +282,7 @@ function RolesTab() {
                       type="checkbox"
                       checked={selPerms.includes(p.name)}
                       onChange={() => togglePerm(p.name)}
-                      className="accent-brand-violet"
+                      className="accent-brand-accent"
                     />
                     <div className="flex flex-col">
                       <span className="text-xs text-text-primary">{p.name}</span>
@@ -307,7 +307,7 @@ function RolesTab() {
               <button
                 onClick={handleSave}
                 disabled={saving || !name}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save
@@ -376,7 +376,7 @@ function PermissionsTab() {
       <div className="mb-4">
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           <Plus size={16} /> Create Permission
         </button>
@@ -384,7 +384,7 @@ function PermissionsTab() {
 
       {isLoading ? (
         <div className="py-8 text-center">
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" />
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" />
         </div>
       ) : permList.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-surface-2 bg-surface-1 py-16 text-center">
@@ -397,7 +397,7 @@ function PermissionsTab() {
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus size={16} />
             Create Permission
@@ -437,7 +437,7 @@ function PermissionsTab() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowCreate(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
             <h3 className="text-lg font-semibold text-text-primary">Create Permission</h3>
             <div>
               <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
@@ -445,7 +445,7 @@ function PermissionsTab() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="users.read"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -454,7 +454,7 @@ function PermissionsTab() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="View user profiles"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div className="flex gap-3 pt-2">
@@ -467,7 +467,7 @@ function PermissionsTab() {
               <button
                 onClick={handleSave}
                 disabled={saving || !name}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Create
@@ -566,11 +566,11 @@ function UserRoleAssignments() {
               value={userEmail}
               onChange={e => { setUserEmail(e.target.value); setSearchUserId(''); setSearched(false) }}
               placeholder="user@example.com"
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
             />
           </div>
-          <button onClick={handleSearch} disabled={!userEmail.trim()} className="rounded-xl bg-brand-violet/10 px-4 py-2.5 text-sm font-medium text-brand-violet hover:bg-brand-violet/20 disabled:opacity-50">
+          <button onClick={handleSearch} disabled={!userEmail.trim()} className="rounded-xl bg-brand-wash px-4 py-2.5 text-sm font-medium text-brand-accent hover:bg-brand-wash-faint disabled:opacity-50">
             Search
           </button>
         </div>
@@ -584,7 +584,7 @@ function UserRoleAssignments() {
               <select
                 value={selectedRole}
                 onChange={e => setSelectedRole(e.target.value)}
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none"
               >
                 <option value="">Select a role...</option>
                 {roleOptions.map(r => <option key={r.role_id || r.id} value={r.role_id || r.id}>{r.name || r.role_id || r.id}</option>)}
@@ -596,13 +596,13 @@ function UserRoleAssignments() {
                 type="date"
                 value={expiresAt}
                 onChange={e => setExpiresAt(e.target.value)}
-                className="rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+                className="rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none"
               />
             </div>
             <button
               onClick={handleAssign}
               disabled={assigning || !selectedRole}
-              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50"
             >
               {assigning ? <Loader2 size={14} className="animate-spin" /> : null}
               Assign
@@ -610,7 +610,7 @@ function UserRoleAssignments() {
           </div>
 
           {isLoading ? (
-            <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-violet" /></div>
+            <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-accent" /></div>
           ) : userRoles.length === 0 ? (
             <div className="rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center">
               <Shield className="mx-auto h-6 w-6 text-text-muted" />

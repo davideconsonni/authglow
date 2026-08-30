@@ -31,6 +31,8 @@ const FLOW_TITLES: Record<PlaygroundFlow, string> = {
   'device-code': 'Device Code Flow',
   'token-preview': 'Token Claims Preview',
   'generic': 'Generic Request',
+  'dcr': 'Dynamic Client Registration',
+  'rp-logout': 'RP-Initiated Logout',
 }
 
 const FLOW_DESCRIPTIONS: Record<PlaygroundFlow, string> = {
@@ -46,6 +48,8 @@ const FLOW_DESCRIPTIONS: Record<PlaygroundFlow, string> = {
   'device-code': 'RFC 8628 — Device authorization for TVs, CLIs, and input-constrained devices.',
   'token-preview': 'Preview the namespaced custom claims (RBAC, tenant, etc.) a client will receive in its access token.',
   'generic': 'Free-form API request builder for any endpoint.',
+  'dcr': 'RFC 7591 — register, update and delete a client via API.',
+  'rp-logout': 'OIDC logout initiated by the app with post-login redirect.',
 }
 
 export function AdminPlaygroundPage() {

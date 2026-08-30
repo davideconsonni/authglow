@@ -61,7 +61,7 @@ export function DeviceAuthorizationsPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-violet" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-accent" />
         </div>
       ) : deviceAuths.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-text-muted">

@@ -122,14 +122,14 @@ describe('Fase 1.3 — Design token AuthGlow via @theme in globals.css', () => {
     expect(css).toMatch(/--color-surface-3:\s*var\(--color-surface-3\)/)
   })
 
-  it('@theme contiene --color-brand-violet', () => {
-    expect(css).toMatch(/--color-brand-violet:\s*var\(--color-brand-violet\)/)
+  it('@theme contiene --color-brand-accent', () => {
+    expect(css).toMatch(/--color-brand-accent:\s*var\(--color-brand-accent\)/)
   })
-  it('@theme contiene --color-brand-magenta', () => {
-    expect(css).toMatch(/--color-brand-magenta:\s*var\(--color-brand-magenta\)/)
+  it('@theme contiene --color-brand-alt', () => {
+    expect(css).toMatch(/--color-brand-alt:\s*var\(--color-brand-alt\)/)
   })
-  it('@theme contiene --color-brand-blue', () => {
-    expect(css).toMatch(/--color-brand-blue:\s*var\(--color-brand-blue\)/)
+  it('@theme contiene --color-brand-cool', () => {
+    expect(css).toMatch(/--color-brand-cool:\s*var\(--color-brand-cool\)/)
   })
 
   it('@theme contiene --color-semantic-success', () => {
@@ -159,14 +159,14 @@ describe('Fase 1.3 — Design token AuthGlow via @theme in globals.css', () => {
     expect(css).toContain('Inter')
   })
 
-  it('@theme contiene glow-violet shadow', () => {
-    expect(css).toMatch(/--shadow-glow-violet/)
+  it('@theme contiene glow-accent shadow', () => {
+    expect(css).toMatch(/--shadow-glow-accent/)
   })
-  it('@theme contiene glow-magenta shadow', () => {
-    expect(css).toMatch(/--shadow-glow-magenta/)
+  it('@theme contiene glow-alt shadow', () => {
+    expect(css).toMatch(/--shadow-glow-alt/)
   })
-  it('@theme contiene glow-blue shadow', () => {
-    expect(css).toMatch(/--shadow-glow-blue/)
+  it('@theme contiene glow-cool shadow', () => {
+    expect(css).toMatch(/--shadow-glow-cool/)
   })
 
   it('@theme contiene gradient-cta', () => {
@@ -212,16 +212,16 @@ describe('Fase 1.4 — globals.css con CSS custom properties e classi glow', () 
     expect(css).toContain('.glass-subtle')
   })
 
-  it('contiene classe .glow-violet', () => {
-    expect(css).toContain('.glow-violet')
+  it('contiene classe .glow-accent', () => {
+    expect(css).toContain('.glow-accent')
   })
 
-  it('contiene classe .glow-magenta', () => {
-    expect(css).toContain('.glow-magenta')
+  it('contiene classe .glow-alt', () => {
+    expect(css).toContain('.glow-alt')
   })
 
-  it('contiene classe .glow-blue', () => {
-    expect(css).toContain('.glow-blue')
+  it('contiene classe .glow-cool', () => {
+    expect(css).toContain('.glow-cool')
   })
 
   it('contiene classe .gradient-text', () => {
@@ -232,8 +232,8 @@ describe('Fase 1.4 — globals.css con CSS custom properties e classi glow', () 
     expect(css).toContain('.scrollbar-dark')
   })
 
-  it('contiene CSS custom property --glow-violet', () => {
-    expect(css).toContain('--glow-violet')
+  it('contiene CSS custom property --glow-accent', () => {
+    expect(css).toContain('--glow-accent')
   })
 
   it('contiene @custom-variant dark per dark mode class-based', () => {

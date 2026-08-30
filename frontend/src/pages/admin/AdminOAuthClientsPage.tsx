@@ -128,7 +128,7 @@ function TextInput(props: {
       placeholder={props.placeholder}
       data-testid={props['data-testid']}
       autoFocus={props.autoFocus}
-      className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+      className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
     />
   )
 }
@@ -445,7 +445,7 @@ export function AdminOAuthClientsPage() {
         title="OAuth Clients"
         description="Applications that authenticate users through AuthGlow."
         actions={
-          <button onClick={() => { resetForm(); setShowForm(true) }} data-testid="create-oauth-client-btn" className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]">
+          <button onClick={() => { resetForm(); setShowForm(true) }} data-testid="create-oauth-client-btn" className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]">
             <Plus size={16} /> Create Client
           </button>
         }
@@ -456,7 +456,7 @@ export function AdminOAuthClientsPage() {
           <div className="rounded-2xl bg-surface-2 p-4"><Sparkles className="h-8 w-8 text-text-muted" /></div>
           <h3 className="mt-4 text-lg font-semibold text-text-primary">No OAuth clients yet</h3>
           <p className="mt-2 max-w-sm text-sm text-text-muted">Create your first client to let applications authenticate users.</p>
-          <button onClick={() => { resetForm(); setShowForm(true) }} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]">
+          <button onClick={() => { resetForm(); setShowForm(true) }} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]">
             <Plus size={16} /> Create Client
           </button>
         </div>
@@ -503,7 +503,7 @@ export function AdminOAuthClientsPage() {
                       {clientScopes(c).length === 0 && <span className="text-[10px] text-text-muted">-</span>}
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-violet/10 text-brand-violet' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}{c.dpop_bound ? <span className="ml-1 inline-flex rounded-lg bg-semantic-info/10 px-1.5 py-0.5 text-[10px] font-semibold text-semantic-info" data-testid="dpop-badge">DPoP</span> : null}</span></td>
+                  <td className="hidden md:table-cell px-4 py-2.5"><span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${c.is_confidential ? 'bg-brand-wash text-brand-accent' : 'bg-surface-2 text-text-muted'}`}>{c.is_confidential ? 'Confidential' : 'Public'}{c.dpop_bound ? <span className="ml-1 inline-flex rounded-lg bg-semantic-info/10 px-1.5 py-0.5 text-[10px] font-semibold text-semantic-info" data-testid="dpop-badge">DPoP</span> : null}</span></td>
                   <td className="px-4 py-2.5">
                     <button onClick={() => handleToggle(c.client_id, c.is_active)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${c.is_active ? 'bg-semantic-success/10 text-semantic-success' : 'bg-semantic-error/10 text-semantic-error'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${c.is_active ? 'bg-semantic-success' : 'bg-semantic-error'}`} />
@@ -518,7 +518,7 @@ export function AdminOAuthClientsPage() {
                       <button
                         onClick={() => setClaimsClient({ id: c.client_id, name: clientDisplayName(c) })}
                         data-testid="open-claims-btn"
-                        className="text-text-muted hover:text-brand-violet"
+                        className="text-text-muted hover:text-brand-accent"
                         title="Token Claims (customize JWT claims)"
                       >
                         <KeyRound size={14} />
@@ -530,7 +530,7 @@ export function AdminOAuthClientsPage() {
                         <button
                           onClick={() => handleRotateJwtKey(c.client_id)}
                           data-testid="rotate-jwt-key-btn"
-                          className="text-text-muted hover:text-brand-violet"
+                          className="text-text-muted hover:text-brand-accent"
                           title="Rotate JWT key"
                         >
                           <Sparkles size={14} />
@@ -552,7 +552,7 @@ export function AdminOAuthClientsPage() {
       {secretModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setSecretModal(null); setNewClientId('') }} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="client-created-secret">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-created-secret">
             <h3 className="text-lg font-semibold text-text-primary">{newClientId ? 'Client Created' : 'New Secret'}</h3>
             {newClientId && <p className="text-xs text-text-muted">Client ID: <code className="text-text-secondary">{newClientId}</code></p>}
             <p className="text-xs text-semantic-warning">Copy this secret now. You will not be able to see it again.</p>
@@ -585,7 +585,7 @@ export function AdminOAuthClientsPage() {
       {jwtKeyModal && !secretModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setJwtKeyModal(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="client-rotated-jwt-key">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-rotated-jwt-key">
             <h3 className="text-lg font-semibold text-text-primary">New JWT Signing Key</h3>
             <p className="text-xs text-semantic-warning">
               The previous key is now invalid. Copy the new key and hand it to the client operator immediately.
@@ -603,7 +603,7 @@ export function AdminOAuthClientsPage() {
       {previewClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => setPreviewClient(null)} />
-          <div className="relative z-10 flex w-full max-w-lg flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-violet max-h-[calc(100vh-4rem)]">
+          <div className="relative z-10 flex w-full max-w-lg flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-accent max-h-[calc(100vh-4rem)]">
             <div className="flex flex-shrink-0 items-center justify-between border-b border-surface-2 px-6 py-4">
               <h3 className="text-lg font-semibold text-text-primary">Consent Screen Preview</h3>
               <button onClick={() => setPreviewClient(null)} className="rounded-lg px-3 py-1.5 text-sm text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors">Close</button>
@@ -633,7 +633,7 @@ export function AdminOAuthClientsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); resetForm() } }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
-          <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+          <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-accent max-h-[calc(100vh-4rem)]">
             <div className="flex-shrink-0 border-b border-surface-2 px-6 py-4">
               <h3 className="text-lg font-semibold text-text-primary">
                 {editClientId ? 'Edit OAuth Client' : 'New OAuth Client'}
@@ -663,7 +663,7 @@ export function AdminOAuthClientsPage() {
                       className={cn(
                         'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all',
                         selectedTemplate === t.id
-                          ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                          ? 'border-brand-accent bg-brand-wash text-brand-accent'
                           : 'border-surface-2 text-text-muted hover:border-surface-3 hover:text-text-secondary'
                       )}
                     >
@@ -700,7 +700,7 @@ export function AdminOAuthClientsPage() {
 
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-text-secondary">Description</label>
-                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 resize-y" />
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this client do?" rows={2} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 resize-y" />
                 </div>
 
                 <div>
@@ -709,14 +709,14 @@ export function AdminOAuthClientsPage() {
                     {ALL_GRANT_TYPES.map(g => (
                       <label key={g.id} className={cn(
                         'flex items-center gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors',
-                        grantTypes.includes(g.id) ? 'bg-brand-violet/10' : 'hover:bg-surface-2'
+                        grantTypes.includes(g.id) ? 'bg-brand-wash' : 'hover:bg-surface-2'
                       )}>
                         <input
                           type="checkbox"
                           checked={grantTypes.includes(g.id)}
                           onChange={() => toggleGrantType(g.id)}
                           data-testid={`grant-${g.id}`}
-                          className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                          className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20"
                         />
                         <span className="text-xs text-text-primary">{g.label}</span>
                       </label>
@@ -740,7 +740,7 @@ export function AdminOAuthClientsPage() {
                         data-testid="client-type-confidential"
                         className={cn(
                           'flex-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
-                          isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'
+                          isConfidential ? 'border-brand-accent bg-brand-wash text-brand-accent' : 'border-surface-2 text-text-muted hover:bg-surface-1'
                         )}
                       >
                         Confidential
@@ -751,7 +751,7 @@ export function AdminOAuthClientsPage() {
                         data-testid="client-type-public"
                         className={cn(
                           'flex-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
-                          !isConfidential ? 'border-brand-violet bg-brand-violet/10 text-brand-violet' : 'border-surface-2 text-text-muted hover:bg-surface-1'
+                          !isConfidential ? 'border-brand-accent bg-brand-wash text-brand-accent' : 'border-surface-2 text-text-muted hover:bg-surface-1'
                         )}
                       >
                         Public
@@ -768,7 +768,7 @@ export function AdminOAuthClientsPage() {
                       value={authMethod}
                       onChange={e => setAuthMethod(e.target.value as AuthMethod)}
                       disabled={!isConfidential}
-                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-[11px] text-text-primary focus:border-brand-violet focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-[11px] text-text-primary focus:border-brand-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="client_secret_basic">client_secret_basic</option>
                       <option value="client_secret_post">client_secret_post</option>
@@ -805,7 +805,7 @@ export function AdminOAuthClientsPage() {
                         placeholder={'{\n  "kty": "RSA",\n  "n": "...",\n  "e": "AQAB"\n}'}
                         rows={5}
                         data-testid="public-jwk-input"
-                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                       />
                       {publicJwkError && <FieldError id="public-jwk-error">{publicJwkError}</FieldError>}
                       {!publicJwkError && formErrors.public_jwk && <FieldError id="public-jwk-error">{formErrors.public_jwk}</FieldError>}
@@ -818,12 +818,12 @@ export function AdminOAuthClientsPage() {
                       <div className="space-y-1.5">
                         {redirectUris.map((uri, i) => (
                           <div key={i} className="flex items-center gap-1.5">
-                            <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/cb${redirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                            <input value={uri} onChange={e => updateRedirectUri(i, e.target.value)} placeholder={`https://app.example.com/cb${redirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                             {redirectUris.length > 1 && <button type="button" onClick={() => removeRedirectUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={12} /></button>}
                           </div>
                         ))}
                       </div>
-                      <button type="button" onClick={addRedirectUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
+                      <button type="button" onClick={addRedirectUri} className="mt-1.5 text-[11px] text-brand-accent hover:text-brand-cool font-medium">+ Add URI</button>
                       {formErrors.redirect_uris && <FieldError id="client-redirect-uris-error">{formErrors.redirect_uris}</FieldError>}
                     </div>
                   )}
@@ -835,12 +835,12 @@ export function AdminOAuthClientsPage() {
                       <div className="space-y-1.5">
                         {allowedPostLogoutRedirectUris.map((uri, i) => (
                           <div key={i} className="flex items-center gap-1.5">
-                            <input value={uri} onChange={e => updateLogoutUri(i, e.target.value)} placeholder={`https://app.example.com/logout${allowedPostLogoutRedirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-logout-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                            <input value={uri} onChange={e => updateLogoutUri(i, e.target.value)} placeholder={`https://app.example.com/logout${allowedPostLogoutRedirectUris.length > 1 ? ` ${i+1}` : ''}`} data-testid={`client-logout-uri-input-${i}`} className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                             {allowedPostLogoutRedirectUris.length > 1 && <button type="button" onClick={() => removeLogoutUri(i)} className="shrink-0 text-text-muted hover:text-semantic-error"><Trash2 size={12} /></button>}
                           </div>
                         ))}
                       </div>
-                      <button type="button" onClick={addLogoutUri} className="mt-1.5 text-[11px] text-brand-violet hover:text-brand-blue font-medium">+ Add URI</button>
+                      <button type="button" onClick={addLogoutUri} className="mt-1.5 text-[11px] text-brand-accent hover:text-brand-cool font-medium">+ Add URI</button>
                     </div>
                   )}
 
@@ -851,7 +851,7 @@ export function AdminOAuthClientsPage() {
                         checked={isConfidential ? requirePkce : true}
                         onChange={e => setRequirePkce(e.target.checked)}
                         disabled={!isConfidential}
-                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20 disabled:opacity-50"
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20 disabled:opacity-50"
                       />
                       <span className={cn('text-[11px]', !isConfidential && 'text-text-muted')}>
                         Require PKCE
@@ -863,7 +863,7 @@ export function AdminOAuthClientsPage() {
                         type="checkbox"
                         checked={requireConsent}
                         onChange={e => setRequireConsent(e.target.checked)}
-                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20"
                       />
                       <span className="text-[11px] text-text-primary">Require consent screen</span>
                     </label>
@@ -875,7 +875,7 @@ export function AdminOAuthClientsPage() {
                         checked={dpopBound}
                         onChange={e => setDpopBound(e.target.checked)}
                         data-testid="dpop-bound-toggle"
-                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-violet focus:ring-brand-violet/20"
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20"
                       />
                       <span className="text-[11px] text-text-primary">
                         DPoP-bound tokens
@@ -908,19 +908,19 @@ export function AdminOAuthClientsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Homepage URI</label>
-                    <input value={homepageUri} onChange={e => setHomepageUri(e.target.value)} placeholder="https://app.example.com" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <input value={homepageUri} onChange={e => setHomepageUri(e.target.value)} placeholder="https://app.example.com" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URI</label>
-                    <input value={logoUri} onChange={e => setLogoUri(e.target.value)} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <input value={logoUri} onChange={e => setLogoUri(e.target.value)} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Terms URI</label>
-                    <input value={termsUri} onChange={e => setTermsUri(e.target.value)} placeholder="https://app.example.com/tos" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <input value={termsUri} onChange={e => setTermsUri(e.target.value)} placeholder="https://app.example.com/tos" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Privacy URI</label>
-                    <input value={privacyUri} onChange={e => setPrivacyUri(e.target.value)} placeholder="https://app.example.com/privacy" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                    <input value={privacyUri} onChange={e => setPrivacyUri(e.target.value)} placeholder="https://app.example.com/privacy" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                   </div>
                 </div>
 
@@ -931,36 +931,36 @@ export function AdminOAuthClientsPage() {
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Primary color</label>
                       <div className="flex gap-2">
                         <input type="color" value={branding.primary_color || '#6366f1'} onChange={e => setBranding({...branding, primary_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.primary_color || ''} onChange={e => setBranding({...branding, primary_color: e.target.value})} placeholder="#6366f1" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                        <input value={branding.primary_color || ''} onChange={e => setBranding({...branding, primary_color: e.target.value})} placeholder="#6366f1" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Surface color</label>
                       <div className="flex gap-2">
                         <input type="color" value={branding.surface_color || '#ffffff'} onChange={e => setBranding({...branding, surface_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.surface_color || ''} onChange={e => setBranding({...branding, surface_color: e.target.value})} placeholder="#ffffff" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                        <input value={branding.surface_color || ''} onChange={e => setBranding({...branding, surface_color: e.target.value})} placeholder="#ffffff" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Text color</label>
                       <div className="flex gap-2">
                         <input type="color" value={branding.text_color || '#1a1a2e'} onChange={e => setBranding({...branding, text_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.text_color || ''} onChange={e => setBranding({...branding, text_color: e.target.value})} placeholder="#1a1a2e" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                        <input value={branding.text_color || ''} onChange={e => setBranding({...branding, text_color: e.target.value})} placeholder="#1a1a2e" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Border radius</label>
-                      <input value={branding.border_radius || ''} onChange={e => setBranding({...branding, border_radius: e.target.value})} placeholder="12px" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      <input value={branding.border_radius || ''} onChange={e => setBranding({...branding, border_radius: e.target.value})} placeholder="12px" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mt-3">
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Font family</label>
-                      <input value={branding.font_family || ''} onChange={e => setBranding({...branding, font_family: e.target.value})} placeholder="Inter, sans-serif" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      <input value={branding.font_family || ''} onChange={e => setBranding({...branding, font_family: e.target.value})} placeholder="Inter, sans-serif" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URL</label>
-                      <input value={branding.logo_url || ''} onChange={e => setBranding({...branding, logo_url: e.target.value})} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                      <input value={branding.logo_url || ''} onChange={e => setBranding({...branding, logo_url: e.target.value})} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                     </div>
                   </div>
                   <p className="mt-2 text-[10px] text-text-muted">Branding is applied as CSS custom properties on the consent page. Leave fields empty to use defaults.</p>
@@ -969,12 +969,12 @@ export function AdminOAuthClientsPage() {
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-surface-2">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Access token lifetime (s)</label>
-                    <input type="number" min={300} max={86400} value={accessTokenLifetime} onChange={e => setAccessTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                    <input type="number" min={300} max={86400} value={accessTokenLifetime} onChange={e => setAccessTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-accent focus:outline-none" />
                     <p className="mt-1 text-[10px] text-text-muted">5 min – 24 hours</p>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Refresh token lifetime (s)</label>
-                    <input type="number" min={3600} max={7776000} value={refreshTokenLifetime} onChange={e => setRefreshTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-violet focus:outline-none" />
+                    <input type="number" min={3600} max={7776000} value={refreshTokenLifetime} onChange={e => setRefreshTokenLifetime(Number(e.target.value))} className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-accent focus:outline-none" />
                     <p className="mt-1 text-[10px] text-text-muted">1 hour – 90 days</p>
                   </div>
                 </div>
@@ -985,7 +985,7 @@ export function AdminOAuthClientsPage() {
 
             <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-              <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
+              <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {editClientId ? 'Update' : 'Create'}
               </button>

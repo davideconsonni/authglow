@@ -13,7 +13,7 @@ export function AppShell() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />
         {meta.demo_mode && (
-          <div className="border-b border-brand-violet/20 bg-brand-violet/5 px-6 py-2">
+          <div className="demo-strip px-6 py-2">
             <Banner variant="demo" size="sm" data-testid="demo-mode-banner">
               {meta.demo_banner_text || 'Demo environment — accounts and data are reset on every server restart.'}
             </Banner>

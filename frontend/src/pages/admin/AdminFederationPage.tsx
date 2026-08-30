@@ -51,7 +51,7 @@ function TextInput(props: { value: string; onChange: (v: string) => void; placeh
         onChange={(e) => props.onChange(e.target.value)}
         placeholder={props.placeholder}
         autoFocus={props.autoFocus}
-        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
       />
     </div>
   )
@@ -192,7 +192,7 @@ export function AdminFederationPage() {
         title="Federation"
         description="Manage external identity providers (CIE, SPID, Google, etc.)"
         actions={
-          <button onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]">
+          <button onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]">
             <Plus size={16} /> Add Provider
           </button>
         }
@@ -259,7 +259,7 @@ export function AdminFederationPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowForm(false); resetForm() }} />
-          <div className="relative z-10 flex w-full max-w-xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet max-h-[calc(100vh-4rem)]">
+          <div className="relative z-10 flex w-full max-w-xl flex-col rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-accent max-h-[calc(100vh-4rem)]">
             <div className="flex-shrink-0 border-b border-surface-2 px-6 py-4">
               <h3 className="text-lg font-semibold text-text-primary">{editId ? 'Edit Provider' : 'New Provider'}</h3>
             </div>
@@ -301,7 +301,7 @@ export function AdminFederationPage() {
                     value={rawAuthLevels}
                     onChange={(e) => setRawAuthLevels(e.target.value)}
                     placeholder="https://www.spid.gov.it/SpidL1 https://www.spid.gov.it/SpidL2"
-                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                   />
                   <p className="mt-0.5 text-[10px] text-text-muted">Standard OIDC acr_values. CIE: https://www.spid.gov.it/SpidL1, L2, L3. Vuoto = non richiesto.</p>
                 </div>
@@ -321,7 +321,7 @@ export function AdminFederationPage() {
                               : ctxs.filter(c => c !== 'dashboard'),
                           })
                         }}
-                        className="rounded accent-brand-violet"
+                        className="rounded accent-brand-accent"
                       />
                       Dashboard
                     </label>
@@ -338,7 +338,7 @@ export function AdminFederationPage() {
                               : ctxs.filter(c => c !== 'oauth2'),
                           })
                         }}
-                        className="rounded accent-brand-violet"
+                        className="rounded accent-brand-accent"
                       />
                       OAuth2
                     </label>
@@ -360,7 +360,7 @@ export function AdminFederationPage() {
                       })
                     }
                     placeholder="Default"
-                    className="w-40 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                    className="w-40 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                   />
                   <p className="mt-0.5 text-[10px] text-text-muted">
                     Leave empty for system default limits.
@@ -380,7 +380,7 @@ export function AdminFederationPage() {
   "email": "email",
   "name": "name"
 }`}
-                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none font-mono"
+                    className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none font-mono"
                   />
                   <p className="mt-1 text-[10px] text-text-muted">
                     Map each external IdP claim name (left key) to an AuthGlow user field (right value).
@@ -398,7 +398,7 @@ export function AdminFederationPage() {
 
             <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save
               </button>

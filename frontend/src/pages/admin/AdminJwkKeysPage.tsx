@@ -90,7 +90,7 @@ export function AdminJwkKeysPage() {
           <button
             onClick={handleRotate}
             disabled={rotating}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50"
           >
             {rotating && <Loader2 size={16} className="animate-spin" />}
             <RefreshCw size={16} />
@@ -153,7 +153,7 @@ export function AdminJwkKeysPage() {
             href={`${API_URL}/.well-known/jwks.json`}
             target="_blank"
             rel="noreferrer"
-            className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-brand-violet transition-colors hover:bg-brand-violet/5 hover:text-brand-blue"
+            className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-brand-accent transition-colors hover:bg-brand-wash-faint hover:text-brand-cool"
           >
             View /.well-known/jwks.json <ExternalLink size={12} />
           </a>
@@ -161,7 +161,7 @@ export function AdminJwkKeysPage() {
       )}
 
       {isLoading ? (
-        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
+        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
       ) : !keys || keys.length === 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-12 text-center">
           <Key className="mx-auto h-8 w-8 text-text-muted" />

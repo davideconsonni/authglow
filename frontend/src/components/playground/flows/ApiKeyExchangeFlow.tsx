@@ -82,13 +82,13 @@ export function ApiKeyExchangeFlow() {
               onChange={(e) => setLocalApiKey(e.target.value)}
               type="password" autoComplete="off"
               placeholder="ag_..."
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
             />
           </div>
           <button
             onClick={handleExchange}
             disabled={loading || !localApiKey}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Key size={16} />}
             Exchange API Key

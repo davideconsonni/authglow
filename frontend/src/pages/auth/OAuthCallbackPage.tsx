@@ -62,7 +62,7 @@ export function OAuthCallbackPage() {
           </>
         ) : (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-violet" />
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-accent" />
             <p className="mt-4 text-sm text-text-muted">Completing secure sign-in...</p>
           </>
         )}

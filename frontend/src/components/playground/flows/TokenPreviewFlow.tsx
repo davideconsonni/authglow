@@ -245,7 +245,7 @@ export function TokenPreviewFlow() {
               className={cn(
                 'flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all',
                 tokenKind === 'client'
-                  ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                  ? 'border-brand-accent bg-brand-wash text-brand-accent'
                   : 'border-surface-2 bg-surface-1 text-text-secondary hover:border-surface-3',
               )}
             >
@@ -262,7 +262,7 @@ export function TokenPreviewFlow() {
               className={cn(
                 'flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all',
                 tokenKind === 'api_key'
-                  ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                  ? 'border-brand-accent bg-brand-wash text-brand-accent'
                   : 'border-surface-2 bg-surface-1 text-text-secondary hover:border-surface-3',
               )}
             >
@@ -302,13 +302,13 @@ export function TokenPreviewFlow() {
                         className={cn(
                           'flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all',
                           active
-                            ? 'border-brand-violet bg-brand-violet/10'
+                            ? 'border-brand-accent bg-brand-wash'
                             : 'border-surface-2 bg-surface-1 hover:border-surface-3',
                         )}
                       >
                         <div className="flex w-full items-center justify-between">
                           <span className="text-sm font-semibold text-text-primary">{displayName}</span>
-                          {active && <Check size={14} className="text-brand-violet" />}
+                          {active && <Check size={14} className="text-brand-accent" />}
                         </div>
                         <code className="text-[10px] font-mono text-text-muted">{c.client_id}</code>
                       </button>
@@ -344,13 +344,13 @@ export function TokenPreviewFlow() {
                         className={cn(
                           'flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all',
                           active
-                            ? 'border-brand-violet bg-brand-violet/10'
+                            ? 'border-brand-accent bg-brand-wash'
                             : 'border-surface-2 bg-surface-1 hover:border-surface-3',
                         )}
                       >
                         <div className="flex w-full items-center justify-between">
                           <span className="text-sm font-semibold text-text-primary">{k.name}</span>
-                          {active && <Check size={14} className="text-brand-violet" />}
+                          {active && <Check size={14} className="text-brand-accent" />}
                         </div>
                         <code className="text-[10px] font-mono text-text-muted">{k.key_prefix}</code>
                         {k.tier && (
@@ -394,7 +394,7 @@ export function TokenPreviewFlow() {
             <label className="mb-1 block text-[10px] font-semibold text-text-muted uppercase">
               Scopes
             </label>
-            <ScopePicker value={scopesText} onChange={setScopesText} placeholder="Add custom scope" />
+            <ScopePicker value={scopesText} onChange={setScopesText} placeholder="Add custom scope" testId="preview-scopes" />
             <p className="mt-1 text-[10px] text-text-muted">
               Claims gated by a <code className="font-mono">required_scope</code> are only emitted when the matching scope is present.
             </p>

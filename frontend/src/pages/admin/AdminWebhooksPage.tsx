@@ -249,7 +249,7 @@ export function AdminWebhooksPage() {
           <button
             onClick={openCreateForm}
             data-testid="webhooks-create-btn"
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
           >
             <Plus size={16} /> New webhook
           </button>
@@ -273,7 +273,7 @@ export function AdminWebhooksPage() {
                 setFormError(null)
               }}
               placeholder="https://mio-sito.it/hooks/authglow"
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm font-mono text-text-primary focus:border-brand-violet focus:outline-none"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm font-mono text-text-primary focus:border-brand-accent focus:outline-none"
             />
             {formError && (
               <p role="alert" data-testid="webhooks-form-error" className="text-xs text-semantic-error">
@@ -294,7 +294,7 @@ export function AdminWebhooksPage() {
                   setFormError(null)
                 }}
                 data-testid="webhooks-insecure-toggle"
-                className="accent-brand-violet"
+                className="accent-brand-accent"
               />
               Allow insecure HTTP <span className="text-text-muted">(extreme cases only: internal receivers without TLS)</span>
             </label>
@@ -308,12 +308,12 @@ export function AdminWebhooksPage() {
             <p className="text-xs font-medium text-text-secondary">Events</p>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {WEBHOOK_EVENT_TYPES.map((t) => (
-                <label key={t} className="flex cursor-pointer items-center gap-2 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-secondary hover:border-brand-violet/40">
+                <label key={t} className="flex cursor-pointer items-center gap-2 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-secondary hover:border-brand-accent/40">
                   <input
                     type="checkbox"
                     checked={createEvents.includes(t)}
                     onChange={() => toggleEvent(t)}
-                    className="accent-brand-violet"
+                    className="accent-brand-accent"
                   />
                   <code>{t}</code>
                 </label>
@@ -325,7 +325,7 @@ export function AdminWebhooksPage() {
               onClick={handleCreate}
               disabled={creating || !!urlError || createEvents.length === 0}
               data-testid="webhooks-create-confirm"
-              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50"
             >
               {creating && <Loader2 size={14} className="animate-spin" />}
               {editingId ? 'Save changes' : 'Create webhook'}
@@ -339,7 +339,7 @@ export function AdminWebhooksPage() {
 
       {/* ----- List ----- */}
       {isLoading ? (
-        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
+        <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
       ) : !webhooks || webhooks.length === 0 ? (
         <div className="rounded-2xl border border-surface-2 bg-surface-1 p-12 text-center">
           <WebhookIcon className="mx-auto h-8 w-8 text-text-muted" />
@@ -386,7 +386,7 @@ export function AdminWebhooksPage() {
                     disabled={testingId === wh.id}
                     title="Send test event"
                     data-testid={`webhook-test-${wh.id}`}
-                    className="rounded-lg p-1.5 text-text-muted hover:bg-brand-violet/10 hover:text-brand-violet disabled:opacity-50"
+                    className="rounded-lg p-1.5 text-text-muted hover:bg-brand-wash-faint hover:text-brand-accent disabled:opacity-50"
                   >
                     {testingId === wh.id ? <Loader2 size={14} className="animate-spin" /> : <WebhookIcon size={14} />}
                   </button>
@@ -395,7 +395,7 @@ export function AdminWebhooksPage() {
                     title="Edit URL & events"
                     aria-label={`Edit webhook ${wh.id}`}
                     data-testid={`webhook-edit-${wh.id}`}
-                    className="rounded-lg p-1.5 text-text-muted hover:text-brand-violet transition-colors"
+                    className="rounded-lg p-1.5 text-text-muted hover:text-brand-accent transition-colors"
                   >
                     <Pencil size={14} />
                   </button>
@@ -404,7 +404,7 @@ export function AdminWebhooksPage() {
                     title="Delivery log"
                     aria-label="Delivery log"
                     className={`rounded-lg p-1.5 transition-colors ${
-                      logOpenId === wh.id ? 'text-brand-violet' : 'text-text-muted hover:text-text-secondary'
+                      logOpenId === wh.id ? 'text-brand-accent' : 'text-text-muted hover:text-text-secondary'
                     }`}
                   >
                     <ScrollText size={14} />
@@ -412,7 +412,7 @@ export function AdminWebhooksPage() {
                   <button
                     onClick={() => setRotateId(wh.id)}
                     title="Rotate signing secret"
-                    className="rounded-lg p-1.5 text-text-muted hover:text-brand-blue transition-colors"
+                    className="rounded-lg p-1.5 text-text-muted hover:text-brand-cool transition-colors"
                   >
                     <RotateCcw size={14} />
                   </button>
@@ -446,7 +446,7 @@ export function AdminWebhooksPage() {
       {secretReveal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="secret-reveal-modal">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSecretReveal(null)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-bg-primary p-6 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-bg-primary p-6 shadow-glow-accent">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text-primary">Signing Secret</h3>
               <button onClick={() => setSecretReveal(null)} aria-label="Close" className="rounded-lg p-1 text-text-muted hover:text-text-secondary">

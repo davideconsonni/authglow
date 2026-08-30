@@ -100,7 +100,7 @@ export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
   if (step === 'loading') {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-brand-violet" />
+        <Loader2 className="h-6 w-6 animate-spin text-brand-accent" />
       </div>
     )
   }
@@ -156,7 +156,7 @@ export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
         )}
         <button
           onClick={startEnrollment}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           Enable MFA
         </button>
@@ -168,8 +168,8 @@ export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-violet/10">
-            <QrCode className="h-5 w-5 text-brand-violet" />
+          <div className="icon-chip flex h-10 w-10 items-center justify-center rounded-xl">
+            <QrCode className="h-5 w-5" />
           </div>
           <div>
             <h3 className="font-semibold text-text-primary">Scan QR Code</h3>
@@ -245,7 +245,7 @@ export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
             maxLength={6}
             placeholder="000000"
             {...register('code')}
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center text-lg font-semibold tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center text-lg font-semibold tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
           />
           {errors.code && (
             <p className="text-xs text-semantic-error" role="alert">{errors.code.message}</p>
@@ -256,7 +256,7 @@ export function MFAEnrollment({ isEnabled = false, onRefreshUser }: Props) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Verify & Enable

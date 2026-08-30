@@ -65,13 +65,13 @@ export function PasskeyLoginButton() {
           placeholder="you@example.com"
           autoComplete="email"
           aria-label="Email for passkey login"
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
         />
       )}
       <button
         onClick={handlePasskeyLogin}
         disabled={loading || !email}
-        className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-brand-violet/30 bg-brand-violet/5 px-4 py-3 text-sm font-medium text-brand-violet hover:bg-brand-violet/10 hover:border-brand-violet/50 hover:shadow-glow-violet transition-all disabled:opacity-50"
+        className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm font-medium text-text-secondary hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-50"
       >
         {loading ? (
           <Loader2 size={18} className="animate-spin" />
@@ -79,7 +79,7 @@ export function PasskeyLoginButton() {
           <Fingerprint size={18} />
         )}
         Sign in with Passkey
-        <span className="absolute -top-2.5 right-3 rounded-full bg-gradient-cta px-2 py-0.5 text-[10px] font-bold text-white shadow-glow-violet">
+        <span className="absolute -top-2.5 right-3 rounded-full bg-gradient-cta px-2 py-0.5 text-[10px] font-bold text-white shadow-glow-accent">
           Recommended
         </span>
       </button>

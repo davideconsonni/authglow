@@ -84,7 +84,7 @@ export function PasskeyManager() {
         <button
           onClick={handleAddPasskey}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           Add Passkey
@@ -101,8 +101,8 @@ export function PasskeyManager() {
 
       {!passkeys || passkeys.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <div className="rounded-2xl bg-brand-violet/10 p-3 shadow-glow-violet">
-            <Shield size={24} className="text-brand-violet" />
+          <div className="icon-chip rounded-2xl p-3">
+            <Shield size={24} />
           </div>
           <p className="text-sm text-text-secondary">No passkeys registered yet</p>
           <p className="text-xs text-text-muted max-w-xs">
@@ -119,8 +119,8 @@ export function PasskeyManager() {
                 className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-violet/10">
-                    <Icon size={16} className="text-brand-violet" />
+                  <div className="icon-chip flex h-8 w-8 items-center justify-center rounded-lg">
+                    <Icon size={16} />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-text-primary">{pk.name}</p>

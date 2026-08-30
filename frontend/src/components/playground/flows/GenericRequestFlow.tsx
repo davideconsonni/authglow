@@ -50,7 +50,7 @@ export function GenericRequestFlow() {
                 method === m
                   ? m === 'GET' ? 'bg-green-500/20 text-green-400'
                     : m === 'DELETE' ? 'bg-semantic-error/20 text-semantic-error'
-                    : 'bg-brand-violet/20 text-brand-violet'
+                    : 'bg-brand-wash text-brand-accent'
                   : 'text-text-muted hover:text-text-secondary'
               }`}
             >
@@ -64,13 +64,13 @@ export function GenericRequestFlow() {
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
             placeholder="/api/endpoint"
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-9 pr-4 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 pl-9 pr-4 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
           />
         </div>
         <button
           onClick={handleSend}
           disabled={loading || !endpoint}
-          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           Send
@@ -85,7 +85,7 @@ export function GenericRequestFlow() {
             onChange={(e) => setBody(e.target.value)}
             placeholder='{ "key": "value" }'
             rows={5}
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none resize-y"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 p-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none resize-y"
           />
         </div>
       )}

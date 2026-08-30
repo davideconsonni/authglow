@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Sun, Moon } from 'lucide-react'
+import { LogOut, User, Sun, Moon, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { useTheme } from '../../hooks/useTheme'
+import { useTheme, type Theme } from '../../hooks/useTheme'
 import { ROUTES } from '../../lib/constants'
-import { useEffect, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,20 +11,15 @@ import {
   DropdownMenuSeparator,
 } from '../../components/ui/dropdown-menu'
 
+const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon; testId: string }> = [
+  { value: 'professional', label: 'Professional theme', icon: Sun, testId: 'theme-professional' },
+  { value: 'dark', label: 'Dark theme', icon: Moon, testId: 'theme-dark' },
+]
+
 export function TopBar() {
   const { user, logout } = useAuth()
-  const { toggleTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
-  const [isLight, setIsLight] = useState(false)
-
-  useEffect(() => {
-    setIsLight(document.documentElement.classList.contains('light'))
-    const observer = new MutationObserver(() => {
-      setIsLight(document.documentElement.classList.contains('light'))
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    return () => observer.disconnect()
-  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -33,17 +27,29 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-surface-2 bg-surface-1 px-6">
+    <header className="topbar-shell flex h-16 items-center justify-between border-b border-surface-2 bg-surface-1 px-6">
       <div />
 
       <div className="flex items-center gap-2">
-        <button
-          onClick={toggleTheme}
-          className="rounded-xl p-2 text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-colors"
-          aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-        >
-          {isLight ? <Moon size={18} /> : <Sun size={18} />}
-        </button>
+        <div className="flex items-center gap-1" role="group" aria-label="Color theme">
+          {THEME_OPTIONS.map(({ value, label, icon: Icon, testId }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              aria-label={label}
+              aria-pressed={theme === value}
+              data-testid={testId}
+              className={`rounded-xl p-2 transition-colors ${
+                theme === value
+                  ? 'bg-surface-2 text-brand-accent'
+                  : 'text-text-muted hover:bg-surface-2 hover:text-text-secondary'
+              }`}
+            >
+              <Icon size={18} />
+            </button>
+          ))}
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -51,7 +57,7 @@ export function TopBar() {
               className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors outline-none"
               data-testid="user-menu-trigger"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet/20 text-brand-violet text-sm font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-wash text-brand-accent text-sm font-medium">
                 {user?.first_name?.charAt(0) || 'U'}
               </div>
               <span className="hidden sm:inline">
@@ -65,7 +71,7 @@ export function TopBar() {
           <DropdownMenuContent
             align="end"
             sideOffset={8}
-            className="w-48 rounded-xl border border-surface-2 bg-surface-1 shadow-glow-violet"
+            className="w-48 rounded-xl border border-surface-2 bg-surface-1 shadow-glow-accent"
           >
             <DropdownMenuItem
               onClick={() => navigate(ROUTES.PROFILE)}

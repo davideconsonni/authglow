@@ -70,7 +70,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh]">
       <div className="absolute inset-0 bg-black/50" onClick={close} />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-violet overflow-hidden">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-surface-2 bg-surface-1 shadow-glow-accent overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-2">
           <Search size={18} className="text-text-muted shrink-0" />
           <input
@@ -93,7 +93,7 @@ export function CommandPalette() {
                     onClick={() => { close(); navigate(ROUTES.ADMIN.USERS) }}
                     className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-surface-2 transition-colors text-left"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-violet/15 text-xs font-bold text-brand-violet">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-wash text-xs font-bold text-brand-accent">
                       {(u.first_name?.[0] || '') + (u.last_name?.[0] || '') || '?'}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -114,7 +114,7 @@ export function CommandPalette() {
                     onClick={() => { close(); navigate(ROUTES.ADMIN.OAUTH_CLIENTS) }}
                     className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-surface-2 transition-colors text-left"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-magenta/10 text-brand-magenta">
+                    <div className="icon-chip flex h-8 w-8 shrink-0 items-center justify-center rounded-xl">
                       <Key size={14} />
                     </div>
                     <div className="min-w-0 flex-1">

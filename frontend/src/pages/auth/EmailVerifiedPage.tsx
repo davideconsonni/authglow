@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { MailCheck, AlertCircle, Loader2, RefreshCw, KeyRound } from 'lucide-react'
+import { SealStamp } from '../../components/shared/SealStamp'
 import { ApiError, api } from '../../lib/api'
 import { ROUTES } from '../../lib/constants'
 import { Banner } from '../../components/shared/Banner'
@@ -94,7 +95,7 @@ export function EmailVerifiedPage() {
 
         {status === 'loading' && (
           <div className="space-y-4">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-violet" />
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-accent" />
             <h2 className="text-xl font-semibold text-text-primary">Verifying your email...</h2>
           </div>
         )}
@@ -102,8 +103,8 @@ export function EmailVerifiedPage() {
         {status === 'form' && (
           <div className="space-y-5 rounded-2xl border border-surface-2 bg-surface-1 p-8 text-left">
             <div className="space-y-2 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-violet/10">
-                <MailCheck className="h-7 w-7 text-brand-violet" />
+              <div className="icon-chip mx-auto flex h-14 w-14 items-center justify-center rounded-2xl">
+                <MailCheck className="h-7 w-7" />
               </div>
               <h2 className="text-xl font-semibold text-text-primary">Verify your email</h2>
               <p className="text-sm text-text-muted">
@@ -113,7 +114,7 @@ export function EmailVerifiedPage() {
 
             <div className="rounded-xl border border-surface-2 bg-surface-1/50 p-3 text-xs text-text-muted">
               <div className="flex items-start gap-2">
-                <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-violet" />
+                <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
                 <p>
                   The code is in the email body (format{' '}
                   <span className="font-mono">XXXX-XXXX-XXXX</span>). It is never included in a
@@ -142,7 +143,7 @@ export function EmailVerifiedPage() {
                   placeholder="XXXX-XXXX-XXXX"
                   aria-describedby="verification-code-help"
                   {...register('verification_code')}
-                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center font-mono text-base tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-center font-mono text-base tracking-widest text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
                 />
                 <p id="verification-code-help" className="text-xs text-text-muted">
                   Copy the code exactly as shown, including the dashes.
@@ -157,7 +158,7 @@ export function EmailVerifiedPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isSubmitting ? 'Verifying...' : 'Verify email'}
@@ -172,7 +173,7 @@ export function EmailVerifiedPage() {
                   type="button"
                   onClick={handleResend}
                   disabled={resending}
-                  className="inline-flex items-center gap-1.5 font-medium text-brand-violet hover:text-brand-blue transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 font-medium text-brand-accent hover:text-brand-cool transition-colors disabled:opacity-50"
                 >
                   {resending ? <Loader2 size={12} className="animate-spin" /> : (
                     <RefreshCw size={12} />
@@ -186,16 +187,14 @@ export function EmailVerifiedPage() {
 
         {status === 'success' && (
           <div className="space-y-4 rounded-2xl border border-surface-2 bg-surface-1 p-8">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-semantic-success/10">
-              <MailCheck className="h-7 w-7 text-semantic-success" />
-            </div>
+            <SealStamp className="mx-auto h-14 w-14" />
             <h2 className="text-xl font-semibold text-text-primary">Email verified</h2>
             <p className="text-sm text-text-muted">
               Your email has been successfully verified. You can now sign in to your account.
             </p>
             <Link
               to={ROUTES.AUTH.LOGIN}
-              className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               Sign in
             </Link>
@@ -220,7 +219,7 @@ export function EmailVerifiedPage() {
               <button
                 onClick={handleResend}
                 disabled={resending}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 {resending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 Resend verification email
@@ -229,7 +228,7 @@ export function EmailVerifiedPage() {
             <p className="text-xs text-text-muted">
               <Link
                 to={ROUTES.AUTH.LOGIN}
-                className="font-medium text-brand-violet hover:text-brand-blue transition-colors"
+                className="font-medium text-brand-accent hover:text-brand-cool transition-colors"
               >
                 Back to sign in
               </Link>

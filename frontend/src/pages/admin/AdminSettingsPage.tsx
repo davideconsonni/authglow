@@ -120,7 +120,7 @@ export function AdminSettingsPage() {
               className={cn(
                 'w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
                 activeCategory === cat
-                  ? 'bg-brand-violet/15 text-brand-violet'
+                  ? 'bg-brand-wash text-brand-accent'
                   : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
               )}
             >
@@ -134,7 +134,7 @@ export function AdminSettingsPage() {
       <div className="flex-1 min-w-0">
         {isLoading ? (
           <div className="py-16 text-center">
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" />
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" />
           </div>
         ) : (
           <>
@@ -154,7 +154,7 @@ export function AdminSettingsPage() {
                       key={field.key}
                       className={cn(
                         'px-6 py-4 transition-colors',
-                        isDirty && 'bg-brand-violet/5',
+                        isDirty && 'bg-brand-wash-faint',
                       )}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -186,7 +186,7 @@ export function AdminSettingsPage() {
                               onClick={() => setValue(field, !currentValue)}
                               className={cn(
                                 'relative inline-flex h-6 w-10 items-center rounded-full transition-colors',
-                                currentValue ? 'bg-brand-violet' : 'bg-surface-3',
+                                currentValue ? 'bg-brand-accent' : 'bg-surface-3',
                                 !field.editable && 'opacity-50 cursor-not-allowed',
                               )}
                             >
@@ -204,7 +204,7 @@ export function AdminSettingsPage() {
                               value={String(currentValue ?? '')}
                               disabled={!field.editable}
                               onChange={(e) => setValue(field, Number(e.target.value))}
-                              className="w-28 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 disabled:opacity-50"
+                              className="w-28 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 disabled:opacity-50"
                             />
                           ) : (
                             <input
@@ -213,7 +213,7 @@ export function AdminSettingsPage() {
                               value={String(currentValue ?? '')}
                               disabled={!field.editable}
                               onChange={(e) => setValue(field, e.target.value)}
-                              className="w-64 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 disabled:opacity-50"
+                              className="w-64 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 disabled:opacity-50"
                             />
                           )}
                         </div>
@@ -238,7 +238,7 @@ export function AdminSettingsPage() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Save changes

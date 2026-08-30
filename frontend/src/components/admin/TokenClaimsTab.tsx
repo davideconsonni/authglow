@@ -171,7 +171,7 @@ function statusColor(status: FieldNameStatus): string {
     case 'reserved': case 'invalid':
       return 'border-semantic-error/50 focus:border-semantic-error'
     case 'empty':
-      return 'border-surface-2 focus:border-brand-violet'
+      return 'border-surface-2 focus:border-brand-accent'
   }
 }
 
@@ -386,7 +386,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" data-testid="claim-policy-modal">
       <div className="absolute inset-0 bg-black/50" onClick={requestClose} />
-      <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-violet max-h-[calc(100vh-4rem)]">
+      <div className="relative z-10 flex w-full max-w-3xl flex-col rounded-2xl border border-surface-2 bg-bg-primary shadow-glow-accent max-h-[calc(100vh-4rem)]">
 
         {/* ----- Header ----- */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-surface-2 px-6 py-4">
@@ -488,7 +488,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                     <button
                       onClick={openAddForm}
                       data-testid="claim-policy-add-btn"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02]"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
                     >
                       <Plus size={12} /> Add first field
                     </button>
@@ -505,7 +505,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                         >
                           <div className="flex items-start gap-3">
                             {/* Icon */}
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-violet/10 text-brand-violet">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-wash text-brand-accent">
                               <Icon size={14} />
                             </div>
                             {/* Content */}
@@ -567,7 +567,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                 <button
                   onClick={openAddForm}
                   data-testid="claim-policy-add-btn"
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-surface-2 py-2 text-[11px] font-semibold text-text-muted transition-all hover:border-brand-violet/30 hover:text-brand-violet hover:bg-brand-violet/5"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-surface-2 py-2 text-[11px] font-semibold text-text-muted transition-all hover:border-brand-accent/30 hover:text-brand-accent hover:bg-brand-wash-faint"
                 >
                   <Plus size={12} /> Add custom field
                 </button>
@@ -585,8 +585,8 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
 
               {/* ----- Add/Edit form ----- */}
               {formMode !== 'closed' && (
-                <div className="mt-3 rounded-xl border border-brand-violet/30 bg-bg-primary p-4 space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-violet">
+                <div className="mt-3 rounded-xl border border-brand-accent/30 bg-bg-primary p-4 space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-accent">
                     {formMode === 'edit' ? 'Edit field' : 'Add custom field'}
                   </p>
 
@@ -639,7 +639,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                             className={cn(
                               'flex flex-col items-start gap-1 rounded-lg border p-2 text-left transition-all',
                               active
-                                ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                                ? 'border-brand-accent bg-brand-wash text-brand-accent'
                                 : 'border-surface-2 bg-surface-1 text-text-muted hover:border-surface-3',
                             )}
                           >
@@ -658,7 +658,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       <select
                         value={formDraft.source_config.user_field ?? ''}
                         onChange={e => setFormDraft(r => ({ ...r, source_config: { ...r.source_config, user_field: e.target.value || null } }))}
-                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary focus:border-brand-violet focus:outline-none"
+                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary focus:border-brand-accent focus:outline-none"
                       >
                         <option value="">— Select a field —</option>
                         {AVAILABLE_USER_FIELDS.map(f => (
@@ -674,7 +674,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                         value={formDraft.source_config.value === undefined || formDraft.source_config.value === null ? '' : String(formDraft.source_config.value)}
                         onChange={e => setFormDraft(r => ({ ...r, source_config: { ...r.source_config, value: e.target.value } }))}
                         placeholder='e.g. "production" or 42'
-                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                       />
                     </div>
                   )}
@@ -704,7 +704,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                             className={cn(
                               'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition-all',
                               active
-                                ? 'border-brand-violet bg-brand-violet/10 text-brand-violet'
+                                ? 'border-brand-accent bg-brand-wash text-brand-accent'
                                 : 'border-surface-2 bg-surface-1 text-text-muted hover:border-surface-3',
                             )}
                           >
@@ -726,7 +726,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       value={formDraft.required_scope ?? ''}
                       onChange={e => setFormDraft(r => ({ ...r, required_scope: e.target.value || null }))}
                       placeholder="e.g. profile, email (optional)"
-                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                     />
                   </div>
 
@@ -742,7 +742,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       onClick={submitForm}
                       data-testid="claim-policy-add-confirm-btn"
                       disabled={formStatus.kind === 'invalid' || formStatus.kind === 'reserved' || formStatus.kind === 'empty'}
-                      className="flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                      className="flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                     >
                       {formMode === 'edit' ? <><Check size={11} /> Save changes</> : <><Plus size={11} /> Add field</>}
                     </button>
@@ -780,7 +780,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
               onClick={handleSave}
               data-testid="claim-policy-save-btn"
               disabled={!dirty || saving}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Save changes

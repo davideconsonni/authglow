@@ -137,7 +137,7 @@ export function ConsentScreen({
         {/* Header */}
         <div className="mt-4 text-center">
           <h1 className="text-lg font-bold text-text-primary">
-            Authorize <span className="text-brand-violet">{clientName}</span>
+            Authorize <span className="text-brand-accent">{clientName}</span>
           </h1>
           {clientDescription && (
             <p className="mt-2 text-sm text-text-muted">{clientDescription}</p>
@@ -177,7 +177,7 @@ export function ConsentScreen({
                 type="checkbox"
                 checked={rememberConsent}
                 onChange={(event) => setRememberConsent(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-surface-3 accent-brand-violet"
+                className="mt-0.5 h-4 w-4 rounded border-surface-3 accent-brand-accent"
               />
               <span>Remember this decision for future requests from this application</span>
             </label>
@@ -189,17 +189,17 @@ export function ConsentScreen({
               <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">Application details</p>
               <div className="flex flex-wrap gap-3">
                 {clientHomepageUri && (
-                  <a href={clientHomepageUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-violet hover:text-brand-magenta transition-colors">
+                  <a href={clientHomepageUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-accent hover:text-brand-alt transition-colors">
                     Homepage <ExternalLink size={10} />
                   </a>
                 )}
                 {clientTermsUri && (
-                  <a href={clientTermsUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-violet hover:text-brand-magenta transition-colors">
+                  <a href={clientTermsUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-accent hover:text-brand-alt transition-colors">
                     Terms of Service <ExternalLink size={10} />
                   </a>
                 )}
                 {clientPrivacyUri && (
-                  <a href={clientPrivacyUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-violet hover:text-brand-magenta transition-colors">
+                  <a href={clientPrivacyUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-accent hover:text-brand-alt transition-colors">
                     Privacy Policy <ExternalLink size={10} />
                   </a>
                 )}
@@ -236,7 +236,7 @@ export function ConsentScreen({
             <button
               onClick={handleApprove}
               disabled={approving || denying}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {approving ? <Loader2 size={16} className="animate-spin" /> : null}
               Approve

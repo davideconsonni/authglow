@@ -150,16 +150,16 @@ export function AuthorizationCodeFlow() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client ID *</label>
-              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" data-testid="playground-client-id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="your_client_id" data-testid="playground-client-id" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
             <div>
               <label className="block mb-1 text-xs font-medium text-text-muted">Client Secret</label>
-              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" data-testid="playground-client-secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+              <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" data-testid="playground-client-secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Redirect URI *</label>
-            <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000/callback" data-testid="playground-redirect-uri" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localRedirectUri} onChange={(e) => setLocalRedirectUri(e.target.value)} placeholder="http://localhost:3000/callback" data-testid="playground-redirect-uri" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -169,12 +169,12 @@ export function AuthorizationCodeFlow() {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <label className="block mb-1 text-xs font-medium text-text-muted">State</label>
-                <input value={localState} onChange={(e) => setLocalState(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary focus:border-brand-violet focus:outline-none" />
+                <input value={localState} onChange={(e) => setLocalState(e.target.value)} className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary focus:border-brand-accent focus:outline-none" />
               </div>
               <button onClick={() => setLocalState(generateState())} className="rounded-xl bg-surface-2 px-3 py-2.5 text-text-muted hover:text-text-secondary" title="Regenerate state"><RefreshCw size={14} /></button>
             </div>
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} data-testid="playground-config-next" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} data-testid="playground-config-next" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -183,7 +183,7 @@ export function AuthorizationCodeFlow() {
       {currentStep === 'authorize' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">
-            Open this URL in a browser to authenticate. After approval you'll be redirected to the callback with a <code className="text-brand-violet">?code=...</code> parameter.
+            Open this URL in a browser to authenticate. After approval you'll be redirected to the callback with a <code className="text-brand-accent">?code=...</code> parameter.
           </p>
           <div className="rounded-xl border border-surface-2 bg-surface-2/50 p-4 space-y-3">
             <code className="block break-all text-xs font-mono text-text-secondary">
@@ -192,13 +192,13 @@ export function AuthorizationCodeFlow() {
             <div className="flex gap-2">
               <a
                 href={authUrl}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-violet/20 px-3 py-1.5 text-xs font-medium text-brand-violet hover:bg-brand-violet/30"
+                className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-3 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint"
               >
                 <ExternalLink size={14} /> Open in Browser
               </a>
             </div>
           </div>
-          <button onClick={handleAuthorizeNext} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02]">
+          <button onClick={handleAuthorizeNext} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             I have the code <ArrowRight size={16} />
           </button>
         </div>
@@ -211,17 +211,17 @@ export function AuthorizationCodeFlow() {
           </p>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Callback URL</label>
-            <input value={callbackUrl} onChange={(e) => setCallbackUrl(e.target.value)} placeholder={`${localRedirectUri}?code=...&state=...`} data-testid="playground-callback-url" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={callbackUrl} onChange={(e) => setCallbackUrl(e.target.value)} placeholder={`${localRedirectUri}?code=...&state=...`} data-testid="playground-callback-url" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
           <div>
             <label className="block mb-1 text-xs font-medium text-text-muted">Authorization Code *</label>
-            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl(''); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." data-testid="playground-auth-code" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+            <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl(''); store.setAuthCode(e.target.value) }} placeholder="Paste the code from ?code=..." data-testid="playground-auth-code" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
           <button
             onClick={handleExchangeCode}
             disabled={loading || (!localCode && !callbackUrl.trim())}
             data-testid="playground-exchange-code"
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Exchange Code for Tokens

@@ -32,7 +32,7 @@ export function AdminDashboardPage() {
 
   const usersList = Array.isArray(recentUsers) ? recentUsers : (recentUsers as { items?: RecentUser[] } | undefined)?.items ?? []
 
-  if (isLoading) return <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-violet" /></div>
+  if (isLoading) return <div className="py-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-accent" /></div>
 
   return (
     <div className="space-y-8">
@@ -43,9 +43,9 @@ export function AdminDashboardPage() {
 
       {/* Hero stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-violet hover:border-brand-violet/30 group">
+        <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-accent hover:border-brand-accent/30 group">
           <div className="flex items-center justify-between mb-3">
-            <Users size={24} className="text-brand-violet" />
+            <Users size={24} className="text-brand-accent" />
             <span className="flex items-center gap-1 text-xs font-medium text-semantic-success">
               <TrendingUp size={12} />
               +{data?.new_users_today ?? 0} today
@@ -53,27 +53,27 @@ export function AdminDashboardPage() {
           </div>
           <p className="text-3xl font-bold text-text-primary">{data?.total_users ?? 0}</p>
           <p className="text-sm text-text-muted mt-1">Total Users</p>
-          <p className="mt-3 text-xs font-medium text-brand-violet opacity-0 group-hover:opacity-100 transition-opacity">Manage users &rarr;</p>
+          <p className="mt-3 text-xs font-medium text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity">Manage users &rarr;</p>
         </button>
 
-        <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-violet hover:border-brand-magenta/30 group">
+        <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-accent hover:border-brand-alt/30 group">
           <div className="flex items-center justify-between mb-3">
-            <Shield size={24} className="text-brand-magenta" />
+            <Shield size={24} className="text-brand-alt" />
             <span className="text-xs font-medium text-text-muted">of total users</span>
           </div>
           <p className="text-3xl font-bold text-text-primary">{data?.mfa_percentage ?? 0}%</p>
           <p className="text-sm text-text-muted mt-1">MFA Adoption</p>
-          <p className="mt-3 text-xs font-medium text-brand-magenta opacity-0 group-hover:opacity-100 transition-opacity">View users &rarr;</p>
+          <p className="mt-3 text-xs font-medium text-brand-alt opacity-0 group-hover:opacity-100 transition-opacity">View users &rarr;</p>
         </button>
 
-        <button onClick={() => navigate(ROUTES.ADMIN.SESSIONS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-violet hover:border-brand-blue/30 group">
+        <button onClick={() => navigate(ROUTES.ADMIN.SESSIONS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-6 text-left transition-all hover:shadow-glow-accent hover:border-brand-cool/30 group">
           <div className="flex items-center justify-between mb-3">
-            <Activity size={24} className="text-brand-blue" />
+            <Activity size={24} className="text-brand-cool" />
             <span className="text-xs font-medium text-text-muted">this month</span>
           </div>
           <p className="text-3xl font-bold text-text-primary">{data?.new_users_this_month ?? 0}</p>
           <p className="text-sm text-text-muted mt-1">New Users (30d)</p>
-          <p className="mt-3 text-xs font-medium text-brand-blue opacity-0 group-hover:opacity-100 transition-opacity">View sessions &rarr;</p>
+          <p className="mt-3 text-xs font-medium text-brand-cool opacity-0 group-hover:opacity-100 transition-opacity">View sessions &rarr;</p>
         </button>
       </div>
 
@@ -81,8 +81,8 @@ export function AdminDashboardPage() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatBadge label="Active" value={data?.active_users ?? 0} color="text-semantic-success" trend={data?.new_users_today ? `+${data.new_users_today}` : undefined} />
         <StatBadge label="Inactive" value={data?.inactive_users ?? 0} color="text-text-muted" />
-        <StatBadge label="New this week" value={data?.new_users_this_week ?? 0} color="brand-violet" />
-        <StatBadge label="MFA enabled" value={data?.users_with_mfa ?? 0} color="brand-magenta" />
+        <StatBadge label="New this week" value={data?.new_users_this_week ?? 0} color="brand-accent" />
+        <StatBadge label="MFA enabled" value={data?.users_with_mfa ?? 0} color="brand-alt" />
       </div>
 
       {/* Quick links + Recent Activity */}
@@ -91,21 +91,21 @@ export function AdminDashboardPage() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">Quick Access</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-violet/30">
+            <button onClick={() => navigate(ROUTES.ADMIN.USERS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-accent/30">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-violet/10 text-brand-violet"><Users size={18} /></div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-wash text-brand-accent"><Users size={18} /></div>
                 <div><p className="text-sm font-semibold text-text-primary">Users</p><p className="text-xs text-text-muted">Manage accounts</p></div>
               </div>
             </button>
-            <button onClick={() => navigate(ROUTES.ADMIN.OAUTH_CLIENTS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-magenta/30">
+            <button onClick={() => navigate(ROUTES.ADMIN.OAUTH_CLIENTS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-alt/30">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-magenta/10 text-brand-magenta"><Key size={18} /></div>
+                <div className="icon-chip flex h-9 w-9 items-center justify-center rounded-xl"><Key size={18} /></div>
                 <div><p className="text-sm font-semibold text-text-primary">OAuth Apps</p><p className="text-xs text-text-muted">Registered clients</p></div>
               </div>
             </button>
-            <button onClick={() => navigate(ROUTES.ADMIN.SESSIONS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-blue/30">
+            <button onClick={() => navigate(ROUTES.ADMIN.SESSIONS)} className="rounded-2xl border border-surface-2 bg-surface-1 p-5 text-left transition-all hover:border-brand-cool/30">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue"><Monitor size={18} /></div>
+                <div className="icon-chip flex h-9 w-9 items-center justify-center rounded-xl"><Monitor size={18} /></div>
                 <div><p className="text-sm font-semibold text-text-primary">Sessions</p><p className="text-xs text-text-muted">Active tokens</p></div>
               </div>
             </button>
@@ -128,7 +128,7 @@ export function AdminDashboardPage() {
               <div className="divide-y divide-surface-2">
                 {usersList.slice(0, 5).map((u) => (
                   <div key={u.id} className="flex items-center gap-3 px-5 py-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-violet/15 text-xs font-bold text-brand-violet">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-wash text-xs font-bold text-brand-accent">
                       {(u.first_name || u.email || '?')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">

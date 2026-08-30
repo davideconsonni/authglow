@@ -58,7 +58,7 @@ class UserPreferences(BaseModel):
     marketing_emails: bool = False
 
     # UI preferences
-    theme: str = "light"  # auto, light, dark
+    theme: str = "professional"  # auto, professional, dark
     language: str = "en"
     timezone: str = "UTC"
 

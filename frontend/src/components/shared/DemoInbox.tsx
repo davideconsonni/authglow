@@ -25,7 +25,7 @@ export function DemoInbox({ email }: DemoInboxProps) {
     >
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 font-medium text-text-primary">
-          <Inbox className="h-4 w-4 text-brand-violet" aria-hidden="true" />
+          <Inbox className="h-4 w-4 text-brand-accent" aria-hidden="true" />
           Demo inbox
         </p>
         <button

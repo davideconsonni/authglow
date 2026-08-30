@@ -12,7 +12,7 @@ export function RegisterPage() {
       <RegisterForm />
       <p className="text-center text-sm text-text-muted">
         Already have an account?{' '}
-        <Link to={ROUTES.AUTH.LOGIN} className="font-medium text-brand-violet hover:text-brand-blue transition-colors">
+        <Link to={ROUTES.AUTH.LOGIN} className="font-medium text-brand-accent hover:text-brand-cool transition-colors">
           Sign in
         </Link>
       </p>

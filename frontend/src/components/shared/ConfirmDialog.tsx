@@ -82,7 +82,7 @@ export function ConfirmDialog({
       {!loading && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} data-testid="confirm-dialog-backdrop" />
       )}
-      <div className="relative z-10 mx-4 w-full sm:max-w-md sm:rounded-2xl rounded-xl border border-surface-2 bg-surface-1 p-6 shadow-glow-violet" data-testid="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div className="relative z-10 mx-4 w-full sm:max-w-md sm:rounded-2xl rounded-xl border border-surface-2 bg-surface-1 p-6 shadow-glow-accent" data-testid="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
         <div className="flex items-start gap-4">
           <div
             className={`rounded-xl p-2 ${

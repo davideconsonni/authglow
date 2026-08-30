@@ -66,7 +66,7 @@ export function AdminDeviceAuthsPage() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-surface-2 bg-surface-2 px-4 py-2 text-sm text-text-primary focus:border-brand-violet focus:outline-none"
+          className="rounded-xl border border-surface-2 bg-surface-2 px-4 py-2 text-sm text-text-primary focus:border-brand-accent focus:outline-none"
         >
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
@@ -77,7 +77,7 @@ export function AdminDeviceAuthsPage() {
         <span className="text-sm text-text-muted">{deviceAuths.length} request{deviceAuths.length !== 1 ? 's' : ''}</span>
         <Link
           to={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS_NEW}
-          className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           <Plus className="h-4 w-4" />
           New Device Auth
@@ -86,7 +86,7 @@ export function AdminDeviceAuthsPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-violet" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-accent" />
         </div>
       ) : deviceAuths.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-text-muted">

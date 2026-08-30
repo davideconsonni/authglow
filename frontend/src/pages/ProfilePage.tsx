@@ -27,7 +27,7 @@ function QuickLink({ icon: Icon, label, to }: { icon: typeof Shield; label: stri
       className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3 hover:bg-surface-3 transition-colors"
     >
       <div className="flex items-center gap-2">
-        <Icon size={16} className="text-brand-violet" />
+        <Icon size={16} className="text-brand-accent" />
         <span className="text-sm text-text-secondary">{label}</span>
       </div>
       <ArrowRight size={14} className="text-text-muted" />
@@ -131,7 +131,7 @@ export function ProfilePage() {
           {/* Avatar & Name card */}
           <div className="lg:col-span-2 rounded-2xl border border-surface-2 bg-surface-1 p-8">
             <div className="flex items-start gap-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand-violet/20 text-2xl font-bold text-brand-violet">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand-wash text-2xl font-bold text-brand-accent">
                 {(p?.first_name || 'U')[0].toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -180,14 +180,14 @@ export function ProfilePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-text-muted mb-1.5">First name</label>
-                    <input {...register('first_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
+                    <input {...register('first_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-text-muted mb-1.5">Last name</label>
-                    <input {...register('last_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20" />
+                    <input {...register('last_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20" />
                   </div>
                 </div>
-                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
+                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
                   {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Save changes
                 </button>
@@ -239,7 +239,7 @@ export function ProfilePage() {
                       key={scope}
                       className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
                         scope === 'admin'
-                          ? 'bg-brand-violet/15 text-brand-violet ring-1 ring-brand-violet/30'
+                          ? 'bg-brand-wash text-brand-accent ring-1 ring-brand-accent/30'
                           : 'bg-surface-2 text-text-secondary'
                       }`}
                     >
@@ -291,7 +291,7 @@ export function ProfilePage() {
               <button
                 onClick={handleReactivate}
                 disabled={reactivating}
-                className="rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-violet disabled:opacity-50"
+                className="rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent disabled:opacity-50"
               >
                 {reactivating ? 'Reactivating...' : 'Reactivate'}
               </button>

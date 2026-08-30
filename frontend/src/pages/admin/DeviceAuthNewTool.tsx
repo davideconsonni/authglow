@@ -69,7 +69,7 @@ export function DeviceAuthNewTool() {
         />
         <Link
           to={ROUTES.ADMIN.DEVICE_AUTHORIZATIONS}
-          className="text-sm text-brand-violet hover:underline"
+          className="text-sm text-brand-accent hover:underline"
         >
           Back to list
         </Link>
@@ -78,12 +78,12 @@ export function DeviceAuthNewTool() {
       <div className="rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-5 max-w-lg">
         {clientsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-brand-violet" />
+            <Loader2 className="h-6 w-6 animate-spin text-brand-accent" />
           </div>
         ) : clients.length === 0 ? (
           <div className="text-center py-8 text-text-muted">
             <p className="text-sm">No OAuth clients configured.</p>
-            <Link to={ROUTES.ADMIN.OAUTH_CLIENTS} className="text-sm text-brand-violet hover:underline mt-1 inline-block">
+            <Link to={ROUTES.ADMIN.OAUTH_CLIENTS} className="text-sm text-brand-accent hover:underline mt-1 inline-block">
               Create a client first
             </Link>
           </div>
@@ -94,7 +94,7 @@ export function DeviceAuthNewTool() {
               <select
                 value={selectedClient}
                 onChange={(e) => { setSelectedClient(e.target.value); setResult(null) }}
-                className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm text-text-primary focus:border-brand-violet focus:outline-none focus:ring-1 focus:ring-brand-violet"
+                className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               >
                 <option value="">Select a client...</option>
                 {clients.map((c) => (
@@ -111,14 +111,14 @@ export function DeviceAuthNewTool() {
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
                 placeholder="read write profile"
-                className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-brand-violet focus:outline-none focus:ring-1 focus:ring-brand-violet"
+                className="w-full rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               />
             </div>
             {error && <p className="text-sm text-semantic-error" role="alert">{error}</p>}
             <button
               onClick={handleGenerate}
               disabled={generating || !selectedClient}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Generate
@@ -147,7 +147,7 @@ export function DeviceAuthNewTool() {
               <div className="rounded-xl bg-surface-2 p-3 space-y-1">
                 <p className="text-xs text-text-muted">Verification URI</p>
                 <div className="flex items-center justify-between gap-2">
-                  <code className="text-sm text-brand-violet">{result.verification_uri_complete}</code>
+                  <code className="text-sm text-brand-accent">{result.verification_uri_complete}</code>
                   <CopyButton text={result.verification_uri_complete} />
                 </div>
               </div>

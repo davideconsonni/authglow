@@ -72,7 +72,7 @@ export function LoginPage() {
       <FederationLoginButtons context="dashboard" />
       <p className="text-center text-sm text-text-muted">
         Don't have an account?{' '}
-        <Link to={ROUTES.AUTH.REGISTER} className="font-medium text-brand-violet hover:text-brand-blue transition-colors">
+        <Link to={ROUTES.AUTH.REGISTER} className="font-medium text-brand-accent hover:text-brand-cool transition-colors">
           Create one
         </Link>
       </p>

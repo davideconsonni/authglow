@@ -9,9 +9,9 @@ const ICONS: Record<ToastType, typeof CheckCircle> = {
 }
 
 const STYLES: Record<ToastType, string> = {
-  success: 'border-semantic-success/40 bg-surface-1/95 text-semantic-success backdrop-blur-md shadow-glow-violet',
-  error: 'border-semantic-error/40 bg-surface-1/95 text-semantic-error backdrop-blur-md shadow-glow-violet',
-  info: 'border-semantic-info/40 bg-surface-1/95 text-semantic-info backdrop-blur-md shadow-glow-violet',
+  success: 'border-semantic-success/40 bg-surface-1/95 text-semantic-success backdrop-blur-md shadow-glow-accent',
+  error: 'border-semantic-error/40 bg-surface-1/95 text-semantic-error backdrop-blur-md shadow-glow-accent',
+  info: 'border-semantic-info/40 bg-surface-1/95 text-semantic-info backdrop-blur-md shadow-glow-accent',
 }
 
 export function ToastContainer() {

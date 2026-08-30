@@ -65,7 +65,7 @@ export function SetupWizard() {
         </p>
         <a
           href={ROUTES.AUTH.LOGIN}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           Go to login
         </a>
@@ -91,7 +91,7 @@ export function SetupWizard() {
           autoComplete="email"
           placeholder="admin@example.com"
           {...register('email')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         {errors.email && <p className="text-xs text-semantic-error" role="alert">{errors.email.message}</p>}
       </div>
@@ -106,7 +106,7 @@ export function SetupWizard() {
           autoComplete="new-password"
           placeholder="Create a strong password"
           {...register('password')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         {errors.password && <p className="text-xs text-semantic-error" role="alert">{errors.password.message}</p>}
       </div>
@@ -121,7 +121,7 @@ export function SetupWizard() {
           autoComplete="off"
           placeholder="Paste the token from your server logs"
           {...register('setup_token')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         <p className="text-xs text-text-muted">
           The setup token is printed in the terminal when the server starts.
@@ -132,7 +132,7 @@ export function SetupWizard() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         Create admin account

@@ -35,7 +35,7 @@ const STYLES: Record<BannerVariant, string> = {
   success: 'border-semantic-success/30 bg-semantic-success/10 text-semantic-success',
   warning: 'border-semantic-warning/30 bg-semantic-warning/10 text-semantic-warning',
   info: 'border-semantic-info/30 bg-semantic-info/10 text-semantic-info',
-  demo: 'border-brand-violet/30 bg-brand-violet/10 text-brand-violet',
+  demo: 'banner-demo',
 }
 
 const SIZE_STYLES: Record<BannerSize, string> = {

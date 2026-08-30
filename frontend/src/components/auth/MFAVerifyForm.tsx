@@ -171,14 +171,14 @@ export function MFAVerifyForm() {
                 onChange={(e) => handleDigitChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 onFocus={(e) => e.target.select()}
-                className="h-14 w-12 rounded-xl border border-surface-2 bg-surface-1 text-center text-xl font-semibold text-text-primary focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors disabled:opacity-50"
+                className="h-14 w-12 rounded-xl border border-surface-2 bg-surface-1 text-center text-xl font-semibold text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors disabled:opacity-50"
               />
             ))}
           </div>
           <button
             type="button"
             onClick={() => setIsBackupCode(true)}
-            className="block w-full text-center text-sm text-brand-violet hover:text-brand-blue transition-colors"
+            className="block w-full text-center text-sm text-brand-accent hover:text-brand-cool transition-colors"
           >
             Use a backup code instead
           </button>
@@ -194,19 +194,19 @@ export function MFAVerifyForm() {
             onChange={(e) => setBackupInput(e.target.value)}
             placeholder="Enter 8+ character backup code"
             disabled={isLocked || submitting}
-            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+            className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
           />
           <button
             type="button"
             onClick={() => setIsBackupCode(false)}
-            className="block w-full text-center text-sm text-brand-violet hover:text-brand-blue transition-colors"
+            className="block w-full text-center text-sm text-brand-accent hover:text-brand-cool transition-colors"
           >
             Use authenticator app instead
           </button>
           <button
             type="submit"
             disabled={isLocked || submitting || backupInput.length < 8}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Verify backup code

@@ -525,7 +525,7 @@ export function OAuthAuthorizePage() {
                       setPassword(meta.demo_user_password || '')
                     }
                   }}
-                  className="mb-4 cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 px-4 py-3 text-sm transition-colors hover:border-brand-violet/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/30"
+                  className="mb-4 cursor-pointer rounded-xl border border-surface-2 bg-surface-1/50 px-4 py-3 text-sm transition-colors hover:border-brand-accent/30 hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30"
                 >
                   <p className="mb-1 font-semibold text-text-primary">Demo credentials <span className="font-normal text-text-muted">— click to fill</span></p>
                   <p className="break-all font-mono text-xs text-text-secondary">

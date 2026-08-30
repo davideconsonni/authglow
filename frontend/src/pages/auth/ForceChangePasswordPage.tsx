@@ -113,7 +113,7 @@ export function ForceChangePasswordPage() {
               placeholder="Enter current password"
               data-testid="force-change-current"
               {...register('current_password')}
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
             />
             {errors.current_password && (
               <FieldError id="force-change-current-error">
@@ -137,7 +137,7 @@ export function ForceChangePasswordPage() {
                 placeholder="Enter new password"
                 data-testid="force-change-new"
                 {...register('new_password')}
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
               />
               <button
                 type="button"
@@ -167,7 +167,7 @@ export function ForceChangePasswordPage() {
               placeholder="Confirm new password"
               data-testid="force-change-confirm"
               {...register('confirm_password')}
-              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+              className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
             />
             {errors.confirm_password && (
               <FieldError id="force-change-confirm-error">
@@ -180,7 +180,7 @@ export function ForceChangePasswordPage() {
             type="submit"
             disabled={isSubmitting}
             data-testid="force-change-submit"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {isSubmitting ? 'Updating...' : 'Update password'}

@@ -215,7 +215,7 @@ export function ApiKeysPage() {
           <button
             onClick={() => setShowCreate(true)}
             data-testid="create-api-key-btn"
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus size={16} />
             Create Key
@@ -241,7 +241,7 @@ export function ApiKeysPage() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeCreate} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
             {newKey ? (
               <div className="space-y-4 text-center" data-testid="key-created-display">
                 <h3 className="text-lg font-semibold text-text-primary">API Key Created</h3>
@@ -280,14 +280,14 @@ export function ApiKeysPage() {
             ) : (
               <div className="space-y-4" data-testid="create-key-modal">
                 <h3 className="text-lg font-semibold text-text-primary">Create API Key</h3>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" data-testid="key-name-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Key name" data-testid="key-name-input" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Description (optional) — e.g. Production server backup automation, rotated 2026-Q3"
                   rows={2}
                   data-testid="key-description-input"
-                  className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                  className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
                 />
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Scopes</label>
@@ -298,13 +298,13 @@ export function ApiKeysPage() {
                     testId="key-scopes"
                   />
                 </div>
-                <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none" />
+                <input type="number" value={newExpires} onChange={(e) => setNewExpires(e.target.value)} placeholder="Expires in days (optional)" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
                 <input
                   value={newAllowedIps}
                   onChange={(e) => setNewAllowedIps(e.target.value)}
                   placeholder="Restrict to IPs or CIDR ranges (comma-separated, optional)"
                   data-testid="key-allowed-ips-input"
-                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                  className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
                 />
                 <div className="flex gap-3">
                   <button onClick={closeCreate} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
@@ -365,7 +365,7 @@ export function ApiKeysPage() {
                       <td className="px-4 py-2.5" data-testid="key-ips-display">
                         {k.allowed_ips && k.allowed_ips.length > 0 ? (
                           <span
-                            className="rounded-lg bg-brand-violet/10 px-2 py-0.5 text-xs text-brand-violet"
+                            className="rounded-lg bg-brand-wash px-2 py-0.5 text-xs text-brand-accent"
                             title={k.allowed_ips.join(', ')}
                           >
                             {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
@@ -390,7 +390,7 @@ export function ApiKeysPage() {
                           <button
                             onClick={() => openEdit(k)}
                             data-testid="key-edit-btn"
-                            className="text-text-muted hover:text-brand-violet transition-colors"
+                            className="text-text-muted hover:text-brand-accent transition-colors"
                             aria-label="Edit key"
                             title="Edit"
                           >
@@ -440,7 +440,7 @@ export function ApiKeysPage() {
                     <button
                       onClick={() => openEdit(k)}
                       data-testid="key-edit-btn"
-                      className="rounded-lg p-1.5 text-text-muted hover:text-brand-violet hover:bg-brand-violet/10 transition-colors"
+                      className="rounded-lg p-1.5 text-text-muted hover:text-brand-accent hover:bg-brand-wash-faint transition-colors"
                       aria-label="Edit key"
                     >
                       <Pencil size={14} />
@@ -466,7 +466,7 @@ export function ApiKeysPage() {
                 </div>
                 <div className="flex items-center gap-4 text-[11px] text-text-muted">
                   {k.allowed_ips && k.allowed_ips.length > 0 && (
-                    <span className="text-brand-violet" title={k.allowed_ips.join(', ')}>
+                    <span className="text-brand-accent" title={k.allowed_ips.join(', ')}>
                       {k.allowed_ips[0]}{k.allowed_ips.length > 1 ? ` +${k.allowed_ips.length - 1}` : ''}
                     </span>
                   )}
@@ -492,7 +492,7 @@ export function ApiKeysPage() {
       {editingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeEdit} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-violet" data-testid="key-edit-modal">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="key-edit-modal">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-text-primary">Edit API Key</h3>
               <button onClick={closeEdit} className="text-text-muted hover:text-text-primary" aria-label="Close">
@@ -505,7 +505,7 @@ export function ApiKeysPage() {
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 data-testid="key-edit-name-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -516,7 +516,7 @@ export function ApiKeysPage() {
                 placeholder="e.g. Production server backup automation, rotated 2026-Q3"
                 rows={2}
                 data-testid="key-edit-description-input"
-                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20"
+                className="w-full resize-y rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
               />
             </div>
             <div>
@@ -535,7 +535,7 @@ export function ApiKeysPage() {
                 onChange={(e) => setEditForm({ ...editForm, allowed_ips: e.target.value })}
                 placeholder="203.0.113.5, 198.51.100.0/24"
                 data-testid="key-edit-allowed-ips-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
               />
             </div>
             <div>
@@ -549,7 +549,7 @@ export function ApiKeysPage() {
                 disabled={editNeverExpires}
                 placeholder="Expires in days (empty = unchanged)"
                 data-testid="key-edit-expires-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
               />
               <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
                 <input
@@ -557,7 +557,7 @@ export function ApiKeysPage() {
                   checked={editNeverExpires}
                   onChange={(e) => setEditNeverExpires(e.target.checked)}
                   data-testid="key-edit-never-expires-toggle"
-                  className="accent-brand-violet"
+                  className="accent-brand-accent"
                 />
                 Never expires
                 {(() => {
@@ -574,7 +574,7 @@ export function ApiKeysPage() {
                 onClick={handleSaveEdit}
                 disabled={savingEdit}
                 data-testid="key-edit-submit"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-violet transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >
                 {savingEdit ? <Loader2 size={16} className="animate-spin" /> : null}
                 Save

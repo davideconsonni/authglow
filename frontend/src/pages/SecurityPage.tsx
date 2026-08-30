@@ -82,7 +82,7 @@ export function SecurityPage() {
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                     user?.mfa_enabled && !disableMfa
                       ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'
-                      : 'bg-gradient-cta text-white shadow-glow-violet'
+                      : 'bg-gradient-cta text-white shadow-glow-accent'
                   }`}
                 >
                   {showMfaSetup ? 'Cancel' : user?.mfa_enabled ? 'Manage' : 'Enable'}

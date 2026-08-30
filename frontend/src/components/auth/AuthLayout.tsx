@@ -19,7 +19,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
   return (
     <div className="flex min-h-screen">
       {/* Brand column — desktop only */}
-      <div className="hidden w-1/2 flex-col justify-between bg-surface-1 p-12 lg:p-16 relative overflow-hidden md:flex">
+      <div className="auth-hero hidden w-1/2 flex-col justify-between bg-surface-1 p-12 lg:p-16 relative overflow-hidden md:flex">
         {/* Subtle background pattern */}
         <div className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -48,7 +48,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
                 className="flex items-start gap-4 animate-fade-in"
                 style={{ animationDelay: `${i * 120}ms`, animationFillMode: 'both' }}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-violet/10 text-brand-violet">
+                <div className="icon-chip flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
                   <f.icon size={20} />
                 </div>
                 <div>

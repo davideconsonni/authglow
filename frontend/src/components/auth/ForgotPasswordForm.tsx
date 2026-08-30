@@ -76,7 +76,7 @@ export function ForgotPasswordForm() {
           autoComplete="email"
           placeholder="you@example.com"
           {...register('email')}
-          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-violet focus:outline-none focus:ring-2 focus:ring-brand-violet/20 transition-colors"
+          className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors"
         />
         {errors.email && <FieldError id="forgot-email-error">{errors.email.message}</FieldError>}
       </div>
@@ -84,7 +84,7 @@ export function ForgotPasswordForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-violet transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {isSubmitting ? 'Sending...' : 'Send reset link'}

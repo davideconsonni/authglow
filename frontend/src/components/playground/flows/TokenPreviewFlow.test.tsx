@@ -9,7 +9,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 const mockApi = vi.hoisted(() => ({
-  get: vi.fn(),
+  get: vi.fn(async (endpoint: string) => (endpoint === '/api/scopes' ? { scopes: [] } : {})),
 }))
 
 const mockQueryData = vi.hoisted(() => ({
@@ -222,8 +222,9 @@ describe('TokenPreviewFlow - preview payload', () => {
       </Wrapper>,
     )
     fireEvent.click(screen.getByTestId('preview-client-c1'))
-    const scopesInput = screen.getByTestId('preview-scopes-input')
-    fireEvent.change(scopesInput, { target: { value: 'openid special' } })
+    const scopesInput = screen.getByTestId('preview-scopes-custom-input')
+    fireEvent.change(scopesInput, { target: { value: 'special' } })
+    fireEvent.keyDown(scopesInput, { key: 'Enter' })
     const json = await screen.findByTestId('preview-payload-json')
     expect(json.textContent).toContain('https://authglow/claims/roles')
   })
