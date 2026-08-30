@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Sun, Moon, type LucideIcon } from 'lucide-react'
+import { LogOut, User } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { useTheme, type Theme } from '../../hooks/useTheme'
 import { ROUTES } from '../../lib/constants'
+import { ThemeSwitcher } from '../../components/shared/ThemeSwitcher'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,14 +11,8 @@ import {
   DropdownMenuSeparator,
 } from '../../components/ui/dropdown-menu'
 
-const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon; testId: string }> = [
-  { value: 'professional', label: 'Professional theme', icon: Sun, testId: 'theme-professional' },
-  { value: 'dark', label: 'Dark theme', icon: Moon, testId: 'theme-dark' },
-]
-
 export function TopBar() {
   const { user, logout } = useAuth()
-  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
@@ -31,25 +25,7 @@ export function TopBar() {
       <div />
 
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1" role="group" aria-label="Color theme">
-          {THEME_OPTIONS.map(({ value, label, icon: Icon, testId }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTheme(value)}
-              aria-label={label}
-              aria-pressed={theme === value}
-              data-testid={testId}
-              className={`rounded-xl p-2 transition-colors ${
-                theme === value
-                  ? 'bg-surface-2 text-brand-accent'
-                  : 'text-text-muted hover:bg-surface-2 hover:text-text-secondary'
-              }`}
-            >
-              <Icon size={18} />
-            </button>
-          ))}
-        </div>
+        <ThemeSwitcher />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

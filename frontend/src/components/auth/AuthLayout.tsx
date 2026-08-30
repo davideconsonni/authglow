@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Key, ShieldCheck, Fingerprint, Globe, Cloud } from 'lucide-react'
+import { ThemeSwitcher } from '../shared/ThemeSwitcher'
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -17,7 +18,10 @@ const FEATURES = [
 
 export function AuthLayout({ children, title, description }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="relative flex min-h-screen">
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeSwitcher size="sm" />
+      </div>
       {/* Brand column — desktop only */}
       <div className="auth-hero hidden w-1/2 flex-col justify-between bg-surface-1 p-12 lg:p-16 relative overflow-hidden md:flex">
         {/* Subtle background pattern */}

@@ -3,6 +3,7 @@ import { Loader2, ShieldCheck } from 'lucide-react'
 import { api } from '../lib/api'
 import { ROUTES } from '../lib/constants'
 import { SetupWizard } from '../components/setup/SetupWizard'
+import { ThemeSwitcher } from '../components/shared/ThemeSwitcher'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 export function SetupPage() {
@@ -31,7 +32,10 @@ export function SetupPage() {
 
   if (status === 'done') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
+      <div className="relative flex min-h-screen items-center justify-center bg-bg-primary p-8">
+        <div className="absolute right-4 top-4 z-20">
+          <ThemeSwitcher size="sm" />
+        </div>
         <div className="w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-8 text-center space-y-4">
           <div className="icon-chip mx-auto flex h-14 w-14 items-center justify-center rounded-2xl">
             <ShieldCheck className="h-7 w-7" />
@@ -50,7 +54,10 @@ export function SetupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
+    <div className="relative flex min-h-screen items-center justify-center bg-bg-primary p-8">
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeSwitcher size="sm" />
+      </div>
       <div className="w-full max-w-lg space-y-8">
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-wash ring-1 ring-brand-accent/20 shadow-glow-accent">

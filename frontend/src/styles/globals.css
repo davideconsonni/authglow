@@ -212,6 +212,7 @@
 @layer base {
   /* Default theme — Ruby Soft-Depth (formerly "professional") */
   :root {
+    color-scheme: light;
     --background: 60 5% 98%;
     --foreground: 24 10% 10%;
     --card: 0 0% 100%;
@@ -295,6 +296,7 @@
 
   /* Dark — Ruby Dark: warm charcoal twin of the default theme */
   .dark {
+    color-scheme: dark;
     --background: 40 7% 8%;
     --foreground: 40 19% 94%;
     --card: 36 8% 12%;
@@ -383,7 +385,7 @@
   }
 
   :is(h1, h2, h3) {
-    font-family: var(--font-heading-stack);
+    font-family: var(--brand-font, var(--font-heading-stack));
     letter-spacing: -0.02em;
   }
 }
@@ -404,6 +406,24 @@
   .icon-chip {
     background: var(--color-chip-bg);
     color: var(--color-chip-fg);
+  }
+
+  /* --- Client branding contract (OIDC: "la casa è l'IdP, il marchio è dell'ospite") ---
+     Le variabili --brand-* sono iniettate inline sulla root della pagina da
+     brandingStyle(); ogni consumer fallback sul token del tema attivo. */
+  .authglow-consent {
+    font-family: var(--brand-font, 'Inter', 'Segoe UI', 'Roboto', sans-serif);
+  }
+
+  .consent-card {
+    background: var(--brand-surface, var(--color-surface-1));
+    border-radius: var(--brand-radius, var(--radius-2xl));
+  }
+
+  .consent-approve-btn {
+    background: var(--brand-primary, var(--gradient-cta));
+    color: var(--brand-text, #FFFFFF);
+    border-radius: var(--brand-radius, var(--radius-xl));
   }
 
   .banner-demo {

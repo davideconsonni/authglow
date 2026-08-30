@@ -1,5 +1,19 @@
 import '@testing-library/jest-dom'
 
+// jsdom does not implement window.matchMedia (useTheme relies on it).
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }) as unknown as MediaQueryList
+}
+
 try {
   if (!globalThis.localStorage) {
     throw new Error('localStorage unavailable')

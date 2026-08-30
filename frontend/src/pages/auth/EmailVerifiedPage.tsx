@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { MailCheck, AlertCircle, Loader2, RefreshCw, KeyRound } from 'lucide-react'
 import { SealStamp } from '../../components/shared/SealStamp'
+import { ThemeSwitcher } from '../../components/shared/ThemeSwitcher'
 import { ApiError, api } from '../../lib/api'
 import { ROUTES } from '../../lib/constants'
 import { Banner } from '../../components/shared/Banner'
@@ -89,7 +90,10 @@ export function EmailVerifiedPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary p-8">
+    <div className="relative flex min-h-screen items-center justify-center bg-bg-primary p-8">
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeSwitcher size="sm" />
+      </div>
       <div className="w-full max-w-md space-y-6 text-center">
         <h1 className="text-2xl font-bold gradient-text">AuthGlow</h1>
 

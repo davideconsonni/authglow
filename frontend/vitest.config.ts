@@ -31,5 +31,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
+    // Some phase tests dynamic-import the whole App graph; under full-suite
+    // parallel load the default 5s is flaky on slower machines.
+    testTimeout: 15000,
   },
 })

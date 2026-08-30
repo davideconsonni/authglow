@@ -9,6 +9,8 @@ import { ConsentScreen } from '../components/oauth/ConsentScreen'
 import { FederationLoginButtons } from '../components/auth/FederationLoginButtons'
 import { PasskeyLoginButton } from '../components/auth/PasskeyLoginButton'
 import { Banner } from '../components/shared/Banner'
+import { ThemeSwitcher } from '../components/shared/ThemeSwitcher'
+import { brandingStyle } from '../lib/clientBranding'
 
 interface ClientInfo {
   client_name: string
@@ -41,29 +43,32 @@ interface AuthorizeResponse {
 
 type Phase = 'loading' | 'login' | 'consent'
 
+// Login phase follows the ACTIVE theme (the IdP's house); client branding
+// (--brand-*) only overrides individual properties when configured.
 const NEUTRAL_CSS = `
 .authglow-authorize {
-  --bg-primary: #f8f9fa;
-  --bg-surface: #ffffff;
-  --text-primary: #1a1a2e;
-  --text-secondary: #475569;
-  --text-muted: #718096;
-  --border-color: #e2e8f0;
-  --brand-color: #475569;
-  --brand-hover: #334155;
-  --brand-text: #ffffff;
-  --brand-shadow: rgba(71, 85, 105, 0.25);
-  --error-color: #dc2626;
-  --error-bg: #fef2f2;
-  --ring-color: rgba(71, 85, 105, 0.2);
-  --radius: 12px;
-  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  position: relative;
+  --radius: var(--brand-radius, 14px);
+  --font-family: var(--brand-font, 'Inter', 'Segoe UI', 'Roboto', sans-serif);
+  --bg-page: var(--color-bg-primary);
+  --bg-surface: var(--brand-surface, var(--color-surface-1));
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --border-color: var(--color-surface-2);
+  --brand-color: var(--brand-primary, var(--color-brand-accent));
+  --brand-hover: color-mix(in srgb, var(--brand-color) 84%, #000);
+  --brand-fg: var(--brand-text, #FFFFFF);
+  --brand-shadow: color-mix(in srgb, var(--brand-color) 25%, transparent);
+  --error-color: var(--color-semantic-error);
+  --error-bg: color-mix(in srgb, var(--color-semantic-error) 8%, transparent);
+  --ring-color: color-mix(in srgb, var(--brand-color) 20%, transparent);
   --transition: 150ms ease;
   display: flex;
   min-height: 100vh;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
+  background: var(--bg-page);
   padding: 2rem;
   font-family: var(--font-family);
   color: var(--text-primary);
@@ -93,8 +98,8 @@ const NEUTRAL_CSS = `
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
-  background: rgba(71, 85, 105, 0.06);
-  border: 1px solid rgba(71, 85, 105, 0.12);
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-color) 16%, transparent);
   color: var(--brand-color);
 }
 .authglow-authorize .login-title {
@@ -123,7 +128,7 @@ const NEUTRAL_CSS = `
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
   border-radius: var(--radius);
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  border: 1px solid color-mix(in srgb, var(--error-color) 30%, transparent);
   background: var(--error-bg);
   color: var(--error-color);
   font-size: 0.875rem;
@@ -151,7 +156,7 @@ const NEUTRAL_CSS = `
   padding: 0.625rem 1rem;
   border-radius: var(--radius);
   border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: var(--bg-page);
   color: var(--text-primary);
   font-size: 0.875rem;
   font-family: var(--font-family);
@@ -173,7 +178,7 @@ const NEUTRAL_CSS = `
   border-radius: var(--radius);
   border: none;
   background: var(--brand-color);
-  color: var(--brand-text);
+  color: var(--brand-fg);
   font-size: 0.875rem;
   font-weight: 600;
   font-family: var(--font-family);
@@ -427,12 +432,11 @@ export function OAuthAuthorizePage() {
   const displayPrivacy = consentData?.client_privacy_uri ?? clientInfo?.client_privacy_uri
   const displayRedirectUri = consentData?.redirect_uri ?? redirectUri
   const displayBranding = consentData?.branding ?? clientInfo?.branding
-  const displayCustomCss = typeof displayBranding?.custom_css === 'string' ? displayBranding.custom_css : ''
 
   if (phase === 'loading') {
     return (
       <>
-        <style>{NEUTRAL_CSS}{displayCustomCss || ''}</style>
+        <style>{NEUTRAL_CSS}</style>
         <div className="authglow-authorize">
           <div className="login-spinner">
             <Loader2 className="login-spin" />
@@ -461,8 +465,11 @@ export function OAuthAuthorizePage() {
 
   return (
     <>
-      <style>{NEUTRAL_CSS}{displayCustomCss || ''}</style>
-      <div className="authglow-authorize">
+      <style>{NEUTRAL_CSS}</style>
+      <div className="authglow-authorize" style={brandingStyle(displayBranding)}>
+        <div className="absolute right-4 top-4 z-20">
+          <ThemeSwitcher size="sm" />
+        </div>
         <div className="login-card">
 
           <div className="login-logo-area">
@@ -582,7 +589,7 @@ export function OAuthAuthorizePage() {
             </>
           )}
 
-          <div className="mt-5 pt-4 border-t border-[#e2e8f0]">
+          <div className="mt-5 pt-4 border-t border-surface-2">
             <PasskeyLoginButton />
           </div>
 

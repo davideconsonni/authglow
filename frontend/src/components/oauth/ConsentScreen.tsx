@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Shield, Globe, Mail, User, Lock, Key, ExternalLink, Loader2, type LucideIcon } from 'lucide-react'
 import { api } from '../../lib/api'
+import { ThemeSwitcher } from '../shared/ThemeSwitcher'
+import { brandingStyle } from '../../lib/clientBranding'
 
 const SCOPE_ICONS: Record<string, LucideIcon> = {
   'openid': Key,
@@ -27,18 +29,6 @@ interface ConsentScreenProps {
   branding?: Record<string, unknown> | null
   scopes: Array<{ name: string; description: string }>
   preview?: boolean
-}
-
-function brandingToCss(b: Record<string, unknown> | null | undefined): string {
-  if (!b) return ''
-  const props: string[] = []
-  if (typeof b.primary_color === 'string' && b.primary_color) props.push(`--brand-primary: ${b.primary_color}`)
-  if (typeof b.surface_color === 'string' && b.surface_color) props.push(`--brand-surface: ${b.surface_color}`)
-  if (typeof b.text_color === 'string' && b.text_color) props.push(`--brand-text: ${b.text_color}`)
-  if (typeof b.font_family === 'string' && b.font_family) props.push(`--brand-font: ${b.font_family}`)
-  if (typeof b.border_radius === 'string' && b.border_radius) props.push(`--brand-radius: ${b.border_radius}`)
-  if (typeof b.logo_url === 'string' && b.logo_url) props.push(`--brand-logo: url(${b.logo_url})`)
-  return props.length ? `.authglow-consent { ${props.join('; ')} }` : ''
 }
 
 export function ConsentScreen({
@@ -114,12 +104,12 @@ export function ConsentScreen({
 
   return (
     <div
-      className="authglow-consent flex min-h-screen items-center justify-center bg-bg-primary p-8 font-sans text-text-primary"
-      style={branding ? undefined : undefined}
+      className="authglow-consent relative flex min-h-screen items-center justify-center bg-bg-primary p-8 text-text-primary"
+      style={brandingStyle(branding)}
     >
-      {brandingToCss(branding) && (
-        <style>{brandingToCss(branding)}</style>
-      )}
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeSwitcher size="sm" />
+      </div>
 
       <div className="w-full max-w-md space-y-0">
         {/* Logo */}
@@ -137,7 +127,8 @@ export function ConsentScreen({
         {/* Header */}
         <div className="mt-4 text-center">
           <h1 className="text-lg font-bold text-text-primary">
-            Authorize <span className="text-brand-accent">{clientName}</span>
+            Authorize{' '}
+            <span style={{ color: 'var(--brand-primary, var(--color-brand-accent))' }}>{clientName}</span>
           </h1>
           {clientDescription && (
             <p className="mt-2 text-sm text-text-muted">{clientDescription}</p>
@@ -145,7 +136,7 @@ export function ConsentScreen({
         </div>
 
         {/* Scope list */}
-        <div className="mt-6 rounded-2xl border border-surface-2 bg-surface-1 p-5">
+        <div className="consent-card mt-6 border border-surface-2 p-5" data-testid="consent-card">
           <p className="text-sm font-medium text-text-secondary mb-4">{clientName} is requesting access to:</p>
           <ul className="space-y-3">
             {scopes.map((scope) => {
@@ -236,7 +227,7 @@ export function ConsentScreen({
             <button
               onClick={handleApprove}
               disabled={approving || denying}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="consent-approve-btn flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {approving ? <Loader2 size={16} className="animate-spin" /> : null}
               Approve
