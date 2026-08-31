@@ -31,14 +31,17 @@ if TYPE_CHECKING:
         PasskeyRepository,
         PasswordResetRepository,
         PermissionRepository,
+        RateLimitConfigRepository,
         RefreshTokenRepository,
         RoleRepository,
         SecurityEventRepository,
         SessionRepository,
+        SettingsOverrideRepository,
         TokenBlacklistRepository,
         TrustedDeviceRepository,
         UserPreferencesRepository,
         UserRepository,
+        UserRoleRepository,
         WebAuthnChallengeRepository,
         WebhookDeliveryRepository,
         WebhookRepository,
@@ -657,3 +660,51 @@ def get_webhook_delivery_repository(
     if settings is not None:
         return FileWebhookDeliveryRepository(settings=settings)
     return FileWebhookDeliveryRepository()
+
+
+def get_rate_limit_config_repository(
+    settings: "Settings | None" = None,
+) -> "RateLimitConfigRepository":
+    """FastAPI factory for the admin rate-limit config repository.
+
+    Returns a fresh ``FileRateLimitConfigRepository`` per request — the
+    repository holds no mutable state, only fsspec handles. The
+    :class:`RateLimitConfigService` (in ``services/rate_limit_config.py``)
+    creates its own default repository by default; this factory is
+    exposed for FastAPI route handlers or tests that want to inject the
+    repository directly.
+
+    The optional ``settings`` argument lets the caller (typically
+    the service constructor) propagate an already-resolved
+    ``Settings`` instance — same ``lru_cache`` bypass rationale
+    as the other factory functions.
+    """
+    from authglow.repositories.file.rate_limit_config import (
+        FileRateLimitConfigRepository,
+    )
+
+    return FileRateLimitConfigRepository(settings=settings)
+
+
+def get_settings_override_repository(
+    settings: "Settings | None" = None,
+) -> "SettingsOverrideRepository":
+    """FastAPI factory for the settings-override repository.
+
+    Returns a fresh ``FileSettingsOverrideRepository`` per request — the
+    repository holds no mutable state, only fsspec handles. The
+    :class:`SettingsOverrideService` (in ``services/settings_override.py``)
+    creates its own default repository by default; this factory is
+    exposed for FastAPI route handlers or tests that want to inject the
+    repository directly.
+
+    The optional ``settings`` argument lets the caller (typically
+    the service constructor) propagate an already-resolved
+    ``Settings`` instance — same ``lru_cache`` bypass rationale
+    as the other factory functions.
+    """
+    from authglow.repositories.file.settings_override import (
+        FileSettingsOverrideRepository,
+    )
+
+    return FileSettingsOverrideRepository(settings=settings)

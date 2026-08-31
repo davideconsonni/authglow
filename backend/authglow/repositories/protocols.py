@@ -45,6 +45,7 @@ from authglow.models.oauth_client import OAuth2Client
 from authglow.models.oauth_consent import OAuth2Consent
 from authglow.models.passkey import Passkey, PasskeyChallenge
 from authglow.models.password_reset import PasswordResetToken
+from authglow.models.rate_limit_config import RateLimitConfig
 from authglow.models.rbac import Permission, Role, UserRole
 from authglow.models.refresh_token import RefreshToken
 from authglow.models.session import MFASession
@@ -1226,3 +1227,42 @@ class WebhookDeliveryRepository(Protocol):
         self, webhook_id: str, limit: int = 20
     ) -> List[WebhookDelivery]:
         """Return the most recent deliveries for the endpoint."""
+
+
+# ---------------------------------------------------------------------------
+# Admin runtime configuration
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class RateLimitConfigRepository(Protocol):
+    """Persistence for the admin-managed rate-limit configuration.
+
+    Single-document storage: the whole configuration (global enabled
+    flag + per-route overrides) lives in one JSON file so every node
+    can reload the latest state with a single read (startup +
+    periodic refresh tick).
+    """
+
+    async def load(self) -> Optional[RateLimitConfig]:
+        """Return the persisted configuration, or ``None`` if never saved."""
+
+    async def save(self, config: RateLimitConfig) -> None:
+        """Persist the configuration (full replace)."""
+
+
+@runtime_checkable
+class SettingsOverrideRepository(Protocol):
+    """Persistence for admin-managed ``Settings`` overrides.
+
+    Single-document storage: a ``{setting_key: value}`` JSON map.
+    Values are JSON scalars (``bool`` / ``int`` / ``float`` / ``str``)
+    validated by the service layer against the live ``Settings``
+    field types; secrets and paths are excluded upstream (API layer).
+    """
+
+    async def load(self) -> Optional[Dict[str, Any]]:
+        """Return the persisted overrides mapping, or ``None``."""
+
+    async def save(self, overrides: Dict[str, Any]) -> None:
+        """Persist the overrides mapping (full replace)."""

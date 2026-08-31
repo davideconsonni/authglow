@@ -17,6 +17,8 @@ interface SettingField {
   category: string
   restart_required: boolean
   editable: boolean
+  overridden: boolean
+  env_value: unknown
 }
 
 interface SettingsData {
@@ -104,6 +106,19 @@ export function AdminSettingsPage() {
     setEdited({})
   }
 
+  const handleRemoveOverride = async (key: string) => {
+    setSaving(true)
+    try {
+      await api.patch('/api/admin/settings', { [key]: null })
+      notify.success('Override removed. Back to the environment value.')
+      await refetch()
+    } catch (err: unknown) {
+      notify.error(err instanceof Error ? err.message : 'Failed to remove override')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="flex gap-6">
       {/* Category sidebar */}
@@ -172,10 +187,34 @@ export function AdminSettingsPage() {
                                 Restart required
                               </span>
                             )}
+                            {field.overridden && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-brand-cool/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-cool">
+                                Overridden
+                              </span>
+                            )}
                           </div>
                           <p className="mt-0.5 text-xs text-text-muted">{field.key}</p>
+                          {field.overridden && (
+                            <p className="mt-0.5 text-[10px] text-text-muted">
+                              env: {String(field.env_value)}
+                            </p>
+                          )}
                         </div>
-                        <div className="shrink-0">
+                        <div className="flex shrink-0 items-center gap-2">
+                          {field.overridden && (
+                            <button
+                              type="button"
+                              aria-label={`Remove override for ${field.key}`}
+                              disabled={saving}
+                              onClick={() => handleRemoveOverride(field.key)}
+                              className={cn(
+                                'rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary',
+                                saving && 'cursor-not-allowed opacity-50',
+                              )}
+                            >
+                              {saving ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                            </button>
+                          )}
                           {field.type === 'boolean' ? (
                             <button
                               id={`setting-${field.key}`}

@@ -415,6 +415,13 @@ class Settings(BaseSettings):
     cache_jti_maxsize: int = 10000
     cache_jti_ttl: int = 3600
 
+    # Admin runtime config refresh. Every node re-reads the persisted
+    # rate-limit config and settings overrides this often, so admin
+    # changes made on one worker converge on the others without a
+    # restart. Change detection makes a tick a no-op when nothing
+    # changed. Not exposed in the admin UI (self-referential footgun).
+    admin_config_refresh_seconds: int = 60
+
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"

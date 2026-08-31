@@ -13,15 +13,20 @@ class TestAdminSettingsEndpointStructure:
         assert "/api/admin/settings" in paths
         assert "/api/admin/settings/schema" in paths
 
-    def test_settings_endpoint_is_read_only(self):
+    def test_settings_endpoint_supports_admin_patch(self):
+        """The settings API exposes PATCH for admin edits (persisted to
+        the SettingsOverrideRepository and live-applied). Only GET and
+        PATCH may exist — no PUT/DELETE surface."""
         from authglow.api.admin_settings import router
 
-        patch_paths = []
+        methods_by_path: dict = {}
         for r in router.routes:
             if hasattr(r, "methods") and hasattr(r, "path"):
-                if "PATCH" in r.methods:
-                    patch_paths.append(r.path)
-        assert not patch_paths, f"Found PATCH endpoints: {patch_paths}"
+                if r.path.startswith("/api/admin/settings"):
+                    methods_by_path.setdefault(r.path, set()).update(r.methods)
+
+        assert methods_by_path.get("/api/admin/settings") == {"GET", "PATCH"}
+        assert methods_by_path.get("/api/admin/settings/schema") == {"GET"}
 
     def test_get_settings_returns_grouped_data(self):
         from authglow.api.admin_settings import _get_settings_fields, _FIELD_META, _CATEGORY_ORDER
@@ -64,6 +69,9 @@ class TestAdminSettingsEndpointStructure:
             # Doc-comment text matched by the naive regex (e.g.
             # ``# Security: the file is written in plaintext...``).
             "Security",
+            # Internal refresher tick for admin runtime config — never
+            # exposed in the admin UI (self-referential footgun).
+            "admin_config_refresh_seconds",
         }
         unexpected = missing - acceptable_missing
         assert not unexpected, f"Fields in config.py but not in _FIELD_META: {unexpected}"

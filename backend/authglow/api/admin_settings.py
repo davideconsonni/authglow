@@ -1,21 +1,62 @@
-"""Admin settings API endpoints.
+"""Admin settings + rate-limits API endpoints.
 
-Exposes a read-only view of the application settings grouped by
+Settings: exposes a view of the application settings grouped by
 category, with metadata for building a dynamic settings UI. Secrets
-are excluded. Settings are managed via environment variables and
-require a redeploy to take effect.
+are excluded. ``PATCH /api/admin/settings`` persists admin updates to
+the ``SettingsOverrideRepository`` and live-applies them onto the
+process ``Settings`` singleton (see
+``services/settings_override.py``); fields whose consumers capture
+values at import time are flagged ``restart_required`` — the override
+is persisted and applied at startup / on the periodic refresher, while
+the badge warns that some components may only pick it up after a
+restart.
+
+Rate limits: exposes the effective per-route limits and lets admins
+reconfigure them at runtime — the global enable flag and per-route
+overrides are persisted to the ``RateLimitConfigRepository`` and
+applied to the live slowapi limiter (see
+``services/rate_limit_config.py``).
 """
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+import structlog
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 
 from authglow.api.admin import require_admin
 from authglow.core.config import Settings, get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
+from authglow.services.rate_limit_config import (
+    InvalidRateLimitError,
+    RateLimitConfigService,
+    iter_effective_routes,
+)
+from authglow.services.settings_override import (
+    InvalidSettingUpdateError,
+    SettingsOverrideService,
+    pristine_value,
+)
+
+logger = structlog.get_logger("authglow.audit")
 
 router = APIRouter()
+
+
+def _get_rate_limit_config_service() -> RateLimitConfigService:
+    """Build a per-request ``RateLimitConfigService``.
+
+    The instance shares the process-wide original-limits registry
+    (populated at startup by ``bind_app``) so resets restore the
+    decorator defaults.
+    """
+    return RateLimitConfigService()
+
+
+def _get_settings_override_service() -> SettingsOverrideService:
+    """Build a per-request ``SettingsOverrideService``."""
+    return SettingsOverrideService()
 
 _FIELD_META: Dict[str, Dict[str, Any]] = {
     # fmt: off
@@ -490,14 +531,23 @@ _EXCLUDED_FIELDS = frozenset(
 )
 
 
-def _get_settings_fields(settings: Settings) -> List[Dict[str, Any]]:
-    """Build a list of setting objects with metadata."""
+def _get_settings_fields(
+    settings: Settings, overrides: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """Build a list of setting objects with metadata.
+
+    ``overrides`` (the persisted admin override map) drives the
+    ``overridden`` flag and the ``env_value`` shown by the UI so admins
+    can see — and restore — the environment-derived value.
+    """
+    overrides = overrides or {}
     fields: List[Dict[str, Any]] = []
     for field_name, meta in _FIELD_META.items():
         if field_name in _EXCLUDED_FIELDS:
             continue
         raw_value = getattr(settings, field_name, None)
         field_type = _type_name(raw_value)
+        overridden = field_name in overrides
         fields.append(
             {
                 "key": field_name,
@@ -507,6 +557,9 @@ def _get_settings_fields(settings: Settings) -> List[Dict[str, Any]]:
                 "label": meta["label"],
                 "category": meta["category"],
                 "restart_required": meta["restart_required"],
+                "editable": True,
+                "overridden": overridden,
+                "env_value": pristine_value(field_name, raw_value),
             }
         )
     return fields
@@ -546,7 +599,8 @@ async def get_settings_list(
 ):
     """List all application settings grouped by category."""
     settings = get_settings()
-    fields = _get_settings_fields(settings)
+    overrides = await _get_settings_override_service().load_overrides()
+    fields = _get_settings_fields(settings, overrides)
 
     if category:
         fields = [f for f in fields if f["category"] == category]
@@ -565,7 +619,8 @@ async def get_settings_schema(
 ):
     """Return settings schema metadata for building a dynamic UI."""
     settings = get_settings()
-    fields = _get_settings_fields(settings)
+    overrides = await _get_settings_override_service().load_overrides()
+    fields = _get_settings_fields(settings, overrides)
 
     categories: Dict[str, List[Dict[str, Any]]] = {}
     for field in fields:
@@ -578,6 +633,81 @@ async def get_settings_schema(
     }
 
 
+@router.patch("/api/admin/settings")
+@limiter.limit("30/minute")
+async def patch_admin_settings(
+    request: Request,
+    updates: Dict[str, Any] = Body(...),
+    _admin: User = Depends(require_admin),
+):
+    """Persist and live-apply admin settings updates.
+
+    Only keys exposed by ``GET /api/admin/settings`` (i.e. in
+    ``_FIELD_META`` minus ``_EXCLUDED_FIELDS``) are accepted. Updates
+    are persisted to the ``SettingsOverrideRepository`` and applied to
+    the live ``Settings`` singleton; keys flagged ``restart_required``
+    take full effect at the next startup / deploy (the periodic
+    refresher re-applies the persisted document on every node).
+
+    A ``null`` value removes the persisted override for that key and
+    restores the environment-derived value.
+    """
+    exposed = {key for key in _FIELD_META if key not in _EXCLUDED_FIELDS}
+    unknown = sorted(key for key in updates if key not in exposed)
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown or non-editable settings: {', '.join(unknown)}",
+        )
+
+    service = _get_settings_override_service()
+
+    # Removals: a null value restores the environment-derived value.
+    removals = sorted(key for key, value in updates.items() if value is None)
+    for key in removals:
+        await service.remove_override(key)
+
+    # Value updates: existing validate + set + apply flow.
+    updates_with_values = {k: v for k, v in updates.items() if v is not None}
+    if updates_with_values:
+        try:
+            validated = service.validate_updates(updates_with_values)
+        except InvalidSettingUpdateError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+
+        persisted = await service.set_overrides(validated)
+        service.apply_overrides(validated)
+        service.mark_synced(persisted)
+    else:
+        validated = {}
+        persisted = await service.load_overrides()
+
+    # All persisted keys are applied live via setattr (the periodic
+    # refresher does the same on every node); the flag warns that
+    # import-time consumers (lru_cache / TTLCache construction) only
+    # pick the new value up after a restart / deploy.
+    restart_required = sorted(
+        key
+        for key in validated
+        if _FIELD_META.get(key, {}).get("restart_required", False)
+    )
+    logger.info(
+        "settings_updated",
+        actor=_admin.email,
+        keys=sorted(validated.keys()),
+        removed=removals,
+        restart_required=restart_required,
+    )
+    return {
+        "updated": sorted(validated.keys()),
+        "removed": removals,
+        "restart_required": restart_required,
+        "settings": _get_settings_fields(service.settings, persisted),
+    }
+
+
 @router.get("/api/admin/rate-limits")
 @limiter.limit("30/minute")
 async def get_rate_limits(
@@ -587,15 +717,18 @@ async def get_rate_limits(
     """List all rate-limited routes with their limits."""
     limiter_obj = request.app.state.limiter
     results: List[Dict[str, Any]] = []
+    config = await _get_rate_limit_config_service().load_config()
+    overrides = config.overrides
 
-    # Build a lookup: (path, method) from FastAPI route -> handler name
+    # Build a lookup: (path, method) from FastAPI route -> handler name.
+    # Uses iter_effective_routes so lazily-included routers (FastAPI
+    # >= 0.141 _IncludedRouter placeholders) resolve to real paths.
     handler_to_route: Dict[str, Dict[str, str]] = {}
-    for route in request.app.routes:
-        if hasattr(route, "endpoint") and hasattr(route, "methods") and hasattr(route, "path"):
-            handler_to_route[route.endpoint.__name__] = {
-                "path": route.path,
-                "method": next(iter(route.methods), "*") if route.methods else "*",
-            }
+    for route_path, endpoint, methods in iter_effective_routes(request.app):
+        handler_to_route[endpoint.__name__] = {
+            "path": route_path,
+            "method": next(iter(methods), "*") if methods else "*",
+        }
 
     # Per-route limits (from @limiter.limit decorators)
     route_limits: Dict = getattr(limiter_obj, "_route_limits", {})
@@ -603,12 +736,15 @@ async def get_rate_limits(
         limits_str = _format_limit_list(limit_list)
         func_name = key.rsplit(".", 1)[-1] if isinstance(key, str) and "." in key else str(key)
         route_info = handler_to_route.get(func_name, {})
+        row_path = route_info.get("path")
         results.append(
             {
-                "route": route_info.get("path", str(key)),
+                "route": row_path or str(key),
                 "method": route_info.get("method", "*"),
                 "limit": limits_str,
-                "source": "decorator",
+                "source": "override" if row_path in overrides else "decorator",
+                "path": row_path,
+                "override": overrides.get(row_path) if row_path else None,
             }
         )
 
@@ -618,12 +754,15 @@ async def get_rate_limits(
         limits_str = _format_limit_list(limit_list)
         func_name = key.rsplit(".", 1)[-1] if isinstance(key, str) and "." in key else str(key)
         route_info = handler_to_route.get(func_name, {})
+        row_path = route_info.get("path")
         results.append(
             {
-                "route": route_info.get("path", str(key)),
+                "route": row_path or str(key),
                 "method": route_info.get("method", "*"),
                 "limit": limits_str,
-                "source": "dynamic",
+                "source": "override" if row_path in overrides else "dynamic",
+                "path": row_path,
+                "override": overrides.get(row_path) if row_path else None,
             }
         )
 
@@ -637,12 +776,69 @@ async def get_rate_limits(
                 "method": "*",
                 "limit": default_str,
                 "source": "default",
+                "path": None,
+                "override": None,
             }
         )
 
     return {
         "total_routes": len(results),
         "rate_limits": results,
+    }
+
+
+class RateLimitConfigUpdate(BaseModel):
+    """Request body for ``PUT /api/admin/rate-limits/config``.
+
+    ``enabled`` toggles the global limiter; ``overrides`` maps a route
+    path to a new limit string, or to ``None`` to remove the override
+    (reset to the decorator default).
+    """
+
+    enabled: Optional[bool] = None
+    overrides: Optional[Dict[str, Optional[str]]] = None
+
+
+@router.put("/api/admin/rate-limits/config")
+@limiter.limit("10/minute")
+async def put_rate_limits_config(
+    request: Request,
+    update: RateLimitConfigUpdate,
+    _admin: User = Depends(require_admin),
+):
+    """Persist and apply the admin rate-limit configuration.
+
+    Validation happens before any mutation: an invalid limit string
+    rejects the whole update with ``400`` and leaves the persisted
+    document and the live limiter untouched.
+    """
+    if update.enabled is None and not update.overrides:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nothing to update: provide 'enabled' and/or 'overrides'.",
+        )
+
+    service = _get_rate_limit_config_service()
+    try:
+        config = await service.set_config(
+            enabled=update.enabled,
+            overrides_update=update.overrides,
+        )
+    except InvalidRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    logger.info(
+        "rate_limit_config_updated",
+        actor=_admin.email,
+        enabled=config.enabled,
+        overrides_count=len(config.overrides),
+    )
+    return {
+        "enabled": config.enabled,
+        "overrides": config.overrides,
+        "updated_at": config.updated_at,
     }
 
 

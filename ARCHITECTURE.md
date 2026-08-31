@@ -46,13 +46,13 @@ authglow/
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
 │       ├── api/               # 20 FastAPI routers (HTTP layer, one per domain)
-│       ├── services/          # 42 modules / 50 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
+│       ├── services/          # 45 modules / 50 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
 │       │   ├── dependencies.py# Factory functions: get_<entity>_repository()
 │       │   └── file/          # 25 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
-│       ├── models/            # Pydantic request/response/domain models (20 modules)
+│       ├── models/            # Pydantic request/response/domain models (24 modules)
 │       ├── core/              # config, crypto, cache, concurrency, permissions, password, pii, datetime, async_io, http_client, jwt_singleton, rate_limit
 │       └── middleware/        # Security headers, HTTPS enforcement, request size, request ID, proxy headers
 ├── frontend/
@@ -227,18 +227,20 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------|
 | `backend/main.py`                                   | All middleware registration and router mounts                                             |
 | `backend/authglow/core/config.py`                   | `Settings` class — all env vars read here                                                 |
-| `backend/authglow/repositories/protocols.py`        | All storage contracts (30 Protocols)                                                      |
-| `backend/authglow/repositories/dependencies.py`     | Factory functions (one per entity)                                                        |
-| `backend/authglow/services/user.py`                 | Canonical service: cross-entity coordination pattern                                      |
-| `backend/authglow/services/claim_policy.py`         | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
-| `backend/authglow/models/claim_policy.py`           | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
-| `backend/authglow/api/device_auth.py`               | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
-| `backend/authglow/api/claim_policy.py`              | Claim policy CRUD per client + admin templates                                            |
-| `backend/authglow/services/dpop.py`                 | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
-| `backend/authglow/services/client_jwt_auth.py`      | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |
-| `backend/authglow/services/acr.py`                  | ACR/AMR computation for ID tokens                                                         |
-| `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                     |
-| `backend/authglow/api/admin_settings.py`            | Admin settings read + rate-limit status endpoints                                         |
+ | `backend/authglow/repositories/protocols.py`        | All storage contracts (32 Protocols)                                                      |
+ | `backend/authglow/repositories/dependencies.py`     | Factory functions (one per entity)                                                        |
+ | `backend/authglow/services/user.py`                 | Canonical service: cross-entity coordination pattern                                      |
+ | `backend/authglow/services/claim_policy.py`         | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
+ | `backend/authglow/models/claim_policy.py`           | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
+ | `backend/authglow/api/device_auth.py`               | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
+ | `backend/authglow/api/claim_policy.py`              | Claim policy CRUD per client + admin templates                                            |
+ | `backend/authglow/services/dpop.py`                 | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
+ | `backend/authglow/services/client_jwt_auth.py`      | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |
+ | `backend/authglow/services/acr.py`                  | ACR/AMR computation for ID tokens                                                         |
+ | `backend/authglow/services/auth/token_blacklist.py` | Access-token `jti` blacklist (logout, revoke-all, MFA session replay)                     |
+ | `backend/authglow/services/rate_limit_config.py`    | Admin rate-limit config: persists + live-patches the slowapi limiter (enabled + overrides) |
+ | `backend/authglow/services/settings_override.py`    | Admin `Settings` overrides: persists + `setattr`s the live `Settings` singleton           |
+ | `backend/authglow/api/admin_settings.py`            | Admin settings GET/PATCH + rate-limits GET/PUT config endpoints                           |
 | `backend/authglow/api/meta.py`                      | Public `GET /api/meta` (demo mode banner + credentials)                                   |
 | `backend/authglow/services/demo.py`                 | Idempotent demo-admin seed (boot-time password, never logged)                             |
 | `frontend/src/App.tsx`                              | All routes, providers, guards                                                             |

@@ -58,6 +58,29 @@ logger = structlog.get_logger("authglow.audit")
 _DEFAULT_EXECUTOR_WORKERS = min(32, (os.cpu_count() or 1) * 4)
 
 
+async def _admin_config_refresher(*services) -> None:
+    """Periodically re-apply persisted admin runtime configuration.
+
+    Lets every worker (not just the one that handled the PUT) converge
+    on the latest rate-limit config and settings overrides within
+    ``admin_config_refresh_seconds``. Each tick re-reads the small
+    config documents and re-applies them only when they actually
+    changed (change detection inside the services). Errors are logged
+    and swallowed: a failed refresh must never take the worker down.
+    """
+    interval = max(5, settings.admin_config_refresh_seconds)
+    while True:
+        await asyncio.sleep(interval)
+        for service in services:
+            try:
+                await service.refresh_if_changed()
+            except Exception:
+                logger.warning(
+                    "admin_config_refresh_failed",
+                    service=type(service).__name__,
+                )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Widen the default ``ThreadPoolExecutor`` for this event loop. Must run
@@ -70,6 +93,36 @@ async def lifespan(app: FastAPI):
         ThreadPoolExecutor(max_workers=_DEFAULT_EXECUTOR_WORKERS),
     )
     await token_blacklist().startup_hydrate()
+
+    # ------------------------------------------------------------------
+    # Admin runtime configuration (rate limits + settings overrides).
+    #
+    # Applied BEFORE serving requests so persisted admin changes
+    # survive deploys/restarts: the limiter gets its persisted enabled
+    # flag and per-route overrides; the Settings singleton gets its
+    # persisted admin overrides. A background refresher then re-reads
+    # both documents every ``admin_config_refresh_seconds`` so every
+    # node converges without a restart.
+    # ------------------------------------------------------------------
+    from authglow.services.rate_limit_config import RateLimitConfigService
+    from authglow.services.settings_override import (
+        SettingsOverrideService,
+        capture_pristine,
+    )
+
+    rate_limit_config_service = RateLimitConfigService()
+    rate_limit_config_service.bind_app(app)
+    await rate_limit_config_service.refresh_if_changed()
+
+    settings_override_service = SettingsOverrideService()
+    # Snapshot env-derived values BEFORE overrides are applied so that
+    # "remove override" can restore the env-derived value later.
+    capture_pristine(settings_override_service.settings)
+    await settings_override_service.refresh_if_changed()
+
+    refresher_task = asyncio.create_task(
+        _admin_config_refresher(rate_limit_config_service, settings_override_service)
+    )
 
     # ------------------------------------------------------------------
     # Demo mode bootstrap (INTENTIONAL public sandbox — see
@@ -96,6 +149,12 @@ async def lifespan(app: FastAPI):
     else:
         app.state.demo_password = None
     yield
+
+    refresher_task.cancel()
+    try:
+        await refresher_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

@@ -68,6 +68,9 @@ from authglow.repositories.file.oauth_consent import (
 from authglow.repositories.file.password_reset import (
     FilePasswordResetRepository,
 )
+from authglow.repositories.file.rate_limit_config import (
+    FileRateLimitConfigRepository,
+)
 from authglow.repositories.file.rbac import (
     FilePermissionRepository,
     FileRoleRepository,
@@ -77,6 +80,9 @@ from authglow.repositories.file.refresh_token import (
     FileRefreshTokenRepository,
 )
 from authglow.repositories.file.session import FileSessionRepository
+from authglow.repositories.file.settings_override import (
+    FileSettingsOverrideRepository,
+)
 from authglow.repositories.file.token_blacklist import (
     FileTokenBlacklistRepository,
 )
@@ -102,9 +108,11 @@ from authglow.repositories.protocols import (
     OAuth2ConsentRepository,
     PasswordResetRepository,
     PermissionRepository,
+    RateLimitConfigRepository,
     RefreshTokenRepository,
     RoleRepository,
     SessionRepository,
+    SettingsOverrideRepository,
     TokenBlacklistRepository,
     UserPreferencesRepository,
     UserRoleRepository,
@@ -223,6 +231,16 @@ _IMPL_TABLE = [
         FileUserPreferencesRepository,
         UserPreferencesRepository,
         "UserPreferences",
+    ),
+    (
+        FileRateLimitConfigRepository,
+        RateLimitConfigRepository,
+        "RateLimitConfig",
+    ),
+    (
+        FileSettingsOverrideRepository,
+        SettingsOverrideRepository,
+        "SettingsOverride",
     ),
 ]
 
