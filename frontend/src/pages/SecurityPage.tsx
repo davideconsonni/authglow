@@ -78,7 +78,7 @@ export function SecurityPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => { setShowMfaSetup(!showMfaSetup); fetchCurrentUser() }}
+                  onClick={() => setShowMfaSetup((prev) => !prev)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                     user?.mfa_enabled && !disableMfa
                       ? 'border border-surface-2 text-text-secondary hover:bg-surface-2'

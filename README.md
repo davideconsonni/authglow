@@ -202,7 +202,7 @@ The backend builds **absolute URLs** from these env vars (OIDC discovery, email 
 
 | Variable | Controls | Default |
 |---|---|---|
-| `ISSUER` | OIDC discovery (`/.well-known/openid-configuration`) and token `aud` | `http://localhost:8000` |
+| `ISSUER` | OIDC discovery (`/.well-known/openid-configuration`), token `iss` claim, absolute OAuth endpoints | `http://localhost:8000` |
 | `BASE_URL` | `/docs` links, federation callback URL | `http://localhost:8000` |
 | `FRONTEND_BASE_URL` | Password-reset emails, device-code verification page, post-federation redirects | `http://localhost:5173` |
 | `OAUTH2_FIRST_PARTY_REDIRECT_URI` | First-party OAuth2 redirect | `http://localhost:5173/auth/callback` |

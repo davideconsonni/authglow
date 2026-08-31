@@ -104,7 +104,7 @@
 ### Registration
 - `POST /api/passkey/register/begin` — generates credential creation options
 - Relying Party ID and Origin configurable via env
-- Dynamic RP ID/Origin detection from headers (supports reverse proxy/playground)
+- On a deployed instance both must match the public origin (bare hostname in `PASSKEY_RP_ID`, full URL in `PASSKEY_ORIGIN`) — see the URL-variables table in the root README
 - Excludes already-registered passkeys to prevent duplicates
 - `POST /api/passkey/register/complete` — verifies attestation, saves credential
 - Challenge with 5-minute expiration

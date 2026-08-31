@@ -13,8 +13,16 @@ OAUTH2_CLIENT_ID
 OAUTH2_FIRST_PARTY_REDIRECT_URI=https://authglow.example.com/auth/callback
 ```
 
+On a remote (non-localhost) deployment also point `ISSUER` and
+`OAUTH2_FIRST_PARTY_REDIRECT_URI` at the public origin — the authorize
+endpoint matches the first-party `redirect_uri` against that exact string,
+so a localhost default on a remote host breaks the login. See the
+"URL variables for a real deployment" table in the root `README.md`.
+
 The configured client is public, requires PKCE S256, and is restricted to the
-exact first-party redirect URI.
+exact first-party redirect URI. `OAUTH2_CLIENT_SECRET` is required only by
+the production startup validator (`APP_ENV=production` refuses placeholder
+values): it is never sent by the browser and is not part of this flow.
 
 ## Flow
 

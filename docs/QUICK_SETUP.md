@@ -42,8 +42,29 @@ Open **http://localhost:5173/setup**, paste the setup token, create your admin a
 
 ## Deployed / Remote Instance
 
-If you've deployed AuthGlow (Render, Fly.io, Cloud Run, etc.) and are starting with an empty instance,
+If you've deployed AuthGlow (Render, Fly.io, Cloud Run, Railway, etc.) and are starting with an empty instance,
 here's the minimal flow to create the first user and get a working API token.
+
+### 0. Required environment variables
+
+The defaults in `backend/.env.example` are localhost-only. On a remote instance set at minimum:
+
+```bash
+SECRET_KEY=<32+ random chars>   # required — the app refuses to boot without it
+APP_ENV=production
+ISSUER=https://<your-host>      # exact public origin (OIDC discovery + iss claim)
+BASE_URL=https://<your-host>
+FRONTEND_BASE_URL=https://<your-host>
+OAUTH2_FIRST_PARTY_REDIRECT_URI=https://<your-host>/auth/callback
+OAUTH2_CLIENT_ID=<non-placeholder value>
+OAUTH2_CLIENT_SECRET=<non-placeholder value>  # required by the production validator only —
+                                              # the dashboard is a public PKCE client
+PASSKEY_RP_ID=<your-host>       # bare hostname; set only if you use passkeys
+PASSKEY_ORIGIN=https://<your-host>
+```
+
+For a single-container deployment (backend + UI on one origin, as produced by the root `Dockerfile`)
+all four URL values are the same origin. Full details: "URL variables for a real deployment" in the root `README.md`.
 
 ### 1. Check if setup is needed
 
@@ -191,6 +212,8 @@ The dashboard refreshes its httpOnly cookie session with
 | `401` on `/oauth2/authorize` | Invalid credentials or inactive user | Check the account status and retry |
 | `423` on `/oauth2/authorize` | Account locked | Too many failed attempts — wait or unlock via admin |
 | `401` on protected endpoints | Token expired (30 min default) | Refresh the token or log in again |
+| App doesn't boot on a remote host | `SECRET_KEY` unset, or `OAUTH2_CLIENT_ID`/`OAUTH2_CLIENT_SECRET` left as `change-me-*` with `APP_ENV=production` | The startup validator refuses placeholders — set real values (see step 0) |
+| `invalid_redirect_uri` on `/oauth2/authorize` | `OAUTH2_FIRST_PARTY_REDIRECT_URI` doesn't match the browser URL exactly | It's an exact string match — set it to `https://<your-host>/auth/callback` |
 | Swagger can't reach API | CORS or `BASE_URL` mismatch | Set `BASE_URL` to your public URL; add frontend URL to `CORS_ALLOWED_ORIGINS` |
 
 ---
@@ -200,5 +223,5 @@ The dashboard refreshes its httpOnly cookie session with
 - Register more users at `POST /api/users` (requires `allow_public_registration=true`)
 - Create OAuth2 clients at `POST /api/admin/clients` for third-party integrations
 - Set up passkeys at `POST /api/passkeys/register/begin`
-- Explore every OAuth2 flow with the built-in OAuth Playground (`/playground` in the frontend)
+- Explore every OAuth2 flow with the built-in OAuth Playground (`/admin/playground` in the frontend)
 - Full feature list: [FEATURES.md](FEATURES.md)

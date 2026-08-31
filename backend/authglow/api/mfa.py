@@ -57,7 +57,14 @@ async def enroll_mfa(
 ):
     """
     Start MFA enrollment process.
-    Generates TOTP secret, QR code, and backup codes.
+
+    Generates a fresh TOTP secret, QR code and backup codes, then stores
+    the encrypted secret on the user record. ``mfa_enabled`` and
+    ``mfa_verified`` are **not** flipped to ``True`` here — that only
+    happens after a successful TOTP code submission in
+    ``/api/mfa/verify``. Persisting the flag too early leaves users
+    in an unrecoverable state where the login flow asks for a code
+    the user never had a chance to enroll against.
     """
     lock = named_lock()
     async with lock(f"mfa_enroll:{current_user.id}"):
@@ -65,7 +72,7 @@ async def enroll_mfa(
         if not fresh_user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if fresh_user.mfa_enabled:
+        if fresh_user.mfa_enabled and fresh_user.mfa_verified:
             raise HTTPException(
                 status_code=400,
                 detail="MFA is already enabled. Disable it first to re-enroll.",
@@ -81,13 +88,16 @@ async def enroll_mfa(
         # Generate backup codes
         backup_codes = mfa_service.generate_backup_codes(10)
 
-        # Save encrypted secret to user (not verified yet)
+        # Auto-heal orphaned state: if a previous enroll left a secret
+        # behind but the user never verified, treat this as a fresh
+        # enroll. We never reuse a stale secret because the user may
+        # have lost the QR/backup codes from that attempt.
         fresh_user.mfa_secret = encrypt_totp_secret(secret)
-        fresh_user.mfa_enabled = True
+        fresh_user.mfa_enabled = False
         fresh_user.mfa_verified = False
         await storage.update_user(fresh_user)
 
-        # Save backup codes
+        # Save backup codes (overwrites any prior set for this user)
         await mfa_service.save_backup_codes(fresh_user.id, backup_codes)
 
         return MFAEnrollResponse(secret=secret, qr_code=qr_code, backup_codes=backup_codes)
@@ -103,16 +113,16 @@ async def verify_mfa_enrollment(
 ):
     """
     Verify MFA enrollment with first TOTP code.
-    This completes the MFA setup.
+
+    Completes the MFA setup: flips ``mfa_enabled`` and ``mfa_verified``
+    to ``True`` only after the user proves they can produce a valid
+    TOTP code from the secret returned by ``/api/mfa/enroll``.
     """
-    if not current_user.mfa_enabled:
-        raise HTTPException(status_code=400, detail="MFA is not enabled")
-
-    if current_user.mfa_verified:
-        raise HTTPException(status_code=400, detail="MFA is already verified")
-
     if not current_user.mfa_secret:
         raise HTTPException(status_code=400, detail="No MFA secret found")
+
+    if current_user.mfa_enabled and current_user.mfa_verified:
+        raise HTTPException(status_code=400, detail="MFA is already verified")
 
     # Verify TOTP code (decrypt stored secret first)
     if not mfa_service.verify_totp(
@@ -120,7 +130,10 @@ async def verify_mfa_enrollment(
     ):
         raise HTTPException(status_code=400, detail="Invalid MFA code")
 
-    # Mark as verified
+    # Mark as enabled AND verified atomically — both flags are required
+    # for the login flow to demand a TOTP code, so flipping only one
+    # would leave the account in a half-protected state.
+    current_user.mfa_enabled = True
     current_user.mfa_verified = True
     await storage.update_user(current_user)
 
@@ -143,8 +156,15 @@ async def disable_mfa(
     mfa_service: MFAService = Depends(get_mfa_service),
     storage: UserStorage = Depends(get_user_storage),
 ):
-    """Disable MFA for current user."""
-    if not current_user.mfa_enabled:
+    """Disable MFA for current user.
+
+    Accepts both fully-enrolled (``mfa_enabled=True``) and orphaned
+    half-states (e.g. ``mfa_secret`` set but never verified) so users
+    stuck after a failed enroll can self-recover without an admin
+    call.
+    """
+    has_any_mfa_state = current_user.mfa_enabled or bool(current_user.mfa_secret)
+    if not has_any_mfa_state:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
 
     # Remove MFA settings

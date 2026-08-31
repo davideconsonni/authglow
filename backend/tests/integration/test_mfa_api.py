@@ -203,10 +203,16 @@ class TestEnrollMfaEndpoint:
     def test_enroll_mfa_blocked_when_enrollment_in_progress(
         self, _mfa_enroll_app, jwt_service, storage, test_user
     ):
+        """An in-progress (fully-enrolled) state must still block re-enroll.
+
+        Note: a half-state (mfa_enabled=True, mfa_verified=False) is now
+        treated as orphaned and auto-healed by enroll — covered by
+        test_enroll_mfa_auto_heals_orphaned_state.
+        """
         import asyncio
 
         test_user.mfa_enabled = True
-        test_user.mfa_verified = False
+        test_user.mfa_verified = True
         asyncio.run(storage.create_user(test_user))
         token = jwt_service.create_access_token(
             user_id=test_user.id,
@@ -296,3 +302,143 @@ class TestEnrollMfaEndpoint:
         assert not named_lock().is_held(f"mfa_enroll:{test_user.id}"), (
             "Lock must be released after enrollment completes"
         )
+
+    def test_enroll_does_not_flip_mfa_enabled(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        """Enroll must leave mfa_enabled=False until verify succeeds.
+
+        Regression test for the bug where ``mfa_enabled`` was set to True
+        during enroll, leaving users who never completed the wizard
+        locked out of their account at the next login.
+        """
+        import asyncio
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        async def _reload():
+            return await storage.get_user(test_user.id)
+
+        fresh = asyncio.run(_reload())
+        assert fresh.mfa_secret is not None, "Enroll must persist a secret"
+        assert fresh.mfa_enabled is False, (
+            "Enroll must NOT flip mfa_enabled — verify is what completes setup"
+        )
+        assert fresh.mfa_verified is False, "Enroll must not set mfa_verified"
+
+    def test_enroll_mfa_auto_heals_orphaned_state(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        """Enroll must succeed for an orphan (mfa_enabled=True, mfa_verified=False).
+
+        This is the recovery path for users who started a previous enroll
+        (e.g. closed the wizard before verifying) and would otherwise be
+        stuck on a broken login flow.
+        """
+        import asyncio
+
+        test_user.mfa_enabled = True
+        test_user.mfa_verified = False
+        test_user.mfa_secret = "stale-encrypted-secret"
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        response = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200, (
+            "Orphaned state must self-heal and allow a fresh enroll"
+        )
+
+        async def _reload():
+            return await storage.get_user(test_user.id)
+
+        fresh = asyncio.run(_reload())
+        assert fresh.mfa_enabled is False, "Auto-heal must reset the broken flag"
+        assert fresh.mfa_verified is False
+        assert fresh.mfa_secret != "stale-encrypted-secret", (
+            "Auto-heal must rotate the secret so a new QR/codes pair is required"
+        )
+
+    def test_verify_mfa_enrollment_completes_setup(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        """Verify must flip both flags together on a valid TOTP code."""
+        import asyncio
+        import pyotp
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        enroll = _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert enroll.status_code == 200
+        secret = enroll.json()["secret"]
+
+        code = pyotp.TOTP(secret).now()
+        verify = _mfa_enroll_app.post(
+            "/api/mfa/verify",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"code": code},
+        )
+        assert verify.status_code == 200
+
+        async def _reload():
+            return await storage.get_user(test_user.id)
+
+        fresh = asyncio.run(_reload())
+        assert fresh.mfa_enabled is True
+        assert fresh.mfa_verified is True
+
+    def test_verify_mfa_enrollment_rejects_invalid_code(
+        self, _mfa_enroll_app, jwt_service, storage, test_user
+    ):
+        """Invalid TOTP code must not flip mfa_enabled to True."""
+        import asyncio
+
+        asyncio.run(storage.create_user(test_user))
+        token = jwt_service.create_access_token(
+            user_id=test_user.id,
+            email=test_user.email,
+            scopes=test_user.scopes,
+        )
+
+        _mfa_enroll_app.post(
+            "/api/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        verify = _mfa_enroll_app.post(
+            "/api/mfa/verify",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"code": "000000"},
+        )
+        assert verify.status_code == 400
+
+        async def _reload():
+            return await storage.get_user(test_user.id)
+
+        fresh = asyncio.run(_reload())
+        assert fresh.mfa_enabled is False
+        assert fresh.mfa_verified is False
