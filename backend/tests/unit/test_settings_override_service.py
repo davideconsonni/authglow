@@ -331,3 +331,69 @@ class TestRemoveOverride:
         changed = await service.refresh_if_changed()
 
         assert changed is False
+
+
+class TestRemoveOverride:
+    async def test_removes_and_restores_pristine(self, test_settings, stub_repo):
+        capture_pristine(test_settings)
+        service = SettingsOverrideService(
+            repository=stub_repo, settings=test_settings
+        )
+        await service.set_overrides({"app_name": "Renamed"})
+        assert test_settings.app_name == "Renamed"
+
+        removed = await service.remove_override("app_name")
+
+        assert removed is True
+        assert test_settings.app_name != "Renamed"
+        # The pristine env-derived value is restored on the live object.
+        assert test_settings.app_name != "Renamed"
+        assert stub_repo.saved == {}
+
+    async def test_restore_uses_captured_env_value(self, test_settings, stub_repo):
+        capture_pristine(test_settings)
+        original = test_settings.app_name
+        service = SettingsOverrideService(
+            repository=stub_repo, settings=test_settings
+        )
+        await service.set_overrides({"app_name": "Renamed"})
+        await service.remove_override("app_name")
+        assert test_settings.app_name == original
+
+    async def test_remove_non_overridden_key_is_noop(self, test_settings, stub_repo):
+        service = SettingsOverrideService(
+            repository=stub_repo, settings=test_settings
+        )
+        removed = await service.remove_override("app_name")
+
+        assert removed is False
+        assert stub_repo.save_count == 0
+
+    async def test_remove_without_pristine_snapshot_skips_restore(
+        self, test_settings, stub_repo
+    ):
+        service = SettingsOverrideService(
+            repository=stub_repo, settings=test_settings
+        )
+        await service.set_overrides({"app_name": "Renamed"})
+        test_settings.app_name = "Renamed"
+
+        removed = await service.remove_override("app_name")
+
+        assert removed is True
+        assert stub_repo.saved == {}
+        # No snapshot captured: the live value is left untouched.
+
+    async def test_refresh_noop_after_removal_mark_synced(
+        self, test_settings, stub_repo
+    ):
+        capture_pristine(test_settings)
+        service = SettingsOverrideService(
+            repository=stub_repo, settings=test_settings
+        )
+        await service.set_overrides({"app_name": "Renamed"})
+        await service.remove_override("app_name")
+
+        changed = await service.refresh_if_changed()
+
+        assert changed is False
