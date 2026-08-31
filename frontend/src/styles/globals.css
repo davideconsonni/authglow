@@ -408,11 +408,25 @@
     color: var(--color-chip-fg);
   }
 
-  /* --- Client branding contract (OIDC: "la casa è l'IdP, il marchio è dell'ospite") ---
-     Le variabili --brand-* sono iniettate inline sulla root della pagina da
-     brandingStyle(); ogni consumer fallback sul token del tema attivo. */
-  .authglow-consent {
+  /* --- Client branding contract (OIDC: the house is the IdP, the brand is the guest's) ---
+     The --brand-*-light/dark variables are injected inline on the page root by
+     brandingStyle(); the mode mapping below picks the active variant with the
+     theme, and every consumer falls back to the active theme token when unset. */
+  .authglow-consent,
+  .authglow-authorize {
+    --brand-primary: var(--brand-primary-light);
+    --brand-surface: var(--brand-surface-light);
+    --brand-text: var(--brand-text-light);
+    --brand-radius: var(--brand-radius-light);
     font-family: var(--brand-font, 'Inter', 'Segoe UI', 'Roboto', sans-serif);
+  }
+
+  .dark .authglow-consent,
+  .dark .authglow-authorize {
+    --brand-primary: var(--brand-primary-dark, var(--brand-primary-light));
+    --brand-surface: var(--brand-surface-dark, var(--brand-surface-light));
+    --brand-text: var(--brand-text-dark, var(--brand-text-light));
+    --brand-radius: var(--brand-radius-dark, var(--brand-radius-light));
   }
 
   .consent-card {
@@ -489,7 +503,7 @@
       opacity 160ms ease;
   }
 
-  /* Outline chips: sostituisce i wash colorati del brand (niente "salmone") */
+  /* Outline chips: replaces the brand color washes (no more "salmon" tints) */
   .bg-brand-wash {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand-accent) 38%, transparent);
   }

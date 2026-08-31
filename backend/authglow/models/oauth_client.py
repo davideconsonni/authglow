@@ -82,12 +82,29 @@ def _reject_implicit_grant(v: List[str]) -> List[str]:
     return v
 
 
+class BrandingVariant(BaseModel):
+    """Theme-specific overrides for client branding (Auth0-style light/dark).
+
+    Every field is optional and inherits from the flat base
+    ``ClientBranding`` when unset. Font and logo are intentionally
+    shared across both modes (only colors differ per mode).
+    """
+
+    primary_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    surface_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    text_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    border_radius: Optional[str] = Field(None, pattern=r"^[0-9.]+(px|em|rem|%)$")
+
+
 class ClientBranding(BaseModel):
     """Structured branding for the OAuth2 consent page.
 
     Replaces the former raw ``custom_css`` field with a typed object
     that is safe to render as CSS custom properties — only pre-validated
     values reach the ``<style>`` tag (VAPT-037 fix).
+
+    The flat fields act as the base; optional ``light``/``dark`` variants
+    override them per theme mode.
     """
 
     primary_color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
@@ -96,6 +113,8 @@ class ClientBranding(BaseModel):
     font_family: Optional[str] = Field(None, max_length=200)
     border_radius: Optional[str] = Field(None, pattern=r"^[0-9.]+(px|em|rem|%)$")
     logo_url: Optional[str] = None
+    light: Optional[BrandingVariant] = None
+    dark: Optional[BrandingVariant] = None
 
     @field_validator("logo_url")
     @classmethod

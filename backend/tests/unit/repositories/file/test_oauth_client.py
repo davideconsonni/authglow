@@ -10,6 +10,8 @@ methods) is exercised by ``tests/unit/test_oauth_client_service.py``.
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from authglow.core.concurrency import ConcurrentWriteError
 from authglow.models.oauth_client import OAuth2Client
 from authglow.repositories.file.oauth_client import FileOAuth2ClientRepository
@@ -95,6 +97,36 @@ class TestFileOAuth2ClientRepositoryCreate:
         assert result.branding is not None
         assert result.branding.primary_color == "#ff00aa"
         assert result.branding.logo_url == "https://example.com/logo.png"
+
+    async def test_branding_persists_light_dark_variants(self, test_settings):
+        repo = _make_repo(test_settings)
+        from authglow.models.oauth_client import BrandingVariant, ClientBranding
+
+        client = _make_client(client_id="brand-2")
+        client.branding = ClientBranding(
+            primary_color="#2E5BFF",
+            light=BrandingVariant(surface_color="#F5F7FF"),
+            dark=BrandingVariant(surface_color="#172040", text_color="#FFFFFF"),
+        )
+        await repo.create(client)
+        result = await repo.get_by_id("brand-2")
+        assert result.branding is not None
+        assert result.branding.primary_color == "#2E5BFF"
+        assert result.branding.light is not None
+        assert result.branding.light.surface_color == "#F5F7FF"
+        assert result.branding.light.primary_color is None
+        assert result.branding.dark is not None
+        assert result.branding.dark.surface_color == "#172040"
+        assert result.branding.dark.text_color == "#FFFFFF"
+
+    async def test_branding_variant_rejects_bad_hex(self, test_settings):
+        from authglow.models.oauth_client import BrandingVariant
+
+        with pytest.raises(ValueError):
+            BrandingVariant(primary_color="red")
+
+        with pytest.raises(ValueError):
+            BrandingVariant(border_radius="12rem; background: red")
 
     async def test_create_overwrites(self, test_settings):
         repo = _make_repo(test_settings)

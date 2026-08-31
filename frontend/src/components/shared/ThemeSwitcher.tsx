@@ -3,7 +3,7 @@ import { useTheme, type Theme } from '../../hooks/useTheme'
 import { cn } from '../../lib/utils'
 
 const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon; testId: string }> = [
-  { value: 'professional', label: 'Professional theme', icon: Sun, testId: 'theme-professional' },
+  { value: 'professional', label: 'Light theme', icon: Sun, testId: 'theme-professional' },
   { value: 'dark', label: 'Dark theme', icon: Moon, testId: 'theme-dark' },
 ]
 

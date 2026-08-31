@@ -112,6 +112,36 @@ function friendlyError(raw: string): string {
   return raw
 }
 
+function ColorField(props: {
+  label: string
+  value: string
+  swatchFallback: string
+  placeholder?: string
+  onChange: (v: string) => void
+}) {
+  const { label, value, swatchFallback, placeholder, onChange } = props
+  return (
+    <div>
+      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">{label}</label>
+      <div className="flex gap-2">
+        <input
+          type="color"
+          value={value || swatchFallback}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer"
+          aria-label={`${label} color picker`}
+        />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
+        />
+      </div>
+    </div>
+  )
+}
+
 function TextInput(props: {
   value: string
   onChange: (v: string) => void
@@ -161,6 +191,9 @@ export function AdminOAuthClientsPage() {
   const [refreshTokenLifetime, setRefreshTokenLifetime] = useState(2592000)
   const [customCss, setCustomCss] = useState('')
   const [branding, setBranding] = useState<Record<string, string>>({})
+  const [brandingLight, setBrandingLight] = useState<Record<string, string>>({})
+  const [brandingDark, setBrandingDark] = useState<Record<string, string>>({})
+  const [brandingMode, setBrandingMode] = useState<'base' | 'light' | 'dark'>('base')
 
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -186,6 +219,13 @@ export function AdminOAuthClientsPage() {
   // T.3: DPoP binding toggle. Default false for back-compat.
   const [dpopBound, setDpopBound] = useState(false)
 
+  const modeBrand = brandingMode === 'base' ? branding : brandingMode === 'light' ? brandingLight : brandingDark
+  const setModeBrand = (patch: Record<string, string>) => {
+    if (brandingMode === 'base') setBranding((p) => ({ ...p, ...patch }))
+    else if (brandingMode === 'light') setBrandingLight((p) => ({ ...p, ...patch }))
+    else setBrandingDark((p) => ({ ...p, ...patch }))
+  }
+
   const { data, refetch } = useApiQuery<OAuthClient[]>(['admin-oauth-clients'], '/api/oauth-clients')
   const clients: OAuthClient[] = Array.isArray(data) ? data : ((data as { items?: OAuthClient[] } | undefined)?.items as OAuthClient[]) ?? []
 
@@ -195,6 +235,7 @@ export function AdminOAuthClientsPage() {
     setRequirePkce(false); setRequireConsent(true)
     setHomepageUri(''); setLogoUri(''); setTermsUri(''); setPrivacyUri('')
     setAllowedScopes('openid profile email'); setCustomCss('')
+    setBranding({}); setBrandingLight({}); setBrandingDark({}); setBrandingMode('base')
     setAccessTokenLifetime(3600); setRefreshTokenLifetime(2592000)
     setShowAdvanced(false); setFormErrors({}); setSelectedTemplate(null)
     setEditClientId(null); setOriginalGrantTypes([]); setOriginalIsConfidential(true)
@@ -249,7 +290,12 @@ export function AdminOAuthClientsPage() {
     setTermsUri(c.terms_uri || '')
     setPrivacyUri(c.privacy_uri || '')
     setCustomCss(c.custom_css || '')
-    setBranding((c.branding as Record<string, string>) || {})
+    const b = (c.branding as Record<string, unknown>) || {}
+    const { light: bLight, dark: bDark, ...bBase } = b
+    setBranding(bBase as Record<string, string>)
+    setBrandingLight((bLight as Record<string, string>) || {})
+    setBrandingDark((bDark as Record<string, string>) || {})
+    setBrandingMode('base')
     setAllowedScopes((c.scopes || c.allowed_scopes || []).join(' ') || 'openid profile email')
     setAccessTokenLifetime(c.access_token_lifetime ?? 3600)
     setRefreshTokenLifetime(c.refresh_token_lifetime ?? 2592000)
@@ -334,7 +380,17 @@ export function AdminOAuthClientsPage() {
       terms_uri: termsUri || undefined,
       privacy_uri: privacyUri || undefined,
       custom_css: customCss || undefined,
-      branding: Object.keys(branding).length > 0 ? branding : undefined,
+      branding: (() => {
+        const clean = (o: Record<string, string>) =>
+          Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === 'string' && v))
+        const base = clean(branding)
+        const light = clean(brandingLight)
+        const dark = clean(brandingDark)
+        const merged: Record<string, unknown> = { ...base }
+        if (Object.keys(light).length > 0) merged.light = light
+        if (Object.keys(dark).length > 0) merged.dark = dark
+        return Object.keys(merged).length > 0 ? merged : undefined
+      })(),
       allowed_scopes: allowedScopes.trim().split(/\s+/).filter(Boolean),
       access_token_lifetime: accessTokenLifetime,
       refresh_token_lifetime: refreshTokenLifetime,
@@ -925,45 +981,79 @@ export function AdminOAuthClientsPage() {
                 </div>
 
                 <div className="pt-3 border-t border-surface-2">
-                  <h4 className="mb-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Consent Page Branding</h4>
+                  <div className="mb-1 flex items-center justify-between">
+                    <h4 className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">Consent Page Branding</h4>
+                    <div className="flex items-center gap-1" role="tablist" aria-label="Branding variant">
+                      {([['base', 'Shared'], ['light', 'Light'], ['dark', 'Dark']] as const).map(([m, l]) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="tab"
+                          aria-selected={brandingMode === m}
+                          data-testid={`branding-mode-${m}`}
+                          onClick={() => setBrandingMode(m)}
+                          className={cn(
+                            'rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors',
+                            brandingMode === m ? 'bg-brand-wash text-brand-accent' : 'text-text-muted hover:bg-surface-2',
+                          )}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mb-3 text-[10px] text-text-muted">
+                    {brandingMode === 'base'
+                      ? 'Defaults for both themes: use these when the client has a single palette. The variants below only override the fields you fill in.'
+                      : brandingMode === 'light'
+                        ? 'Only set these if the light theme should differ from the Shared values. Leave empty to inherit.'
+                        : 'Only set these if the dark theme should differ from the Shared values. A light Shared surface inherited here is automatically darkened.'}
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Primary color</label>
-                      <div className="flex gap-2">
-                        <input type="color" value={branding.primary_color || '#6366f1'} onChange={e => setBranding({...branding, primary_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.primary_color || ''} onChange={e => setBranding({...branding, primary_color: e.target.value})} placeholder="#6366f1" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Surface color</label>
-                      <div className="flex gap-2">
-                        <input type="color" value={branding.surface_color || '#ffffff'} onChange={e => setBranding({...branding, surface_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.surface_color || ''} onChange={e => setBranding({...branding, surface_color: e.target.value})} placeholder="#ffffff" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Text color</label>
-                      <div className="flex gap-2">
-                        <input type="color" value={branding.text_color || '#1a1a2e'} onChange={e => setBranding({...branding, text_color: e.target.value})} className="h-8 w-8 rounded border border-surface-2 bg-surface-1 cursor-pointer" />
-                        <input value={branding.text_color || ''} onChange={e => setBranding({...branding, text_color: e.target.value})} placeholder="#1a1a2e" className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
-                      </div>
-                    </div>
+                    <ColorField
+                      label="Primary color"
+                      value={modeBrand.primary_color || ''}
+                      swatchFallback={brandingMode === 'base' ? '#6366f1' : (branding.primary_color || '#6366f1')}
+                      placeholder={brandingMode === 'base' ? '#6366f1' : (branding.primary_color ? `shared: ${branding.primary_color}` : '#6366f1')}
+                      onChange={(v) => setModeBrand({ primary_color: v })}
+                    />
+                    <ColorField
+                      label="Surface color"
+                      value={modeBrand.surface_color || ''}
+                      swatchFallback={brandingMode === 'base' ? '#ffffff' : (branding.surface_color || '#ffffff')}
+                      placeholder={brandingMode === 'base' ? '#ffffff' : (branding.surface_color ? `shared: ${branding.surface_color}` : '#ffffff')}
+                      onChange={(v) => setModeBrand({ surface_color: v })}
+                    />
+                    <ColorField
+                      label="Text color"
+                      value={modeBrand.text_color || ''}
+                      swatchFallback={brandingMode === 'base' ? '#1a1a2e' : (branding.text_color || '#1a1a2e')}
+                      placeholder={brandingMode === 'base' ? 'auto (contrast)' : (branding.text_color ? `shared: ${branding.text_color}` : 'auto (contrast)')}
+                      onChange={(v) => setModeBrand({ text_color: v })}
+                    />
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Border radius</label>
-                      <input value={branding.border_radius || ''} onChange={e => setBranding({...branding, border_radius: e.target.value})} placeholder="12px" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
+                      <input
+                        value={modeBrand.border_radius || ''}
+                        onChange={(e) => setModeBrand({ border_radius: e.target.value })}
+                        placeholder={brandingMode === 'base' ? '12px' : (branding.border_radius ? `shared: ${branding.border_radius}` : '12px')}
+                        className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
+                      />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Font family</label>
-                      <input value={branding.font_family || ''} onChange={e => setBranding({...branding, font_family: e.target.value})} placeholder="Inter, sans-serif" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
+                  {brandingMode === 'base' && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Font family (both themes)</label>
+                        <input value={branding.font_family || ''} onChange={e => setBranding({...branding, font_family: e.target.value})} placeholder="Inter, sans-serif" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URL</label>
+                        <input value={branding.logo_url || ''} onChange={e => setBranding({...branding, logo_url: e.target.value})} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
+                      </div>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-text-muted">Logo URL</label>
-                      <input value={branding.logo_url || ''} onChange={e => setBranding({...branding, logo_url: e.target.value})} placeholder="https://app.example.com/logo.png" className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-text-muted">Branding is applied as CSS custom properties on the consent page. Leave fields empty to use defaults.</p>
+                  )}
+                  <p className="mt-2 text-[10px] text-text-muted">Button text color is auto-derived from contrast when unset. The preview follows the current theme.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-surface-2">
