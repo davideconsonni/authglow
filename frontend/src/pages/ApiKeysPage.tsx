@@ -1,8 +1,20 @@
+// Per-row action button convention (keep in sync with
+// AdminOAuthClientsPage / AdminApiKeysPage / AdminJwkKeysPage):
+//
+//   rotate  → RefreshCw 14px, hover text-brand-accent
+//   edit    → Pencil    14px, hover text-text-secondary
+//   disable → Ban       14px, hover text-semantic-warning
+//   enable  → RotateCcw 14px, hover text-semantic-success
+//   delete  → Trash2    14px, hover text-semantic-error
+//
+// Each row composes its own <button>; we only share the icon +
+// hover-color mapping (no shared component by design).
 import { useState } from 'react'
-import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle, Pencil, X } from 'lucide-react'
+import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle, Pencil, X, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApiQuery } from '../hooks/useApi'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
+import { RotateSecretDialog } from '../components/admin/RotateSecretDialog'
 import { PageHeader } from '../components/layout/PageHeader'
 import { ScopePicker } from '../components/shared/ScopePicker'
 import { formatDateTime } from '../lib/utils'
@@ -56,6 +68,20 @@ export function ApiKeysPage() {
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  // For the safeword delete dialog we want to show the key name
+  // (not just the id) so the operator can confirm they're acting
+  // on the right key.
+  const [deleteName, setDeleteName] = useState<string>('')
+  // Regenerate-secret flow: bounded to the same safeword dialog
+  // shape as delete. The new plaintext is shown in a show-once
+  // modal that mirrors the create-key modal.
+  const [rotateId, setRotateId] = useState<string | null>(null)
+  const [rotateName, setRotateName] = useState<string>('')
+  const [rotatedKey, setRotatedKey] = useState<{
+    api_key: string
+    name: string
+  } | null>(null)
+  const [rotatedCopied, setRotatedCopied] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', scopes: '', allowed_ips: '', expires_in_days: '' })
@@ -183,17 +209,9 @@ export function ApiKeysPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteId) return
-    try {
-      await api.delete(`/api/keys/${deleteId}`)
-      setDeleteId(null)
-      notify.success('Key deleted.')
-      await refetch()
-    } catch (err: unknown) {
-      notify.error(err instanceof Error ? err.message : 'Failed to delete key')
-    }
-  }
+  // The destructive delete is now handled by <RotateSecretDialog>
+  // with safeword confirmation. The onSuccess callback closes the
+  // dialog and refetches the list.
 
   const closeCreate = () => {
     setShowCreate(false)
@@ -319,6 +337,64 @@ export function ApiKeysPage() {
         </div>
       )}
 
+      {rotatedKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="rotated-key-modal">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { setRotatedKey(null); setRotatedCopied(false) }}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
+            <div className="text-center space-y-2">
+              <div className="rounded-2xl bg-semantic-success/10 p-3 inline-block">
+                <Key size={24} className="text-semantic-success" />
+              </div>
+              <h3 className="text-lg font-semibold text-text-primary">API Key Secret Regenerated</h3>
+              <p className="text-xs text-semantic-warning">
+                Copy this secret now. You will not be able to see it again.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-surface-2 bg-surface-2 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-text-muted">{rotatedKey.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <code
+                  data-testid="rotated-key-value"
+                  className="flex-1 break-all text-sm font-mono text-text-primary"
+                >
+                  {rotatedKey.api_key}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(rotatedKey.api_key)
+                    setRotatedCopied(true)
+                    setTimeout(() => setRotatedCopied(false), 3000)
+                  }}
+                  className="rounded-xl p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors shrink-0"
+                  title="Copy new secret"
+                  data-testid="rotated-key-copy"
+                >
+                  {rotatedCopied ? (
+                    <Check size={16} className="text-semantic-success" />
+                  ) : (
+                    <Copy size={16} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { setRotatedKey(null); setRotatedCopied(false) }}
+              data-testid="rotated-key-done"
+              className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {keys && keys.length > 0 ? (
         <>
           {/* Desktop table */}
@@ -390,11 +466,20 @@ export function ApiKeysPage() {
                           <button
                             onClick={() => openEdit(k)}
                             data-testid="key-edit-btn"
-                            className="text-text-muted hover:text-brand-accent transition-colors"
+                            className="text-text-muted hover:text-text-secondary transition-colors"
                             aria-label="Edit key"
                             title="Edit"
                           >
                             <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => { setRotateId(k.key_id); setRotateName(k.name) }}
+                            data-testid="rotate-key-btn"
+                            className="text-text-muted hover:text-brand-accent transition-colors"
+                            aria-label="Rotate secret (regenerate credential)"
+                            title="Rotate secret"
+                          >
+                            <RefreshCw size={14} />
                           </button>
                           {k.is_active ? (
                             <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key" title="Deactivate">
@@ -405,7 +490,7 @@ export function ApiKeysPage() {
                               <RotateCcw size={14} />
                             </button>
                           )}
-                          <button onClick={() => setDeleteId(k.key_id)} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
+                          <button onClick={() => { setDeleteId(k.key_id); setDeleteName(k.name) }} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -440,21 +525,30 @@ export function ApiKeysPage() {
                     <button
                       onClick={() => openEdit(k)}
                       data-testid="key-edit-btn"
-                      className="rounded-lg p-1.5 text-text-muted hover:text-brand-accent hover:bg-brand-wash-faint transition-colors"
+                      className="text-text-muted hover:text-text-secondary transition-colors"
                       aria-label="Edit key"
                     >
                       <Pencil size={14} />
                     </button>
                     {k.is_active ? (
-                      <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="rounded-lg p-1.5 text-text-muted hover:text-semantic-warning hover:bg-semantic-warning/10 transition-colors" aria-label="Deactivate key">
+                      <button onClick={() => setRevokeId(k.key_id)} data-testid="revoke-key-btn" className="text-text-muted hover:text-semantic-warning transition-colors" aria-label="Deactivate key">
                         <Ban size={14} />
                       </button>
                     ) : (
-                      <button onClick={() => setRestoreId(k.key_id)} className="rounded-lg p-1.5 text-text-muted hover:text-semantic-success hover:bg-semantic-success/10 transition-colors" aria-label="Restore key">
+                      <button onClick={() => setRestoreId(k.key_id)} className="text-text-muted hover:text-semantic-success transition-colors" aria-label="Restore key">
                         <RotateCcw size={14} />
                       </button>
                     )}
-                    <button onClick={() => setDeleteId(k.key_id)} className="rounded-lg p-1.5 text-text-muted hover:text-semantic-error hover:bg-semantic-error/10 transition-colors" aria-label="Delete key">
+                    <button
+                      onClick={() => { setRotateId(k.key_id); setRotateName(k.name) }}
+                      className="text-text-muted hover:text-brand-accent transition-colors"
+                      aria-label="Rotate secret"
+                      title="Rotate secret"
+                      data-testid="rotate-key-btn"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                    <button onClick={() => { setDeleteId(k.key_id); setDeleteName(k.name) }} className="text-text-muted hover:text-semantic-error transition-colors" aria-label="Delete key">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -487,7 +581,41 @@ export function ApiKeysPage() {
 
       <ConfirmDialog open={!!revokeId} title="Deactivate API Key" message="The key will stop working immediately but you can reactivate it later." confirmLabel="Deactivate" variant="danger" onConfirm={handleRevoke} onCancel={() => setRevokeId(null)} />
       <ConfirmDialog open={!!restoreId} title="Reactivate API Key" message="This will make the key active again." confirmLabel="Reactivate" variant="danger" onConfirm={handleRestore} onCancel={() => setRestoreId(null)} />
-      <ConfirmDialog open={!!deleteId} title="Delete API Key" message="This permanently removes the key. Use Deactivate if you might need it later." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
+      <RotateSecretDialog
+        open={!!deleteId}
+        targetId={deleteId}
+        targetLabel={deleteName}
+        purpose="api_key_delete"
+        onClose={() => {
+          setDeleteId(null)
+          setDeleteName('')
+        }}
+        onSuccess={async () => {
+          notify.success('Key deleted.')
+          await refetch()
+        }}
+        onError={(msg) => notify.error(msg)}
+      />
+
+      <RotateSecretDialog
+        open={!!rotateId}
+        targetId={rotateId}
+        targetLabel={rotateName}
+        purpose="api_key_rotate"
+        onClose={() => {
+          setRotateId(null)
+          setRotateName('')
+        }}
+        onSuccess={(newCredential) => {
+          if (newCredential) {
+            setRotatedKey({ api_key: newCredential, name: rotateName })
+            setRotatedCopied(false)
+            notify.success('Secret rotated. Copy it now.')
+          }
+          void refetch()
+        }}
+        onError={(msg) => notify.error(msg)}
+      />
 
       {editingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

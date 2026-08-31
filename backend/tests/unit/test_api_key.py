@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from authglow.core.cache import api_key_cache
 from authglow.core.datetime import utcnow
 from authglow.models.api_key import APIKeyCreate, APIKeyCreateResponse, APIKeyUpdate
 from authglow.services.api_key import APIKeyLockedException, _enforce_scope_subset
@@ -149,6 +150,89 @@ class TestAPIKeyPrefixIndex:
 
         validated = _run(api_key_service.validate_key(plaintext))
         assert validated is None
+
+    def test_rotate_key_returns_new_plaintext_and_keeps_identity(
+        self, api_key_service
+    ):
+        """rotate_key returns a new plaintext; the same key_id can
+        validate the new plaintext but not the old one."""
+        key_data = APIKeyCreate(name="Rotate Index", scopes=["read"], never_expires=True)
+        api_key, old_plaintext = _run(
+            api_key_service.create_key(
+                user_id="user-rot-1", key_data=key_data, created_by="admin-1"
+            )
+        )
+        original_prefix = api_key.key_prefix
+        original_hash = api_key.key_hash
+
+        rotated, new_plaintext = _run(api_key_service.rotate_key(api_key.key_id))
+        assert rotated is not None
+        assert new_plaintext is not None
+        assert new_plaintext != old_plaintext
+
+        # Identity preserved
+        assert rotated.key_id == api_key.key_id
+        assert rotated.user_id == api_key.user_id
+        assert rotated.name == api_key.name
+        assert rotated.scopes == api_key.scopes
+        # Prefix rotated and bcrypt hash rotated
+        assert rotated.key_prefix != original_prefix
+        assert rotated.key_hash != original_hash
+        assert rotated.key_prefix in new_plaintext
+        # New plaintext validates
+        validated = _run(api_key_service.validate_key(new_plaintext))
+        assert validated is not None
+        assert validated.key_id == api_key.key_id
+        # Old plaintext no longer validates
+        assert _run(api_key_service.validate_key(old_plaintext)) is None
+
+    def test_rotate_key_resets_brute_force_lockout(self, api_key_service):
+        """After rotation, the new credential has a clean counter."""
+        key_data = APIKeyCreate(name="Rotate Lockout", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-rot-2", key_data=key_data, created_by="admin-1"
+            )
+        )
+        # Manually lock the key (simulate a brute-force scenario)
+        async def _lock():
+            api_key.failed_validation_attempts = 5
+            api_key.locked_until = utcnow() + timedelta(hours=1)
+            await api_key_service._repo.update(api_key)
+            await api_key_cache.delete(api_key.key_id)
+        _run(_lock())
+
+        rotated, _ = _run(api_key_service.rotate_key(api_key.key_id))
+        assert rotated is not None
+        assert rotated.failed_validation_attempts == 0
+        assert rotated.locked_until is None
+
+    def test_rotate_key_resurrects_revoked_key(self, api_key_service):
+        """Rotating a revoked key brings it back to active=True and
+        clears ``revoked_at``."""
+        from authglow.core.datetime import utcnow
+
+        key_data = APIKeyCreate(name="Rotate Revived", scopes=["read"], never_expires=True)
+        api_key, _ = _run(
+            api_key_service.create_key(
+                user_id="user-rot-3", key_data=key_data, created_by="admin-1"
+            )
+        )
+
+        async def _revoke():
+            ok = await api_key_service.revoke_key(api_key.key_id, revoked_by="admin-1")
+            assert ok is True
+        _run(_revoke())
+
+        rotated, _ = _run(api_key_service.rotate_key(api_key.key_id))
+        assert rotated is not None
+        assert rotated.is_active is True
+        assert rotated.revoked_at is None
+        assert rotated.revoked_by is None
+
+    def test_rotate_key_unknown_id_returns_none(self, api_key_service):
+        result = _run(api_key_service.rotate_key("no-such-key-id-zzz"))
+        assert result is None
 
     def test_validate_expired_key_returns_none(self, api_key_service):
         key_data = APIKeyCreate(

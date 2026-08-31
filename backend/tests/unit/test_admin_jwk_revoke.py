@@ -88,3 +88,63 @@ class TestRevokeJwkKeyAwaitRegression:
         assert "Cannot revoke key" in resp.json()["detail"]
         svc.revoke_key.assert_awaited_once_with("active-kid")
         audit.log_event.assert_not_awaited()
+
+
+class TestRotateJwkKeysSafeword:
+    """Safeword-gated ``POST /api/admin/jwk-keys/rotate`` handshake."""
+
+    def _build_app(self):
+        return _build_app()
+
+    def _mock_jwt_rotate(self, old_kid="old-1", new_kid="new-2"):
+        svc = MagicMock()
+        svc.rotate_keys = AsyncMock(
+            return_value={"old_kid": old_kid, "new_kid": new_kid}
+        )
+        return patch("authglow.api.admin.get_jwt_service", AsyncMock(return_value=svc)), svc
+
+    def test_rotate_without_safeword_returns_400(self, test_settings):
+        app, audit = self._build_app()
+        cm, svc = self._mock_jwt_rotate()
+        with cm, patch("authglow.api.admin.get_settings", return_value=test_settings):
+            client = TestClient(app)
+            resp = client.post("/api/admin/jwk-keys/rotate", json={})
+        assert resp.status_code in (400, 422), resp.text
+        svc.rotate_keys.assert_not_awaited()
+        audit.log_event.assert_not_awaited()
+
+    def test_rotate_with_valid_safeword_succeeds(self, test_settings):
+        app, audit = self._build_app()
+        cm, svc = self._mock_jwt_rotate()
+        with cm, patch("authglow.api.admin.get_settings", return_value=test_settings):
+            client = TestClient(app)
+            challenge = client.post("/api/admin/jwk-keys/rotate/challenge").json()
+            resp = client.post(
+                "/api/admin/jwk-keys/rotate",
+                json={
+                    "challenge_id": challenge["challenge_id"],
+                    "word": challenge["word"],
+                },
+            )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["old_kid"] == "old-1"
+        assert body["new_kid"] == "new-2"
+        svc.rotate_keys.assert_awaited_once()
+        audit.log_event.assert_awaited_once()
+
+    def test_rotate_with_wrong_safeword_returns_400(self, test_settings):
+        app, audit = self._build_app()
+        cm, svc = self._mock_jwt_rotate()
+        with cm, patch("authglow.api.admin.get_settings", return_value=test_settings):
+            client = TestClient(app)
+            challenge = client.post("/api/admin/jwk-keys/rotate/challenge").json()
+            resp = client.post(
+                "/api/admin/jwk-keys/rotate",
+                json={
+                    "challenge_id": challenge["challenge_id"],
+                    "word": "wrong-word-99",
+                },
+            )
+        assert resp.status_code == 400, resp.text
+        svc.rotate_keys.assert_not_awaited()

@@ -3,14 +3,21 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 
 from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
 from authglow.core.rate_limit import limiter
+from authglow.core.safeword_store import (
+    SafewordPurpose,
+    consume_challenge,
+    issue_challenge,
+)
 from authglow.models.api_key import (
     APIKeyCreate,
     APIKeyCreateResponse,
     APIKeyResponse,
     APIKeyUpdate,
+    APIKeyWithSecret,
 )
 from authglow.models.user import User
 from authglow.services.api_key import APIKeyService
@@ -21,6 +28,17 @@ from authglow.services.user import UserService
 UserStorage = UserService
 
 router = APIRouter()
+
+
+class RotateSecretChallenge(BaseModel):
+    challenge_id: str
+    word: str
+    expires_at: str
+
+
+class SafewordConfirm(BaseModel):
+    challenge_id: str
+    word: str
 
 
 @router.post("/api/keys", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -212,16 +230,48 @@ async def revoke_api_key(
     return {"message": "API key revoked successfully"}
 
 
+@router.delete("/api/keys/{key_id}/delete/challenge", response_model=RotateSecretChallenge)
+@limiter.limit("60/hour")
+async def request_delete_api_key_challenge(
+    request: Request,
+    key_id: str,
+    current_user: User = Depends(get_current_user),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+):
+    """Issue a single-use safeword challenge for the destructive
+    ``DELETE /api/keys/{key_id}`` call."""
+    api_key = await api_key_service.get_key(key_id)
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to delete this key"
+        )
+
+    issued = issue_challenge(key_id, SafewordPurpose.API_KEY_DELETE)
+    return RotateSecretChallenge(
+        challenge_id=issued["challenge_id"],
+        word=issued["word"],
+        expires_at=issued["expires_at"].isoformat(),
+    )
+
+
 @router.delete("/api/keys/{key_id}")
 @limiter.limit("20/hour")
 async def delete_api_key(
     request: Request,
     key_id: str,
+    body: SafewordConfirm,
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Permanently delete an API key."""
+    """Permanently delete an API key. Requires a valid safeword
+    challenge from ``/api/keys/{key_id}/delete/challenge``."""
+    consume_challenge(
+        body.challenge_id, key_id, body.word, SafewordPurpose.API_KEY_DELETE
+    )
+
     api_key = await api_key_service.get_key(key_id)
 
     if not api_key:
@@ -248,6 +298,91 @@ async def delete_api_key(
     )
 
     return {"message": "API key deleted successfully"}
+
+
+@router.post("/api/keys/{key_id}/rotate/challenge", response_model=RotateSecretChallenge)
+@limiter.limit("60/hour")
+async def request_rotate_api_key_challenge(
+    request: Request,
+    key_id: str,
+    current_user: User = Depends(get_current_user),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+):
+    """Issue a single-use safeword challenge for the destructive
+    ``POST /api/keys/{key_id}/rotate`` call.
+
+    Rotating a key invalidates the current plaintext secret and
+    gives the operator a fresh one — any cached credential
+    immediately stops working. The safeword handshake protects
+    against accidental clicks.
+    """
+    api_key = await api_key_service.get_key(key_id)
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to rotate this key"
+        )
+
+    issued = issue_challenge(key_id, SafewordPurpose.API_KEY_ROTATE)
+    return RotateSecretChallenge(
+        challenge_id=issued["challenge_id"],
+        word=issued["word"],
+        expires_at=issued["expires_at"].isoformat(),
+    )
+
+
+@router.post("/api/keys/{key_id}/rotate", response_model=APIKeyWithSecret)
+@limiter.limit("20/hour")
+async def rotate_api_key(
+    request: Request,
+    key_id: str,
+    body: SafewordConfirm,
+    current_user: User = Depends(get_current_user),
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    """Regenerate the plaintext secret for an existing API key.
+
+    Requires a valid safeword challenge from
+    ``/api/keys/{key_id}/rotate/challenge``. Returns the rotated
+    key with its new ``api_key`` (plaintext) shown **once**.
+    """
+    consume_challenge(
+        body.challenge_id, key_id, body.word, SafewordPurpose.API_KEY_ROTATE
+    )
+
+    api_key = await api_key_service.get_key(key_id)
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to rotate this key"
+        )
+
+    rotated = await api_key_service.rotate_key(key_id)
+    if rotated is None:
+        raise HTTPException(status_code=500, detail="Failed to rotate key")
+
+    new_api_key, plaintext = rotated
+
+    await audit_service.log_event(
+        event_type="api_key_rotated",
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata={
+            "key_id": key_id,
+            "key_name": new_api_key.name,
+        },
+        severity="warning",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    response = APIKeyWithSecret(
+        **new_api_key.model_dump(),
+        api_key=plaintext,
+    )
+    return response
 
 
 # Admin endpoints

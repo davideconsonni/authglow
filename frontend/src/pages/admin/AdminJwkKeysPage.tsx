@@ -1,3 +1,12 @@
+// Per-row action button convention (keep in sync with
+// AdminOAuthClientsPage / AdminApiKeysPage / ApiKeysPage):
+//
+//   revoke → Ban 14px, hover text-semantic-error
+//
+// The "Rotate" CTA at the top of the page is intentionally a
+// different, gradient button — it's the page's primary action.
+// Each row composes its own <button>; we only share the icon +
+// hover-color mapping (no shared component by design).
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, Ban, Loader2, Key, ExternalLink } from 'lucide-react'
@@ -5,6 +14,7 @@ import { api } from '../../lib/api'
 import { API_URL } from '../../lib/constants'
 import { useApiQuery } from '../../hooks/useApi'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { RotateSecretDialog } from '../../components/admin/RotateSecretDialog'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { formatDateTime } from '../../lib/utils'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
@@ -29,7 +39,9 @@ export function AdminJwkKeysPage() {
   useDocumentTitle('JWK Keys')
   const queryClient = useQueryClient()
   const [revokeKid, setRevokeKid] = useState<string | null>(null)
-  const [rotating, setRotating] = useState(false)
+  // The JWK rotation is gated by a server-issued safeword via
+  // the shared <RotateSecretDialog>.
+  const [rotateDialog, setRotateDialog] = useState(false)
 
   const { data, isLoading } = useApiQuery<JwkKey[] | { items?: JwkKey[]; keys?: JwkKey[] }>(
     ['admin-jwk-keys'],
@@ -56,17 +68,13 @@ export function AdminJwkKeysPage() {
       queryClient.invalidateQueries({ queryKey: ['jwks-status'] }),
     ])
 
-  const handleRotate = async () => {
-    setRotating(true)
-    try {
-      await api.post('/api/admin/jwk-keys/rotate')
-      notify.success('Keys rotated.')
-      await refreshAll()
-    } catch (err: unknown) {
-      notify.error(err instanceof Error ? err.message : 'Failed to rotate keys')
-    } finally {
-      setRotating(false)
-    }
+  // The destructive POST now runs from inside the dialog (which
+  // also handles the safeword handshake). We just refetch on
+  // success.
+  const onRotateSuccess = async () => {
+    notify.success('Keys rotated.')
+    await refreshAll()
+    setRotateDialog(false)
   }
 
   const handleRevoke = async () => {
@@ -88,11 +96,10 @@ export function AdminJwkKeysPage() {
         description="Manage signing keys for JWT tokens."
         actions={
           <button
-            onClick={handleRotate}
-            disabled={rotating}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50"
+            onClick={() => setRotateDialog(true)}
+            data-testid="jwk-rotate-btn"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
           >
-            {rotating && <Loader2 size={16} className="animate-spin" />}
             <RefreshCw size={16} />
             Rotate
           </button>
@@ -231,6 +238,16 @@ export function AdminJwkKeysPage() {
         variant="danger"
         onConfirm={handleRevoke}
         onCancel={() => setRevokeKid(null)}
+      />
+
+      <RotateSecretDialog
+        open={rotateDialog}
+        targetId="global"
+        targetLabel="JWT signing keyring"
+        purpose="jwk_rotate"
+        onClose={() => setRotateDialog(false)}
+        onSuccess={onRotateSuccess}
+        onError={(msg) => notify.error(msg)}
       />
     </div>
   )

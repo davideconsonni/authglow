@@ -512,3 +512,43 @@ class OAuth2ClientSecretRotation(BaseModel):
     client_id: str
     new_client_secret: str  # Plaintext
     expires_at: Optional[datetime] = None
+
+
+class RotateSecretChallenge(BaseModel):
+    """Server-issued safeword challenge for destructive admin actions.
+
+    The OAuth client admin flow requires a server-generated
+    safeword to be typed back by the operator before a destructive
+    action (``rotate-secret`` or ``rotate-jwt-key``) is accepted.
+    This model is the response of
+    ``POST /api/oauth-clients/{id}/rotate-secret/challenge`` and
+    the JWT-key counterpart.
+
+    The ``word`` is shown to the admin exactly once. The
+    ``challenge_id`` is the handle the admin must echo back in
+    :class:`RotateSecretConfirm` to prove they read it.
+
+    Attributes:
+        challenge_id: Opaque handle. Single-use, expires at
+            ``expires_at``.
+        word: Human-readable safeword (e.g. ``correct-horse-purple-42``).
+            **Never** logged.
+        expires_at: UTC instant at which the challenge stops being
+            accepted. Clients can render a countdown from this.
+    """
+
+    challenge_id: str
+    word: str
+    expires_at: datetime
+
+
+class RotateSecretConfirm(BaseModel):
+    """Body of the destructive action that consumes a safeword challenge.
+
+    The admin must echo back both the challenge id and the word
+    they were shown. The server verifies both, then invalidates
+    the challenge (single-use) and performs the rotation.
+    """
+
+    challenge_id: str
+    word: str

@@ -4,12 +4,18 @@ from datetime import datetime, timedelta
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.core.safeword_store import (
+    SafewordPurpose,
+    consume_challenge,
+    issue_challenge,
+)
 from authglow.models.admin import (
     AdminUserDetail,
     BulkUserOperation,
@@ -32,6 +38,17 @@ from authglow.services.user import UserService
 
 # Back-compat alias for Fase 21 transition window
 UserStorage = UserService
+
+
+class JwkRotateChallenge(BaseModel):
+    challenge_id: str
+    word: str
+    expires_at: str
+
+
+class JwkRotateConfirm(BaseModel):
+    challenge_id: str
+    word: str
 
 router = APIRouter()
 
@@ -1595,14 +1612,48 @@ async def get_jwk_keys(
     return {"active_kid": info["active_kid"], "keys": keys_list}
 
 
+@router.post("/api/admin/jwk-keys/rotate/challenge", response_model=JwkRotateChallenge)
+@limiter.limit("60/hour")
+async def request_rotate_jwk_keys_challenge(
+    request: Request,
+    current_user: User = Depends(require_admin),
+):
+    """Issue a single-use safeword challenge for the destructive
+    ``POST /api/admin/jwk-keys/rotate`` call.
+
+    Rotating the active signing key invalidates every access and
+    ID token signed with the previous key (after the verifying
+    window expires), so the operator must type a server-issued
+    safeword before the call is accepted.
+    """
+    # We bind the challenge to the literal "global" target id —
+    # there is only one active keyring at a time, and scoping the
+    # challenge to a per-kid value would be misleading.
+    issued = issue_challenge("global", SafewordPurpose.JWK_ROTATE)
+    return JwkRotateChallenge(
+        challenge_id=issued["challenge_id"],
+        word=issued["word"],
+        expires_at=issued["expires_at"].isoformat(),
+    )
+
+
 @router.post("/api/admin/jwk-keys/rotate")
 @limiter.limit("5/minute")
 async def rotate_jwk_keys(
     request: Request,
+    body: JwkRotateConfirm,
     current_user: User = Depends(require_admin),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Rotate the active JWK signing key."""
+    """Rotate the active JWK signing key.
+
+    Requires a valid safeword challenge from
+    ``/api/admin/jwk-keys/rotate/challenge``.
+    """
+    consume_challenge(
+        body.challenge_id, "global", body.word, SafewordPurpose.JWK_ROTATE
+    )
+
     jwt_service = await get_jwt_service()
     result = await jwt_service.rotate_keys()
 

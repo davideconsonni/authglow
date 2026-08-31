@@ -27,8 +27,14 @@ describe('Fase API Keys — Frontend', () => {
     })
 
     it('contiene handleDelete', async () => {
+      // The destructive delete is now handled inside the shared
+      // <RotateSecretDialog> via a safeword handshake, so the
+      // page no longer owns a local handleDelete function — it
+      // delegates to the dialog's onSuccess callback. This
+      // test asserts the new wiring is in place.
       const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
-      expect(source).toContain('handleDelete')
+      expect(source).toContain('RotateSecretDialog')
+      expect(source).toContain('purpose="api_key_delete"')
     })
 
     it('contiene handleCreate', async () => {
@@ -77,8 +83,14 @@ describe('Fase API Keys — Frontend', () => {
     })
 
     it('contiene handleDelete', async () => {
+      // The destructive delete is now handled inside the shared
+      // <RotateSecretDialog> via a safeword handshake, so the
+      // page no longer owns a local handleDelete function — it
+      // delegates to the dialog's onSuccess callback. This
+      // test asserts the new wiring is in place.
       const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
-      expect(source).toContain('handleDelete')
+      expect(source).toContain('RotateSecretDialog')
+      expect(source).toContain('purpose="api_key_delete"')
     })
 
     it('usa key_id', async () => {
@@ -186,6 +198,40 @@ describe('Fase API Keys — Frontend', () => {
       expect(source).toContain('key-edit-modal')
       expect(source).toContain('key-edit-description-input')
       expect(source).toContain('key-edit-submit')
+    })
+
+    it('rotazione secret via RotateSecretDialog con purpose api_key_rotate', async () => {
+      // Regen-secret flow: same safeword dialog shape as delete.
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('purpose="api_key_rotate"')
+      expect(source).toContain('setRotateId(k.key_id)')
+    })
+
+    it('rotatedKey modal mostra la nuova plaintext una sola volta', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('rotated-key-modal')
+      expect(source).toContain('rotated-key-value')
+      expect(source).toContain('rotated-key-copy')
+      expect(source).toContain('rotated-key-done')
+    })
+
+    it('rotatedKey modal include avviso copy-now', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('Copy this secret now')
+    })
+  })
+
+  describe('ApiKeysPage (utente) — rotate secret', () => {
+    it('rotazione secret via RotateSecretDialog con purpose api_key_rotate', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('purpose="api_key_rotate"')
+      expect(source).toContain('setRotateId(k.key_id)')
+    })
+
+    it('rotatedKey modal presente', async () => {
+      const source = readFileSync(resolve(SRC, 'pages', 'ApiKeysPage.tsx'), 'utf-8')
+      expect(source).toContain('rotated-key-modal')
+      expect(source).toContain('rotated-key-value')
     })
   })
 })

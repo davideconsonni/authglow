@@ -1,9 +1,19 @@
+// Per-row action button convention (keep in sync with
+// AdminApiKeysPage / ApiKeysPage / AdminJwkKeysPage):
+//
+//   rotate  → RefreshCw 14px, hover text-brand-accent
+//   edit    → Pencil    14px, hover text-text-secondary
+//   delete  → Trash2    14px, hover text-semantic-error
+//
+// Each row composes its own <button>; we only share the icon +
+// hover-color mapping (no shared component by design).
 import { useState } from 'react'
-import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, Sparkles, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye, KeyRound } from 'lucide-react'
+import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, ChevronDown, ChevronRight, Edit, AlertTriangle, Check, Eye, KeyRound } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useApiQuery } from '../../hooks/useApi'
 import { cn } from '../../lib/utils'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { RotateSecretDialog } from '../../components/admin/RotateSecretDialog'
 import { Banner } from '../../components/shared/Banner'
 import { FieldError } from '../../components/shared/FieldError'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -205,6 +215,12 @@ export function AdminOAuthClientsPage() {
   // the regular client_secret. We display it once in the same modal
   // so the operator can hand it to the client developer.
   const [jwtKeyModal, setJwtKeyModal] = useState<string | null>(null)
+  // Rotate actions are destructive (invalidate the live credential)
+  // and are gated behind a server-issued safeword. The state holds
+  // the target client_id while the dialog is open; the destructive
+  // POST only fires after the operator types the safeword back.
+  const [rotateTarget, setRotateTarget] = useState<string | null>(null)
+  const [rotateJwtKeyTarget, setRotateJwtKeyTarget] = useState<string | null>(null)
   const [newClientId, setNewClientId] = useState('')
   const [editClientId, setEditClientId] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
@@ -318,26 +334,11 @@ export function AdminOAuthClientsPage() {
     catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
   }
 
-  const handleRotate = async (id: string) => {
-    try {
-      const res = await api.post<{ secret: string }>(`/api/oauth-clients/${id}/rotate-secret`)
-      setSecretModal(res.secret)
-    } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') }
-  }
-
-  // T.2: rotate the server-managed symmetric key used by
-  // ``client_secret_jwt`` clients. The new key is shown once in
-  // the same modal as the regular client_secret.
-  const handleRotateJwtKey = async (id: string) => {
-    try {
-      const res = await api.post<{ new_client_secret: string }>(
-        `/api/oauth-clients/${id}/rotate-jwt-key`
-      )
-      setJwtKeyModal(res.new_client_secret)
-    } catch (e) {
-      notify.error(e instanceof Error ? e.message : 'Failed')
-    }
-  }
+  // Rotate-secret and rotate-jwt-key are now handled by
+  // <RotateSecretDialog>, which performs the safeword handshake
+  // internally and calls back via onRotated/onError. The state
+  // hooks setRotateTarget / setRotateJwtKeyTarget are kept in this
+  // component purely to control the dialog's open prop.
 
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {}
@@ -509,7 +510,7 @@ export function AdminOAuthClientsPage() {
 
       {!clients || clients.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-surface-2 bg-surface-1 py-16 text-center">
-          <div className="rounded-2xl bg-surface-2 p-4"><Sparkles className="h-8 w-8 text-text-muted" /></div>
+          <div className="rounded-2xl bg-surface-2 p-4"><KeyRound className="h-8 w-8 text-text-muted" /></div>
           <h3 className="mt-4 text-lg font-semibold text-text-primary">No OAuth clients yet</h3>
           <p className="mt-2 max-w-sm text-sm text-text-muted">Create your first client to let applications authenticate users.</p>
           <button onClick={() => { resetForm(); setShowForm(true) }} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]">
@@ -580,16 +581,16 @@ export function AdminOAuthClientsPage() {
                         <KeyRound size={14} />
                       </button>
                       <button onClick={() => openEdit(c)} className="text-text-muted hover:text-text-secondary" title="Edit client"><Edit size={14} /></button>
-                      <button onClick={() => handleRotate(c.client_id)} data-testid="rotate-secret-btn" className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
+                      <button onClick={() => setRotateTarget(c.client_id)} data-testid="rotate-secret-btn" className="text-text-muted hover:text-text-secondary" title="Rotate secret"><RefreshCw size={14} /></button>
                       {/* T.2: rotate the JWT key for client_secret_jwt clients. */}
                       {c.token_endpoint_auth_method === 'client_secret_jwt' && c.has_client_secret_jwt_key && (
                         <button
-                          onClick={() => handleRotateJwtKey(c.client_id)}
+                          onClick={() => setRotateJwtKeyTarget(c.client_id)}
                           data-testid="rotate-jwt-key-btn"
                           className="text-text-muted hover:text-brand-accent"
                           title="Rotate JWT key"
                         >
-                          <Sparkles size={14} />
+                          <RefreshCw size={14} />
                         </button>
                       )}
                       <button onClick={() => setDeleteId(c.client_id || idx.toString())} data-testid="delete-client-btn" className="text-text-muted hover:text-semantic-error" title="Delete"><Trash2 size={14} /></button>
@@ -603,6 +604,39 @@ export function AdminOAuthClientsPage() {
       )}
 
       <ConfirmDialog open={!!deleteId} title="Delete OAuth Client" message="All tokens for this client will be revoked. This action cannot be undone." confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
+
+      {/* Rotate secret — destructive, gated by a server-issued
+          safeword. The dialog walks the operator through three
+          phases: confirm, safeword (challenge issued + typed back),
+          error/retry. The destructive POST only fires on success. */}
+      <RotateSecretDialog
+        open={!!rotateTarget}
+        targetId={rotateTarget}
+        targetLabel={
+          data?.find?.((x) => x?.client_id === rotateTarget)?.client_name
+        }
+        purpose="secret"
+        onClose={() => setRotateTarget(null)}
+        onSuccess={(newCredential) => {
+          if (newCredential) setSecretModal(newCredential)
+        }}
+        onError={(msg) => notify.error(msg)}
+      />
+
+      {/* Rotate JWT key — T.2, same destructive semantics. */}
+      <RotateSecretDialog
+        open={!!rotateJwtKeyTarget}
+        targetId={rotateJwtKeyTarget}
+        targetLabel={
+          data?.find?.((x) => x?.client_id === rotateJwtKeyTarget)?.client_name
+        }
+        purpose="jwt_key"
+        onClose={() => setRotateJwtKeyTarget(null)}
+        onSuccess={(newCredential) => {
+          if (newCredential) setJwtKeyModal(newCredential)
+        }}
+        onError={(msg) => notify.error(msg)}
+      />
 
       {/* Secret modal */}
       {secretModal && (

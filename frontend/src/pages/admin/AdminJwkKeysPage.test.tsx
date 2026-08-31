@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AdminJwkKeysPage } from './AdminJwkKeysPage'
 
@@ -133,6 +133,58 @@ describe('AdminJwkKeysPage', () => {
     expect(screen.queryByTestId('jwks-public-card')).not.toBeInTheDocument()
     // The table still renders.
     expect(screen.getByText('kid-active-1')).toBeInTheDocument()
+  })
+
+  it('opens the safeword dialog on Rotate click and does not POST immediately', async () => {
+    const { api } = await import('../../lib/api')
+    render(<Wrapper><AdminJwkKeysPage /></Wrapper>)
+
+    const rotateBtn = await screen.findByTestId('jwk-rotate-btn')
+    fireEvent.click(rotateBtn)
+
+    // The safeword dialog is open and on the confirm phase. The
+    // destructive POST must NOT have fired yet.
+    expect(screen.getByTestId('rotate-secret-dialog')).toBeInTheDocument()
+    expect(screen.getByTestId('rotate-secret-generate')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('walks the full safeword handshake on Rotate', async () => {
+    const { api } = await import('../../lib/api')
+    // First call: challenge issuance
+    ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      challenge_id: 'chal-xyz',
+      word: 'correct-horse-purple-42',
+      expires_at: '2099-01-01T00:00:00Z',
+    })
+    // Second call: destructive rotate
+    ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      old_kid: 'kid-active-1',
+      new_kid: 'kid-new-2',
+    })
+
+    render(<Wrapper><AdminJwkKeysPage /></Wrapper>)
+
+    fireEvent.click(await screen.findByTestId('jwk-rotate-btn'))
+    fireEvent.click(screen.getByTestId('rotate-secret-generate'))
+    await screen.findByTestId('rotate-secret-safeword-phase')
+
+    const input = screen.getByTestId('rotate-secret-input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'correct-horse-purple-42' } })
+    fireEvent.click(screen.getByTestId('rotate-secret-confirm'))
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/admin/jwk-keys/rotate/challenge'
+      )
+    })
+    const rotateCall = (api.post as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === '/api/admin/jwk-keys/rotate'
+    )
+    expect(rotateCall?.[1]).toEqual({
+      challenge_id: 'chal-xyz',
+      word: 'correct-horse-purple-42',
+    })
   })
 })
 

@@ -1,8 +1,20 @@
+// Per-row action button convention (keep in sync with
+// AdminOAuthClientsPage / ApiKeysPage / AdminJwkKeysPage):
+//
+//   rotate  → RefreshCw 14px, hover text-brand-accent
+//   edit    → Pencil    14px, hover text-text-secondary
+//   disable → Ban       14px, hover text-semantic-warning
+//   enable  → RotateCcw 14px, hover text-semantic-success
+//   delete  → Trash2    14px, hover text-semantic-error
+//
+// Each row composes its own <button>; we only share the icon +
+// hover-color mapping (no shared component by design).
 import { useState } from 'react'
-import { Search, Loader2, Trash2, Key, Plus, Save, Ban, Copy, Check, RotateCcw, Pencil, X } from 'lucide-react'
+import { Search, Loader2, Trash2, Key, Plus, Save, Ban, Copy, Check, RotateCcw, Pencil, X, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useApiQuery } from '../../hooks/useApi'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
+import { RotateSecretDialog } from '../../components/admin/RotateSecretDialog'
 import { Banner } from '../../components/shared/Banner'
 import { ApiKeyClaimsTab } from '../../components/admin/ApiKeyClaimsTab'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -82,6 +94,15 @@ export function AdminApiKeysPage() {
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  // For the safeword delete dialog we surface the key name to
+  // the operator so they can confirm they are acting on the
+  // right record.
+  const [deleteName, setDeleteName] = useState<string>('')
+  // Regenerate-secret flow: bounded to the same safeword dialog
+  // shape as delete. The new plaintext is shown in a show-once
+  // modal that mirrors ``createdKey``.
+  const [rotateId, setRotateId] = useState<string | null>(null)
+  const [rotateName, setRotateName] = useState<string>('')
   const [cleaning, setCleaning] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState<CreateForm>(initialForm)
@@ -89,6 +110,13 @@ export function AdminApiKeysPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null)
   const [copied, setCopied] = useState(false)
+  // Holds the freshly-rotated API key (plaintext only, shown once).
+  const [rotatedKey, setRotatedKey] = useState<{
+    api_key: string
+    name: string
+    key_id?: string
+  } | null>(null)
+  const [rotatedCopied, setRotatedCopied] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>(initialEdit)
   const [editNeverExpires, setEditNeverExpires] = useState(false)
@@ -131,22 +159,9 @@ export function AdminApiKeysPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteId) return
-    try {
-      await api.delete(`/api/keys/${deleteId}`)
-      setDeleteId(null)
-      notify.success('Key deleted successfully.')
-      await refetch()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete key'
-      if (msg.includes('403') || msg.includes('authorized')) {
-        notify.error('Delete failed: you may need admin scope.')
-      } else {
-        notify.error(msg)
-      }
-    }
-  }
+  // The destructive delete is now handled by <RotateSecretDialog>
+  // with safeword confirmation. The onSuccess callback closes the
+  // dialog and refetches the list.
 
   const handleCleanup = async () => {
     setCleaning(true)
@@ -402,7 +417,7 @@ export function AdminApiKeysPage() {
                       <button
                         onClick={() => openEdit(k)}
                         data-testid="key-edit-btn"
-                        className="text-text-muted hover:text-brand-accent transition-colors"
+                        className="text-text-muted hover:text-text-secondary transition-colors"
                         title="Edit key"
                       >
                         <Pencil size={14} />
@@ -433,10 +448,19 @@ export function AdminApiKeysPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => setDeleteId(k.key_id)}
-                        className="text-text-muted hover:text-semantic-error transition-colors"
-                        title="Delete key permanently (irreversible)"
+                        onClick={() => { setRotateId(k.key_id); setRotateName(k.name) }}
+                        className="text-text-muted hover:text-brand-accent transition-colors"
+                        title="Rotate secret (regenerates the credential)"
+                        aria-label="Rotate secret"
+                        data-testid="rotate-key-btn"
                       >
+                        <RefreshCw size={14} />
+                      </button>
+                        <button
+                          onClick={() => { setDeleteId(k.key_id); setDeleteName(k.name) }}
+                          className="text-text-muted hover:text-semantic-error transition-colors"
+                          title="Delete key permanently (irreversible)"
+                        >
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -468,14 +492,40 @@ export function AdminApiKeysPage() {
         onCancel={() => setRestoreId(null)}
       />
 
-      <ConfirmDialog
+      <RotateSecretDialog
         open={!!deleteId}
-        title="Delete API Key"
-        message="This permanently removes the key. It cannot be recovered. Use Deactivate if you might need to restore it later."
-        confirmLabel="Delete"
-        variant="danger"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
+        targetId={deleteId}
+        targetLabel={deleteName}
+        purpose="api_key_delete"
+        onClose={() => {
+          setDeleteId(null)
+          setDeleteName('')
+        }}
+        onSuccess={async () => {
+          notify.success('Key deleted successfully.')
+          await refetch()
+        }}
+        onError={(msg) => notify.error(msg)}
+      />
+
+      <RotateSecretDialog
+        open={!!rotateId}
+        targetId={rotateId}
+        targetLabel={rotateName}
+        purpose="api_key_rotate"
+        onClose={() => {
+          setRotateId(null)
+          setRotateName('')
+        }}
+        onSuccess={(newCredential) => {
+          if (newCredential) {
+            setRotatedKey({ api_key: newCredential, name: rotateName })
+            setRotatedCopied(false)
+            notify.success('Secret rotated. Copy it now.')
+          }
+          void refetch()
+        }}
+        onError={(msg) => notify.error(msg)}
       />
 
       {showCreate && (
@@ -649,6 +699,64 @@ export function AdminApiKeysPage() {
 
             <button
               onClick={closeCreatedKey}
+              className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rotatedKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="rotated-key-modal">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { setRotatedKey(null); setRotatedCopied(false) }}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent">
+            <div className="text-center space-y-2">
+              <div className="rounded-2xl bg-semantic-success/10 p-3 inline-block">
+                <Key size={24} className="text-semantic-success" />
+              </div>
+              <h3 className="text-lg font-semibold text-text-primary">API Key Secret Regenerated</h3>
+              <p className="text-xs text-semantic-warning">
+                Copy this secret now. You will not be able to see it again.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-surface-2 bg-surface-2 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-text-muted">{rotatedKey.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <code
+                  data-testid="rotated-key-value"
+                  className="flex-1 break-all text-sm font-mono text-text-primary"
+                >
+                  {rotatedKey.api_key}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(rotatedKey.api_key)
+                    setRotatedCopied(true)
+                    setTimeout(() => setRotatedCopied(false), 3000)
+                  }}
+                  className="rounded-xl p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors shrink-0"
+                  title="Copy new secret"
+                  data-testid="rotated-key-copy"
+                >
+                  {rotatedCopied ? (
+                    <Check size={16} className="text-semantic-success" />
+                  ) : (
+                    <Copy size={16} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { setRotatedKey(null); setRotatedCopied(false) }}
+              data-testid="rotated-key-done"
               className="w-full rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]"
             >
               Done

@@ -528,6 +528,62 @@ class APIKeyService:
             await api_key_cache.delete(key_id)
             return result
 
+    async def rotate_key(self, key_id: str) -> Optional[tuple[APIKey, str]]:
+        """Regenerate the plaintext secret for an existing key.
+
+        The key keeps its identity (same ``key_id``, same name,
+        same scopes, same owner) so it remains addressable across
+        the rotation. The bcrypt hash, the prefix index entry,
+        and the brute-force counters are all reset. ``revoked_at``
+        and ``revoked_by`` are cleared too: rotating a revoked
+        key effectively resurrects it (the operator asked for
+        a fresh credential, not for a deactivated record).
+
+        Returns:
+            ``(rotated_api_key, plaintext_key)`` or ``None`` if
+            the key id is unknown. The plaintext key is shown
+            to the operator **once** at the call site.
+        """
+        existing = await self._repo.get_by_id(key_id)
+        if not existing:
+            return None
+
+        new_full_key, new_prefix, new_hash = self._generate_api_key()
+
+        async with self._lock(f"api_key_rotate:{existing.key_prefix}"):
+            # Snapshot the file-system state we will mutate. The
+            # generation of ``new_prefix`` collides with ``existing``
+            # only by astronomical luck (32 bytes of entropy), but we
+            # still acquire the per-old-prefix lock to serialize the
+            # delete-from-old-index + add-to-new-index pair against a
+            # concurrent revoke/delete on the same record.
+            old_prefix = existing.key_prefix
+
+            existing.key_prefix = new_prefix
+            existing.key_hash = new_hash
+            # Reset brute-force lockout state — a rotation is a
+            # deliberate action, not an attack signal.
+            existing.failed_validation_attempts = 0
+            existing.locked_until = None
+            # Reset usage / last-seen tracking — the new secret has
+            # not been used yet, so any prior counters describe a
+            # different credential.
+            existing.last_used_at = None
+            existing.last_used_ip = None
+            existing.last_used_ua = None
+            existing.total_requests = 0
+            # Resurrection: a revoked key can be rotated to revive it.
+            existing.is_active = True
+            existing.revoked_at = None
+            existing.revoked_by = None
+
+            await self._repo.update(existing)
+            await self._repo.remove_from_prefix_index(old_prefix, key_id)
+            await self._repo.add_to_prefix_index(existing)
+            await api_key_cache.delete(key_id)
+
+        return existing, new_full_key
+
     async def track_usage(self, key_id: str, ip_address: Optional[str] = None) -> bool:
         """Track API key usage."""
         async with self._lock(f"api_key:{key_id}"):
