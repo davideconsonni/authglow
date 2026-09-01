@@ -165,12 +165,29 @@ class RefreshTokenService:
     # ------------------------------------------------------------------
 
     async def validate_and_rotate(
-        self, token: str, client_id: str, ip_address: Optional[str] = None
+        self,
+        token: str,
+        client_id: str,
+        ip_address: Optional[str] = None,
+        requested_scopes: Optional[List[str]] = None,
     ) -> Tuple[Optional[RefreshToken], Optional[str]]:
         """Validate a refresh token and automatically rotate it.
 
         Protected by a named lock on the token_lookup to prevent
         concurrent rotations, and by optimistic-concurrency versioning.
+
+        Args:
+            token: The plaintext refresh token.
+            client_id: The authenticated client — must own the token.
+            ip_address: Caller IP, recorded on the rotated token.
+            requested_scopes: Optional RFC 6749 §6 scope narrowing.
+                When provided, the issued scopes are the intersection
+                of the requested and the originally granted scopes
+                (never a superset). A request matching none of the
+                granted scopes is rejected (``None, error``) *without*
+                rotating the original token — a scope-less token would
+                be useless. ``None`` (omitted form field) keeps the
+                original scopes.
 
         Returns:
             Tuple of (new_refresh_token, error_message)
@@ -193,6 +210,17 @@ class RefreshTokenService:
             await self._revoke_token_family(rt)
             return None, "Token reuse detected - all tokens in family revoked"
 
+        # RFC 6749 §6 scope narrowing — read-only computation, safe
+        # outside the rotation lock (granted scopes are immutable
+        # during rotation). ``requested_scopes is None`` means no
+        # narrowing was requested and preserves the original scopes;
+        # an explicitly empty list matches nothing and errors out.
+        new_scopes = rt.scopes
+        if requested_scopes is not None:
+            new_scopes = [s for s in requested_scopes if s in rt.scopes]
+            if not new_scopes:
+                return None, "No requested scope was originally granted"
+
         async with self._lock(f"refresh_token:{rt.token_lookup}"):
             for _ in range(self.MAX_CAS_RETRIES):
                 rt = await self.get_refresh_token_by_id(rt.token_id)
@@ -212,7 +240,7 @@ class RefreshTokenService:
                 new_token = await self.create_refresh_token(
                     user_id=rt.user_id,
                     client_id=rt.client_id,
-                    scopes=rt.scopes,
+                    scopes=new_scopes,
                     issued_ip=ip_address,
                     parent_token_id=rt.token_id,
                 )

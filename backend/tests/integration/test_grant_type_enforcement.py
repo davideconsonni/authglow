@@ -100,3 +100,27 @@ def test_registered_grant_passes_the_guard(grant):
 
     body = res.json()
     assert res.status_code != 400 or body.get("error") != "unauthorized_client", res.text
+
+
+def test_refresh_grant_propagates_scope_request():
+    """F4 / RFC 6749 §6: the optional form ``scope`` is forwarded to
+    ``validate_and_rotate`` as ``requested_scopes``; when the field is
+    omitted, ``requested_scopes`` is ``None`` (no narrowing)."""
+    app = _build_app(allowed=True)
+    rt_svc = MagicMock()
+    rt_svc.validate_and_rotate = AsyncMock(return_value=(None, "invalid refresh token"))
+    with patch("authglow.api.auth.RefreshTokenService", return_value=rt_svc):
+        # With an explicit scope request.
+        data = _request_data("refresh_token")
+        data["scope"] = "read"
+        TestClient(app).post("/oauth2/token", data=data)
+        rt_svc.validate_and_rotate.assert_awaited_once()
+        kwargs = rt_svc.validate_and_rotate.await_args.kwargs
+        assert kwargs["requested_scopes"] == ["read"]
+
+        # Without the form field: no narrowing requested.
+        rt_svc.validate_and_rotate.reset_mock()
+        TestClient(app).post("/oauth2/token", data=_request_data("refresh_token"))
+        rt_svc.validate_and_rotate.assert_awaited_once()
+        kwargs = rt_svc.validate_and_rotate.await_args.kwargs
+        assert kwargs["requested_scopes"] is None

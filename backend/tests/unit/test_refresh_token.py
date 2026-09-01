@@ -3,12 +3,6 @@ import json
 import os
 import secrets
 
-import pytest
-from datetime import timedelta
-from unittest.mock import patch, MagicMock
-
-from authglow.core.datetime import utcnow
-
 
 class TestRefreshTokenLifecycle:
     def test_create_refresh_token(self, refresh_token_service):
@@ -218,7 +212,8 @@ class TestRefreshTokenHashedStorage:
                 scopes=["read"],
             )
         )
-        import hmac, hashlib
+        import hashlib
+        import hmac
 
         wrong_lookup = hmac.new(b"wrong-secret", rt.token.encode(), hashlib.sha256).hexdigest()  # type: ignore[union-attr]
         assert wrong_lookup != rt.token_lookup
@@ -448,3 +443,105 @@ class TestRefreshTokenActiveIndex:
         )
         assert tokens == []
         assert total == 0
+
+
+class TestValidateAndRotateScopeNarrowing:
+    """F4 / RFC 6749 §6: the optional scope request narrows the issued
+    scopes to the intersection with the originally granted ones (never
+    a superset); a request matching nothing is rejected without
+    rotating the original token."""
+
+    def _create_rt(self, refresh_token_service, user_id, scopes):
+        return asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id=user_id,
+                client_id="test-client",
+                scopes=scopes,
+                expires_in_days=30,
+            )
+        )
+
+    def test_narrowing_issues_intersection(self, refresh_token_service):
+        rt = self._create_rt(refresh_token_service, "user-scope-1", ["read", "write"])
+
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+                requested_scopes=["read"],
+            )
+        )
+
+        assert error is None
+        assert new_rt is not None
+        assert new_rt.scopes == ["read"]
+
+    def test_no_scope_request_preserves_original(self, refresh_token_service):
+        rt = self._create_rt(refresh_token_service, "user-scope-2", ["read", "write"])
+
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+            )
+        )
+
+        assert error is None
+        assert new_rt is not None
+        assert new_rt.scopes == ["read", "write"]
+
+    def test_tolerant_intersection_ignores_ungranted_scopes(self, refresh_token_service):
+        rt = self._create_rt(refresh_token_service, "user-scope-3", ["read", "write"])
+
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+                requested_scopes=["admin", "read"],
+            )
+        )
+
+        assert error is None
+        assert new_rt is not None
+        assert new_rt.scopes == ["read"]
+
+    def test_no_matching_scope_rejected_without_rotation(self, refresh_token_service):
+        rt = self._create_rt(refresh_token_service, "user-scope-4", ["read", "write"])
+
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+                requested_scopes=["admin"],
+            )
+        )
+
+        assert new_rt is None
+        assert "No requested scope" in error
+        # The original token must remain consumable: the rejection
+        # happens before the rotation lock, so nothing was marked used
+        # and no family revocation was triggered.
+        still_valid, still_error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+            )
+        )
+        assert still_error is None
+        assert still_valid is not None
+
+    def test_explicitly_empty_request_is_rejected(self, refresh_token_service):
+        """An explicitly empty scope list matches nothing — distinct
+        from ``None`` (no narrowing requested)."""
+        rt = self._create_rt(refresh_token_service, "user-scope-5", ["read"])
+
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+                requested_scopes=[],
+            )
+        )
+
+        assert new_rt is None
+        assert "No requested scope" in error

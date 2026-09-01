@@ -1530,11 +1530,15 @@ async def token_endpoint(
         # possession on EVERY token-endpoint request, including refresh.
         dpop_cnf = await _require_dpop_proof_if_bound(request, oauth_client, "POST")
 
-        # Validate and rotate refresh token
+        # Validate and rotate refresh token — RFC 6749 §6: the optional
+        # form ``scope`` narrows the issued scopes (tolerant
+        # intersection with the originally granted ones; a request
+        # matching nothing is rejected by the service).
         new_rt, error = await refresh_token_service.validate_and_rotate(
             token=refresh_token,
             client_id=resolved_client_id,
             ip_address=request.client.host if request.client else None,
+            requested_scopes=scope.split() if scope else None,
         )
 
         if error:
