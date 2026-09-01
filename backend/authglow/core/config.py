@@ -216,6 +216,7 @@ class Settings(BaseSettings):
     public_key_path: str = "data/keys/public_key.pem"
     jwt_key_rotation_days: int = 90
     jwt_auto_rotate: bool = True
+    jwt_keyring_refresh_seconds: int = 60
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 

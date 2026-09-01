@@ -8,15 +8,27 @@ the storage backend is a cloud provider (S3, GCS, ADLS).
 CAS (Compare-And-Swap) helpers are provided for optimistic-concurrency control:
 ``read_json_versioned`` reads a record together with its ``_version`` field,
 and ``write_json_versioned`` writes only if the version has not changed since
-the read.  This prevents cross-process race conditions when multiple instances
-write to the same storage backend.
+the read. The check and the write run inside a single critical section
+(one worker-thread operation guarded by a process-wide lock), so no concurrent
+coroutine or thread can interleave between them. Across OS processes the
+version re-check remains best-effort: a writer that observed a stale version
+is rejected, but two processes can still pass the check in the same instant
+unless the storage backend offers a native atomic compare-and-swap.
 """
 
 import asyncio
 import json
+import threading
 from typing import Any, List, Tuple
 
 from authglow.core.concurrency import ConcurrentWriteError
+
+# Process-wide lock serializing CAS check+write critical sections. A
+# ``threading.Lock`` (not an ``asyncio.Lock``) deliberately: the guarded
+# code runs on a ``asyncio.to_thread`` worker, and a threading lock carries
+# no event-loop affinity, so tests that drive each case on a fresh event
+# loop keep working.
+_cas_write_lock = threading.Lock()
 
 
 class AsyncFileSystem:
@@ -74,26 +86,38 @@ class AsyncFileSystem:
     ) -> None:
         """Write a JSON record with optimistic-concurrency check.
 
-        Atomically reads the current ``_version`` from disk, compares it to
-        *expected_version*, and only writes if they match.  On mismatch,
-        ``ConcurrentWriteError`` is raised so the caller can retry.
+        The current ``_version`` is read, compared to *expected_version*,
+        and the record is written inside one critical section — a single
+        worker-thread operation under the process-wide ``_cas_write_lock``
+        — so no concurrent coroutine or thread can observe the record
+        between the check and the write. On a version mismatch,
+        ``ConcurrentWriteError`` is raised so the caller can retry the
+        read-mutate-write loop.
 
         On success the stored record's ``_version`` is incremented by 1.
         """
-        try:
-            current = await self.read_json(path)
-        except FileNotFoundError:
-            current = {}
+        _default = default if default is not None else str
 
-        current_version = current.get("_version", 0)
+        def _op() -> None:
+            with _cas_write_lock:
+                try:
+                    with self._fs.open(path, "r") as f:
+                        current = json.load(f)
+                except FileNotFoundError:
+                    current = {}
 
-        if current_version != expected_version:
-            raise ConcurrentWriteError(
-                f"Version mismatch for {path}: expected {expected_version}, found {current_version}"
-            )
+                current_version = current.get("_version", 0)
+                if current_version != expected_version:
+                    raise ConcurrentWriteError(
+                        f"Version mismatch for {path}: "
+                        f"expected {expected_version}, found {current_version}"
+                    )
 
-        data_with_version = {**data, "_version": expected_version + 1}
-        await self.write_json(path, data_with_version, indent=indent, default=default)
+                data_with_version = {**data, "_version": expected_version + 1}
+                with self._fs.open(path, "w") as f:
+                    json.dump(data_with_version, f, indent=indent, default=_default)
+
+        await asyncio.to_thread(_op)
 
     async def read_text(self, path: str) -> str:
         def _op():

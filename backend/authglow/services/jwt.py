@@ -96,6 +96,22 @@ _RESERVED_CLAIMS: frozenset[str] = frozenset(
 )
 
 
+def _keyring_fingerprint(data: Dict[str, Any]) -> tuple:
+    """Build a stable fingerprint of a keyring dict.
+
+    Used by the JWT singleton TTL probe to compare the in-memory
+    snapshot against a fresh on-disk read. The tuple captures the
+    versioned CAS counter (bumped by every ``_save_keyring`` write,
+    so it alone detects any rotation/revocation performed by
+    another replica), the active kid, and the per-kid status map as
+    a fallback for legacy keyrings written before versioning.
+    """
+    keys = tuple(
+        sorted((kid, str(meta.get("status", ""))) for kid, meta in data.get("keys", {}).items())
+    )
+    return (data.get("_version", 0), data.get("active_kid", ""), keys)
+
+
 class JWTService:
     """Service for creating and validating JWT tokens using RS256.
 
@@ -192,6 +208,22 @@ class JWTService:
     async def _reload_keyring(self) -> None:
         """Reload keyring from the repository (used after rotation/revocation)."""
         await self._load_keyring_snapshot()
+
+    async def keyring_changed_on_disk(self) -> bool:
+        """Return ``True`` if the on-disk keyring differs from the snapshot.
+
+        Used by the JWT singleton TTL probe to detect rotations or
+        revocations performed by *another* replica. The check is
+        cheap: one small JSON read (``keyring.json``) through the
+        repository's fresh-read path — no per-kid PEM reads and no
+        private-key decryption. The in-memory snapshot is left
+        untouched; callers rebuild via ``JWTService.new()`` when
+        this returns ``True``.
+        """
+        fresh = await self._repository.read_keyring_fresh()
+        if fresh is None or self._keyring is None:
+            return False
+        return _keyring_fingerprint(fresh) != _keyring_fingerprint(self._keyring)
 
     def _encode_token(self, payload: dict) -> str:
         """Encode a token payload using the active private key, including kid in header."""

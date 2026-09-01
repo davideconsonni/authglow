@@ -86,8 +86,7 @@ def _validate_registration_url(url: str, *, insecure: bool) -> None:
 
 def _validate_events(events: List[str]) -> List[str]:
     """Deduplicate (order-preserving) and validate against the Event Catalog."""
-    seen: set = set()
-    deduped = [e for e in events if not (e in seen or seen.add(e))]
+    deduped = list(dict.fromkeys(events))
     if not deduped:
         raise ValueError("At least one event type is required")
     unknown = [e for e in deduped if e not in VALID_EVENT_TYPES]

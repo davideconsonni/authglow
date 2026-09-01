@@ -41,8 +41,7 @@ class WebhookEndpoint(BaseModel):
         if unknown:
             raise ValueError(f"Unknown event types: {', '.join(sorted(unknown))}")
         # De-duplicate preserving order so the subscription list stays clean.
-        seen: set = set()
-        return [e for e in v if not (e in seen or seen.add(e))]
+        return list(dict.fromkeys(v))
 
     @field_validator("url")
     @classmethod

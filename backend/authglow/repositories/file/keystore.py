@@ -253,6 +253,18 @@ class FileKeyStoreRepository(BaseFileRepository):
         # right expected value.
         keyring["_version"] = expected_version + 1
 
+    async def read_keyring_fresh(self) -> Optional[Dict[str, Any]]:
+        """Read keyring.json from disk, bypassing the in-memory cache.
+
+        Used by the JWT singleton TTL probe to detect keyring
+        mutations performed by another replica (rotation, revocation,
+        bootstrap). Cheap: one existence check + one small JSON read
+        — no per-kid PEM reads, no private-key decryption. The
+        in-memory cache is left untouched so concurrent readers keep
+        a consistent view.
+        """
+        return await self._load_keyring()
+
     async def _write_active_copies(self, keyring: Dict[str, Any]) -> None:
         """Copy the active key to the legacy flat paths for
         backward compatibility with code that still reads
@@ -586,18 +598,35 @@ class FileKeyStoreRepository(BaseFileRepository):
         2. If the keyring is missing AND no legacy files,
            generate a fresh keyring.
         3. Otherwise no-op.
+        4. If another replica bootstrapped concurrently (a
+           ``ConcurrentWriteError`` on the versioned save), reload
+           from disk and accept the winner's keyring instead of
+           failing the startup.
         """
         await self._ensure_loaded()
         if self._keyring is not None:
             return
 
-        if await self._exists(self._legacy_priv_path()) and await self._exists(
-            self._legacy_pub_path()
-        ):
-            await self._migrate_legacy(secret_key, key_size)
-            return
+        try:
+            if await self._exists(self._legacy_priv_path()) and await self._exists(
+                self._legacy_pub_path()
+            ):
+                await self._migrate_legacy(secret_key, key_size)
+                return
 
-        await self._generate_fresh(secret_key, key_size)
+            await self._generate_fresh(secret_key, key_size)
+        except ConcurrentWriteError:
+            # Two replicas bootstrapped the keyring at the same
+            # moment: exactly one ``_save_keyring`` wins the CAS on
+            # ``_version`` and the loser lands here. Reload and
+            # accept the winner's keyring as authoritative. The PEMs
+            # written by the loser before the failed CAS are
+            # orphaned but harmless (no keyring entry references
+            # them).
+            await self._reload_keyring()
+            if self._keyring is not None:
+                return
+            raise
 
     async def _migrate_legacy(self, secret_key: str, key_size: int) -> None:
         """Migrate the pre-keyring single-key layout to the

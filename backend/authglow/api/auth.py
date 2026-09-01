@@ -267,7 +267,9 @@ async def _enforce_grant_allowed(
     # ``inspect.isawaitable`` mirrors the MagicMock-tolerant pattern used
     # by ``_require_dpop_proof_if_bound``: unit-test doubles often stub
     # ``verify_grant_type`` with a plain MagicMock (sync, truthy).
-    result = oauth2_service.verify_grant_type(client_id, grant_type)
+    # ``Any`` because the call may be a coroutine (production) or a plain
+    # value (test doubles) — the variable is re-bound after the await.
+    result: Any = oauth2_service.verify_grant_type(client_id, grant_type)
     if inspect.isawaitable(result):
         result = await result
     if result:
@@ -1578,6 +1580,11 @@ async def token_endpoint(
         basic_client_id, basic_client_secret = _extract_basic_auth(request)
         resolved_device_client_id = client_id or basic_client_id
         resolved_device_client_secret = client_secret or basic_client_secret
+        if not resolved_device_client_id:
+            # Unreachable while the ``client_id`` guard above stands, but
+            # kept fail-closed so a future guard change cannot pass
+            # ``None`` into grant registration enforcement.
+            raise OAuth2Error(INVALID_REQUEST, "Missing client_id", status_code=400)
 
         oauth_client = await _authenticate_client_at_token_endpoint(
             request,

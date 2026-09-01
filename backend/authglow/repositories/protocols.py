@@ -1140,6 +1140,15 @@ class KeyStoreRepository(Protocol):
         the event loop on per-kid file reads (performance
         workstream Tier 1.8)."""
 
+    async def read_keyring_fresh(self) -> "Optional[Dict[str, Any]]":
+        """Read the raw keyring index (``keyring.json``) directly
+        from the backend, bypassing any in-memory cache.
+
+        Cheap staleness probe used by the JWT singleton TTL probe
+        to detect keyring mutations performed by another replica
+        (rotation, revocation, bootstrap). Returns ``None`` if the
+        keyring is missing."""
+
     async def rotate(self, secret_key: str, key_size: int = 2048) -> object:
         """Generate a new RSA key pair, mark the current
         active key as ``verifying``, and persist. Returns

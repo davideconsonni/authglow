@@ -447,7 +447,7 @@ Copy the printed line into `backend/.env` (which is gitignored).
 |---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `SECRET_KEY`                          | On every major release, or **immediately** on any suspected leak. Invalidates all sessions and encrypted blobs.                   |
 | `OAUTH2_CLIENT_SECRET`                | On request from a client, or on suspected leak. Requires re-consent flow.                                                         |
-| JWT signing key                       | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. |
+| JWT signing key                       | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. Multi-replica coherence: the `JWTService` singleton re-probes `keyring.json` every `jwt_keyring_refresh_seconds` (default 60, `0` off) and rebuilds on foreign rotation/revocation (`core/jwt_singleton.py`). |
 | SMTP / SendGrid / Mailgun credentials | Every 180 days, or on personnel change.                                                                                           |
 
 ### What to do if GitGuardian fires a real alert

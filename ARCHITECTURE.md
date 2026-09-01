@@ -212,6 +212,8 @@ Page component
 
 7. **Default-safe enforcement** — AuthGlow is hardened at the framework layer, not at the call site. Examples: PKCE enforced for every authorization-code flow (`enforce_pkce=True`), implicit grant rejected at the model layer, ROPC rejected at the token endpoint, refresh-token rotation with reuse-detection family-revocation, and **API-key BOPLA + IP allowlist enforced by default** (see "API Key Hardening" below). New features must follow the same pattern: declare a policy, enforce it in the service, not in the route handler.
 
+8. **Multi-replica JWT keyring coherence** — the process-wide `JWTService` snapshot (`core/jwt_singleton.py`) is invalidated in-process by `rotate_keys`/`revoke_key` and, additionally, re-validated by a TTL staleness probe: every `jwt_keyring_refresh_seconds` (default 60, `0` disables) `get_jwt_service()` re-reads `keyring.json` via `KeyStoreRepository.read_keyring_fresh()` (cheap JSON index read — no PEM reads, no AES decrypt) and rebuilds the snapshot when another replica rotated, revoked, or bootstrapped a key. Because every auth path and the JWKS endpoints go through `get_jwt_service()`, a single probe point bounds cross-replica incoherence to one interval. Concurrent cold boots converge via the CAS on `_version` (`bootstrap_if_missing` reloads and accepts the winner's keyring on `ConcurrentWriteError`).
+
 ## API Key Hardening
 
 Two material gaps were closed in a single hardening pass:

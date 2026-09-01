@@ -590,3 +590,77 @@ class TestKeyStoreSharedBackend:
             assert await repo_b.get_active_kid() != "k-initial"
 
         asyncio.run(_scenario())
+
+    def test_bootstrap_loser_accepts_winner_keyring(self, tmp_path):
+        """A replica whose versioned save loses the bootstrap CAS
+        must reload and accept the winner's keyring instead of
+        crashing its startup.
+
+        Deterministic race injection: ``repo_b``'s
+        ``_save_keyring`` is wrapped so a third repository
+        bootstraps the shared keys_dir in the window between
+        ``repo_b``'s existence check and its CAS write — exactly
+        the interleave two simultaneous cold boots produce on a
+        shared backend.
+        """
+        import asyncio
+
+        keys_dir = tmp_path / "shared_bootstrap_race"
+        keys_dir.mkdir()
+        secret = "test-secret-key-for-authglow-testing-32chars!"
+
+        async def _scenario():
+            repo_b = FileKeyStoreRepository(settings=_StubSettings(str(keys_dir)))
+            repo_c = FileKeyStoreRepository(settings=_StubSettings(str(keys_dir)))
+
+            orig_save = repo_b._save_keyring
+
+            async def _racing_save(keyring):
+                # Foreign replica wins the bootstrap race here.
+                await repo_c.bootstrap_if_missing(secret_key=secret)
+                await orig_save(keyring)
+
+            repo_b._save_keyring = _racing_save
+
+            # Must not raise ConcurrentWriteError.
+            await repo_b.bootstrap_if_missing(secret_key=secret)
+
+            await repo_b._reload_keyring()
+            kid_b = await repo_b.get_active_kid()
+            kid_c = await repo_c.get_active_kid()
+            assert kid_b is not None, "loser replica must converge on the keyring"
+            assert kid_b == kid_c, "loser must accept the winner's keyring"
+
+        asyncio.run(_scenario())
+
+    def test_concurrent_bootstrap_single_winner(self, tmp_path):
+        """Two replicas bootstrapping the same empty keys_dir in the
+        same event loop must converge on exactly one keyring.
+
+        The CAS critical section in ``write_json_versioned`` is
+        serialized process-wide, so exactly one ``_save_keyring``
+        wins; the loser gets ``ConcurrentWriteError`` and accepts
+        the winner's keyring (``bootstrap_if_missing``).
+        """
+        import asyncio
+
+        keys_dir = tmp_path / "shared_bootstrap_gather"
+        keys_dir.mkdir()
+        secret = "test-secret-key-for-authglow-testing-32chars!"
+
+        async def _scenario():
+            repo_a = FileKeyStoreRepository(settings=_StubSettings(str(keys_dir)))
+            repo_b = FileKeyStoreRepository(settings=_StubSettings(str(keys_dir)))
+            await asyncio.gather(
+                repo_a.bootstrap_if_missing(secret_key=secret),
+                repo_b.bootstrap_if_missing(secret_key=secret),
+            )
+            kid_a = await repo_a.get_active_kid()
+            kid_b = await repo_b.get_active_kid()
+            assert kid_a is not None and kid_a == kid_b, (
+                "concurrent bootstraps must converge on one active kid"
+            )
+            ring = await repo_a.get_keyring_dict()
+            assert ring is not None and len(ring["keys"]) == 1
+
+        asyncio.run(_scenario())

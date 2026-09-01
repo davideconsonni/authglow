@@ -67,7 +67,6 @@ from __future__ import annotations
 import secrets
 from typing import Final
 
-
 # EFF short wordlist (https://www.eff.org/dice) — 256 hand-picked
 # 3-to-5-letter English words, distributed under CC-BY 3.0. This
 # module embeds the full list so it has no runtime file I/O.

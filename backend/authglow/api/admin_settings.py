@@ -86,6 +86,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Auto-rotate JWT keys",
         "restart_required": False,
     },
+    "jwt_keyring_refresh_seconds": {
+        "category": "security",
+        "label": "JWT keyring refresh interval (seconds, 0 = off)",
+        "restart_required": False,
+    },
     "timing_leak_protection": {
         "category": "security",
         "label": "Timing leak protection",

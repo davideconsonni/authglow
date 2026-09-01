@@ -50,7 +50,6 @@ from fastapi import HTTPException, status
 from authglow.core.datetime import utcnow
 from authglow.core.safeword import generate_safeword
 
-
 CHALLENGE_TTL_SECONDS: int = 60
 MAX_CHALLENGES_PER_TARGET: int = 5
 
