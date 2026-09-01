@@ -45,6 +45,23 @@ def get_user_storage():
     return UserStorage()
 
 
+def _audience_allowed(token_aud: Optional[str], caller_client_id: str, settings) -> bool:
+    """Audience binding rule shared by revocation and introspection.
+
+    A client may only act on a token that was issued to it:
+
+    * ``aud``-bearing tokens (third-party flows): the token's
+      audience must equal the authenticated ``client_id``;
+    * aud-less tokens (``client_credentials`` and legacy internal
+      JWTs, which carry no ``aud`` — see the token-endpoint
+      ``client_credentials`` branch): only the configured
+      first-party client may act on them.
+    """
+    return token_aud == caller_client_id or (
+        token_aud is None and caller_client_id == settings.oauth2_client_id
+    )
+
+
 @router.post("/oauth2/revoke")
 @limiter.limit("20/minute")
 async def revoke_token(
@@ -122,11 +139,7 @@ async def revoke_token(
             # Disallowed combinations are silently ignored and the
             # endpoint still answers 200 per RFC 7009 §2.2.
             settings = get_settings()
-            aud_ok = token_data.aud == resolved_client_id or (
-                token_data.aud is None
-                and resolved_client_id == settings.oauth2_client_id
-            )
-            if not aud_ok:
+            if not _audience_allowed(token_data.aud, resolved_client_id, settings):
                 return JSONResponse(status_code=200, content={})
             # Actually revoke: add jti to in-process blacklist
             await token_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
@@ -186,6 +199,14 @@ async def introspect_token(
     if token_type_hint == "refresh_token" or not token_type_hint:
         rt = await refresh_token_service.get_refresh_token(token)
         if rt:
+            # Ownership check (mirrors revoke_token): a client may
+            # only introspect refresh tokens issued to itself.
+            # RFC 7662 §2.2: an unauthorized introspection is answered
+            # with ``{"active": false}`` — never with an error, and
+            # never revealing *why* the token is considered inactive.
+            if rt.client_id != resolved_client_id:
+                return {"active": False}
+
             # Check if token is active
             active = not rt.revoked and not rt.used and utcnow() < rt.expires_at
 
@@ -213,10 +234,12 @@ async def introspect_token(
         token_data = jwt_service.decode_token(token)
         if token_data:
             # RFC 7662 §2.2: the introspection response MUST NOT leak why a
-            # token is inactive. We enforce audience binding silently by
-            # returning ``{"active": false}`` when the introspecting client
-            # is not the audience of the token.
-            if token_data.aud and token_data.aud != resolved_client_id:
+            # token is inactive. The same audience binding as the
+            # revocation endpoint is enforced silently: aud-bearing
+            # tokens are only introspectable by their audience, and
+            # aud-less tokens only by the configured first-party
+            # client.
+            if not _audience_allowed(token_data.aud, resolved_client_id, get_settings()):
                 return {"active": False}
 
             active = utcnow() < token_data.exp

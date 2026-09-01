@@ -438,6 +438,10 @@ class TestTokenBlacklist:
             sub="user-1",
             email="u@x.com",
             scopes=["read"],
+            # aud-bearing: the caller below is the token's audience.
+            # (Without aud the F2 audience restriction would answer
+            # {"active": false} before the blacklist is even reached.)
+            aud="valid-client",
             exp=future,
             iat=utcnow(),
             jti="introspect-jti-revoked",
@@ -607,3 +611,165 @@ class TestTokenBlacklist:
 
         assert resp.status_code == 200
         assert token_blacklist().is_revoked(decoded.jti)
+
+
+class TestIntrospectAudienceRestriction:
+    """F2 / RFC 7662 §2.2: introspection applies the same audience
+    binding as revocation — aud-bearing tokens only to their audience,
+    aud-less tokens only to the configured first-party client — and
+    answers unauthorized introspections with ``{"active": false}``
+    instead of an error (the response must not reveal *why* a token
+    is inactive).
+    """
+
+    def _build_app(self, *, token_data=None, refresh_token=None):
+        from fastapi import FastAPI
+
+        from authglow.api.oauth2_advanced import (
+            get_jwt_service,
+            get_oauth2_service,
+            get_refresh_token_service,
+            get_user_storage,
+            router,
+        )
+        from authglow.api.oauth_errors import register_oauth2_error_handler
+
+        _reset_token_blacklist()
+
+        if token_data is None and refresh_token is None:
+            token_data = self._token_data()
+
+        app = FastAPI()
+        app.include_router(router)
+        register_oauth2_error_handler(app)
+
+        mock_rt_svc = MagicMock()
+        mock_rt_svc.get_refresh_token = AsyncMock(return_value=refresh_token)
+        mock_jwt_svc = MagicMock()
+        mock_jwt_svc.decode_token = MagicMock(return_value=token_data)
+        mock_oauth2_svc = MagicMock()
+        mock_oauth2_svc.verify_client = AsyncMock(return_value=True)
+        mock_user_svc = MagicMock()
+        mock_user_svc.get_user = AsyncMock(return_value=None)
+
+        app.dependency_overrides[get_refresh_token_service] = lambda: mock_rt_svc
+        app.dependency_overrides[get_jwt_service] = lambda: mock_jwt_svc
+        app.dependency_overrides[get_oauth2_service] = lambda: mock_oauth2_svc
+        app.dependency_overrides[get_user_storage] = lambda: mock_user_svc
+
+        return TestClient(app)
+
+    @staticmethod
+    def _token_data(aud=None):
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.models.token import TokenData
+
+        return TokenData(
+            sub="user-1",
+            email="u@x.com",
+            scopes=["read"],
+            aud=aud,
+            exp=utcnow() + timedelta(minutes=30),
+            iat=utcnow(),
+            jti="introspect-aud-jti",
+        )
+
+    @staticmethod
+    def _refresh_token(client_id):
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+
+        rt = MagicMock()
+        rt.client_id = client_id
+        rt.user_id = "user-1"
+        rt.scopes = ["read"]
+        rt.revoked = False
+        rt.used = False
+        rt.expires_at = utcnow() + timedelta(minutes=30)
+        rt.created_at = utcnow()
+        return rt
+
+    def test_aud_less_token_rejected_for_third_party_client(self):
+        """aud-less token + third-party caller → {"active": false} (F2)."""
+        client = self._build_app(token_data=self._token_data(aud=None))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "t", "token_type_hint": "access_token"},
+            auth=("some-third-party-client", "secret"),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"active": False}
+
+    def test_aud_less_token_allowed_for_first_party_client(self):
+        """aud-less token + configured first-party caller → active."""
+        from authglow.core.config import get_settings
+
+        client = self._build_app(token_data=self._token_data(aud=None))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "t", "token_type_hint": "access_token"},
+            auth=(get_settings().oauth2_client_id, "secret"),
+        )
+
+        body = resp.json()
+        assert body["active"] is True
+        assert body["sub"] == "user-1"
+
+    def test_aud_bearing_token_allows_audience_client(self):
+        """aud-bearing token + its audience → active (regression)."""
+        client = self._build_app(token_data=self._token_data(aud="client-a"))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "t", "token_type_hint": "access_token"},
+            auth=("client-a", "secret"),
+        )
+
+        assert resp.json()["active"] is True
+
+    def test_aud_bearing_token_rejected_for_other_client(self):
+        """aud-bearing token + non-audience caller → {"active": false}."""
+        client = self._build_app(token_data=self._token_data(aud="client-a"))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "t", "token_type_hint": "access_token"},
+            auth=("client-b", "secret"),
+        )
+
+        assert resp.json() == {"active": False}
+
+    def test_refresh_token_rejected_for_other_client(self):
+        """Refresh token owned by client-a + caller client-b → {"active": false}."""
+        client = self._build_app(refresh_token=self._refresh_token("client-a"))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "rt", "token_type_hint": "refresh_token"},
+            auth=("client-b", "secret"),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"active": False}
+
+    def test_refresh_token_allows_owning_client(self):
+        """Refresh token + its owning client → full metadata."""
+        client = self._build_app(refresh_token=self._refresh_token("client-a"))
+
+        resp = client.post(
+            "/oauth2/introspect",
+            data={"token": "rt", "token_type_hint": "refresh_token"},
+            auth=("client-a", "secret"),
+        )
+
+        body = resp.json()
+        assert body["active"] is True
+        assert body["client_id"] == "client-a"
+        assert body["sub"] == "user-1"
+        assert body["scope"] == "read"
