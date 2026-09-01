@@ -241,6 +241,69 @@ class TestOauth2DefaultsHardFailInProduction:
                 )
 
 
+class TestCorsWildcardCredentialsGuardrail:
+    """F3: CORS wildcard origins + credentials is the most dangerous
+    CORS combination — Starlette reflects the request Origin, letting
+    any origin make credentialed (httpOnly-cookie) requests. It is a
+    hard fail at boot in production and a non-blocking warning
+    elsewhere."""
+
+    def test_wildcard_credentials_raise_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="CORS misconfiguration"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                cors_allowed_origins="*",
+                cors_allow_credentials=True,
+            )
+
+    def test_explicit_origins_ok_in_production(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="production",
+            cors_allowed_origins="https://app.example.com,https://admin.example.com",
+            cors_allow_credentials=True,
+        )
+        assert settings.cors_allowed_origins != "*"
+        assert settings.cors_allow_credentials is True
+
+    def test_wildcard_without_credentials_ok_in_production(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="production",
+            cors_allowed_origins="*",
+            cors_allow_credentials=False,
+        )
+        assert settings.cors_allow_credentials is False
+
+    def test_wildcard_credentials_warn_in_development(self, tmp_path):
+        with pytest.warns(UserWarning, match="CORS misconfiguration"):
+            settings = _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="development",
+                cors_allowed_origins="*",
+                cors_allow_credentials=True,
+            )
+        assert settings.cors_allowed_origins == "*"
+
+    def test_wildcard_without_credentials_no_warning_in_development(self, tmp_path):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            settings = _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="development",
+                cors_allowed_origins="*",
+                cors_allow_credentials=False,
+            )
+        assert not any("CORS misconfiguration" in str(x.message) for x in caught)
+        assert settings.app_env == "development"
+
+
 class TestSettingsInstantiation:
     def test_can_create_settings_with_valid_key(self, tmp_path):
         storage_path = str(tmp_path / "data" / "users")

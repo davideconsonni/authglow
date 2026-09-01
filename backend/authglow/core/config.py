@@ -664,6 +664,41 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_cors_wildcard_credentials(self):
+        """Fail fast in production on CORS wildcard origins + credentials.
+
+        Starlette's CORSMiddleware with ``allowed_origins=["*"]`` and
+        ``allow_credentials=True`` reflects the request's ``Origin``
+        header, effectively allowing ANY origin to make credentialed
+        (httpOnly-cookie) requests. The comparison is intentionally
+        strict (``== "*"``) so the guard blocks exactly what
+        :meth:`get_cors_origins` interprets as the wildcard at runtime.
+        In non-production environments the same combination only emits
+        a non-blocking ``UserWarning`` (mirroring the
+        ``cors_allowed_headers`` check in ``__init__``). Runtime
+        overrides applied through the admin Settings API bypass model
+        validators — this guard protects the boot path, which is the
+        primary configuration surface.
+        """
+        wildcard_credentials = self.cors_allow_credentials and self.cors_allowed_origins == "*"
+        if wildcard_credentials:
+            if self.is_production:
+                raise ValueError(
+                    "CORS misconfiguration: cors_allowed_origins='*' combined with "
+                    "cors_allow_credentials=true allows any origin to make credentialed "
+                    "requests. Set explicit origins or disable credentials."
+                )
+            warnings.warn(
+                "CORS misconfiguration: cors_allowed_origins='*' combined with "
+                "cors_allow_credentials=true allows any origin to make credentialed "
+                "requests (non-production only). Set explicit origins or disable "
+                "credentials.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return self
+
     def get_storage_options(self) -> dict:
         """Get storage options based on backend."""
         options: dict[str, object] = {}
