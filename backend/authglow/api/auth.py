@@ -244,6 +244,11 @@ def _oauth_error_redirect(
             error=error,
             error_description=description,
             state=state,
+            # RFC 9207 §2: every authorization response (success and
+            # error) carries ``iss`` so a client talking to multiple
+            # authorization servers can attribute the response and
+            # mitigate mix-up attacks (FAPI 2.0 prerequisite).
+            iss=get_settings().issuer,
         ),
         status_code=302,
     )
@@ -774,6 +779,7 @@ async def authorize_post(
             error="login_required",
             error_description="User is not authenticated",
             state=state,
+            iss=settings.issuer,
         )
         from fastapi.responses import RedirectResponse
 
@@ -818,7 +824,9 @@ async def authorize_post(
             state=state,
             requested_claims=parsed_claims,
         )
-        redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
+        redirect_url = _build_oauth_redirect(
+            redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+        )
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse(url=redirect_url, status_code=302)
@@ -997,7 +1005,9 @@ async def authorize_post(
                 state=state,
                 requested_claims=parsed_claims,
             )
-            redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
+            redirect_url = _build_oauth_redirect(
+                redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+            )
             return {"redirect_url": redirect_url}
 
         from authglow.services.oauth_consent import OAuth2ConsentService
@@ -1023,7 +1033,9 @@ async def authorize_post(
                 state=state,
                 requested_claims=parsed_claims,
             )
-            redirect_url = _build_oauth_redirect(redirect_uri, code=auth_code.code, state=state)
+            redirect_url = _build_oauth_redirect(
+                redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+            )
             return {"redirect_url": redirect_url}
 
     # Show consent screen (forced by prompt=consent, or no prior consent)

@@ -88,7 +88,12 @@ async def check_consent_auto(
         )
 
         redirect_url = _build_oauth_redirect(
-            session["redirect_uri"], code=auth_code.code, state=session.get("state")
+            session["redirect_uri"],
+            code=auth_code.code,
+            state=session.get("state"),
+            # RFC 9207 §2: mix-up mitigation — every authorization
+            # response carries the issuer identifier.
+            iss=get_settings().issuer,
         )
 
         return {
@@ -154,6 +159,9 @@ async def process_consent(
             session["redirect_uri"],
             error="access_denied",
             state=session.get("state"),
+            # RFC 9207 §2: mix-up mitigation — every authorization
+            # response carries the issuer identifier.
+            iss=get_settings().issuer,
         )
 
         return {"approved": False, "redirect_url": redirect_url}
@@ -193,7 +201,12 @@ async def process_consent(
     await session_service.delete_consent_session(session_token)
 
     redirect_url = _build_oauth_redirect(
-        session["redirect_uri"], code=auth_code.code, state=session.get("state")
+        session["redirect_uri"],
+        code=auth_code.code,
+        state=session.get("state"),
+        # RFC 9207 §2: mix-up mitigation — every authorization
+        # response carries the issuer identifier.
+        iss=get_settings().issuer,
     )
 
     return {"approved": True, "authorization_code": auth_code.code, "redirect_url": redirect_url}

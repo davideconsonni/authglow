@@ -92,6 +92,11 @@ class OpenIDConfiguration(BaseModel):
     # supported; AuthGlow advertises ES256.
     dpop_signing_alg_values_supported: List[str] = []
 
+    # RFC 9207: the ``iss`` parameter is included in every
+    # authorization response (success and error) as mix-up
+    # mitigation — an informal FAPI 2.0 prerequisite.
+    authorization_response_iss_parameter_supported: bool = True
+
     # Additional endpoints
     device_authorization_endpoint: Optional[str] = None
     revocation_endpoint: Optional[str] = None

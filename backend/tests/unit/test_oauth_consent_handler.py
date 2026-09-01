@@ -1,8 +1,12 @@
 from unittest.mock import AsyncMock, MagicMock
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from starlette.requests import Request
 
+from authglow.api.oauth_consent_handler import (
+    get_settings as handler_get_settings,
+)
 from authglow.api.oauth_consent_handler import process_consent
 
 
@@ -56,7 +60,11 @@ async def test_consent_without_remember_does_not_persist_grant():
 
     consent_service.create_consent.assert_not_awaited()
     assert result["approved"] is True
-    assert result["redirect_url"].endswith("code=auth-code&state=state-value")
+    query = parse_qs(urlsplit(result["redirect_url"]).query)
+    assert query["code"] == ["auth-code"]
+    assert query["state"] == ["state-value"]
+    # RFC 9207 §2: the authorization response carries the issuer.
+    assert query["iss"] == [handler_get_settings().issuer]
 
 
 @pytest.mark.asyncio

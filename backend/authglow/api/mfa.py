@@ -483,5 +483,8 @@ async def verify_oauth_mfa_login(
             session.redirect_uri,
             code=auth_code.code,
             state=session.state,
+            # RFC 9207 §2: mix-up mitigation — every authorization
+            # response carries the issuer identifier.
+            iss=get_settings().issuer,
         )
     }

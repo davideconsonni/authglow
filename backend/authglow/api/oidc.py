@@ -140,6 +140,9 @@ async def openid_configuration(request: Request, response: Response):
         # ``dpop_bound`` field on OAuth2Client. ES256 is the only
         # accepted algorithm — see services/dpop.py.
         dpop_signing_alg_values_supported=["ES256"],
+        # RFC 9207: ``iss`` is included in every authorization
+        # response (success and error redirects) — mix-up mitigation.
+        authorization_response_iss_parameter_supported=True,
         claims_supported=claims_supported,
         code_challenge_methods_supported=["S256"],
         device_authorization_endpoint=f"{base_url}/oauth2/device/authorize",
