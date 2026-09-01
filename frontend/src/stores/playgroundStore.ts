@@ -64,7 +64,7 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   codeChallenge: '',
   authCode: '',
   redirectUri: '',
-  scopes: 'openid profile email',
+  scopes: 'openid profile email offline_access',
   state: generateOAuthState(),
   nonce: generateOAuthNonce(),
   apiKey: '',

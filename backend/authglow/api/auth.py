@@ -63,7 +63,10 @@ UserStorage = UserService
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/oauth2/token", auto_error=False)
 FIRST_PARTY_BROWSER_CLIENT_ID = "password_grant"
-FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin"
+# ``offline_access`` keeps the dashboard's browser session backed by a
+# refresh token once the OIDC §11 gate on third-party code/device flows
+# is in effect (see the token endpoint).
+FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin offline_access"
 
 
 def _first_party_oauth_client(settings: Settings) -> OAuth2Client:
@@ -1261,8 +1264,11 @@ async def token_endpoint(
             raise OAuth2Error(INVALID_SCOPE, "Invalid scope", status_code=400)
 
         # Final check: ensure the user has the scopes that were approved and are valid for the client
-        # OIDC standard scopes (openid, profile, email, phone, address) are always allowed
-        oidc_standard_scopes = {"openid", "profile", "email", "phone", "address"}
+        # OIDC standard scopes (openid, profile, email, phone, address,
+        # offline_access) are always allowed — ``offline_access`` must
+        # survive this filter so the §11 refresh-token gate downstream
+        # can see it (it mirrors ``process_scopes``' OIDC standard set).
+        oidc_standard_scopes = {"openid", "profile", "email", "phone", "address", "offline_access"}
         scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
 
         # Generate JWT access token. The claim policy for this
@@ -1289,24 +1295,32 @@ async def token_endpoint(
             extra_claims=extra_claims,
         )
 
-        # Create persistent refresh token with rotation
-        rt = await refresh_token_service.create_refresh_token(
-            user_id=user.id,
-            client_id=auth_code.client_id,
-            scopes=scopes,
-            issued_ip=request.client.host if request.client else None,
-            expires_in_days=30,
-        )
+        # OIDC Core §11: a refresh token is issued only when the client
+        # was granted ``offline_access``. Clients that do not request
+        # (or are not granted) it simply receive an access-token-only
+        # response — no error, per the OIDC recommendation.
+        rt = None
+        if "offline_access" in scopes:
+            rt = await refresh_token_service.create_refresh_token(
+                user_id=user.id,
+                client_id=auth_code.client_id,
+                scopes=scopes,
+                issued_ip=request.client.host if request.client else None,
+                expires_in_days=30,
+            )
 
-        # Add refresh token to response
-        access_token_response.refresh_token = rt.token
+        if rt is not None:
+            access_token_response.refresh_token = rt.token
 
         # The dashboard is a public OAuth client. Set the browser session
         # cookies as a same-origin convenience; the OAuth response remains
-        # standards-compatible JSON for every other client.
+        # standards-compatible JSON for every other client. Its authorize
+        # request carries ``offline_access``, so the session cookies are
+        # backed by the rotated refresh token.
         if (
             resolved_client_id == settings.oauth2_client_id
             and redirect_uri == settings.oauth2_first_party_redirect_uri
+            and rt is not None
         ):
             _set_auth_cookies(response, access_token_response.access_token, rt.token, settings)
 
@@ -1401,6 +1415,7 @@ async def token_endpoint(
         if (
             resolved_client_id == settings.oauth2_client_id
             and redirect_uri == settings.oauth2_first_party_redirect_uri
+            and rt is not None
         ):
             from fastapi.responses import JSONResponse
 
@@ -1697,17 +1712,20 @@ async def token_endpoint(
                 extra_claims=extra_claims,
             )
 
-            # Opaque persisted refresh token with rotation + theft
-            # detection — previously a JWT the refresh endpoint could
-            # never accept.
-            rt = await refresh_token_service.create_refresh_token(
-                user_id=user.id,
-                client_id=resolved_device_client_id,
-                scopes=scopes_list,
-                issued_ip=request.client.host if request.client else None,
-                expires_in_days=30,
-            )
-            access_token_response.refresh_token = rt.token
+            # OIDC Core §11: refresh token only with granted
+            # ``offline_access`` — same gate as the authorization_code
+            # branch. Opaque persisted refresh token with rotation +
+            # theft detection — previously a JWT the refresh endpoint
+            # could never accept.
+            if "offline_access" in scopes_list:
+                rt = await refresh_token_service.create_refresh_token(
+                    user_id=user.id,
+                    client_id=resolved_device_client_id,
+                    scopes=scopes_list,
+                    issued_ip=request.client.host if request.client else None,
+                    expires_in_days=30,
+                )
+                access_token_response.refresh_token = rt.token
 
             await device_service.cleanup_expired()
             return access_token_response

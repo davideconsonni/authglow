@@ -45,12 +45,21 @@ def _build_app(router) -> FastAPI:
 class TestLogoutRedirectStrictValidation:
     """Production-only strict validation: no bypass, no dev-mode exceptions."""
 
-    def _patch_services(self, *, id_token_valid: bool = True, client=None):
+    def _patch_services(
+        self,
+        *,
+        id_token_valid: bool = True,
+        client=None,
+        frontchannel_uris=None,
+    ):
         """Return an ``ExitStack`` that mocks JWT / OAuth2 / Audit services.
 
         ``logout_get`` imports ``OAuth2Service`` and ``AuditService``
         locally, so the patching target is each service's definition
         module (``services.{jwt,oauth2,audit}``).
+        ``frontchannel_uris`` is the list returned by
+        ``client_storage.list_clients`` (drives the front-channel
+        logout HTML branch; default empty → plain 303 redirect).
         """
         from authglow.models.oidc import IDTokenClaims
 
@@ -70,7 +79,7 @@ class TestLogoutRedirectStrictValidation:
 
         storage_mock = MagicMock()
         storage_mock.get_client = AsyncMock(return_value=client)
-        storage_mock.list_clients = AsyncMock(return_value=[])
+        storage_mock.list_clients = AsyncMock(return_value=frontchannel_uris or [])
 
         oauth2_service_mock = MagicMock()
         oauth2_service_mock.client_storage = storage_mock
@@ -238,3 +247,91 @@ class TestLogoutRedirectStrictValidation:
         assert response.status_code == 400, response.text
         detail = response.json().get("detail", "")
         assert "invalid" in detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# Front-Channel Logout HTML — JS/HTML-safe interpolation (F6)
+# ---------------------------------------------------------------------------
+
+
+class TestFrontChannelLogoutHtmlEscaping:
+    """F6 / defence in depth: the front-channel logout HTML must never
+    interpolate the redirect URI or the registered front-channel URIs
+    raw into their JS/HTML contexts. The redirect URI is serialized
+    with ``json.dumps`` inside the script; the iframe attributes are
+    HTML-escaped; the iframe query is URL-encoded."""
+
+    def _logout_html(self, *, allowed_uri: str, frontchannel_uri: str, state=None) -> str:
+        from authglow.api.oidc import router
+
+        client = _make_client(allowed_post_logout_redirect_uris=[allowed_uri])
+        client.frontchannel_logout_uri = frontchannel_uri
+
+        patches, _, _ = TestLogoutRedirectStrictValidation()._patch_services(
+            client=client,
+            frontchannel_uris=[client],
+        )
+
+        app = _build_app(router)
+        http = TestClient(app, follow_redirects=False)
+
+        params = {
+            "id_token_hint": "valid-hint",
+            "post_logout_redirect_uri": allowed_uri,
+        }
+        if state:
+            params["state"] = state
+        with patches:
+            response = http.get("/oauth2/logout", params=params)
+
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"].startswith("text/html")
+        return response.text
+
+    def test_redirect_uri_is_json_serialized_in_script(self, test_settings):
+        """The script assigns the URI through ``json.dumps`` — exactly
+        one pair of surrounding quotes; the old raw-replacement pattern
+        (``location="..."``) is gone."""
+        html = self._logout_html(
+            allowed_uri="https://example.com/logout",
+            frontchannel_uri="https://rp.example/frontchannel",
+        )
+        assert 'location = "https://example.com/logout";' in html
+        assert 'location="' not in html
+
+    def test_hostile_redirect_uri_cannot_break_out_of_the_script(self, test_settings):
+        """A registered URI carrying JS metacharacters stays a string
+        literal: json.dumps escapes the embedded quotes, so no code
+        can execute out of the assignment."""
+        hostile = 'https://example.com/logout?x=",alert(1),("'
+        html = self._logout_html(
+            allowed_uri=hostile,
+            frontchannel_uri="https://rp.example/frontchannel",
+        )
+        assert "location = " in html
+        # The hostile payload never appears raw inside the script…
+        assert '",alert(1),("' not in html
+        # …it is JSON-escaped instead.
+        assert '\\"' in html
+
+    def test_iframe_attributes_are_html_escaped(self, test_settings):
+        """A front-channel URI containing a double quote cannot break
+        out of the ``src`` attribute — html.escape(quote=True) turns
+        it into &quot; and any injected markup is neutralized as text."""
+        html = self._logout_html(
+            allowed_uri="https://example.com/logout",
+            frontchannel_uri='https://rp.example/fc?x="><script>alert(1)</script>',
+        )
+        assert 'src="https://rp.example/fc?x=">' not in html
+        assert "&quot;&gt;&lt;script&gt;" in html
+
+    def test_iframe_query_components_are_url_encoded(self, test_settings):
+        """iss/sid in the iframe query go through urlencode."""
+        html = self._logout_html(
+            allowed_uri="https://example.com/logout",
+            frontchannel_uri="https://rp.example/frontchannel",
+            state="abc/123",
+        )
+        assert "src=" in html
+        # The state appended to the redirect URL stays URL-encoded too.
+        assert "state=abc%2F123" in html

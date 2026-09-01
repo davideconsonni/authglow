@@ -3,8 +3,10 @@
 import asyncio
 import base64
 import hashlib
+import json
+from html import escape as _html_escape
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import jwt
 from cryptography.hazmat.backends import default_backend
@@ -501,26 +503,31 @@ async def logout_get(
             from fastapi.responses import HTMLResponse
 
             issuer = get_settings().issuer
+            # HTML-escape the registered URI inside the attribute and
+            # URL-encode the query components — defence in depth for
+            # values that are exact-match validated at registration but
+            # must never be able to break out of their context here.
             iframes = "\n".join(
-                f'<iframe src="{c.frontchannel_logout_uri}?iss={issuer}&sid={sid}" '
+                f'<iframe src="{_html_escape(c.frontchannel_logout_uri, quote=True)}'
+                f'?{urlencode({"iss": issuer, "sid": sid})}" '
                 f'style="display:none"></iframe>'
                 for c in frontchannel_clients
             )
             redirect_url = post_logout_redirect_uri
             if state:
-                from urllib.parse import urlencode as _enc
-
                 sep = "&" if "?" in redirect_url else "?"
-                redirect_url = f"{redirect_url}{sep}{_enc({'state': state})}"
+                redirect_url = f"{redirect_url}{sep}{urlencode({'state': state})}"
             html = (
                 "<!DOCTYPE html>\n<html><head><title>Logout</title></head><body>\n"
                 f"{iframes}\n"
-                '<script>setTimeout(function(){{location="{redirect_url}";}},2000)</script>\n'
+                # JSON serialization is JS-safe (``ensure_ascii`` escapes
+                # every non-basic character as \uXXXX) and carries its
+                # own quotes — the URI is never interpolated into the
+                # script via raw string replacement.
+                f"<script>setTimeout(function(){{location = {json.dumps(redirect_url)};}},2000)</script>\n"
                 "</body></html>"
-            ).replace("{redirect_url}", redirect_url)
+            )
             return HTMLResponse(content=html)
-
-        from urllib.parse import urlencode
 
         redirect_url = post_logout_redirect_uri
         if state:

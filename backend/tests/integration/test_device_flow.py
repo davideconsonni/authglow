@@ -302,13 +302,15 @@ class TestDeviceTokenPolling:
 
         mock_service = MagicMock(spec=Svc)
         mock_service.poll = AsyncMock(
-            return_value=_pending_auth(status="authorized", user_id="user-1")
+            return_value=_pending_auth(
+                status="authorized", user_id="user-1", scope="read offline_access"
+            )
         )
         mock_service.cleanup_expired = AsyncMock(return_value=0)
 
         http, oauth2_svc = _token_app(mock_service)
-        from authglow.api.auth import get_user_storage as gus
         from authglow.api.auth import get_jwt_service as gjs
+        from authglow.api.auth import get_user_storage as gus
 
         http.app.dependency_overrides[gus] = lambda: storage
         http.app.dependency_overrides[gjs] = lambda: jwt_svc
@@ -332,3 +334,51 @@ class TestDeviceTokenPolling:
         # Opaque rotated refresh token — never a JWT.
         assert body["refresh_token"] == "rt-opaque-value"
         assert "." not in body["refresh_token"]
+
+    def test_authorized_without_offline_access_skips_refresh_token(self):
+        """OIDC Core §11: the device branch issues a refresh token only
+        when ``offline_access`` was granted — otherwise the response is
+        access-token-only (no error)."""
+        from authglow.services.device_auth import DeviceAuthorizationService as Svc
+
+        user = MagicMock(id="user-1", email="u@x.com", scopes=["read"], is_active=True)
+        storage = MagicMock()
+        storage.get_user = AsyncMock(return_value=user)
+
+        jwt_svc = MagicMock()
+        expected = Token(access_token="at-fake", token_type="Bearer", expires_in=300)
+        jwt_svc.create_token_response = MagicMock(return_value=expected)
+
+        mock_service = MagicMock(spec=Svc)
+        mock_service.poll = AsyncMock(
+            return_value=_pending_auth(status="authorized", user_id="user-1")
+        )
+        mock_service.cleanup_expired = AsyncMock(return_value=0)
+
+        http, _ = _token_app(mock_service)
+        from authglow.api.auth import get_jwt_service as gjs
+        from authglow.api.auth import get_user_storage as gus
+
+        http.app.dependency_overrides[gus] = lambda: storage
+        http.app.dependency_overrides[gjs] = lambda: jwt_svc
+
+        claim_policy = MagicMock()
+        claim_policy.build_claims = AsyncMock(return_value={})
+
+        rt_instance = MagicMock()
+        rt_instance.create_refresh_token = AsyncMock(
+            return_value=MagicMock(token="rt-opaque-value")
+        )
+
+        with (
+            patch("authglow.services.device_auth.DeviceAuthorizationService", return_value=mock_service),
+            patch("authglow.api.auth.ClaimPolicyService", return_value=claim_policy),
+            patch("authglow.api.auth.RefreshTokenService", return_value=rt_instance),
+        ):
+            response = _poll(http)
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["access_token"] == "at-fake"
+        assert body["refresh_token"] is None
+        rt_instance.create_refresh_token.assert_not_awaited()
