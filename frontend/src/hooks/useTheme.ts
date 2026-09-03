@@ -8,9 +8,6 @@ type ResolvedTheme = 'professional' | 'dark'
 
 const THEME_KEY = 'auth-theme'
 
-let serverSyncDone = false
-let serverSyncPromise: Promise<void> | null = null
-
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined') return 'dark'
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'professional' : 'dark'
@@ -52,38 +49,10 @@ function saveLocalTheme(theme: Theme) {
   }
 }
 
-async function syncFromServer(): Promise<void> {
-  if (serverSyncDone) return
-  if (serverSyncPromise) return serverSyncPromise
-
-  serverSyncPromise = (async () => {
-    try {
-      const prefs = await api.get<{ theme?: string }>('/api/profile/me/preferences')
-      const serverTheme = normalizeTheme(prefs.theme ?? 'professional') ?? 'professional'
-      const localTheme = readLocalTheme()
-
-      if (localTheme !== 'auto' && serverTheme === localTheme) {
-        return
-      }
-
-      applyTheme(resolveTheme(serverTheme))
-      saveLocalTheme(serverTheme)
-    } catch {
-      /* offline: keep local theme */
-    } finally {
-      serverSyncDone = true
-      serverSyncPromise = null
-    }
-  })()
-
-  return serverSyncPromise
-}
-
 export function useTheme() {
   const { isAuthenticated } = useAuth()
   const [theme, setThemeState] = useState<Theme>(() => readLocalTheme())
   const manualOverrideRef = useRef(false)
-  const manualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setTheme = useCallback(async (newTheme: Theme) => {
     const resolved = resolveTheme(newTheme)
@@ -92,10 +61,6 @@ export function useTheme() {
     setThemeState(newTheme)
 
     manualOverrideRef.current = true
-    if (manualTimerRef.current) clearTimeout(manualTimerRef.current)
-    manualTimerRef.current = setTimeout(() => {
-      manualOverrideRef.current = false
-    }, 2000)
 
     if (isAuthenticated) {
       try {
@@ -120,14 +85,17 @@ export function useTheme() {
   useEffect(() => {
     if (!isAuthenticated) return
 
-    syncFromServer().then(() => {
-      if (manualOverrideRef.current) return
+    if (manualOverrideRef.current) {
+      manualOverrideRef.current = false
+      return
+    }
 
-      const serverTheme = readLocalTheme()
-      if (serverTheme !== theme) {
-        setThemeState(serverTheme)
-      }
-    })
+    const local = readLocalTheme()
+    api
+      .patch('/api/profile/me/preferences', { theme: local })
+      .catch(() => {
+        /* offline: keep local theme */
+      })
   }, [isAuthenticated])
 
   useEffect(() => {
