@@ -1,9 +1,11 @@
 import asyncio
-import pytest
-import warnings
 import os
+import warnings
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
+
 from authglow.core.config import Settings
 
 
@@ -19,9 +21,7 @@ class TestSecretKeyValidation:
     def test_placeholder_key_triggers_warning(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = Settings.validate_secret_key(
-                "your-secret-key-change-in-production-min-32-chars"
-            )
+            Settings.validate_secret_key("your-secret-key-change-in-production-min-32-chars")
             assert len(w) == 1
             assert issubclass(w[0].category, UserWarning)
             assert "placeholder" in str(w[0].message).lower()
@@ -404,9 +404,9 @@ class TestRSAKeyEncryption:
         assert decoded.email == "enc@example.com"
 
     def test_encrypted_key_differs_from_plaintext(self):
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
 
         private_key = rsa.generate_private_key(
             public_exponent=65537, key_size=2048, backend=default_backend()
@@ -419,7 +419,7 @@ class TestRSAKeyEncryption:
 
         secret = "d" * 32
 
-        from authglow.core.crypto import encrypt_private_key, decrypt_private_key
+        from authglow.core.crypto import decrypt_private_key, encrypt_private_key
 
         encrypted = encrypt_private_key(priv_bytes, secret_key=secret)
         decrypted = decrypt_private_key(encrypted, secret_key=secret)
