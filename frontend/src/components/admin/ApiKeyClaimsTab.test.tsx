@@ -332,7 +332,14 @@ describe('ApiKeyClaimsTab - save flow', () => {
   })
 })
 
-describe.skip('ApiKeyClaimsTab - preview shows MERGE (default + saved)', () => {
+describe.skip('ApiKeyClaimsTab - preview shows REPLACE (saved rules only)', () => {
+  // After the REPLACE semantics change, the API key token
+  // contains only the saved rules — the namespaced RBAC
+  // roles / permissions defaults are NOT auto-emitted. This
+  // describe is kept skipped because the preview is still
+  // built from hard-coded defaults in the component (see
+  // ``api-key-claim-policy-preview-json``); re-enable when
+  // the preview is rewired to read from the live token shape.
   beforeEach(() => {
     vi.clearAllMocks()
     mockQueryData.policy = {
@@ -354,17 +361,18 @@ describe.skip('ApiKeyClaimsTab - preview shows MERGE (default + saved)', () => {
     mockQueryData.templates = []
   })
 
-  it('shows the default RBAC claims PLUS the saved rule in the preview', async () => {
+  it('shows ONLY the saved rule in the preview (defaults not auto-emitted)', async () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
     const json = await screen.findByTestId('api-key-claim-policy-preview-json')
-    // The default first-party RBAC claims (merge semantic)
-    expect(json.textContent).toContain('https://authglow.example.com/claims/roles')
-    expect(json.textContent).toContain('https://authglow.example.com/claims/permissions')
-    // The saved rule's claim
+    // REPLACE semantic: the namespaced RBAC defaults are NOT
+    // auto-emitted unless the admin adds them explicitly.
+    expect(json.textContent).not.toContain('https://authglow.example.com/claims/roles')
+    expect(json.textContent).not.toContain('https://authglow.example.com/claims/permissions')
+    // The saved rule's claim is the only extra
     expect(json.textContent).toContain('https://authglow.example.com/claims/api_key_tier')
   })
 })
@@ -494,12 +502,12 @@ describe('ApiKeyClaimsTab - focus stability (regression)', () => {
 // first-party RBAC claims inside the "Current Rules" editable
 // section with a "2 saved rules + default" counter — confusing
 // the admin into thinking the system rules were user-saved.
-// The fix: the GET endpoint now returns the defaults in
-// ``default_rules`` (read-only) and keeps ``rules`` empty
-// when no policy is saved. The modal surfaces the defaults
-// in a separate "Default rules (always applied)" box with
-// a lock icon, and shows a merge-semantic banner at the
-// top so the admin understands the rule ordering.
+// Subsequent iterations surfaced the defaults in a separate
+// "Default rules" box, but with REPLACE semantics the defaults
+// are NOT auto-applied to API keys — the API endpoint now
+// returns an empty ``default_rules`` and the modal does not
+// render the misleading box. The admin opts in via the
+// templates gallery or the form.
 
 
 describe('ApiKeyClaimsTab - default rules UX (regression)', () => {
@@ -534,30 +542,30 @@ describe('ApiKeyClaimsTab - default rules UX (regression)', () => {
     mockQueryData.templates = []
   })
 
-  it('shows the merge-semantic banner', () => {
+  it('shows the REPLACE-semantic banner', () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    const banner = screen.getByTestId('api-key-merge-banner')
+    const banner = screen.getByTestId('api-key-policy-banner')
     expect(banner).toBeInTheDocument()
-    expect(banner.textContent).toMatch(/merged/i)
-    expect(banner.textContent).toMatch(/always/i)
+    expect(banner.textContent).toMatch(/replace/i)
+    expect(banner.textContent).toMatch(/only extras/i)
   })
 
-  it('shows the "Default rules (always applied)" box with 2 read-only rules', () => {
+  it('does NOT render the Default rules box (defaults are NOT auto-applied to API keys)', () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
       </Wrapper>,
     )
-    const box = screen.getByTestId('api-key-default-rules-box')
-    expect(box).toBeInTheDocument()
-    const defaultRules = screen.getAllByTestId('api-key-default-rule')
-    expect(defaultRules).toHaveLength(2)
-    // Lock icon indicates read-only
-    expect(box.textContent).toMatch(/always included/i)
+    // REPLACE semantic: the API returns no default_rules for
+    // API keys (they are not auto-applied) and the modal does
+    // not render the box regardless. The admin opts in via
+    // the templates gallery.
+    expect(screen.queryByTestId('api-key-default-rules-box')).not.toBeInTheDocument()
+    expect(screen.queryAllByTestId('api-key-default-rule')).toHaveLength(0)
   })
 
   it('does NOT show any rules in the "Current Rules" editable section when no policy is saved', () => {
@@ -567,13 +575,12 @@ describe('ApiKeyClaimsTab - default rules UX (regression)', () => {
       </Wrapper>,
     )
     // The empty state is shown — the admin sees "No custom
-    // claims yet" with a clear CTA. The 2 default rules are
-    // NOT editable in the Current Rules section.
+    // claims yet" with a clear CTA.
     expect(screen.getByTestId('api-key-claim-policy-empty-state')).toBeInTheDocument()
     expect(screen.queryAllByTestId('api-key-claim-rule-card')).toHaveLength(0)
   })
 
-  it('preview header counter says "0 custom rules · 2 default always applied"', () => {
+  it('preview header counter says "0 custom rules" (no defaults count)', () => {
     render(
       <Wrapper>
         <ApiKeyClaimsTab keyId="k-1" keyName="Test" onClose={vi.fn()} />
@@ -581,7 +588,9 @@ describe('ApiKeyClaimsTab - default rules UX (regression)', () => {
     )
     const counter = screen.getByTestId('api-key-claim-policy-counter')
     expect(counter.textContent).toMatch(/0 custom rules/)
-    expect(counter.textContent).toMatch(/2 default always applied/)
+    // With REPLACE semantics, defaults are NOT applied — no
+    // "default always applied" segment in the counter.
+    expect(counter.textContent).not.toMatch(/default always applied/i)
   })
 
   it.skip('preview still shows the default claims in the wire shape (so the admin sees the full token)', () => {

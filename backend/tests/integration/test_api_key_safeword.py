@@ -300,7 +300,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_owned_key())
         _wire_service(user_client, service)
 
-        resp = user_client.delete("/api/keys/k-own/delete/challenge")
+        resp = user_client.post("/api/keys/k-own/delete/challenge")
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["challenge_id"]
@@ -323,7 +323,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_owned_key())
         _wire_service(user_client, service)
 
-        challenge = user_client.delete("/api/keys/k-own/delete/challenge").json()
+        challenge = user_client.post("/api/keys/k-own/delete/challenge").json()
         resp = self._delete_with_body(
             user_client,
             "/api/keys/k-own",
@@ -339,7 +339,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_owned_key())
         _wire_service(user_client, service)
 
-        challenge = user_client.delete("/api/keys/k-own/delete/challenge").json()
+        challenge = user_client.post("/api/keys/k-own/delete/challenge").json()
         resp = self._delete_with_body(
             user_client,
             "/api/keys/k-own",
@@ -355,7 +355,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_owned_key())
         _wire_service(user_client, service)
 
-        challenge = user_client.delete("/api/keys/k-own/delete/challenge").json()
+        challenge = user_client.post("/api/keys/k-own/delete/challenge").json()
         first = self._delete_with_body(
             user_client,
             "/api/keys/k-own",
@@ -381,7 +381,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_other_users_key())
         _wire_service(user_client, service)
 
-        challenge = user_client.delete("/api/keys/k-other/delete/challenge")
+        challenge = user_client.post("/api/keys/k-other/delete/challenge")
         # The challenge endpoint checks ownership too — must be 403
         # (or 404 to avoid leaking existence). Either is acceptable
         # but the destructive delete must NOT fire.
@@ -392,7 +392,7 @@ class TestDeleteApiKeySafeword:
         service = _FakeKeyService(key=_other_users_key())
         _wire_service(admin_client, service)
 
-        challenge = admin_client.delete(
+        challenge = admin_client.post(
             "/api/keys/k-other/delete/challenge"
         ).json()
         resp = self._delete_with_body(
@@ -421,9 +421,9 @@ class TestDeleteApiKeySafeword:
         # server to delete a different id with that challenge.
         # The challenge is bound to its target id, so the server
         # must reject it as "not valid for this target" (400).
-        challenge = user_client.delete(
+        challenge = user_client.post(
             "/api/keys/k-own/delete/challenge"
-        ).json() if user_client.delete("/api/keys/k-own/delete/challenge").status_code == 200 else None
+        ).json() if user_client.post("/api/keys/k-own/delete/challenge").status_code == 200 else None
         # No owned key seeded in this test — generate a "passing"
         # challenge path by directly calling the safeword store.
         from authglow.core.safeword_store import issue_challenge, SafewordPurpose

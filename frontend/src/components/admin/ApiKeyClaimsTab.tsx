@@ -20,7 +20,7 @@
 // 5. **Inline form**: adding/editing a field is a simple form
 //    that appears inside the token card.
 //
-// 6. **API key extras**: context strip + merge semantics banner
+// 6. **API key extras**: context strip + REPLACE semantics banner
 //    + 5th source (API key attribute).
 
 import { useEffect, useRef, useState } from 'react'
@@ -485,14 +485,14 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
           </div>
         )}
 
-        {/* ----- Merge semantics banner ----- */}
-        <div className="flex-shrink-0 border-b border-surface-2 bg-brand-cool/5 px-6 py-3" data-testid="api-key-merge-banner">
+        {/* ----- REPLACE semantics banner ----- */}
+        <div className="flex-shrink-0 border-b border-surface-2 bg-brand-cool/5 px-6 py-3" data-testid="api-key-policy-banner">
           <div className="flex items-start gap-2 text-[11px] text-brand-cool">
             <Sparkles size={14} className="mt-0.5 shrink-0" />
             <p>
-              API key policies are <strong>merged</strong> with default rules. The system
-              always emits roles + permissions alongside your custom claims. To override
-              a default, add a custom rule with the same name — last one wins.
+              API key policies <strong>replace</strong> the default rule set — your
+              custom claims are the only extras in the token. To emit RBAC roles or
+              permissions, add them via the templates below or the form.
             </p>
           </div>
         </div>
@@ -523,32 +523,6 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                 <h3 className="text-sm font-semibold text-text-primary">Your Token</h3>
               </div>
 
-              {/* ----- Default rules (read-only, always applied) ----- */}
-              {(policy?.default_rules ?? []).length > 0 && (
-                <div className="mb-5" data-testid="api-key-default-rules-box">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                    Default rules (always included)
-                  </p>
-                  <div className="space-y-1.5">
-                    {(policy?.default_rules ?? []).map((r, idx) => (
-                      <div
-                        key={`default-rule-${idx}`}
-                        className="flex items-center gap-2 rounded-lg border border-surface-2 bg-surface-1 px-2.5 py-1.5"
-                        data-testid="api-key-default-rule"
-                      >
-                        <Lock size={10} className="shrink-0 text-text-muted" />
-                        <code className="flex-1 font-mono text-[11px] text-text-primary">
-                          {r.claim_name}
-                        </code>
-                        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] font-mono text-text-secondary">
-                          {r.source}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* ----- Standard fields section ----- */}
               <div className="mb-5">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
@@ -576,8 +550,7 @@ export function ApiKeyClaimsTab({ keyId, keyName, onClose }: ApiKeyClaimsTabProp
                       Your custom fields
                     </p>
                     <span className="text-[10px] font-semibold text-text-muted" data-testid="api-key-claim-policy-counter">
-                      {ruleCount} custom rule{ruleCount !== 1 ? 's' : ''}{' · '}
-                      {(policy?.default_rules ?? []).length} default always applied
+                      {ruleCount} custom rule{ruleCount !== 1 ? 's' : ''}
                     </span>
                   </div>
                   {isCustom && ruleCount > 0 && (

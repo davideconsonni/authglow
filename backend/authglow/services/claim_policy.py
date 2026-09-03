@@ -160,9 +160,15 @@ class ClaimPolicyService:
           set (the admin's saved rules are the entire
           emission).
         * **API key** (``api_key_id`` set): the saved
-          ``APIKeyClaimPolicy`` MERGES with the default rule
-          set (the standard RBAC roles + permissions are
-          always emitted, plus the key-specific rules).
+          ``APIKeyClaimPolicy`` REPLACES the default rule
+          set. A brand-new key with no saved policy emits
+          no extra claims — the admin opts in via the Claims
+          tab. This matches the admin UI's promise ("0 custom
+          rules" → no namespaced RBAC claims in the token) and
+          aligns API key semantics with OAuth client semantics.
+          To emit the namespaced RBAC roles / permissions
+          defaults on an API key, add explicit rules with
+          source ``RBAC_ROLES`` / ``RBAC_PERMISSIONS``.
 
         For first-party flows with neither parameter set the
         default first-party rules are used as-is.
@@ -211,16 +217,13 @@ class ClaimPolicyService:
             saved = await self._repository.get_by_client(client_id)
             active_rules = saved.rules if saved is not None else self._default_rules()
         elif api_key_id is not None:
-            # API key flow: default rules are ALWAYS applied,
-            # the saved policy rules are merged on top.
-            # The "merge" semantic is implemented by
-            # concatenating the rule lists and processing both.
-            # When a saved rule emits a claim that the default
-            # rules also emit, the saved rule wins (last-wins
-            # on dict assignment).
+            # API key flow: saved policy REPLACES the default rule
+            # set. With no saved policy, ``active_rules`` is empty
+            # and the JWT carries only standard claims — no
+            # implicit namespaced RBAC roles / permissions. The
+            # admin adds those explicitly via the Claims tab.
             saved_api_key = await self._api_key_repository.get_by_api_key(api_key_id)
-            saved_rules = saved_api_key.rules if saved_api_key is not None else []
-            active_rules = self._default_rules() + saved_rules
+            active_rules = saved_api_key.rules if saved_api_key is not None else []
         else:
             # First-party default (cookie auth, password
             # login, MFA completion, etc.).
@@ -307,8 +310,11 @@ class ClaimPolicyService:
         """Replace the saved policy for *api_key_id*.
 
         If *rules* is empty, the saved policy is deleted
-        (reverting to the default first-party rule set on
-        its own).
+        and the synthetic return reflects the "no policy"
+        state (empty rules). The API key flow REPLACES the
+        default rule set, so deleting the saved policy
+        removes all extra claims from the token — the
+        admin opts back in by saving explicit rules.
         """
         if rules:
             existing = await self._api_key_repository.get_by_api_key(api_key_id)
@@ -322,12 +328,9 @@ class ClaimPolicyService:
             await self._api_key_repository.save(policy)
             return policy
         await self._api_key_repository.delete(api_key_id)
-        # Return a synthetic "no policy" view so the admin UI
-        # can show "this key uses the default" instead of an
-        # empty state.
         return APIKeyClaimPolicy(
             api_key_id=api_key_id,
-            rules=self._default_rules(),
+            rules=[],
         )
 
     async def delete_api_key_policy(self, api_key_id: str) -> bool:
@@ -385,6 +388,12 @@ class ClaimPolicyService:
         """The default rule set applied to clients without a
         saved policy and to first-party flows with no
         ``client_id``.
+
+        Note: API key flows (``api_key_id`` set) no longer
+        consult this method — they REPLACE the default with
+        the saved policy (or empty rules when no policy is
+        configured). See :meth:`build_claims` for the
+        rationale.
 
         The default is a single OIDC-compliant rule pair: the
         namespaced RBAC roles + permissions claims, both into

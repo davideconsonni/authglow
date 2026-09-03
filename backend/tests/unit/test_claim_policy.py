@@ -687,11 +687,12 @@ class TestSaveAndDelete:
 # ---------------------------------------------------------------------------
 
 
-class TestBuildClaimsAPIKeyMerge:
-    def test_api_key_emits_default_rbac_when_no_policy_saved(self, test_settings):
-        """No saved API key policy → only the default first-party
-        rule set (RBAC roles + permissions, namespaced) is
-        applied to the access token."""
+class TestBuildClaimsAPIKeyReplace:
+    def test_api_key_emits_no_extra_claims_when_no_policy_saved(self, test_settings):
+        """No saved API key policy → no extra claims (the
+        namespaced RBAC roles + permissions defaults are NOT
+        auto-applied to API keys; the admin opts in via the
+        Claims tab)."""
         svc = ClaimPolicyService()
         api_key = _make_api_key()
         claims = _run(
@@ -704,16 +705,14 @@ class TestBuildClaimsAPIKeyMerge:
             )
         )
         ns = test_settings.claim_namespace.rstrip("/")
-        assert f"{ns}/roles" in claims
-        assert f"{ns}/permissions" in claims
-        assert (
-            "https://authglow.example.com/claims/api_key_name" not in claims
-        )
+        assert claims == {}
+        assert f"{ns}/roles" not in claims
+        assert f"{ns}/permissions" not in claims
 
-    def test_saved_api_key_policy_merges_with_default(self, test_settings):
-        """A saved API key policy is MERGED with the default
-        first-party rules — both the default RBAC claims and
-        the api-key-specific ones are emitted."""
+    def test_saved_api_key_policy_replaces_default(self, test_settings):
+        """A saved API key policy REPLACES the default rule set
+        — only the saved claims are emitted, no implicit RBAC
+        defaults are added on top."""
         svc = ClaimPolicyService()
         api_key = _make_api_key()
         rule = ClaimRule(
@@ -737,16 +736,16 @@ class TestBuildClaimsAPIKeyMerge:
             )
         )
         ns = test_settings.claim_namespace.rstrip("/")
-        assert f"{ns}/roles" in claims
-        assert f"{ns}/permissions" in claims
-        assert claims[
-            "https://authglow.example.com/claims/api_key_name"
-        ] == "Production key"
+        assert claims == {
+            "https://authglow.example.com/claims/api_key_name": "Production key"
+        }
+        assert f"{ns}/roles" not in claims
+        assert f"{ns}/permissions" not in claims
 
-    def test_api_key_saved_rule_overrides_default_on_conflict(self, test_settings):
-        """When the saved policy emits a claim with the same
-        name as a default rule, the saved rule wins (last-wins
-        on dict assignment)."""
+    def test_api_key_saved_rule_emits_directly(self, test_settings):
+        """A saved rule with the same claim_name as the legacy
+        RBAC default is emitted as-is — there is no default
+        rule to compete with (REPLACE, not MERGE)."""
         svc = ClaimPolicyService()
         api_key = _make_api_key()
         ns = test_settings.claim_namespace.rstrip("/")
@@ -770,8 +769,8 @@ class TestBuildClaimsAPIKeyMerge:
                 target=ClaimTarget.ACCESS_TOKEN,
             )
         )
-        assert claims[f"{ns}/roles"] == ["custom-from-saved"]
-        assert f"{ns}/permissions" in claims
+        assert claims == {f"{ns}/roles": ["custom-from-saved"]}
+        assert f"{ns}/permissions" not in claims
 
     def test_api_key_id_without_api_key_instance_skips_api_key_field(
         self, test_settings
@@ -967,12 +966,16 @@ class TestAPIKeyPolicySaveDelete:
         repo.save.assert_awaited_once()
 
     def test_save_with_empty_rules_deletes(self, test_settings):
+        """Empty rules → the saved policy is removed and the
+        synthetic return reflects the no-policy state (empty
+        rules, since API key REPLACE semantics drop the
+        defaults along with the saved policy)."""
         repo = MagicMock()
         repo.delete = AsyncMock(return_value=True)
         svc = ClaimPolicyService(api_key_repository=repo)
         saved = _run(svc.save_api_key_policy("ak-1", []))
         repo.delete.assert_awaited_once_with("ak-1")
-        assert len(saved.rules) >= 1
+        assert saved.rules == []
 
     def test_delete_policy_returns_bool(self, test_settings):
         repo = MagicMock()

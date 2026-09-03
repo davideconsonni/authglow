@@ -230,7 +230,7 @@ async def revoke_api_key(
     return {"message": "API key revoked successfully"}
 
 
-@router.delete("/api/keys/{key_id}/delete/challenge", response_model=RotateSecretChallenge)
+@router.post("/api/keys/{key_id}/delete/challenge", response_model=RotateSecretChallenge)
 @limiter.limit("60/hour")
 async def request_delete_api_key_challenge(
     request: Request,

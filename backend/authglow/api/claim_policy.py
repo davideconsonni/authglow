@@ -399,11 +399,11 @@ async def list_claim_templates(
 # The endpoints are mounted under ``/api/admin/api-keys`` so
 # the resource hierarchy is clear and the existing API key
 # admin UI can deep-link into the policy tab. Empty
-# ``rules`` list on PUT deletes the saved policy (revert to
-# the default first-party rules). Saved policies are
-# MERGED with the default first-party rule set at issue time
-# (different from OAuth client policies, which REPLACE the
-# default) — see :class:`ClaimPolicyService` for the rationale.
+# ``rules`` list on PUT deletes the saved policy (the API
+# key emits no extra claims until the admin saves explicit
+# rules). Saved policies REPLACE the default rule set at
+# issue time — see :class:`ClaimPolicyService` for the
+# rationale.
 # ---------------------------------------------------------------------------
 
 
@@ -427,6 +427,26 @@ def _to_response_payload_api_key(policy) -> ClaimPolicyResponse:
         ],
         default_rules=[],
         updated_at=policy.updated_at.isoformat() if policy.updated_at else None,
+    )
+
+
+def _to_api_key_default_payload(api_key_id: str) -> ClaimPolicyResponse:
+    """Return the "no saved policy" response for an API key.
+
+    The namespaced RBAC roles / permissions defaults are NOT
+    emitted at issue time for API keys (REPLACE semantics) —
+    see :class:`ClaimPolicyService`. We therefore return an
+    empty ``default_rules`` list so the admin UI does not show
+    a misleading "these are available" box. The admin opts in
+    to RBAC roles / permissions explicitly by saving rules
+    via the Claims tab (the templates gallery is the
+    recommended path).
+    """
+    return ClaimPolicyResponse(
+        client_id=api_key_id,
+        is_custom=False,
+        rules=[],
+        default_rules=[],
     )
 
 
@@ -457,7 +477,7 @@ async def get_api_key_claim_policy(
         )
     saved = await policy_service.get_api_key_policy(key_id)
     if saved is None:
-        return _to_default_payload(key_id)
+        return _to_api_key_default_payload(key_id)
     return _to_response_payload_api_key(saved)
 
 
@@ -476,9 +496,9 @@ async def put_api_key_claim_policy(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Replace the saved policy for *key_id*. Empty
-    ``rules`` deletes the saved policy (revert to the default
-    first-party rule set alone, since the API key merge
-    semantic is "saved rules + default rules")."""
+    ``rules`` deletes the saved policy (the API key emits
+    no extra claims until the admin saves explicit rules —
+    REPLACE semantics, see :class:`ClaimPolicyService`)."""
     key = await api_key_service.get_key(key_id)
     if key is None:
         raise HTTPException(
@@ -522,7 +542,7 @@ async def put_api_key_claim_policy(
     )
     if validated_rules:
         return _to_response_payload_api_key(saved)
-    return _to_default_payload(key_id)
+    return _to_api_key_default_payload(key_id)
 
 
 @router.delete(

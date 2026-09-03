@@ -101,22 +101,15 @@ class TestGetApiKeyClaimPolicy:
             assert resp.status_code == 200
             data = resp.json()
             assert data["is_custom"] is False
-            # The default RBAC rules are in ``default_rules``
-            # (read-only informational) — NOT in ``rules``
-            # (which the admin UI shows as the editable
-            # "Current Rules" list). Showing them in ``rules``
-            # confuses the admin into thinking the system
-            # rules are user-editable.
+            # No saved policy AND no defaults surfaced: API
+            # keys use REPLACE semantics, so the namespaced
+            # RBAC roles / permissions are NOT auto-applied
+            # (see :class:`ClaimPolicyService`). The admin UI
+            # therefore has nothing to show in
+            # ``default_rules``; the admin opts in by saving
+            # explicit rules via the Claims tab.
             assert data["rules"] == []
-            assert len(data["default_rules"]) == 2
-            ns = test_settings.claim_namespace.rstrip("/")
-            assert any(
-                r["claim_name"] == f"{ns}/roles" for r in data["default_rules"]
-            )
-            assert any(
-                r["claim_name"] == f"{ns}/permissions"
-                for r in data["default_rules"]
-            )
+            assert data["default_rules"] == []
 
     def test_default_payload_keeps_rules_empty_for_oauth_client_too(
         self, admin_client, test_settings
@@ -402,3 +395,98 @@ class TestRequireAdmin:
         client = TestClient(app)
         resp = client.get("/api/admin/claim-templates")
         assert resp.status_code in (401, 403)
+
+
+class TestApiKeyBuildClaimsReplace:
+    """Build-claims integration test for the API key REPLACE
+    semantic: the namespaced RBAC defaults must NOT auto-emit
+    when the API key has no saved policy. The unit-test class
+    ``TestBuildClaimsAPIKeyReplace`` covers the service-level
+    branch; this test pins the same invariant through the
+    route handler that ``exchange_api_key_for_token`` calls."""
+
+    def _mock_key(self, key_id: str) -> APIKey:
+        return _make_api_key(key_id)
+
+    def test_no_policy_no_extra_claims(
+        self, admin_client, test_settings
+    ) -> None:
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        with patch(
+            "authglow.api.claim_policy.APIKeyService"
+        ) as MockService:
+            MockService.return_value.get_key = AsyncMock(
+                return_value=self._mock_key("k-clean")
+            )
+
+            svc = ClaimPolicyService()
+            from authglow.models.user import User
+
+            user = User(
+                id="u-1",
+                email="u@test.com",
+                hashed_password=hash_password("TestP@ss123!"),
+                is_active=True,
+                scopes=["read"],
+            )
+
+            claims = asyncio.run(
+                svc.build_claims(
+                    user,
+                    api_key_id="k-clean",
+                    api_key=self._mock_key("k-clean"),
+                    scopes=["read"],
+                    target=ClaimTarget.ACCESS_TOKEN,
+                )
+            )
+            ns = test_settings.claim_namespace.rstrip("/")
+            assert claims == {}
+            assert f"{ns}/roles" not in claims
+            assert f"{ns}/permissions" not in claims
+
+    def test_saved_policy_alone_emits(
+        self, admin_client, test_settings
+    ) -> None:
+        from authglow.services.claim_policy import ClaimPolicyService
+
+        with patch(
+            "authglow.api.claim_policy.APIKeyService"
+        ) as MockService:
+            MockService.return_value.get_key = AsyncMock(
+                return_value=self._mock_key("k-rule")
+            )
+
+            svc = ClaimPolicyService()
+            from authglow.models.user import User
+
+            user = User(
+                id="u-1",
+                email="u@test.com",
+                hashed_password=hash_password("TestP@ss123!"),
+                is_active=True,
+                scopes=["read"],
+            )
+            rule = ClaimRule(
+                claim_name="https://authglow.example.com/claims/tenant_id",
+                source=ClaimSource.STATIC,
+                source_config=ClaimSourceConfig(value="acme"),
+                include_in=[ClaimTarget.ACCESS_TOKEN],
+            )
+            asyncio.run(svc.save_api_key_policy("k-rule", [rule]))
+
+            claims = asyncio.run(
+                svc.build_claims(
+                    user,
+                    api_key_id="k-rule",
+                    api_key=self._mock_key("k-rule"),
+                    scopes=["read"],
+                    target=ClaimTarget.ACCESS_TOKEN,
+                )
+            )
+            ns = test_settings.claim_namespace.rstrip("/")
+            assert claims == {
+                "https://authglow.example.com/claims/tenant_id": "acme"
+            }
+            assert f"{ns}/roles" not in claims
+            assert f"{ns}/permissions" not in claims

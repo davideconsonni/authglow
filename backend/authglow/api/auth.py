@@ -1789,9 +1789,10 @@ async def exchange_api_key_for_token(
     # minted by the first-party API-key exchange. Claim policy
     # is consulted with ``api_key_id=key_data.key_id`` so a
     # saved API key claim policy is applied. The service
-    # merges the saved policy on top of the default first-party
-    # rule set (RBAC roles + permissions) — the merge is the
-    # whole point of the API key policy.
+    # REPLACES the default rule set with the saved policy —
+    # a brand-new key with no policy emits no extra claims
+    # beyond the standard JWT fields, and the admin opts in
+    # to RBAC roles / permissions via the Claims tab.
     from authglow.services.jwt import INTERNAL_AUDIENCE
 
     claim_policy_service = ClaimPolicyService()
