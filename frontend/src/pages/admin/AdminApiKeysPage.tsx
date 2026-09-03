@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { Search, Loader2, Trash2, Key, Plus, Save, Ban, Copy, Check, RotateCcw, Pencil, X, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
-import { useApiQuery } from '../../hooks/useApi'
+import { useApiQuery, useApiKeyInvalidation } from '../../hooks/useApi'
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { RotateSecretDialog } from '../../components/admin/RotateSecretDialog'
 import { Banner } from '../../components/shared/Banner'
@@ -131,6 +131,7 @@ export function AdminApiKeysPage() {
     ['admin-keys', search],
     `/api/admin/keys${queryParam}`,
   )
+  const { invalidateApiKeyLists } = useApiKeyInvalidation()
   const keys: ApiKeyData[] = Array.isArray(data) ? data : (data?.items || data?.keys || [])
 
   const handleRevoke = async () => {
@@ -140,6 +141,7 @@ export function AdminApiKeysPage() {
       setRevokeId(null)
       notify.success('Key revoked. You can restore it later if needed.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke key'
       notify.error(msg)
@@ -153,6 +155,7 @@ export function AdminApiKeysPage() {
       setRestoreId(null)
       notify.success('Key restored successfully.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to restore key'
       notify.error(msg)
@@ -169,6 +172,7 @@ export function AdminApiKeysPage() {
       await api.post('/api/admin/keys/cleanup')
       notify.success('Expired keys cleaned up.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to cleanup keys')
     } finally {
@@ -215,6 +219,7 @@ export function AdminApiKeysPage() {
       })
       setCopied(false)
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
@@ -268,6 +273,7 @@ export function AdminApiKeysPage() {
       closeEdit()
       notify.success('Key updated.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to update key')
     } finally {
@@ -504,6 +510,7 @@ export function AdminApiKeysPage() {
         onSuccess={async () => {
           notify.success('Key deleted successfully.')
           await refetch()
+          invalidateApiKeyLists()
         }}
         onError={(msg) => notify.error(msg)}
       />
@@ -524,6 +531,7 @@ export function AdminApiKeysPage() {
             notify.success('Secret rotated. Copy it now.')
           }
           void refetch()
+          invalidateApiKeyLists()
         }}
         onError={(msg) => notify.error(msg)}
       />

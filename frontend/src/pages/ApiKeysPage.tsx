@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { Plus, Trash2, Copy, Check, Key, Loader2, Ban, RotateCcw, AlertTriangle, Pencil, X, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
-import { useApiQuery } from '../hooks/useApi'
+import { useApiQuery, useApiKeyInvalidation } from '../hooks/useApi'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { RotateSecretDialog } from '../components/admin/RotateSecretDialog'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -89,6 +89,7 @@ export function ApiKeysPage() {
   const [savingEdit, setSavingEdit] = useState(false)
 
   const { data: keys, refetch } = useApiQuery<ApiKeyData[]>(['my-keys'], '/api/keys')
+  const { invalidateApiKeyLists } = useApiKeyInvalidation()
 
   const atRiskKeys = (keys ?? []).filter((k) => {
     if (!k.is_active) return false
@@ -120,6 +121,7 @@ export function ApiKeysPage() {
       setNewName('')
       setNewDescription('')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to create key')
     } finally {
@@ -171,6 +173,7 @@ export function ApiKeysPage() {
       closeEdit()
       notify.success('Key updated.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to update key')
     } finally {
@@ -192,6 +195,7 @@ export function ApiKeysPage() {
       setRevokeId(null)
       notify.success('Key deactivated.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to deactivate key')
     }
@@ -204,6 +208,7 @@ export function ApiKeysPage() {
       setRestoreId(null)
       notify.success('Key restored.')
       await refetch()
+      invalidateApiKeyLists()
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed to restore key')
     }
@@ -593,6 +598,7 @@ export function ApiKeysPage() {
         onSuccess={async () => {
           notify.success('Key deleted.')
           await refetch()
+          invalidateApiKeyLists()
         }}
         onError={(msg) => notify.error(msg)}
       />
@@ -613,6 +619,7 @@ export function ApiKeysPage() {
             notify.success('Secret rotated. Copy it now.')
           }
           void refetch()
+          invalidateApiKeyLists()
         }}
         onError={(msg) => notify.error(msg)}
       />
