@@ -81,7 +81,7 @@ export function ApiKeyExchangeFlow() {
               value={localApiKey}
               onChange={(e) => setLocalApiKey(e.target.value)}
               type="password" autoComplete="off"
-              placeholder="ag_..."
+              placeholder="ak_..."
               className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
             />
           </div>
