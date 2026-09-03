@@ -291,7 +291,7 @@ export function RotateSecretDialog({
               <button
                 onClick={onClose}
                 disabled={busy}
-                className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors disabled:opacity-50"
+                className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors btn-cta"
               >
                 Cancel
               </button>
@@ -299,7 +299,7 @@ export function RotateSecretDialog({
                 onClick={requestChallenge}
                 disabled={busy}
                 data-testid="rotate-secret-generate"
-                className="inline-flex items-center gap-2 rounded-xl bg-semantic-error hover:bg-semantic-error/90 px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-semantic-error hover:bg-semantic-error/90 px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors btn-cta"
               >
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
                 {copy.generateLabel}
@@ -372,7 +372,7 @@ export function RotateSecretDialog({
               <button
                 onClick={onClose}
                 disabled={busy}
-                className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors disabled:opacity-50"
+                className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors btn-cta"
               >
                 Cancel
               </button>
@@ -380,7 +380,7 @@ export function RotateSecretDialog({
                 onClick={performAction}
                 disabled={busy || !wordMatches}
                 data-testid="rotate-secret-confirm"
-                className="inline-flex items-center gap-2 rounded-xl bg-semantic-error hover:bg-semantic-error/90 px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-xl bg-semantic-error hover:bg-semantic-error/90 px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors btn-cta disabled:cursor-not-allowed"
               >
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 {busy ? copy.rotatingLabel : copy.rotateLabel}

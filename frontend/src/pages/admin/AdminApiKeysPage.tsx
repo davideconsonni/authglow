@@ -303,7 +303,7 @@ export function AdminApiKeysPage() {
             <button
               onClick={handleCleanup}
               disabled={cleaning}
-              className="flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors btn-cta"
             >
               {cleaning && <Loader2 size={14} className="animate-spin" />}
               Cleanup Expired
@@ -640,7 +640,7 @@ export function AdminApiKeysPage() {
               <button
                 onClick={handleCreate}
                 disabled={saving || !form.name || !form.user_email}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Create Key
@@ -843,7 +843,7 @@ export function AdminApiKeysPage() {
                 disabled={editNeverExpires}
                 placeholder="Expires in days (empty = unchanged)"
                 data-testid="key-edit-expires-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none btn-cta"
               />
               <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
                 <input
@@ -868,7 +868,7 @@ export function AdminApiKeysPage() {
                 onClick={handleSaveEdit}
                 disabled={savingEdit}
                 data-testid="key-edit-submit"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
               >
                 {savingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save

@@ -223,7 +223,7 @@ export function AdminRateLimitsPage() {
             data-testid="rate-limits-reset-all"
             disabled={editingDisabled}
             onClick={() => setShowResetAllConfirm(true)}
-            className="flex items-center gap-2 rounded-xl border border-surface-2 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border border-surface-2 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary btn-cta"
           >
             {editingDisabled ? (
               <Loader2 size={13} className="animate-spin" />

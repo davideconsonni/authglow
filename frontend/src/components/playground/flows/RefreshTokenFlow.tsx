@@ -101,7 +101,7 @@ export function RefreshTokenFlow() {
               <input value={localClientSecret} onChange={(e) => setLocalClientSecret(e.target.value)} type="password" autoComplete="off" placeholder="secret" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
-          <button onClick={handleGo} disabled={!localToken} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleGo} disabled={!localToken} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -114,7 +114,7 @@ export function RefreshTokenFlow() {
             <code className="block text-xs font-mono text-text-muted">grant_type=refresh_token</code>
             <code className="block text-xs font-mono text-text-muted truncate">refresh_token={localToken.slice(0, 30)}...</code>
           </div>
-          <button onClick={handleRequest} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleRequest} disabled={loading} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
             Refresh Tokens
           </button>

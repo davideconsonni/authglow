@@ -162,7 +162,7 @@ export function EmailVerifiedPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed btn-cta"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isSubmitting ? 'Verifying...' : 'Verify email'}
@@ -177,7 +177,7 @@ export function EmailVerifiedPage() {
                   type="button"
                   onClick={handleResend}
                   disabled={resending}
-                  className="inline-flex items-center gap-1.5 font-medium text-brand-accent hover:text-brand-cool transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 font-medium text-brand-accent hover:text-brand-cool transition-colors btn-cta"
                 >
                   {resending ? <Loader2 size={12} className="animate-spin" /> : (
                     <RefreshCw size={12} />
@@ -223,7 +223,7 @@ export function EmailVerifiedPage() {
               <button
                 onClick={handleResend}
                 disabled={resending}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-6 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta"
               >
                 {resending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 Resend verification email

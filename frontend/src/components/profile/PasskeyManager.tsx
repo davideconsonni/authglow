@@ -84,7 +84,7 @@ export function PasskeyManager() {
         <button
           onClick={handleAddPasskey}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           Add Passkey

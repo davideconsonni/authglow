@@ -98,7 +98,7 @@ export function ClientCredentialsFlow() {
             <label className="block mb-1 text-xs font-medium text-text-muted">Scopes</label>
             <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localClientSecret} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localClientSecret} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -115,7 +115,7 @@ export function ClientCredentialsFlow() {
           <button
             onClick={handleRequest}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] btn-cta"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Request Token

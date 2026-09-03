@@ -77,7 +77,7 @@ export function SessionsPage() {
           <button
             onClick={handleRevokeAll}
             disabled={revokingAll}
-            className="rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors disabled:opacity-50"
+            className="rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors btn-cta"
           >
             {revokingAll ? <Loader2 size={14} className="inline animate-spin mr-1" /> : null}
             Revoke all

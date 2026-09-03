@@ -178,7 +178,7 @@ export function DeviceCodeFlow() {
               <ScopePicker value={localScopes} onChange={setLocalScopes} placeholder="Add custom scope" />
             </div>
           </div>
-          <button onClick={() => { store.setClientId(localClientId); store.setScopes(localScopes); setCompleted(['config']); setCurrentStep('request') }} disabled={!localClientId} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={() => { store.setClientId(localClientId); store.setScopes(localScopes); setCompleted(['config']); setCurrentStep('request') }} disabled={!localClientId} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -187,7 +187,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'request' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Send the device authorization request. This creates a device_code and user_code.</p>
-          <button onClick={handleRequest} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleRequest} disabled={loading} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Request Device Code
           </button>
@@ -229,7 +229,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'verify' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Simulate the user approving the device authorization. (Requires an authenticated admin session.)</p>
-          <button onClick={handleVerify} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleVerify} disabled={loading} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Approve Device
           </button>
@@ -239,7 +239,7 @@ export function DeviceCodeFlow() {
       {currentStep === 'poll' && (
         <div className="space-y-3">
           <p className="text-xs text-text-muted">Start polling the token endpoint until the device is authorized or the code expires.</p>
-          <button onClick={handleStartPolling} disabled={loading} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleStartPolling} disabled={loading} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Start Polling
           </button>

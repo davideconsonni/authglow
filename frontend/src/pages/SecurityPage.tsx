@@ -19,7 +19,7 @@ export function SecurityPage() {
   useDocumentTitle('Security')
   const { user, fetchCurrentUser } = useAuth()
   const [backupCodes, setBackupCodes] = useState<string[]>([])
-  const [showMfaSetup, setShowMfaSetup] = useState(false)
+  const [showMfaSetup, setShowMfaSetup] = useState(true)
   const [disableMfa, setDisableMfa] = useState(false)
 
   const { data: mfaStatus } = useApiQuery<{ enabled: boolean; backup_codes_remaining?: number }>(['mfa-status'], '/api/mfa/status')

@@ -166,7 +166,7 @@ export function DcrFlow() {
           <button
             onClick={handleRegister}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] btn-cta"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
             Register Client
@@ -194,7 +194,7 @@ export function DcrFlow() {
             <button
               onClick={handleUpdate}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-3 btn-cta"
             >
               <RefreshCw size={14} /> Update name (PUT)
             </button>
@@ -202,7 +202,7 @@ export function DcrFlow() {
               onClick={handleDelete}
               disabled={loading}
               data-testid="dcr-delete-btn"
-              className="flex items-center gap-2 rounded-xl border border-semantic-error/40 px-4 py-2 text-sm text-semantic-error hover:bg-semantic-error/10 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl border border-semantic-error/40 px-4 py-2 text-sm text-semantic-error hover:bg-semantic-error/10 btn-cta"
             >
               <Trash2 size={14} /> Delete registration (DELETE)
             </button>

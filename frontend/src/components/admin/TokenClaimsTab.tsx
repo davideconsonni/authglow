@@ -742,7 +742,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
                       onClick={submitForm}
                       data-testid="claim-policy-add-confirm-btn"
                       disabled={formStatus.kind === 'invalid' || formStatus.kind === 'reserved' || formStatus.kind === 'empty'}
-                      className="flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                      className="flex items-center gap-1.5 rounded-lg bg-gradient-cta px-3 py-1.5 text-[11px] font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
                     >
                       {formMode === 'edit' ? <><Check size={11} /> Save changes</> : <><Plus size={11} /> Add field</>}
                     </button>
@@ -780,7 +780,7 @@ export function TokenClaimsTab({ clientId, clientName, onClose }: TokenClaimsTab
               onClick={handleSave}
               data-testid="claim-policy-save-btn"
               disabled={!dirty || saving}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Save changes

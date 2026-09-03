@@ -325,7 +325,7 @@ export function AdminWebhooksPage() {
               onClick={handleCreate}
               disabled={creating || !!urlError || createEvents.length === 0}
               data-testid="webhooks-create-confirm"
-              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent btn-cta"
             >
               {creating && <Loader2 size={14} className="animate-spin" />}
               {editingId ? 'Save changes' : 'Create webhook'}
@@ -386,7 +386,7 @@ export function AdminWebhooksPage() {
                     disabled={testingId === wh.id}
                     title="Send test event"
                     data-testid={`webhook-test-${wh.id}`}
-                    className="rounded-lg p-1.5 text-text-muted hover:bg-brand-wash-faint hover:text-brand-accent disabled:opacity-50"
+                    className="rounded-lg p-1.5 text-text-muted hover:bg-brand-wash-faint hover:text-brand-accent btn-cta"
                   >
                     {testingId === wh.id ? <Loader2 size={14} className="animate-spin" /> : <WebhookIcon size={14} />}
                   </button>

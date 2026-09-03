@@ -221,45 +221,45 @@
     --popover-foreground: 24 10% 10%;
     --primary: 4 77% 43%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 120 2% 91%;
-    --secondary-foreground: 24 10% 10%;
-    --muted: 120 2% 94%;
-    --muted-foreground: 120 1% 40%;
-    --accent: 4 77% 43%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 97%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 72% 45%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 76% 51%;
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 120 1% 86%;
-    --input: 120 1% 90%;
-    --ring: 4 77% 43%;
+    --border: 0 0% 90%;
+    --input: 0 0% 94%;
+    --ring: 0 72% 45%;
     --radius: 0.5rem;
 
-    --color-bg-primary: #FAFAF9;
-    --color-bg-secondary: #EDEEEC;
-    --color-bg-tertiary: #E6E8E6;
+    --color-bg-primary: #FFFFFF;
+    --color-bg-secondary: #FAFAFA;
+    --color-bg-tertiary: #F4F4F4;
     --color-surface-1: #FFFFFF;
-    --color-surface-2: #E6E8E6;
-    --color-surface-3: #D6D8D6;
-    --color-nested-panel: #F1F2F1;
-    --color-brand-accent: #C2261A;
-    --color-brand-alt: #E5402E;
+    --color-surface-2: #E5E5E5;
+    --color-surface-3: #D4D4D4;
+    --color-nested-panel: #F5F5F5;
+    --color-brand-accent: #DC2626;
+    --color-brand-alt: #EF4444;
     --color-brand-cool: #0E7490;
     --brand-wash: transparent;
-    --brand-wash-faint: rgba(194, 38, 26, 0.05);
-    --color-semantic-success: #0F7B4B;
-    --color-semantic-warning: #B54708;
+    --brand-wash-faint: rgba(220, 38, 38, 0.05);
+    --color-semantic-success: #16A34A;
+    --color-semantic-warning: #D97706;
     --color-semantic-error: #DC2626;
     --color-semantic-info: #0E7490;
-    --color-text-primary: #191919;
-    --color-text-secondary: #3F423F;
-    --color-text-muted: #646863;
+    --color-text-primary: #0A0A0A;
+    --color-text-secondary: #525252;
+    --color-text-muted: #A3A3A3;
 
-    --color-chip-bg: #DDE0DD;
-    --color-chip-fg: #3F423F;
+    --color-chip-bg: #F0F0F0;
+    --color-chip-fg: #525252;
 
-    --color-banner-demo-bg: #E4EEF0;
-    --color-banner-demo-border: #A6C4CA;
-    --color-banner-demo-fg: #0B5160;
+    --color-banner-demo-bg: #FFFFFF;
+    --color-banner-demo-border: #E5E5E5;
+    --color-banner-demo-fg: #525252;
 
     --color-glass-bg: rgba(255, 255, 255, 0.85);
     --color-glass-border: rgba(180, 183, 180, 0.55);
@@ -268,14 +268,14 @@
     --color-scrollbar-thumb: rgba(80, 84, 80, 0.35);
     --color-scrollbar-thumb-hover: rgba(80, 84, 80, 0.55);
 
-    --glow-accent: 0 0 20px -10px rgba(201, 60, 18, 0.18), 0 0 44px -18px rgba(201, 60, 18, 0.09);
-    --glow-alt: 0 0 20px -10px rgba(241, 80, 37, 0.14), 0 0 44px -18px rgba(241, 80, 37, 0.07);
-    --glow-cool: 0 0 20px -10px rgba(14, 116, 144, 0.15), 0 0 44px -18px rgba(14, 116, 144, 0.08);
-    --gradient-cta: linear-gradient(135deg, #E5402E 0%, #C2261A 100%);
-    --gradient-secondary: linear-gradient(135deg, #191919 0%, #3F423F 100%);
-    --gradient-ai: linear-gradient(135deg, #F15025 0%, #C93C12 55%, #8A2A0C 100%);
+    --glow-accent: 0 0 16px -10px rgba(220, 38, 38, 0.10), 0 0 32px -16px rgba(220, 38, 38, 0.05);
+    --glow-alt: 0 0 16px -10px rgba(239, 68, 68, 0.08), 0 0 32px -16px rgba(239, 68, 68, 0.04);
+    --glow-cool: 0 0 16px -10px rgba(14, 116, 144, 0.10), 0 0 32px -16px rgba(14, 116, 144, 0.05);
+    --gradient-cta: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    --gradient-secondary: linear-gradient(135deg, #171717 0%, #404040 100%);
+    --gradient-ai: linear-gradient(135deg, #F87171 0%, #DC2626 55%, #991B1B 100%);
 
-    --font-heading-stack: 'Space Grotesk', 'Inter', 'Segoe UI', sans-serif;
+    --font-heading-stack: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
   }
 
   /* Shared geometry/typography for both themes */
@@ -341,9 +341,9 @@
     --color-chip-bg: #2B2926;
     --color-chip-fg: #C4BFB7;
 
-    --color-banner-demo-bg: #0F333B;
-    --color-banner-demo-border: #205C68;
-    --color-banner-demo-fg: #56CBDE;
+    --color-banner-demo-bg: #2B2926;
+    --color-banner-demo-border: #4A4540;
+    --color-banner-demo-fg: #E8E2D9;
 
     --color-glass-bg: rgba(26, 24, 22, 0.82);
     --color-glass-border: rgba(255, 255, 255, 0.09);
@@ -374,14 +374,24 @@
   }
 
   *:focus-visible {
-    @apply outline-none ring-2 ring-brand-accent ring-offset-2 ring-offset-bg-primary;
+    @apply outline-none ring-1 ring-brand-accent ring-offset-0 ring-offset-bg-primary;
   }
 
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible,
   button:focus-visible {
-    @apply ring-2 ring-brand-accent ring-offset-2 ring-offset-bg-primary;
+    @apply ring-1 ring-brand-accent ring-offset-0 ring-offset-bg-primary;
+  }
+
+  /* Dropdown / popover menu items: bg change is enough focus indicator.
+     The global ring would draw a heavy ruby border around each item. */
+  [role="menuitem"]:focus-visible,
+  [role="menuitemcheckbox"]:focus-visible,
+  [role="menuitemradio"]:focus-visible,
+  [data-radix-collection-item]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
   }
 
   :is(h1, h2, h3) {
@@ -446,6 +456,12 @@
     color: var(--color-banner-demo-fg);
   }
 
+  /* Demo banner keeps a neutral warm surface — only the sparkles icon
+     carries the ruby brand accent so the whole panel doesn't tint pink. */
+  .banner-demo > svg {
+    color: var(--color-brand-accent);
+  }
+
   .glow-accent {
     box-shadow: var(--glow-accent);
   }
@@ -503,9 +519,30 @@
       opacity 160ms ease;
   }
 
+  /* Light mode: the active item is now rendered by the link itself
+     (bg-gradient-cta text-white). The trail is just a decorative
+     underlay; its glow would create a salmon halo on white. */
+  :root:not(.dark) .sidebar-active-trail {
+    box-shadow: none;
+  }
+
   /* Outline chips: replaces the brand color washes (no more "salmon" tints) */
   .bg-brand-wash {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand-accent) 38%, transparent);
+  }
+
+  /* CTA buttons when disabled: neutral gray instead of faded salmon.
+     Used on bg-gradient-cta / bg-semantic-error buttons to avoid the
+     "50% opacity over a saturated red produces pink" pitfall. */
+  .btn-cta:disabled,
+  .btn-cta[aria-disabled='true'] {
+    background: var(--color-surface-3) !important;
+    background-image: none !important;
+    color: var(--color-text-muted) !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+    transform: none !important;
   }
 
   .demo-strip {
@@ -516,21 +553,21 @@
   }
 
   :root .sidebar-rail {
-    --color-surface-1: #3E3B36;
-    --color-surface-2: rgba(255, 255, 255, 0.08);
-    --color-surface-3: rgba(255, 255, 255, 0.14);
-    --color-text-primary: #FAFAF9;
-    --color-text-secondary: #D6D3D1;
-    --color-text-muted: rgba(255, 255, 255, 0.45);
-    --color-brand-accent: #FAFAF9;
-    --color-brand-wash: rgba(255, 255, 255, 0.10);
-    --color-brand-wash-faint: rgba(255, 255, 255, 0.07);
-    --color-border: rgba(255, 255, 255, 0.08);
-    --glow-accent: transparent;
-    --gradient-cta: linear-gradient(135deg, #FAFAF9 0%, #D6D3D1 100%);
-    --color-scrollbar-thumb: rgba(255, 255, 255, 0.18);
-    --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    --color-surface-1: #FFFFFF;
+    --color-surface-2: #E5E5E5;
+    --color-surface-3: #D4D4D4;
+    --color-text-primary: #0A0A0A;
+    --color-text-secondary: #525252;
+    --color-text-muted: #A3A3A3;
+    --color-brand-accent: #DC2626;
+    --color-brand-wash: rgba(220, 38, 38, 0.08);
+    --color-brand-wash-faint: rgba(220, 38, 38, 0.05);
+    --color-border: #E5E5E5;
+    --glow-accent: 0 0 20px -10px rgba(220, 38, 38, 0.18);
+    --gradient-cta: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    --color-scrollbar-thumb: rgba(0, 0, 0, 0.18);
+    --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+    border-right: 1px solid #E5E5E5;
   }
 
   :root.dark .sidebar-rail {

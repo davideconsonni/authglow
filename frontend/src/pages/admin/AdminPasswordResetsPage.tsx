@@ -69,7 +69,7 @@ export function AdminPasswordResetsPage() {
         title="Password Resets"
         description="Track and manage password reset requests. When users forget their password, a reset token is generated and appears here. You can revoke tokens, clean up expired ones, or see who's requesting resets."
         actions={
-          <button onClick={handleCleanup} disabled={cleaning} className="whitespace-nowrap flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 disabled:opacity-50">
+          <button onClick={handleCleanup} disabled={cleaning} className="whitespace-nowrap flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 btn-cta">
             {cleaning ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
             Cleanup Expired
           </button>
@@ -98,7 +98,7 @@ export function AdminPasswordResetsPage() {
             placeholder="user@example.com"
             className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none"
           />
-          <button onClick={handleRevokeForUser} disabled={!revokeEmail.trim()} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50">
+                  <button onClick={handleRevokeForUser} disabled={!revokeEmail.trim()} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent">
             <Ban size={14} /> Revoke
           </button>
         </div>

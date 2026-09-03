@@ -174,7 +174,7 @@ export function AuthorizationCodeFlow() {
               <button onClick={() => setLocalState(generateState())} className="rounded-xl bg-surface-2 px-3 py-2.5 text-text-muted hover:text-text-secondary" title="Regenerate state"><RefreshCw size={14} /></button>
             </div>
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} data-testid="playground-config-next" className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} data-testid="playground-config-next" className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -221,7 +221,7 @@ export function AuthorizationCodeFlow() {
             onClick={handleExchangeCode}
             disabled={loading || (!localCode && !callbackUrl.trim())}
             data-testid="playground-exchange-code"
-            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] btn-cta"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Exchange Code for Tokens

@@ -161,7 +161,7 @@ export function PkceFlow() {
               <button onClick={() => setLocalState(generateState())} className="rounded-xl bg-surface-2 px-3 py-2.5 text-text-muted hover:text-text-secondary" title="Regenerate"><RefreshCw size={14} /></button>
             </div>
           </div>
-          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleConfigNext} disabled={!localClientId || !localRedirectUri} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             Next <ArrowRight size={16} />
           </button>
         </div>
@@ -211,7 +211,7 @@ export function PkceFlow() {
             <label className="block mb-1 text-xs font-medium text-text-muted">Authorization Code *</label>
             <input value={localCode} onChange={(e) => { setLocalCode(e.target.value); setCallbackUrl('') }} placeholder="Paste code from callback" className="w-full rounded-xl border border-surface-2 bg-surface-1 py-2.5 px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none" />
           </div>
-          <button onClick={handleExchangeCode} disabled={loading || (!localCode && !callbackUrl.trim())} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02] disabled:opacity-50">
+          <button onClick={handleExchangeCode} disabled={loading || (!localCode && !callbackUrl.trim())} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent hover:scale-[1.02]">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
             Exchange Code
           </button>

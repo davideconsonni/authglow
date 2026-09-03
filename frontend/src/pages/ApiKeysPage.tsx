@@ -331,7 +331,7 @@ export function ApiKeysPage() {
                 />
                 <div className="flex gap-3">
                   <button onClick={closeCreate} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-                  <button onClick={handleCreate} disabled={creating} data-testid="key-create-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  <button onClick={handleCreate} disabled={creating} data-testid="key-create-submit" className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white">
                     {creating ? <Loader2 size={16} className="animate-spin" /> : null}
                     Create
                   </button>
@@ -684,7 +684,7 @@ export function ApiKeysPage() {
                 disabled={editNeverExpires}
                 placeholder="Expires in days (empty = unchanged)"
                 data-testid="key-edit-expires-input"
-                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none btn-cta"
               />
               <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
                 <input
@@ -709,7 +709,7 @@ export function ApiKeysPage() {
                 onClick={handleSaveEdit}
                 disabled={savingEdit}
                 data-testid="key-edit-submit"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
               >
                 {savingEdit ? <Loader2 size={16} className="animate-spin" /> : null}
                 Save

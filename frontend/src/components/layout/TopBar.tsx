@@ -33,7 +33,7 @@ export function TopBar() {
               className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors outline-none"
               data-testid="user-menu-trigger"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-wash text-brand-accent text-sm font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-text-secondary text-sm font-medium">
                 {user?.first_name?.charAt(0) || 'U'}
               </div>
               <span className="hidden sm:inline">

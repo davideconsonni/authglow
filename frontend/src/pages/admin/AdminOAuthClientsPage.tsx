@@ -858,7 +858,7 @@ export function AdminOAuthClientsPage() {
                       value={authMethod}
                       onChange={e => setAuthMethod(e.target.value as AuthMethod)}
                       disabled={!isConfidential}
-                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-[11px] text-text-primary focus:border-brand-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-[11px] text-text-primary focus:border-brand-accent focus:outline-none btn-cta disabled:cursor-not-allowed"
                     >
                       <option value="client_secret_basic">client_secret_basic</option>
                       <option value="client_secret_post">client_secret_post</option>
@@ -941,7 +941,7 @@ export function AdminOAuthClientsPage() {
                         checked={isConfidential ? requirePkce : true}
                         onChange={e => setRequirePkce(e.target.checked)}
                         disabled={!isConfidential}
-                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20 disabled:opacity-50"
+                        className="h-3.5 w-3.5 rounded border-surface-3 text-brand-accent focus:ring-brand-accent/20 btn-cta"
                       />
                       <span className={cn('text-[11px]', !isConfidential && 'text-text-muted')}>
                         Require PKCE
@@ -1109,7 +1109,7 @@ export function AdminOAuthClientsPage() {
 
             <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-              <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100">
+              <button type="button" onClick={handleSubmit} disabled={saving} data-testid="create-client-submit" className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:hover:scale-100">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {editClientId ? 'Update' : 'Create'}
               </button>

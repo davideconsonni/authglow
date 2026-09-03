@@ -219,7 +219,7 @@ export function ConsentScreen({
             <button
               onClick={handleDeny}
               disabled={denying || approving}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-surface-2 px-4 py-3 text-sm font-medium text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-surface-2 px-4 py-3 text-sm font-medium text-text-secondary hover:bg-surface-2 transition-colors btn-cta disabled:cursor-not-allowed"
             >
               {denying ? <Loader2 size={16} className="animate-spin" /> : null}
               Deny
@@ -227,7 +227,7 @@ export function ConsentScreen({
             <button
               onClick={handleApprove}
               disabled={approving || denying}
-              className="consent-approve-btn flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="consent-approve-btn flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {approving ? <Loader2 size={16} className="animate-spin" /> : null}
               Approve

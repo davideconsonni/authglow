@@ -171,7 +171,7 @@ export function MFAVerifyForm() {
                 onChange={(e) => handleDigitChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 onFocus={(e) => e.target.select()}
-                className="h-14 w-12 rounded-xl border border-surface-2 bg-surface-1 text-center text-xl font-semibold text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors disabled:opacity-50"
+                className="h-14 w-12 rounded-xl border border-surface-2 bg-surface-1 text-center text-xl font-semibold text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-colors btn-cta"
               />
             ))}
           </div>
@@ -206,7 +206,7 @@ export function MFAVerifyForm() {
           <button
             type="submit"
             disabled={isLocked || submitting || backupInput.length < 8}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed btn-cta"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Verify backup code

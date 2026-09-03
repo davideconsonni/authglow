@@ -228,7 +228,7 @@ export function Sidebar() {
                       cn(
                         'relative z-[1] flex items-center gap-3 rounded-xl px-3 min-h-[44px] py-2.5 text-sm font-medium transition-all duration-150',
                         isActive
-                          ? 'bg-brand-wash text-brand-accent shadow-glow-accent'
+                          ? 'bg-gradient-cta text-white shadow-glow-accent'
                           : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
                         collapsed && !isMobile && 'justify-center px-2',
                       )

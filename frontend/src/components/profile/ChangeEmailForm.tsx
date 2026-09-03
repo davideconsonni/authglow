@@ -52,7 +52,7 @@ export function ChangeEmailForm() {
         {errors.new_email && <p className="text-xs text-semantic-error">{errors.new_email.message}</p>}
         <input type="password" autoComplete="current-password" {...register('password')} placeholder="Confirm with password" className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20" />
         {errors.password && <p className="text-xs text-semantic-error">{errors.password.message}</p>}
-        <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
+        <button type="submit" disabled={isSubmitting} className="btn-cta flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]">
           {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
           Change email
         </button>

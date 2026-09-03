@@ -243,7 +243,7 @@ export function AdminSettingsPage() {
                               value={String(currentValue ?? '')}
                               disabled={!field.editable}
                               onChange={(e) => setValue(field, Number(e.target.value))}
-                              className="w-28 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 disabled:opacity-50"
+                              className="w-28 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 btn-cta"
                             />
                           ) : (
                             <input
@@ -252,7 +252,7 @@ export function AdminSettingsPage() {
                               value={String(currentValue ?? '')}
                               disabled={!field.editable}
                               onChange={(e) => setValue(field, e.target.value)}
-                              className="w-64 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 disabled:opacity-50"
+                              className="w-64 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20 btn-cta"
                             />
                           )}
                         </div>
@@ -269,7 +269,7 @@ export function AdminSettingsPage() {
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-xl border border-surface-2 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl border border-surface-2 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-2 transition-colors btn-cta"
                 >
                   <RotateCcw size={16} />
                   Reset
@@ -277,7 +277,7 @@ export function AdminSettingsPage() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Save changes

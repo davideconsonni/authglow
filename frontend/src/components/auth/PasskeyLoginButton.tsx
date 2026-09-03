@@ -71,7 +71,7 @@ export function PasskeyLoginButton() {
       <button
         onClick={handlePasskeyLogin}
         disabled={loading || !email}
-        className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm font-medium text-text-secondary hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-50"
+        className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm font-medium text-text-secondary hover:border-brand-accent/50 hover:text-brand-accent transition-all btn-cta"
       >
         {loading ? (
           <Loader2 size={18} className="animate-spin" />

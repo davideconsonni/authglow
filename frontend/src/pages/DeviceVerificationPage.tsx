@@ -178,7 +178,7 @@ export function DeviceVerificationPage() {
             <button
               onClick={() => handleLookup()}
               disabled={submitting || !userCode.trim()}
-              className="w-full inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full inline-flex items-center justify-center rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta disabled:cursor-not-allowed"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Verify Code
@@ -214,14 +214,14 @@ export function DeviceVerificationPage() {
               <button
                 onClick={handleDeny}
                 disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm font-semibold text-text-primary transition-all hover:bg-surface-3 disabled:opacity-50"
+                className="flex-1 inline-flex items-center justify-center rounded-xl border border-surface-2 bg-surface-2 px-4 py-3 text-sm font-semibold text-text-primary transition-all hover:bg-surface-3 btn-cta"
               >
                 Deny
               </button>
               <button
                 onClick={handleApprove}
                 disabled={submitting}
-                className="flex-1 inline-flex items-center justify-center rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                className="flex-1 inline-flex items-center justify-center rounded-xl bg-gradient-cta px-4 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Approve

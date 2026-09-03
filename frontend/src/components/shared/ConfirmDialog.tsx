@@ -104,7 +104,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             disabled={loading}
             data-testid="confirm-dialog-cancel"
-            className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-xl bg-surface-2 px-4 min-h-[44px] py-2 text-sm font-medium text-text-secondary hover:bg-surface-3 transition-colors btn-cta disabled:cursor-not-allowed"
           >
             {cancelLabel}
           </button>
@@ -113,7 +113,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={loading}
             data-testid="confirm-dialog-confirm"
-            className={`rounded-xl px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`rounded-xl px-4 min-h-[44px] py-2 text-sm font-medium text-white transition-colors btn-cta disabled:cursor-not-allowed ${
               variant === 'danger'
                 ? 'bg-semantic-error hover:bg-semantic-error/90'
                 : 'bg-gradient-cta'

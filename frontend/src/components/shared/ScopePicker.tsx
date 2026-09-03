@@ -115,13 +115,13 @@ export function ScopePicker({
           placeholder={placeholder}
           disabled={disabled}
           data-testid={testId ? `${testId}-custom-input` : undefined}
-          className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
+          className="flex-1 rounded-xl border border-surface-2 bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none btn-cta"
         />
         <button
           type="button"
           onClick={addCustomScope}
           disabled={disabled || !customInput.trim()}
-          className="rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white btn-cta"
         >
           Add
         </button>

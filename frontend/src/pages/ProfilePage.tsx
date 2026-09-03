@@ -187,7 +187,7 @@ export function ProfilePage() {
                     <input {...register('last_name')} className="w-full rounded-xl border border-surface-2 bg-surface-1 px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20" />
                   </div>
                 </div>
-                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
+                <button type="submit" disabled={isSubmitting} className="btn-cta inline-flex items-center gap-2 rounded-xl bg-gradient-cta px-5 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98]">
                   {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Save changes
                 </button>
@@ -291,7 +291,7 @@ export function ProfilePage() {
               <button
                 onClick={handleReactivate}
                 disabled={reactivating}
-                className="rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent disabled:opacity-50"
+                className="rounded-xl bg-gradient-cta px-4 py-2 text-xs font-semibold text-white shadow-glow-accent btn-cta"
               >
                 {reactivating ? 'Reactivating...' : 'Reactivate'}
               </button>

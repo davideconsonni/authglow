@@ -398,7 +398,7 @@ export function AdminFederationPage() {
 
             <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
               <button onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02]">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save
               </button>

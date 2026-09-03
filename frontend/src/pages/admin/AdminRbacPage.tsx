@@ -307,7 +307,7 @@ function RolesTab() {
               <button
                 onClick={handleSave}
                 disabled={saving || !name}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save
@@ -467,7 +467,7 @@ function PermissionsTab() {
               <button
                 onClick={handleSave}
                 disabled={saving || !name}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] btn-cta disabled:hover:scale-100"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Create
@@ -570,7 +570,7 @@ function UserRoleAssignments() {
               onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
             />
           </div>
-          <button onClick={handleSearch} disabled={!userEmail.trim()} className="rounded-xl bg-brand-wash px-4 py-2.5 text-sm font-medium text-brand-accent hover:bg-brand-wash-faint disabled:opacity-50">
+          <button onClick={handleSearch} disabled={!userEmail.trim()} className="rounded-xl bg-brand-wash px-4 py-2.5 text-sm font-medium text-brand-accent hover:bg-brand-wash-faint btn-cta">
             Search
           </button>
         </div>
@@ -602,7 +602,7 @@ function UserRoleAssignments() {
             <button
               onClick={handleAssign}
               disabled={assigning || !selectedRole}
-              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent btn-cta"
             >
               {assigning ? <Loader2 size={14} className="animate-spin" /> : null}
               Assign

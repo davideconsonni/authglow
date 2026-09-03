@@ -62,7 +62,7 @@ export function AdminSessionsPage() {
           <button
             onClick={handleCleanup}
             disabled={cleaning}
-            className="flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border border-semantic-error/30 px-4 py-2 text-xs font-medium text-semantic-error hover:bg-semantic-error/10 transition-colors btn-cta"
           >
             {cleaning && <Loader2 size={14} className="animate-spin" />}
             Cleanup Expired

@@ -118,7 +118,7 @@ export function DeviceAuthNewTool() {
             <button
               onClick={handleGenerate}
               disabled={generating || !selectedClient}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-cta px-6 py-3 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] active:scale-[0.98] btn-cta disabled:cursor-not-allowed"
             >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Generate
