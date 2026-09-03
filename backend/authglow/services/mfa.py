@@ -145,10 +145,21 @@ class MFAService:
     # ------------------------------------------------------------------
 
     async def save_backup_codes(self, user_id: str, codes: List[str]):
-        """Save hashed backup codes for a user."""
-        hashed_codes = [self.hash_backup_code(code) for code in codes]
+        """Save hashed backup codes for a user.
 
-        backup_codes = BackupCodes(user_id=user_id, codes=hashed_codes)
+        Hashes run concurrently in the thread pool (bcrypt releases the
+        GIL), so wall time is one bcrypt cost instead of ``len(codes)``
+        sequential costs — and the event loop is never blocked (a sync
+        10× bcrypt here made ``/api/mfa/enroll`` take ~3s and stalled
+        every other request).
+        """
+        from authglow.services.password import hash_password_async
+
+        hashed_codes = await asyncio.gather(
+            *(hash_password_async(code.replace("-", "")) for code in codes)
+        )
+
+        backup_codes = BackupCodes(user_id=user_id, codes=list(hashed_codes))
         await self._bc_repo.save(backup_codes)
 
     async def get_backup_codes(self, user_id: str) -> Optional[BackupCodes]:

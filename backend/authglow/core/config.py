@@ -343,11 +343,17 @@ class Settings(BaseSettings):
     audit_email_log_level: str = "hash"  # "mask", "hash", "none"
 
     # Security Headers Settings
+    # img-src data: — MFA enrollment renders the TOTP QR code as an
+    # inline data: URL (services/mfa.generate_qr_code). Safe: images
+    # cannot execute script. Without it the browser falls back to
+    # default-src 'self' and blocks the QR in prod (SPA served by the
+    # backend inherits this CSP).
     csp_header: str = (
         "default-src 'self'; "
         "script-src 'self'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
         "frame-ancestors 'none'; "
         "object-src 'none'; "
         "base-uri 'self'"

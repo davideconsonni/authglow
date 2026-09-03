@@ -94,6 +94,7 @@ class TestSecurityHeadersMiddleware:
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; "
             "frame-ancestors 'none'; "
             "object-src 'none'; "
             "base-uri 'self'"
@@ -290,6 +291,7 @@ def _make_settings(**overrides) -> object:
         "script-src 'self'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
         "frame-ancestors 'none'; "
         "object-src 'none'; "
         "base-uri 'self'"
@@ -305,6 +307,29 @@ def _make_settings(**overrides) -> object:
     for key, value in overrides.items():
         setattr(settings, key, value)
     return settings
+
+
+class TestDefaultCspImageSource:
+    """Regression: the default CSP must allow inline data: images.
+
+    MFA enrollment renders the TOTP QR code as a
+    ``data:image/png;base64,...`` URL (services/mfa.generate_qr_code).
+    Without an explicit ``img-src`` the browser falls back to
+    ``default-src 'self'`` and blocks the QR in production, where the
+    SPA is served by the backend and inherits its CSP.
+    """
+
+    def test_default_csp_allows_data_images(self, test_settings):
+        # conftest patches authglow.core.config.Settings with a mock, so
+        # recover the real class (and its true field default) from the
+        # test_settings fixture, which instantiates Settings pre-patch.
+        default_csp = type(test_settings).model_fields["csp_header"].default
+        assert "img-src 'self' data:" in default_csp
+
+    def test_default_csp_directive_order(self, test_settings):
+        default_csp = type(test_settings).model_fields["csp_header"].default
+        assert default_csp.index("font-src") < default_csp.index("img-src")
+        assert default_csp.index("img-src") < default_csp.index("frame-ancestors")
 
 
 class _FakeSettings:
