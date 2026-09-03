@@ -106,6 +106,48 @@ class TestRefreshTokenLifecycle:
         assert reuse_result is None
         assert "reuse" in error.lower() or "revoked" in error.lower()
 
+    def test_reuse_detection_logs_audit_event(self, refresh_token_service):
+        """VAPT-057: refresh-token reuse (stolen-token symptom) must
+        always leave a warning-severity audit trail for SIEM/SOC."""
+        from unittest.mock import AsyncMock
+
+        mock_audit = AsyncMock()
+        refresh_token_service.audit_service = mock_audit
+
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-rt-reuse-audit", client_id="test-client", scopes=["read"]
+            )
+        )
+        new_rt, _ = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+            )
+        )
+        assert new_rt is not None
+
+        reuse_result, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+                ip_address="203.0.113.7",
+            )
+        )
+        assert reuse_result is None
+        assert "reuse" in error.lower()
+
+        mock_audit.log_event.assert_awaited_once()
+        kwargs = mock_audit.log_event.await_args.kwargs
+        assert kwargs["event_type"] == "refresh_token_reuse_detected"
+        assert kwargs["severity"] == "warning"
+        assert kwargs["user_id"] == "user-rt-reuse-audit"
+        assert kwargs["ip_address"] == "203.0.113.7"
+        # root + rotated child must both be revoked and counted
+        assert kwargs["metadata"]["revoked_count"] >= 2
+        assert kwargs["metadata"]["root_token_id"] == rt.token_id
+        assert kwargs["metadata"]["client_id"] == "test-client"
+
     def test_revoke_token(self, refresh_token_service):
         rt = asyncio.get_event_loop().run_until_complete(
             refresh_token_service.create_refresh_token(
@@ -545,3 +587,67 @@ class TestValidateAndRotateScopeNarrowing:
 
         assert new_rt is None
         assert "No requested scope" in error
+
+
+class TestVapt058ConfigDrivenExpiry:
+    """VAPT-058: the refresh-token lifetime must come from
+    ``Settings.refresh_token_expire_days`` — never from a hardcoded
+    30-day default (which the rotation path silently inherited)."""
+
+    def test_default_expiry_uses_settings(self, refresh_token_service):
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-rt-default-expiry",
+                client_id="test-client",
+                scopes=["read"],
+            )
+        )
+        expected_days = refresh_token_service.settings.refresh_token_expire_days
+        actual_days = (rt.expires_at - rt.created_at).total_seconds() / 86400
+        assert expected_days - 1 < actual_days <= expected_days
+        assert expected_days != 30
+
+    def test_rotated_token_expiry_uses_settings(self, refresh_token_service):
+        """``validate_and_rotate`` never passes ``expires_in_days`` —
+        the rotated child must inherit the configured lifetime, not a
+        hardcoded 30 days."""
+        rt = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.create_refresh_token(
+                user_id="user-rt-rotate-expiry",
+                client_id="test-client",
+                scopes=["read"],
+            )
+        )
+        new_rt, error = asyncio.get_event_loop().run_until_complete(
+            refresh_token_service.validate_and_rotate(
+                token=rt.token,
+                client_id="test-client",  # type: ignore[arg-type]
+            )
+        )
+        assert error is None
+        assert new_rt is not None
+        expected_days = refresh_token_service.settings.refresh_token_expire_days
+        actual_days = (new_rt.expires_at - new_rt.created_at).total_seconds() / 86400
+        assert expected_days - 1 < actual_days <= expected_days
+
+
+class TestVapt058NoHardcodedExpiryLiteral:
+    """Regression guard: the acceptance criterion for VAPT-058 is that
+    no ``expires_in_days=30`` literal remains in the token-issuing
+    paths, and the service signature does not default to 30."""
+
+    def test_no_hardcoded_expires_in_days_30(self):
+        from pathlib import Path
+
+        backend_root = Path(__file__).resolve().parents[2]
+        offenders = []
+        for path in sorted((backend_root / "authglow" / "api").glob("*.py")):
+            if "expires_in_days=30" in path.read_text(encoding="utf-8"):
+                offenders.append(str(path))
+        rt_service = backend_root / "authglow" / "services" / "refresh_token.py"
+        if "expires_in_days: int = 30" in rt_service.read_text(encoding="utf-8"):
+            offenders.append(str(rt_service))
+        assert offenders == [], (
+            "Hardcoded 30-day refresh-token lifetime reintroduced in: "
+            f"{offenders}. Use Settings.refresh_token_expire_days."
+        )

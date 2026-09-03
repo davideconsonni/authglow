@@ -36,7 +36,7 @@ stesso tier — falle nell'ordine che preferisci.
 
 ## TIER 0 — Blocca il go-live (6 voci)
 
-### T0-1 — [ ] CSRF costruito ma non collegato a nessun endpoint (VAPT-066)
+### T0-1 — [x] CSRF costruito ma non collegato a nessun endpoint (VAPT-066)
 
 - **Verificato oggi**: `grep -rn "require_csrf" api/*.py` → zero
   risultati. `cors_allow_credentials: bool = True` di default
@@ -54,8 +54,42 @@ stesso tier — falle nell'ordine che preferisci.
   cookie per le chiamate API) e documentarlo esplicitamente — ma oggi
   il sistema usa cookie httpOnly per il flow first-party, quindi questa
   alternativa richiede più lavoro della prima.
+- **Risolto (2026-09-03)** — con **correzione della premessa e un bug
+  funzionale trovato e sistemato**:
+  - **Premessa stantia**: l'enforcement CSRF esisteva già, ma NON via
+    `Depends(require_csrf)` (ecco perché il grep del piano trovava
+    zero) — c'era un middleware globale (`middleware/csrf.py`,
+    montato in `main.py:192`), l'endpoint di emissione
+    (`/api/oauth2/csrf-token`) e il frontend che invia già
+    `X-CSRF-Token` su ogni richiesta unsafe (`api.ts:120-122`).
+  - **Bug G0 (funzionale, confermato con probe empirica)**: doppio
+    enforcement — il middleware consumava il token one-time
+    dell'header, poi il check inline dentro `authorize_post` richiedeva
+    un token nel form: con semantiche replace+consume NESSUNA
+    combinazione poteva passare → **authorize da utente loggato sempre
+    403** in produzione (i test non lo beccavano: app bare senza
+    middleware).
+  - **Fix applicati**: `validate_token` non consumante (il token resta
+    valido per il TTL di 30 min, legato al cookie httpOnly del
+    possessore); check inline rimosso da `authorize_post` (il
+    middleware è l'unico punto di enforcement; i check
+    `is_active`/`suspended` restano); gate del middleware esteso a
+    cookie refresh **e** `csrf_session_id` (login CSRF coperto) con
+    bypass per credenziali esplicite (`Authorization`/`X-API-Key`,
+    CSRF-immuni per costruzione); audit `csrf_token_mismatch`
+    (severity warning, path/origin/request_id) nel middleware;
+    frontend: cache del token (1 fetch per page load, elimina la race
+    su richieste unsafe parallele) + clear & retry-once su 403-CSRF.
+  - **Verifica**: probe end-to-end sulla sequenza esatta della SPA —
+    authorize via cookie ora **200** (prima 403), attacco cross-site
+    senza header **403**. Test: 12 nuovi casi gate
+    (`tests/integration/test_csrf_middleware.py`), service test
+    non-consuming, test authorize rifatti con middleware montato,
+    frontend +3 (cache/retry/403 non-CSRF). Suite completa 2596
+    passed; eslint/tsc/ruff/mypy puliti.
+  - **Follow-up opzionale**: e2e Playwright sul flusso authorize.
 
-### T0-2 — [ ] `enable_docs=True` di default, non legato all'ambiente (VAPT-070)
+### T0-2 — [x] `enable_docs=True` di default, non legato all'ambiente (VAPT-070)
 
 - **Verificato oggi**: `core/config.py:203` → `enable_docs: bool = True`
   incondizionato; `main.py:164-166` lo usa così com'è, nessun controllo
@@ -68,8 +102,25 @@ stesso tier — falle nell'ordine che preferisci.
   is_production_env())` oppure, più semplice, forzare `False` quando
   `app_env == "production"` in un `model_validator`, sullo stesso
   pattern già usato per `debug` (`config.py:571`).
+- **Risolto (2026-09-03)**: `model_validator(mode="before")`
+  `_apply_enable_docs_production_default` in `core/config.py` — default
+  `False` quando `app_env == "production"` (case-insensitive) e
+  `ENABLE_DOCS` non impostato; il validator vede il dict mergiato
+  env + `.env`, quindi copre anche i deploy configurati via file.
+  Opt-in esplicito rispettato ma con `UserWarning` nel log di boot
+  (la deroga resta visibile). Test:
+  `TestEnableDocsProductionDefault` in `tests/unit/test_config.py`
+  (5 casi) + `_env_file=None` nell'helper `_make_settings_with` per
+  isolare i test dal `.env` locale dello sviluppatore (che qui
+  impostava `ENABLE_DOCS=true` e inquinava i casi "non impostato").
+  `ENABLE_DOCS` documentato in `backend/.env.example`.
+  **Nota emersa a fattura chiusa**: il toggle admin "Enable API docs"
+  (`api/admin_settings.py:67`, `restart_required=True`) è inefficace —
+  gli override vengono applicati nel `lifespan` (`main.py:117-121`),
+  dopo la costruzione di `FastAPI(...)` in cui `docs_url` è già deciso;
+  da affrontare a parte se si vuole rendere funzionante o rimuoverlo.
 
-### T0-3 — [ ] `passkey_rp_id` / `passkey_origin` di default puntano a `localhost` (VAPT-069)
+### T0-3 — [x] `passkey_rp_id` / `passkey_origin` di default puntano a `localhost` (VAPT-069)
 
 - **Verificato oggi**: `core/config.py:431,433` →
   `passkey_rp_id: str = "localhost"`,
@@ -85,8 +136,27 @@ stesso tier — falle nell'ordine che preferisci.
   `oauth2_client_secret`.
 - **Nota**: se non usi passkey in produzione nel breve termine, questo
   scende a Tier 1 — ma verificalo prima di derubricarlo.
+- **Risolto (2026-09-03)** — con **correzione del "perché blocca"**:
+  riverificando è emerso che le cerimonie WebAuthn reali (register
+  begin/complete, auth begin/complete in `api/passkey.py:37-61`)
+  derivano `rp_id`/`origin` **dinamicamente dagli header** della
+  request e non leggono questi setting; li consumano solo le route
+  admin di listing/CRUD (`admin.py:74,1390`), dove restano inerti.
+  Il rischio "cerimonia accetta richieste localhost" quindi non
+  esiste oggi — restano però la config fuorviante (l'admin UI espone
+  i due setting come se governassero le cerimonie) e la mine futura
+  di un rewiring. Fix applicato: validator
+  `_validate_passkey_defaults_for_production` (`core/config.py`) che
+  fa **hard-fail al boot in produzione** se i due setting sono vuoti
+  o localhost (hostname confrontato esatto, no substring → nessun
+  falso positivo tipo `idp.localhostdomain.example.com`); default dev
+  invariati. Test: `TestPasskeyDefaultsHardFailInProduction`
+  (6 casi in `tests/unit/test_config.py`, helper `_make_settings_with`
+  con default passkey non-localhost come già per oauth2) +
+  allineato `test_cookie_auth.py:294`. Nota hard-fail aggiunta al
+  blocco PASSKEY di `.env.example`.
 
-### T0-4 — [ ] Nessun exception handler globale + errori verbosi in risposta (VAPT-074 + VAPT-073)
+### T0-4 — [x] Nessun exception handler globale + errori verbosi in risposta (VAPT-074 + VAPT-073)
 
 - **Verificato oggi**: `grep -n "add_exception_handler" main.py` → zero
   risultati. Confermata inoltre almeno una `except Exception` che passa
@@ -104,8 +174,30 @@ stesso tier — falle nell'ordine che preferisci.
   structlog con `request_id` di correlazione e risponde con un 500
   generico stabile; sostituire gli `str(e)` puntuali con log
   server-side + codice errore stabile in risposta.
+- **Risolto (2026-09-03)**:
+  - **Handler globale**: nuovo modulo `api/error_handlers.py` con
+    `register_global_error_handler(app)` (stesso pattern di
+    `register_oauth2_error_handler`), cablato in `main.py`. Audit
+    `unhandled_exception` (severity error, path/method/error_class,
+    `request_id` ereditato dai contextvars VAPT-131) + entry structlog
+    con traceback + **500 generico stabile**
+    `{"detail": "Internal server error"}`.
+  - **5 siti leak genericizzati** (dettaglio stabile in response,
+    `str(e)` solo server-side nell'audit, `raise ... from e`):
+    `passkey.py` ×2 (interni libreria WebAuthn),
+    `federation.py` ×3 (frammenti risposta IdP upstream, interni
+    validazione JWT, login federato).
+  - **Tenuti di proposito** (messaggi controllati, superficie
+    admin/protocollo): `ClaimsEssentialMissingError` e `INVALID_SCOPE`
+    (error_description RFC 6749 §5.2), validazioni admin settings /
+    claim policy / webhooks, `ValueError` handler in admin, risultati
+    bulk-op admin (info operativa per l'admin del sistema stesso).
+  - Test: `tests/integration/test_global_error_handler.py` (500
+    generico + audit); 2 test federation aggiornati — asserivano
+    proprio il leak ("nonce"/"signature" nel body) e ora il contratto
+    generico. Suite completa 2598 passed, ruff/mypy puliti.
 
-### T0-5 — [ ] Refresh token: 30 giorni hardcoded, la config viene ignorata (VAPT-058)
+### T0-5 — [x] Refresh token: 30 giorni hardcoded, la config viene ignorata (VAPT-058)
 
 - **Verificato oggi**: `expires_in_days=30` letterale in
   `api/auth.py:1309`, `api/auth.py:1726`, `api/passkey.py:325` — la
@@ -120,8 +212,27 @@ stesso tier — falle nell'ordine che preferisci.
   `self.settings.refresh_token_expire_days` (o equivalente iniettato).
   Un `grep -rn "expires_in_days=30"` deve tornare vuoto a fix
   applicato.
+- **Risolto (2026-09-03)** — con **due scoperte oltre il piano**:
+  - un **quarto call site** hardcoded non censito:
+    `api/federation.py:356` (federation callback);
+  - il **default del metodo** `create_refresh_token`
+    (`services/refresh_token.py` → `expires_in_days: int = 30`) era
+    anch'esso hardcoded, e la **rotazione**
+    (`validate_and_rotate` non passa l'argomento) lo ereditava:
+    ogni token ruotato viveva 30 giorni qualunque fosse la config.
+  Fix: firma `expires_in_days: Optional[int] = None` con fallback su
+  `Settings.refresh_token_expire_days` (sistema rotazione e caller
+  futuri) + i 4 call site ora passano
+  `settings.refresh_token_expire_days` (pattern già usato da
+  `api/mfa.py:397` e `JWTService.create_refresh_token`,
+  `services/jwt.py:405`). Test: default e token ruotato seguono la
+  config (`TestVapt058ConfigDrivenExpiry`) + **guardia di regressione**
+  source-scan che fallisce se un letterale `expires_in_days=30`
+  rientra in `api/*.py` o nel service
+  (`TestVapt058NoHardcodedExpiryLiteral`). Criterio di accettazione
+  soddisfatto: `grep -rn "expires_in_days=30"` su `api/` → vuoto.
 
-### T0-6 — [ ] Nessun audit trail su disable MFA e su reuse-detection dei refresh token (VAPT-056 + VAPT-057)
+### T0-6 — [x] Nessun audit trail su disable MFA e su reuse-detection dei refresh token (VAPT-056 + VAPT-057)
 
 - **Verificato oggi**: `api/mfa.py:154-177` (`disable_mfa`) — nessuna
   chiamata `audit_service`, nessuna `send_mfa_disabled_alert` (esiste
@@ -139,6 +250,31 @@ stesso tier — falle nell'ordine che preferisci.
   `event_type="refresh_token_reuse_detected"` nel punto che chiama
   `_revoke_token_family`. Wireare anche `send_mfa_disabled_alert`
   (email all'utente) già pronta e mai chiamata.
+- **Risolto (2026-09-03)**:
+  - **MFA disable** (`api/mfa.py`): `disable_mfa` logga ora
+    `mfa_disabled` (severity `warning`, IP, email) e invia
+    `send_mfa_disabled_alert` in fire-and-forget via
+    `asyncio.create_task` (stesso pattern di
+    `user_profile.py:180` per `send_password_changed_alert`; il
+    notification service deglutisce già i fallimenti invio — l'email
+    non può rompere la response).
+  - **Refresh reuse** (`services/refresh_token.py`): il reuse è
+    interamente nel service (`validate_and_rotate`, due punti) e
+    `api/auth.py:529-559` citato dal piano oggi contiene altro codice
+    (linee shiftate). Fix nel funnel unico `_revoke_token_family`
+    (chiamato solo sui percorsi di reuse): log di
+    `refresh_token_reuse_detected` (severity `warning`) con root
+    token_id, revoked_count, client_id e IP. Il service istanzia
+    `AuditService()` nel `__init__` (pattern VAPT-130 di
+    `user_profile.py`). **Copertura completa**: loggando nel service,
+    l'evento copre sia il flusso cookie (`/api/auth/refresh`) sia il
+    grant OAuth2 refresh al token endpoint — entrambi passano per
+    `validate_and_rotate`.
+  - Test: `test_reuse_detection_logs_audit_event`
+    (`tests/unit/test_refresh_token.py`) e
+    `TestDisableMfaSecurityTrail` (`tests/integration/test_mfa_api.py`,
+    con nota: l'override dipendenze deve puntare al
+    `get_audit_service` di `api/mfa.py`, non a quello di `api/auth.py`).
 
 ---
 
@@ -237,3 +373,44 @@ non perde tempo a riverificarle:
 - 2026-09-03: creazione del documento. 6 voci Tier 0, 10 voci Tier 1,
   backlog Tier 2 raggruppato per area. 3 falsi allarmi identificati e
   documentati per la correzione del plan originale.
+- 2026-09-03: **T0-2 chiuso** — `enable_docs` default off in
+  produzione via before-validator (opt-in esplicito rispettato con
+  warning); toggle admin docs documentato come inefficace (nota in
+  sezione T0-2). Verificato: `test_config.py` 51/51, suite completa
+  senza failure, ruff/mypy puliti.
+- 2026-09-03: **T0-3 chiuso** — hard-fail al boot in produzione su
+  default passkey localhost/vuoti (`_validate_passkey_defaults_for_production`).
+  "Perché blocca" corretto nel documento: le cerimonie WebAuthn usano
+  origin dinamico dagli header, i setting alimentano solo le route
+  admin di listing (rischio reale = config fuorviante + mine futura).
+  Verificato: suite completa 2579 passed, ruff/mypy puliti
+  (+ auto-fix I001 pre-esistenti in `test_cookie_auth.py`).
+- 2026-09-03: **T0-6 chiuso** — audit `mfa_disabled` + email
+  `send_mfa_disabled_alert` wireata in `disable_mfa`;
+  `refresh_token_reuse_detected` loggato nel funnel
+  `_revoke_token_family` (copre cookie refresh e OAuth2 token
+  endpoint). 2 test nuovi; suite completa 2581 passed,
+  ruff/mypy puliti.
+- 2026-09-03: **T0-5 chiuso** — lifetime refresh token da
+  `refresh_token_expire_days` ovunque: 4 call site (federation
+  scoperto in verifica) + default del metodo con fallback config
+  (la rotazione ereditava il 30 hardcoded). Guardia di regressione
+  source-scan. 3 test nuovi; suite completa 2584 passed,
+  ruff/mypy puliti.
+- 2026-09-03: **T0-1 chiuso** — premessa corretta: il CSRF era già
+  enforcementato via middleware globale (non via `require_csrf`).
+  Trovato e risolto un **bug funzionale**: il doppio enforcement
+  (middleware + check inline in authorize) con token one-time
+  rendeva impossibile l'authorize da utente loggato (sempre 403).
+  validate_token non consumante, enforcement unico nel middleware
+  (gate esteso a refresh + csrf_session_id, bypass credenziali
+  esplicite, audit su mismatch), frontend con cache+retry. Probe
+  empirica: authorize via cookie 200 (prima 403), attacco senza
+  header 403. 15 test nuovi/aggiornati; suite completa 2596
+  passed.
+- 2026-09-03: **T0-4 chiuso — TIER 0 COMPLETO (6/6)**. Handler
+  globale (`register_global_error_handler`, audit + 500 generico
+  stabile) e 5 siti leak `str(e)` genericizzati (passkey ×2,
+  federation ×3) con audit server-side. 2 test nuovi + 2 aggiornati
+  al contratto generico; suite completa 2598 passed,
+  ruff/mypy puliti.

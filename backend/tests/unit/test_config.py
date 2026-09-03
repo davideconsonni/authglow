@@ -110,6 +110,12 @@ def _make_settings_with(tmp_path, secret_key, app_env, **kwargs):
         "jwt_auto_rotate": False,
         "oauth2_client_id": "test-client-id",
         "oauth2_client_secret": "test-client-secret",
+        # VAPT-069: production boots hard-fail on localhost passkey
+        # defaults, so tests that boot production Settings must start
+        # from non-localhost values (pass localhost explicitly to
+        # exercise the hard-fail).
+        "passkey_rp_id": "test-rp.example.com",
+        "passkey_origin": "https://test-rp.example.com",
     }
     settings_kwargs.update(kwargs)
     return Settings(**settings_kwargs)
@@ -240,6 +246,86 @@ class TestOauth2DefaultsHardFailInProduction:
                     oauth2_client_id=bad_id,
                     oauth2_client_secret="good-secret-value-for-testing-ok!",
                 )
+
+
+class TestPasskeyDefaultsHardFailInProduction:
+    """VAPT-069: the passkey settings default to localhost values for
+    local development; production must boot only with real RP ID /
+    origin values. (The live WebAuthn ceremonies derive them from
+    request headers, but the settings must not be allowed to silently
+    mismatch a real deployment.)"""
+
+    def test_localhost_defaults_raise_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="PASSKEY_RP_ID"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                passkey_rp_id="localhost",
+            )
+
+    def test_localhost_origin_raises_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="PASSKEY_ORIGIN"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                passkey_rp_id="idp.example.com",
+                passkey_origin="http://localhost:8000",
+            )
+
+    def test_real_values_ok_in_production(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="production",
+            passkey_rp_id="idp.example.com",
+            passkey_origin="https://idp.example.com",
+        )
+        assert settings.passkey_rp_id == "idp.example.com"
+        assert settings.passkey_origin == "https://idp.example.com"
+
+    def test_localhost_defaults_ok_in_development(self, tmp_path):
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="development",
+            passkey_rp_id="localhost",
+            passkey_origin="http://localhost:8000",
+        )
+        assert settings.passkey_rp_id == "localhost"
+        assert settings.passkey_origin == "http://localhost:8000"
+
+    def test_empty_values_raise_in_production(self, tmp_path):
+        with pytest.raises(ValueError, match="PASSKEY_RP_ID"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                passkey_rp_id="",
+                passkey_origin="https://idp.example.com",
+            )
+        with pytest.raises(ValueError, match="PASSKEY_ORIGIN"):
+            _make_settings_with(
+                tmp_path,
+                secret_key="k" * 64,
+                app_env="production",
+                passkey_rp_id="idp.example.com",
+                passkey_origin="",
+            )
+
+    def test_non_localhost_substring_hostname_allowed(self, tmp_path):
+        # A hostname that merely *contains* "localhost" as a substring
+        # (e.g. a staging domain) must not trigger the hard-fail — the
+        # check compares the parsed hostname exactly, never substrings.
+        settings = _make_settings_with(
+            tmp_path,
+            secret_key="k" * 64,
+            app_env="production",
+            passkey_rp_id="idp.localhostdomain.example.com",
+            passkey_origin="https://idp.localhostdomain.example.com",
+        )
+        assert settings.passkey_rp_id == "idp.localhostdomain.example.com"
 
 
 class TestCorsWildcardCredentialsGuardrail:

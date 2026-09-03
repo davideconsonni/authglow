@@ -198,7 +198,11 @@ class TestMaxAge:
             },
         )
 
-        # Should NOT be 400 "Credentials required" — cookie auth allowed
-        # Will be 403 because CSRF token is missing, which proves the cookie path is taken
-        assert response.status_code == 403, response.text
-        assert "CSRF" in response.json().get("detail", "")
+        # Should NOT be 400 "Credentials required" — cookie auth allowed.
+        # T0-1: CSRF enforcement moved to the global middleware (not
+        # mounted in this bare app), so the cookie path now proceeds to
+        # the consent response instead of stopping at the old inline
+        # CSRF check.
+        assert response.status_code == 200, response.text
+        assert "consent_required" in response.text
+        assert "Credentials required" not in response.text

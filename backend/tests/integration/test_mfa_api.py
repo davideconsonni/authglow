@@ -1,15 +1,13 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
-from authglow.models.user import User
-from authglow.services.password import hash_password
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def test_app(test_settings):
-    from authglow.main import app
-    from authglow.core.config import get_settings
     from authglow.core import config as config_mod
+    from authglow.main import app
 
     with patch.object(config_mod, "get_settings", return_value=test_settings):
         with patch.object(config_mod, "Settings", return_value=test_settings):
@@ -41,8 +39,9 @@ class TestTokenEndpointClientAuth:
 
 class TestMFAVerifyLoginBackupCodes:
     def test_mfa_verify_login_uses_verify_user_backup_code(self):
-        from authglow.api.mfa import verify_mfa_login
         import inspect
+
+        from authglow.api.mfa import verify_mfa_login
 
         source = inspect.getsource(verify_mfa_login)
         assert "verify_user_backup_code" in source, (
@@ -74,6 +73,7 @@ class TestMFAVerifyLoginBackupCodes:
 class TestBackupCodeLockoutIntegration:
     def test_verify_user_backup_code_locked_after_max_failures(self, mfa_service):
         import asyncio
+
         from authglow.services.mfa import BackupCodeLockedException
 
         async def _run():
@@ -143,15 +143,20 @@ class TestBackupCodeLockoutIntegration:
 def _mfa_enroll_app(test_settings, jwt_service, storage):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from unittest.mock import AsyncMock, MagicMock
-    from authglow.api.mfa import router, get_mfa_service, get_user_storage as mfa_get_user_storage
+
+    from authglow.api.auth import (
+        get_api_key_service,
+        get_audit_service,
+        get_oauth2_service,
+    )
+    from authglow.api.auth import (
+        get_jwt_service as auth_get_jwt_service,
+    )
     from authglow.api.auth import (
         get_user_storage as auth_get_user_storage,
-        get_jwt_service as auth_get_jwt_service,
-        get_api_key_service,
-        get_oauth2_service,
-        get_audit_service,
     )
+    from authglow.api.mfa import get_mfa_service, router
+    from authglow.api.mfa import get_user_storage as mfa_get_user_storage
     from authglow.services.mfa import MFAService
 
     app = FastAPI()
@@ -284,6 +289,7 @@ class TestEnrollMfaEndpoint:
 
     def test_enroll_mfa_guard_is_locked(self, _mfa_enroll_app, jwt_service, storage, test_user):
         import asyncio
+
         from authglow.core.concurrency import named_lock
 
         asyncio.run(storage.create_user(test_user))
@@ -362,9 +368,7 @@ class TestEnrollMfaEndpoint:
             "/api/mfa/enroll",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 200, (
-            "Orphaned state must self-heal and allow a fresh enroll"
-        )
+        assert response.status_code == 200, "Orphaned state must self-heal and allow a fresh enroll"
 
         async def _reload():
             return await storage.get_user(test_user.id)
@@ -381,6 +385,7 @@ class TestEnrollMfaEndpoint:
     ):
         """Verify must flip both flags together on a valid TOTP code."""
         import asyncio
+
         import pyotp
 
         asyncio.run(storage.create_user(test_user))
@@ -442,3 +447,93 @@ class TestEnrollMfaEndpoint:
         fresh = asyncio.run(_reload())
         assert fresh.mfa_enabled is False
         assert fresh.mfa_verified is False
+
+
+@pytest.fixture
+def _mfa_disable_app(test_settings, jwt_service, test_user):
+    """Isolated app for the ``disable_mfa`` security-trail tests
+    (VAPT-056): exposes the audit mock and patches the (previously
+    dead) ``SecurityNotificationService`` wiring."""
+    from unittest.mock import patch
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from authglow.api.auth import (
+        get_api_key_service,
+        get_audit_service,
+        get_current_user,
+        get_oauth2_service,
+    )
+    from authglow.api.auth import (
+        get_jwt_service as auth_get_jwt_service,
+    )
+    from authglow.api.auth import (
+        get_user_storage as auth_get_user_storage,
+    )
+    from authglow.api.mfa import (
+        get_audit_service as mfa_get_audit_service,
+    )
+    from authglow.api.mfa import (
+        get_mfa_service,
+        router,
+    )
+    from authglow.api.mfa import (
+        get_user_storage as mfa_get_user_storage,
+    )
+
+    app = FastAPI()
+    app.include_router(router)
+
+    mock_audit = MagicMock()
+    mock_audit.log_event = AsyncMock()
+
+    mfa_svc = MagicMock()
+    mfa_svc.delete_backup_codes = AsyncMock()
+
+    storage_mock = MagicMock()
+    storage_mock.update_user = AsyncMock()
+
+    user = test_user.model_copy(update={"mfa_enabled": True, "mfa_verified": True})
+
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[mfa_get_user_storage] = lambda: storage_mock
+    app.dependency_overrides[auth_get_user_storage] = lambda: storage_mock
+    app.dependency_overrides[auth_get_jwt_service] = lambda: jwt_service
+    app.dependency_overrides[get_mfa_service] = lambda: mfa_svc
+    app.dependency_overrides[get_api_key_service] = lambda: MagicMock()
+    app.dependency_overrides[get_oauth2_service] = lambda: MagicMock()
+    app.dependency_overrides[mfa_get_audit_service] = lambda: mock_audit
+    app.dependency_overrides[get_audit_service] = lambda: mock_audit
+
+    with patch("authglow.api.mfa.SecurityNotificationService") as notif_class:
+        notif_instance = MagicMock()
+        notif_instance.send_mfa_disabled_alert = AsyncMock(return_value=True)
+        notif_class.return_value = notif_instance
+        yield TestClient(app), user, mock_audit, notif_instance
+
+
+class TestDisableMfaSecurityTrail:
+    """VAPT-056: disabling MFA is one of the highest-signal compromise
+    indicators — the endpoint must leave a warning-severity audit event
+    and trigger the user-facing security email."""
+
+    def test_disable_mfa_logs_audit_and_sends_alert(self, _mfa_disable_app):
+        client, user, mock_audit, notif_instance = _mfa_disable_app
+
+        response = client.delete("/api/mfa/disable")
+
+        assert response.status_code == 200
+        assert response.json() == {"message": "MFA disabled successfully"}
+
+        mock_audit.log_event.assert_awaited_once()
+        kwargs = mock_audit.log_event.await_args.kwargs
+        assert kwargs["event_type"] == "mfa_disabled"
+        assert kwargs["severity"] == "warning"
+        assert kwargs["user_id"] == user.id
+        assert kwargs["email"] == user.email
+        assert kwargs["ip_address"] is not None
+
+        notif_instance.send_mfa_disabled_alert.assert_called_once()
+        assert notif_instance.send_mfa_disabled_alert.call_args.args[0] is user
+        assert notif_instance.send_mfa_disabled_alert.call_args.kwargs["ip_address"] is not None

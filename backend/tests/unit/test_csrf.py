@@ -3,9 +3,7 @@
 import asyncio
 import json
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 def asyncio_run(coro):
@@ -132,6 +130,20 @@ class TestCSRFTokenService:
             assert not asyncio_run(svc.validate_token(session_id, token1))
             assert asyncio_run(svc.validate_token(session_id, token2))
 
+    def test_validate_is_non_consuming(self, test_settings):
+        """T0-1 (VAPT-066): a valid token stays valid for its whole
+        TTL — the global middleware and parallel in-flight requests
+        share it, and an endpoint-level re-check cannot strand it."""
+        from authglow.services.csrf import CSRFTokenService
+
+        with patch("authglow.services.csrf.get_settings", return_value=test_settings):
+            svc = CSRFTokenService()
+            session_id = "test-session-non-consuming"
+            token = asyncio_run(svc.generate_token(session_id))
+
+            for _ in range(3):
+                assert asyncio_run(svc.validate_token(session_id, token)) is True
+
     """Security-specific tests for CSRF tokens."""
 
     def test_token_length_meets_remediation_spec(self, test_settings):
@@ -147,8 +159,9 @@ class TestCSRFTokenService:
             )
 
     def test_token_generated_has_tags_and_signals(self, test_settings):
-        from authglow.services.csrf import CSRFTokenService
         import re
+
+        from authglow.services.csrf import CSRFTokenService
 
         with patch("authglow.services.csrf.get_settings", return_value=test_settings):
             svc = CSRFTokenService()

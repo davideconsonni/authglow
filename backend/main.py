@@ -20,6 +20,7 @@ from authglow.api.claim_policy import router as claim_policy_router
 from authglow.api.demo import router as demo_router
 from authglow.api.device_auth import router as device_auth_router
 from authglow.api.email_verification import router as email_verification_router
+from authglow.api.error_handlers import register_global_error_handler
 from authglow.api.federation import router as federation_router
 from authglow.api.meta import router as meta_router
 from authglow.api.mfa import router as mfa_router
@@ -173,6 +174,7 @@ app.state.limiter = limiter
 # {"error": ..., "error_description": ...} body instead of FastAPI's
 # default {"detail": ...} envelope.
 register_oauth2_error_handler(app)
+register_global_error_handler(app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -40,6 +40,12 @@ function extractErrorMessage(data: unknown): string {
 
 let isRefreshing = false
 let pendingRequests: (() => void)[] = []
+// Endpoints where a 401 is an *expected* credential failure (e.g. a wrong
+// password on the sign-in form). The refresh dance is skipped there: it can
+// never succeed in that state and it masks the backend's real detail
+// ("Invalid credentials") behind a generic "Unauthorized" — plus it fires a
+// spurious "session expired" toast right before a fresh sign-in attempt.
+const CREDENTIAL_ENDPOINTS = ['/api/auth/refresh', '/api/oauth2/authorize']
 // Guards against toast spam when many parallel requests 401 at once.
 // The flag is per-module-load, so it resets on the next page navigation
 // (after the soft redirect to /auth/login).
@@ -47,6 +53,12 @@ let sessionExpiredNotified = false
 let csrfToken: string | null = null
 
 async function getCsrfToken(): Promise<string> {
+  // T0-1 (VAPT-066): the token is cached and reused across unsafe
+  // requests — backend validation is non-consuming and bound to the
+  // holder's csrf_session_id cookie, so one fetch per page load is
+  // enough. Fetching a fresh token per request would race parallel
+  // mutations (each fetch rotates the server-side token).
+  if (csrfToken) return csrfToken
   const response = await fetch(`${API_URL}/api/oauth2/csrf-token`, { credentials: 'include' })
   const data = await response.json() as { csrf_token?: string }
   if (!response.ok || !data.csrf_token) throw new Error('Unable to initialize CSRF protection')
@@ -54,6 +66,11 @@ async function getCsrfToken(): Promise<string> {
   return csrfToken
 }
 
+/** Drop the cached CSRF token (e.g. on a 403 from the CSRF gate, or
+ * after a hard sign-out) so the next unsafe request re-bootstraps. */
+export function clearCsrfToken() {
+  csrfToken = null
+}
 async function attemptRefresh(): Promise<boolean> {
   try {
     const token = await getCsrfToken()
@@ -124,7 +141,18 @@ async function request<T>(endpoint: string, options: ApiOptions = {}): Promise<T
 
   let response = await doFetch()
 
-  if (response.status === 401 && !endpoint.startsWith('/api/auth/refresh')) {
+  // A 403 from the CSRF gate means the cached token went stale (e.g.
+  // another tab rotated it, or the server-side entry expired). Drop it
+  // and retry once with a fresh token before surfacing the error.
+  if (isUnsafe && response.status === 403) {
+    const errDetail = extractErrorMessage(await response.clone().json().catch(() => null))
+    if (errDetail.includes('CSRF')) {
+      clearCsrfToken()
+      response = await doFetch()
+    }
+  }
+
+  if (response.status === 401 && !CREDENTIAL_ENDPOINTS.some((e) => endpoint.startsWith(e))) {
     if (!isRefreshing) {
       isRefreshing = true
       const ok = await attemptRefresh()

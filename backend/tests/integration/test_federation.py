@@ -233,7 +233,9 @@ class TestFederationCallbackIdTokenNonce:
                     )
 
         assert resp.status_code == 400
-        assert "nonce" in resp.json()["detail"].lower()
+        # VAPT-073: the response carries only a stable generic detail —
+        # the nonce-specific reason stays server-side (audit log).
+        assert resp.json()["detail"] == "ID token validation failed"
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +382,9 @@ class TestFederationCallbackIdTokenSignature:
                     )
 
         assert resp.status_code == 400
-        assert "signature" in resp.json()["detail"].lower()
+        # VAPT-073: the response carries only a stable generic detail —
+        # the signature-specific reason stays server-side (audit log).
+        assert resp.json()["detail"] == "ID token validation failed"
 
 
 class TestVisibleContexts:

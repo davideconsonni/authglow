@@ -1,5 +1,6 @@
 """MFA API endpoints."""
 
+import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -25,6 +26,7 @@ from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.oauth_client import OAuth2ClientStorage
 from authglow.services.oauth_consent import OAuth2ConsentService
+from authglow.services.security_notifications import SecurityNotificationService
 from authglow.services.session import SessionService
 from authglow.services.user import UserService
 
@@ -152,9 +154,11 @@ async def verify_mfa_enrollment(
 
 @router.delete("/api/mfa/disable")
 async def disable_mfa(
+    request: Request,
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
     storage: UserStorage = Depends(get_user_storage),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Disable MFA for current user.
 
@@ -162,6 +166,11 @@ async def disable_mfa(
     half-states (e.g. ``mfa_secret`` set but never verified) so users
     stuck after a failed enroll can self-recover without an admin
     call.
+
+    VAPT-056: the disable event is one of the highest-signal
+    compromise indicators — it always leaves a warning-severity audit
+    trail and triggers the user-facing security email (fire-and-forget,
+    send failures are swallowed by the notification service).
     """
     has_any_mfa_state = current_user.mfa_enabled or bool(current_user.mfa_secret)
     if not has_any_mfa_state:
@@ -175,6 +184,20 @@ async def disable_mfa(
 
     # Delete backup codes
     await mfa_service.delete_backup_codes(current_user.id)
+
+    client_ip = request.client.host if request.client else None
+
+    await audit_service.log_event(
+        event_type="mfa_disabled",
+        user_id=current_user.id,
+        email=current_user.email,
+        ip_address=client_ip,
+        severity="warning",
+    )
+
+    asyncio.create_task(
+        SecurityNotificationService().send_mfa_disabled_alert(current_user, ip_address=client_ip)
+    )
 
     return {"message": "MFA disabled successfully"}
 

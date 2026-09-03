@@ -320,8 +320,7 @@ async def _require_dpop_proof_if_bound(
     if not proof:
         raise OAuth2Error(
             INVALID_REQUEST,
-            "DPoP proof is required for this client "
-            "(token_endpoint_auth_method is DPoP-bound).",
+            "DPoP proof is required for this client (token_endpoint_auth_method is DPoP-bound).",
             status_code=400,
             error_code="missing_dpop_proof",
             headers={"WWW-Authenticate": 'DPoP algs="ES256"'},
@@ -626,7 +625,6 @@ async def authorize_post(
     code_challenge: Optional[str] = Form(None),
     code_challenge_method: Optional[str] = Form(None),
     nonce: Optional[str] = Form(None),
-    csrf_token: Optional[str] = Form(None),
     prompt: Optional[str] = Form(None),
     max_age: Optional[int] = Form(None),
     id_token_hint: Optional[str] = Form(None),
@@ -677,9 +675,7 @@ async def authorize_post(
         return _oauth_error_redirect(
             redirect_uri,
             error="unsupported_response_type",
-            description=(
-                "Only the 'code' response_type is supported (implicit flow disabled)."
-            ),
+            description=("Only the 'code' response_type is supported (implicit flow disabled)."),
             state=_validate_state(state),
         )
 
@@ -842,39 +838,12 @@ async def authorize_post(
             user = None
 
     if user:
-        from authglow.services.csrf import CSRFTokenService, get_or_create_session_id
-
-        session_id = get_or_create_session_id(request)
-        csrf_service = CSRFTokenService()
-        if csrf_token is None:
-            await AuditService().log_event(
-                event_type="csrf_token_mismatch",
-                user_id=user.id,
-                email=user.email,
-                ip_address=request.client.host if request.client else None,
-                metadata={"reason": "csrf_token_missing"},
-                severity="high",
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="CSRF token required when authenticated via session cookie.",
-            )
-
-        csrf_valid = await csrf_service.validate_token(session_id, csrf_token)
-        if not csrf_valid:
-            await AuditService().log_event(
-                event_type="csrf_token_mismatch",
-                user_id=user.id,
-                email=user.email,
-                ip_address=request.client.host if request.client else None,
-                metadata={"reason": "csrf_token_invalid"},
-                severity="high",
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid or expired CSRF token.",
-            )
-
+        # T0-1 (VAPT-066): CSRF for cookie-authenticated mutations is
+        # enforced globally by ``CSRFMiddleware`` (non-consuming token,
+        # header-based) — the previous endpoint-level double-check with
+        # one-time form tokens made a cookie-authenticated authorize
+        # impossible to complete (middleware consumed the token before
+        # this check could validate it).
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
         if user.suspended_until and utcnow() < user.suspended_until:
@@ -1306,7 +1275,8 @@ async def token_endpoint(
                 client_id=auth_code.client_id,
                 scopes=scopes,
                 issued_ip=request.client.host if request.client else None,
-                expires_in_days=30,
+                # VAPT-058: lifetime is policy, not a hardcoded constant
+                expires_in_days=settings.refresh_token_expire_days,
             )
 
         if rt is not None:
@@ -1362,12 +1332,8 @@ async def token_endpoint(
                     getattr(auth_code, "requested_claims", None),
                     available_id_token_claims,
                 )
-                user_claims = {
-                    k: v for k, v in user_claims.items() if k in filtered
-                }
-                id_extra_claims = {
-                    k: v for k, v in id_extra_claims.items() if k in filtered
-                }
+                user_claims = {k: v for k, v in user_claims.items() if k in filtered}
+                id_extra_claims = {k: v for k, v in id_extra_claims.items() if k in filtered}
                 if missing_essential:
                     # OIDC §5.5: the server MUST refuse when an
                     # essential claim cannot be provided.
@@ -1379,8 +1345,7 @@ async def token_endpoint(
                             "error": "claims_request_invalid",
                             "error_description": (
                                 "Essential claims requested by the client "
-                                "are not available: "
-                                + ", ".join(sorted(missing_essential))
+                                "are not available: " + ", ".join(sorted(missing_essential))
                             ),
                         },
                     )
@@ -1455,9 +1420,7 @@ async def token_endpoint(
                 raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
         else:
             if not resolved_client_secret:
-                raise OAuth2Error(
-                    INVALID_CLIENT, "Missing client credentials", status_code=400
-                )
+                raise OAuth2Error(INVALID_CLIENT, "Missing client credentials", status_code=400)
             if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
                 raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
@@ -1723,7 +1686,8 @@ async def token_endpoint(
                     client_id=resolved_device_client_id,
                     scopes=scopes_list,
                     issued_ip=request.client.host if request.client else None,
-                    expires_in_days=30,
+                    # VAPT-058: lifetime is policy, not a hardcoded constant
+                    expires_in_days=settings.refresh_token_expire_days,
                 )
                 access_token_response.refresh_token = rt.token
 
@@ -1747,6 +1711,7 @@ async def token_endpoint(
             "Unsupported grant_type",
             status_code=400,
         )
+
 
 @router.post("/api/token/api-key")
 @limiter.limit("20/minute")

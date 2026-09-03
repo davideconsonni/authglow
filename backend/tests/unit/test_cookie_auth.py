@@ -1,10 +1,11 @@
 """Tests for cookie-based auth flow (VAPT-001 remediation)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from authglow.api.auth import _clear_auth_cookies, _cookie_kwargs, _set_auth_cookies
 from authglow.core.config import Settings
-from authglow.api.auth import _cookie_kwargs, _set_auth_cookies, _clear_auth_cookies
 
 
 class TestCookieHelpers:
@@ -80,6 +81,7 @@ class TestCookiesSetOnLogin:
     def test_login_sets_auth_cookies(self, test_settings):
         """POST /api/token response includes Set-Cookie headers with httpOnly tokens."""
         from fastapi import Response
+
         from authglow.api.auth import _set_auth_cookies
         from authglow.models.token import Token
 
@@ -142,8 +144,9 @@ class TestGetCurrentUserReadsCookie:
 
     async def test_raises_401_when_no_header_and_no_cookie(self, test_settings):
         """get_current_user raises 401 when both header and cookie are missing."""
-        from authglow.api.auth import get_current_user
         from fastapi import HTTPException
+
+        from authglow.api.auth import get_current_user
 
         request = MagicMock()
         request.headers.get.return_value = ""  # No auth header
@@ -171,8 +174,9 @@ class TestGetCurrentUserReadsCookie:
 
     async def test_rejects_inactive_user_with_valid_jwt(self, test_settings):
         """get_current_user raises 400 when user exists but is_active=False."""
-        from authglow.api.auth import get_current_user
         from fastapi import HTTPException
+
+        from authglow.api.auth import get_current_user
 
         request = MagicMock()
         request.headers.get.return_value = ""
@@ -235,8 +239,9 @@ class TestAuthCookieEndpointsRegistered:
 
     def test_refresh_endpoint_requires_cookie(self):
         """cookie_refresh returns 401 when no refresh_token cookie present."""
-        from fastapi.testclient import TestClient
         from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
 
         from authglow.api.auth import router
 
@@ -256,8 +261,9 @@ class TestAuthCookieEndpointsRegistered:
 
     def test_logout_clears_cookies(self):
         """cookie_logout returns {"ok": true} and clears cookies."""
-        from fastapi.testclient import TestClient
         from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
 
         from authglow.api.auth import router
 
@@ -294,11 +300,15 @@ class TestConfigCookieSettings:
     def test_auth_cookie_secure_true_in_prod(self):
         """Cookie Secure flag is True in production."""
         settings = Settings(
+            _env_file=None,  # isolate from the developer's local .env
             secret_key="a" * 32,
             app_env="production",
             debug=False,
             oauth2_client_id="prod-client-id",
             oauth2_client_secret="prod-client-secret",
+            # VAPT-069: production refuses to boot with localhost passkey defaults
+            passkey_rp_id="prod.example.com",
+            passkey_origin="https://prod.example.com",
         )
         assert settings.auth_cookie_secure is True
 

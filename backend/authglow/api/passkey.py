@@ -180,10 +180,17 @@ async def complete_registration(
             ),
         }
     except Exception as e:
+        # VAPT-073: never leak WebAuthn library internals to the client —
+        # stable generic detail, full error server-side in the audit log.
+        await AuditService().log_event(
+            event_type="passkey_registration_failed",
+            severity="warning",
+            metadata={"error_class": type(e).__name__, "error": str(e)},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Registration verification failed: {str(e)}",
-        )
+            detail="Passkey registration verification failed",
+        ) from e
 
 
 class EmailRequest(BaseModel):
@@ -322,7 +329,8 @@ async def complete_authentication(
             client_id="passkey_grant",
             scopes=user.scopes,
             issued_ip=request.client.host if request.client else None,
-            expires_in_days=30,
+            # VAPT-058: lifetime is policy, not a hardcoded constant
+            expires_in_days=settings.refresh_token_expire_days,
         )
 
         # Log successful passkey login
@@ -368,10 +376,17 @@ async def complete_authentication(
             },
         }
     except Exception as e:
+        # VAPT-073: never leak WebAuthn library internals to the client —
+        # stable generic detail, full error server-side in the audit log.
+        await AuditService().log_event(
+            event_type="passkey_authentication_failed",
+            severity="warning",
+            metadata={"error_class": type(e).__name__, "error": str(e)},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Authentication verification failed: {str(e)}",
-        )
+            detail="Passkey authentication verification failed",
+        ) from e
 
 
 @router.get("/list")

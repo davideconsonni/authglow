@@ -32,6 +32,7 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.models.refresh_token import RefreshToken
 from authglow.repositories.protocols import RefreshTokenRepository
+from authglow.services.audit import AuditService
 from authglow.services.password import hash_password, verify_password_async
 
 
@@ -73,6 +74,10 @@ class RefreshTokenService:
         self._secret_bytes = self.settings.secret_key.encode()
         self._repo = repository or get_refresh_token_repository(settings=self.settings)
         self._lock = named_lock()
+        # VAPT-057: reuse detection must leave an audit trail (see
+        # ``_revoke_token_family``) — same injected-service pattern as
+        # ``user_profile.py`` (VAPT-130).
+        self.audit_service = AuditService()
 
     # ------------------------------------------------------------------
     # Pure crypto helpers — no I/O
@@ -103,14 +108,21 @@ class RefreshTokenService:
         client_id: str,
         scopes: List[str],
         issued_ip: Optional[str] = None,
-        expires_in_days: int = 30,
+        expires_in_days: Optional[int] = None,
         parent_token_id: Optional[str] = None,
     ) -> RefreshToken:
         """Create a new refresh token.
 
         Only the bcrypt hash and HMAC lookup key are persisted to disk.
         The plaintext token is returned to the caller for delivery to the client.
+
+        VAPT-058: when ``expires_in_days`` is omitted (the rotation
+        path never passes it), the configured
+        ``Settings.refresh_token_expire_days`` drives the lifetime —
+        never a hardcoded default.
         """
+        if expires_in_days is None:
+            expires_in_days = self.settings.refresh_token_expire_days
         plaintext, token_hash, token_lookup = await asyncio.to_thread(self._generate_token)
 
         refresh_token = RefreshToken(
@@ -207,7 +219,7 @@ class RefreshTokenService:
             return None, "Token expired"
 
         if rt.used:
-            await self._revoke_token_family(rt)
+            await self._revoke_token_family(rt, ip_address=ip_address)
             return None, "Token reuse detected - all tokens in family revoked"
 
         # RFC 6749 §6 scope narrowing — read-only computation, safe
@@ -230,7 +242,7 @@ class RefreshTokenService:
                 if rt.revoked:
                     return None, "Token has been revoked"
                 if rt.used:
-                    await self._revoke_token_family(rt)
+                    await self._revoke_token_family(rt, ip_address=ip_address)
                     return None, "Token reuse detected - all tokens in family revoked"
 
                 rt.used = True
@@ -321,11 +333,18 @@ class RefreshTokenService:
             except Exception:
                 return False
 
-    async def _revoke_token_family(self, token: RefreshToken) -> int:
+    async def _revoke_token_family(
+        self, token: RefreshToken, *, ip_address: Optional[str] = None
+    ) -> int:
         """Revoke all tokens in a family (security measure).
 
         Walks the parent chain to the root, then recursively
         revokes every descendant via ``_revoke_descendants``.
+
+        VAPT-057: this method is only reached on refresh-token
+        **reuse** — the classic symptom of a stolen token — so the
+        revocation is always accompanied by a high-signal audit
+        event for SIEM/SOC consumption.
         """
         current = token
         while current.parent_token_id:
@@ -334,7 +353,20 @@ class RefreshTokenService:
                 break
             current = parent
 
-        return await self._revoke_descendants(current.token_id)
+        root_id = current.token_id
+        revoked_count = await self._revoke_descendants(root_id)
+        await self.audit_service.log_event(
+            event_type="refresh_token_reuse_detected",
+            user_id=current.user_id,
+            ip_address=ip_address,
+            severity="warning",
+            metadata={
+                "root_token_id": root_id,
+                "revoked_count": revoked_count,
+                "client_id": current.client_id,
+            },
+        )
+        return revoked_count
 
     async def _revoke_descendants(self, token_id: str) -> int:
         """Recursively revoke a token and all its descendants."""

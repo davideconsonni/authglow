@@ -67,7 +67,7 @@ export function AdminUsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', first_name: '', last_name: '', scopes: '' })
   const [inviting, setInviting] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' })
+  const [createForm, setCreateForm] = useState({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '', email_verified: false })
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null)
@@ -138,8 +138,9 @@ export function AdminUsersPage() {
         phone: createForm.phone || null,
         avatar_url: createForm.avatar_url || null,
         scopes: tokens,
+        email_verified: createForm.email_verified,
       })
-      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '' }); notify.success('User created.'); await refetch()
+      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '', email_verified: false }); notify.success('User created.'); await refetch()
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
   }
 
@@ -242,6 +243,7 @@ export function AdminUsersPage() {
             testId="create-user-scopes"
           />
         </div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={createForm.email_verified} onChange={e => setCreateForm({...createForm, email_verified: e.target.checked})} data-testid="create-user-email-verified" className="rounded border-surface-2 text-brand-accent focus:ring-brand-accent" /><span className="text-text-primary">Email verified</span></label>
         <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent disabled:opacity-50">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
       </div></div>}
 

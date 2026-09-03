@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, clearCsrfToken } from '../lib/api'
 
 describe('api', () => {
   beforeEach(() => {
+    clearCsrfToken()
     vi.restoreAllMocks()
   })
 
@@ -166,6 +167,117 @@ describe('api', () => {
 
       // Should only have one call (no retry loop for refresh endpoint)
       expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('surfaces the backend detail for credential endpoints without refreshing', async () => {
+      // Call #1 is the CSRF bootstrap every unsafe request performs.
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ csrf_token: 'csrf-token' }),
+        })
+        .mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: () => Promise.resolve({ detail: 'Invalid credentials' }),
+        })
+      globalThis.fetch = mockFetch
+
+      // A 401 on the sign-in endpoint is an expected credential failure:
+      // the real detail must reach the caller and no refresh may run.
+      await expect(
+        api.postForm('/api/oauth2/authorize', { email: 'a@b.c', password: 'x' }),
+      ).rejects.toThrow('Invalid credentials')
+
+      const calls = mockFetch.mock.calls.map((c) => String(c[0]))
+      expect(calls[0]).toContain('/api/oauth2/csrf-token')
+      expect(calls[1]).toContain('/api/oauth2/authorize')
+      expect(calls.some((u) => u.includes('/api/auth/refresh'))).toBe(false)
+    })
+  })
+
+  describe('csrf token handling', () => {
+    it('caches the csrf token across unsafe requests', async () => {
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ csrf_token: 'tok-1' }),
+        })
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
+      globalThis.fetch = mockFetch
+
+      await api.post('/api/thing')
+      await api.post('/api/thing')
+
+      const csrfCalls = mockFetch.mock.calls.filter((c) =>
+        String(c[0]).includes('/api/oauth2/csrf-token'),
+      )
+      expect(csrfCalls).toHaveLength(1)
+    })
+
+    it('clears the cached token and retries once on a 403 from the CSRF gate', async () => {
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ csrf_token: 'tok-stale' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          json: () => Promise.resolve({ detail: 'CSRF token required' }),
+          clone() {
+            return this
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ csrf_token: 'tok-fresh' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ retried: true }),
+        })
+      globalThis.fetch = mockFetch
+
+      const result = await api.post('/api/thing')
+
+      expect(result).toEqual({ retried: true })
+      const csrfCalls = mockFetch.mock.calls.filter((c) =>
+        String(c[0]).includes('/api/oauth2/csrf-token'),
+      )
+      expect(csrfCalls).toHaveLength(2)
+      const postCalls = mockFetch.mock.calls.filter((c) => String(c[0]).includes('/api/thing'))
+      expect((postCalls[1][1] as RequestInit).headers).toEqual(
+        expect.objectContaining({ 'X-CSRF-Token': 'tok-fresh' }),
+      )
+    })
+
+    it('does not retry a plain 403', async () => {
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ csrf_token: 'tok-1' }),
+        })
+        .mockResolvedValue({
+          ok: false,
+          status: 403,
+          json: () => Promise.resolve({ detail: 'Admin access required' }),
+          clone() {
+            return this
+          },
+        })
+      globalThis.fetch = mockFetch
+
+      await expect(api.post('/api/admin/nope')).rejects.toThrow('Admin access required')
+
+      const postCalls = mockFetch.mock.calls.filter((c) => String(c[0]).includes('/api/admin/nope'))
+      expect(postCalls).toHaveLength(1)
     })
   })
 

@@ -3,7 +3,11 @@
 Validates that:
 - ``GET /api/oauth2/csrf-token`` returns a valid token and sets the cookie.
 - ``POST /api/oauth2/authorize`` with a session cookie but no CSRF token → 403.
-- ``POST /api/oauth2/authorize`` with a valid CSRF token → proceeds past CSRF.
+- ``POST /api/oauth2/authorize`` with a valid CSRF token header → proceeds.
+
+T0-1 (VAPT-066): enforcement lives in the global ``CSRFMiddleware``
+(non-consuming, header-based) — the test app must therefore include
+the middleware, exactly like ``main.py`` does.
 """
 
 import asyncio
@@ -13,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from authglow.middleware.csrf import CSRFMiddleware
 from authglow.services.csrf import SESSION_ID_COOKIE
 
 # ---------------------------------------------------------------------------
@@ -112,6 +117,7 @@ def _build_authorize_app_with_mocks(test_settings):
 
     app = FastAPI()
     app.include_router(router)
+    app.add_middleware(CSRFMiddleware)
 
     app.dependency_overrides[get_user_storage] = lambda: storage
     app.dependency_overrides[get_oauth2_service] = lambda: oauth2_svc
@@ -193,7 +199,11 @@ class TestAuthorizePostCsrfEnforcement:
         jwt_svc = asyncio.run(JWTService.new())
         access_token = jwt_svc.create_access_token("user-1", "test@example.com", ["read"])
 
-        with patch("authglow.api.auth.get_settings", return_value=test_settings):
+        with (
+            patch("authglow.api.auth.get_settings", return_value=test_settings),
+            patch("authglow.middleware.csrf.get_settings", return_value=test_settings),
+            patch("authglow.services.csrf.get_settings", return_value=test_settings),
+        ):
             http_client = TestClient(app)
             http_client.cookies.set(
                 test_settings.auth_cookie_access_name, access_token, domain="testserver.local"
@@ -215,7 +225,8 @@ class TestAuthorizePostCsrfEnforcement:
         assert "CSRF" in detail
 
     def test_session_cookie_with_valid_csrf_token_proceeds(self, test_settings):
-        """User authenticated via cookie + valid CSRF token → not rejected by CSRF."""
+        """User authenticated via cookie + valid CSRF token header → not
+        rejected by CSRF (T0-1: header-based, like the SPA sends it)."""
         from authglow.models.user import User
         from authglow.services.jwt import JWTService
         from authglow.services.password import hash_password
@@ -258,6 +269,7 @@ class TestAuthorizePostCsrfEnforcement:
 
         with (
             patch("authglow.api.auth.get_settings", return_value=test_settings),
+            patch("authglow.middleware.csrf.get_settings", return_value=test_settings),
             patch("authglow.services.csrf.get_settings", return_value=test_settings),
         ):
             http_client = TestClient(app)
@@ -269,13 +281,14 @@ class TestAuthorizePostCsrfEnforcement:
             )
             response = http_client.post(
                 "/api/oauth2/authorize",
+                headers={"X-CSRF-Token": token},
                 data={
                     "client_id": "client-abc",
                     "redirect_uri": "https://example.com/callback",
                     "scope": "read",
                     "code_challenge": "test-challenge-abc",
                     "code_challenge_method": "S256",
-                    "csrf_token": token,
+                    "state": secrets.token_urlsafe(32),
                 },
             )
 

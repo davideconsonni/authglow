@@ -433,13 +433,14 @@ describe('AdminUsersPage', () => {
 
     fireEvent.change(screen.getByTestId('create-user-email'), { target: { value: 'new@test.com' } })
     fireEvent.change(screen.getByTestId('create-user-password'), { target: { value: 'StrongP@ss1' } })
+    fireEvent.click(screen.getByTestId('create-user-email-verified'))
 
     fireEvent.click(screen.getByTestId('create-user-submit'))
 
     await waitFor(() => {
       expect(mockApi.post).toHaveBeenCalledWith(
         '/api/admin/users/create',
-        expect.objectContaining({ email: 'new@test.com', password: 'StrongP@ss1' }),
+        expect.objectContaining({ email: 'new@test.com', password: 'StrongP@ss1', email_verified: true }),
       )
     })
   })

@@ -112,11 +112,17 @@ class CSRFTokenService:
         return token
 
     async def validate_token(self, session_id: str, submitted_token: str) -> bool:
-        """Validate a submitted CSRF token against the stored hash.
+        """Validate a submitted token against the stored hash.
 
         Returns True if valid, False otherwise.
-        On successful validation the stored entry is deleted to prevent
-        reuse.
+
+        Non-consuming (T0-1 / VAPT-066): the entry is NOT deleted on
+        success. The token is bound to the holder's ``csrf_session_id``
+        httpOnly cookie, expires after 30 minutes and is worthless to
+        any origin that cannot read the issuing response, so one-time
+        semantics buy nothing — while single-use consumption made the
+        double enforcement (global middleware + endpoint-level checks)
+        and parallel in-flight requests mutually incompatible.
         """
         await self._cleanup_expired()
 
@@ -135,11 +141,7 @@ class CSRFTokenService:
         stored_hash = data.get("token_hash", "")
         submitted_hash = self._hash_token(submitted_token)
 
-        if not secrets.compare_digest(stored_hash, submitted_hash):
-            return False
-
-        await self._repository.delete(lookup)
-        return True
+        return secrets.compare_digest(stored_hash, submitted_hash)
 
 
 def _default_repository(settings: Settings) -> CSRFTokenRepository:

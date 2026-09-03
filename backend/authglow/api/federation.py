@@ -146,10 +146,17 @@ async def federation_login(
         )
         return RedirectResponse(url=auth_url, status_code=302)
     except Exception as e:
+        # VAPT-073: upstream IdP response fragments must not reach the
+        # client — generic detail, full error server-side.
+        await AuditService().log_event(
+            event_type="federation_provider_unreachable",
+            severity="warning",
+            metadata={"error_class": type(e).__name__, "error": str(e)},
+        )
         raise HTTPException(
             status_code=502,
-            detail=f"Failed to reach external provider: {str(e)}",
-        )
+            detail="Failed to reach the external provider",
+        ) from e
 
 
 @router.get("/api/federation/callback")
@@ -223,9 +230,18 @@ async def federation_callback(
             try:
                 await service.verify_id_token(provider, id_token, nonce=state_claims.get("nonce"))
             except Exception as e:
-                raise HTTPException(
-                    status_code=400, detail=f"ID token validation failed: {e}"
-                ) from e
+                # VAPT-073: JWT validation internals must not reach the
+                # client — generic detail, full error server-side.
+                await audit_service.log_event(
+                    event_type="federation_id_token_invalid",
+                    severity="warning",
+                    metadata={
+                        "provider_id": provider.id,
+                        "error_class": type(e).__name__,
+                        "error": str(e),
+                    },
+                )
+                raise HTTPException(status_code=400, detail="ID token validation failed") from e
 
         claims = await service.fetch_userinfo(provider, access_token)
         mapped = await service.map_claims_to_user(provider, claims)
@@ -353,7 +369,8 @@ async def federation_callback(
             client_id="federation_grant",
             scopes=user.scopes,
             issued_ip=request.client.host if request.client else None,
-            expires_in_days=30,
+            # VAPT-058: lifetime is policy, not a hardcoded constant
+            expires_in_days=get_settings().refresh_token_expire_days,
         )
         assert stored_rt.token is not None  # narrowed: always set on creation
 
@@ -563,7 +580,8 @@ async def federation_callback(
                 "error": str(e),
             },
         )
-        raise HTTPException(status_code=400, detail=f"Federation login failed: {str(e)}")
+        # VAPT-073: generic detail — str(e) stays server-side (audit above).
+        raise HTTPException(status_code=400, detail="Federation login failed") from e
 
 
 # ---------------------------------------------------------------------------

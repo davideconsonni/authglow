@@ -7,6 +7,7 @@ import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, Optional
+from urllib.parse import urlparse
 
 import structlog
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -693,6 +694,45 @@ class Settings(BaseSettings):
                 f"'{self.app_env}'. Generate unique OAuth2 credentials with "
                 'python -c "import secrets; print(secrets.token_urlsafe(32))" '
                 "and set OAUTH2_CLIENT_ID / OAUTH2_CLIENT_SECRET."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_passkey_defaults_for_production(self):
+        """VAPT-069: hard-fail in production on localhost passkey defaults.
+
+        ``passkey_rp_id`` / ``passkey_origin`` default to localhost
+        values for local development. The live WebAuthn ceremonies
+        derive RP ID and origin dynamically from request headers
+        (``api/passkey.py``), so the settings are inert for ceremony
+        verification today — but the admin settings UI exposes them as
+        if they drove the ceremonies, and a future refactor could wire
+        them back in. Shipping production with localhost defaults would
+        then silently break (or mis-scope) every passkey ceremony, so
+        an operator must set real values before booting production.
+        """
+        if not self.app_env or self.app_env.lower() != "production":
+            return self
+
+        def _is_localhost(value: str) -> bool:
+            return value.strip().lower() in ("", "localhost", "127.0.0.1", "::1")
+
+        if _is_localhost(self.passkey_rp_id):
+            raise ValueError(
+                "PASSKEY_RP_ID is empty or a localhost default "
+                f"('{self.passkey_rp_id}') but app_env is "
+                f"'{self.app_env}'. Set it to the production domain "
+                "users see (e.g. 'idp.example.com')."
+            )
+
+        origin = (self.passkey_origin or "").strip()
+        origin_host = urlparse(origin).hostname if origin else ""
+        if _is_localhost(origin_host or ""):
+            raise ValueError(
+                "PASSKEY_ORIGIN is empty or a localhost default "
+                f"('{self.passkey_origin}') but app_env is "
+                f"'{self.app_env}'. Set it to the production origin "
+                "users see (e.g. 'https://idp.example.com')."
             )
         return self
 
