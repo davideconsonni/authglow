@@ -189,7 +189,7 @@ export function PkceFlow() {
           <div className="rounded-xl border border-surface-2 bg-surface-2/50 p-4 space-y-3">
             <code className="block break-all text-xs font-mono text-text-secondary">{authUrl}</code>
             <div className="flex gap-2">
-              <a href={authUrl} className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-3 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint">
+              <a href={authUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-3 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint">
                 <ExternalLink size={14} /> Open in Browser
               </a>
             </div>

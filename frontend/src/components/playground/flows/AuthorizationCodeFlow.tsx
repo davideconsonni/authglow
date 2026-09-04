@@ -192,6 +192,8 @@ export function AuthorizationCodeFlow() {
             <div className="flex gap-2">
               <a
                 href={authUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-3 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint"
               >
                 <ExternalLink size={14} /> Open in Browser

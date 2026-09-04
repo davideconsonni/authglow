@@ -27,7 +27,7 @@ export function CopyButton({ text, label, className = '' }: CopyButtonProps) {
       aria-label={label || 'Copy to clipboard'}
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
-      {label && <span>{copied ? 'Copied' : label}</span>}
+      {label && <span>{label}</span>}
     </button>
   )
 }

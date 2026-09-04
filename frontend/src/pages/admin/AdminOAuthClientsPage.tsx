@@ -642,13 +642,13 @@ export function AdminOAuthClientsPage() {
       {secretModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setSecretModal(null); setNewClientId('') }} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-created-secret">
+          <div className="relative z-10 w-full max-w-md sm:max-w-2xl rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-created-secret">
             <h3 className="text-lg font-semibold text-text-primary">{newClientId ? 'Client Created' : 'New Secret'}</h3>
             {newClientId && <p className="text-xs text-text-muted">Client ID: <code className="text-text-secondary">{newClientId}</code></p>}
             <p className="text-xs text-semantic-warning">Copy this secret now. You will not be able to see it again.</p>
             <div className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2 px-4 py-3">
-              <code className="flex-1 break-all text-sm text-text-primary">{secretModal}</code>
-              <CopyButton text={secretModal} label="Copy" />
+              <code className="flex-1 min-w-0 break-words text-sm font-mono text-text-primary sm:whitespace-nowrap sm:break-normal">{secretModal}</code>
+              <CopyButton text={secretModal} label="Copy" className="flex-shrink-0" />
             </div>
             {/* T.2: client_secret_jwt clients also receive a symmetric
                 key in the same envelope. Display it in the same modal
@@ -659,8 +659,8 @@ export function AdminOAuthClientsPage() {
                 <p className="text-xs font-semibold text-text-secondary">JWT signing key (HS256)</p>
                 <p className="text-xs text-semantic-warning">Copy this key now. It will not be shown again.</p>
                 <div className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2 px-4 py-3">
-                  <code className="flex-1 break-all text-sm text-text-primary" data-testid="client-jwt-key">{jwtKeyModal}</code>
-                  <CopyButton text={jwtKeyModal} label="Copy" />
+                  <code className="flex-1 min-w-0 break-words text-sm font-mono text-text-primary sm:whitespace-nowrap sm:break-normal" data-testid="client-jwt-key">{jwtKeyModal}</code>
+                  <CopyButton text={jwtKeyModal} label="Copy" className="flex-shrink-0" />
                 </div>
               </div>
             )}
@@ -675,14 +675,14 @@ export function AdminOAuthClientsPage() {
       {jwtKeyModal && !secretModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setJwtKeyModal(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-rotated-jwt-key">
+          <div className="relative z-10 w-full max-w-md sm:max-w-2xl rounded-2xl border border-surface-2 bg-surface-1 p-6 space-y-4 shadow-glow-accent" data-testid="client-rotated-jwt-key">
             <h3 className="text-lg font-semibold text-text-primary">New JWT Signing Key</h3>
             <p className="text-xs text-semantic-warning">
               The previous key is now invalid. Copy the new key and hand it to the client operator immediately.
             </p>
             <div className="flex items-center gap-2 rounded-xl border border-surface-2 bg-surface-2 px-4 py-3">
-              <code className="flex-1 break-all text-sm text-text-primary">{jwtKeyModal}</code>
-              <CopyButton text={jwtKeyModal} label="Copy" />
+              <code className="flex-1 min-w-0 break-words text-sm font-mono text-text-primary sm:whitespace-nowrap sm:break-normal">{jwtKeyModal}</code>
+              <CopyButton text={jwtKeyModal} label="Copy" className="flex-shrink-0" />
             </div>
             <button onClick={() => setJwtKeyModal(null)} data-testid="jwt-key-rotated-done" className="w-full rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Close</button>
           </div>

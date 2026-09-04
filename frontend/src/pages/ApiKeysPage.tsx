@@ -366,7 +366,7 @@ export function ApiKeysPage() {
               <div className="flex items-center gap-2">
                 <code
                   data-testid="rotated-key-value"
-                  className="flex-1 break-all text-sm font-mono text-text-primary"
+                  className="flex-1 min-w-0 break-words text-sm font-mono text-text-primary sm:whitespace-nowrap sm:break-normal"
                 >
                   {rotatedKey.api_key}
                 </code>
