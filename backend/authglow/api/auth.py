@@ -27,6 +27,15 @@ from authglow.core.crypto import decrypt_totp_secret
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import (
+    AuthorizationCodeMetadata,
+    LoginSuccessMetadata,
+    LogoutMetadata,
+    TokenIssuedMetadata,
+    TokenRefreshedMetadata,
+    UserRegisteredMetadata,
+)
 from authglow.models.claim_policy import ClaimTarget
 from authglow.models.oauth_client import OAuth2Client
 from authglow.models.token import Token
@@ -638,6 +647,7 @@ async def authorize_post(
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Process login and create authorization code (or MFA challenge).
 
@@ -933,6 +943,21 @@ async def authorize_post(
             user_agent=request.headers.get("user-agent"),
         )
 
+        # Audit: login success
+        await audit_service.log_event(
+            event_type=AuditEventType.LOGIN_SUCCESS,
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=LoginSuccessMetadata(
+                auth_method="password",
+                mfa_used=user.mfa_enabled and user.mfa_verified,
+                session_id=None,  # Will be set after session creation
+                scopes=validated_scope.split() if validated_scope else ["read"],
+            ),
+        )
+
         if user.mfa_enabled and user.mfa_verified:
             req_user_agent = request.headers.get("user-agent", "")
             client_host = request.client.host if request.client else ""
@@ -973,10 +998,32 @@ async def authorize_post(
                 code_challenge_method=code_challenge_method,
                 nonce=nonce,
                 acr=auth_acr,
-                amr=auth_amr,
+                amr=auth_amr or [],
                 state=state,
                 requested_claims=parsed_claims,
             )
+
+            # Audit: authorization code issued
+            await audit_service.log_event(
+                event_type=AuditEventType.AUTHORIZATION_CODE_ISSUED,
+                user_id=user.id,
+                email=user.email,
+                client_id=client_id,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                metadata=AuthorizationCodeMetadata(
+                    code_id=auth_code.code,
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    scopes=validated_scope.split() if validated_scope else ["read"],
+                    pkce_method=code_challenge_method,
+                    nonce=nonce,
+                    acr_values=[auth_acr] if auth_acr else [],
+                    amr=auth_amr or [],
+                    auth_time=user.last_login,
+                ),
+            )
+
             redirect_url = _build_oauth_redirect(
                 redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
             )
@@ -1001,10 +1048,32 @@ async def authorize_post(
                 code_challenge_method=code_challenge_method,
                 nonce=nonce,
                 acr=auth_acr,
-                amr=auth_amr,
+                amr=auth_amr or [],
                 state=state,
                 requested_claims=parsed_claims,
             )
+
+            # Audit: authorization code issued (with consent)
+            await audit_service.log_event(
+                event_type=AuditEventType.AUTHORIZATION_CODE_ISSUED,
+                user_id=user.id,
+                email=user.email,
+                client_id=client_id,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                metadata=AuthorizationCodeMetadata(
+                    code_id=auth_code.code,
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    scopes=validated_scope.split() if validated_scope else ["read"],
+                    pkce_method=code_challenge_method,
+                    nonce=nonce,
+                    acr_values=[auth_acr] if auth_acr else [],
+                    amr=auth_amr or [],
+                    auth_time=user.last_login,
+                ),
+            )
+
             redirect_url = _build_oauth_redirect(
                 redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
             )
@@ -1103,6 +1172,7 @@ async def token_endpoint(
     jwt_service: JWTService = Depends(get_jwt_service),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """OAuth2 token endpoint - exchanges code for tokens."""
     settings = get_settings()
@@ -1282,6 +1352,82 @@ async def token_endpoint(
         if rt is not None:
             access_token_response.refresh_token = rt.token
 
+        # Audit: authorization code redeemed
+        await audit_service.log_event(
+            event_type=AuditEventType.AUTHORIZATION_CODE_REDEEMED,
+            user_id=user.id,
+            email=user.email,
+            client_id=auth_code.client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            correlation_id=auth_code.code,
+            metadata=AuthorizationCodeMetadata(
+                code_id=auth_code.code,
+                client_id=auth_code.client_id,
+                redirect_uri=redirect_uri,
+                scopes=scopes,
+                pkce_method=auth_code.code_challenge_method,
+                pkce_verified=True,
+                nonce=auth_code.nonce,
+                acr_values=[auth_code.acr] if auth_code.acr else [],
+                amr=auth_code.amr or [],
+                auth_time=user.last_login,
+            ),
+        )
+
+        # Decode access token to get token_id (jti)
+        at_data = jwt_service.decode_token(access_token_response.access_token)
+        access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
+
+        # Audit: access token issued
+        await audit_service.log_event(
+            event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
+            user_id=user.id,
+            email=user.email,
+            client_id=auth_code.client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            correlation_id=auth_code.code,
+            metadata=TokenIssuedMetadata(
+                token_id=access_token_id,
+                client_id=auth_code.client_id,
+                grant_type="authorization_code",
+                scopes=scopes,
+                expires_in=settings.access_token_expire_minutes * 60,
+                dpop_bound=bool(dpop_cnf),
+                dpop_jkt=dpop_cnf.get("jkt") if dpop_cnf else None,
+                token_type="access",
+                auth_code_id=auth_code.code,
+                auth_time=user.last_login,
+                amr=auth_code.amr or [],
+            ),
+        )
+
+        # Audit: refresh token issued
+        if rt is not None and rt.token:
+            rt_data = jwt_service.decode_token(rt.token)
+            refresh_token_id = rt_data.jti if rt_data and rt_data.jti else rt.token_id
+            await audit_service.log_event(
+                event_type=AuditEventType.REFRESH_TOKEN_ISSUED,
+                user_id=user.id,
+                email=user.email,
+                client_id=auth_code.client_id,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                correlation_id=auth_code.code,
+                metadata=TokenIssuedMetadata(
+                    token_id=refresh_token_id,
+                    client_id=auth_code.client_id,
+                    grant_type="authorization_code",
+                    scopes=scopes,
+                    expires_in=settings.refresh_token_expire_days * 86400,
+                    token_type="refresh",
+                    auth_code_id=auth_code.code,
+                    auth_time=user.last_login,
+                    amr=auth_code.amr or [],
+                ),
+            )
+
         # The dashboard is a public OAuth client. Set the browser session
         # cookies as a same-origin convenience; the OAuth response remains
         # standards-compatible JSON for every other client. Its authorize
@@ -1374,6 +1520,30 @@ async def token_endpoint(
                 extra_claims=id_extra_claims,
             )
 
+            # Audit: ID token issued
+            id_token_data = jwt_service.decode_token(id_token)
+            id_token_id = id_token_data.jti if id_token_data and id_token_data.jti else "unknown"
+            await audit_service.log_event(
+                event_type=AuditEventType.ID_TOKEN_ISSUED,
+                user_id=user.id,
+                email=user.email,
+                client_id=auth_code.client_id,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                correlation_id=auth_code.code,
+                metadata=TokenIssuedMetadata(
+                    token_id=id_token_id,
+                    client_id=auth_code.client_id,
+                    grant_type="authorization_code",
+                    scopes=scopes,
+                    expires_in=settings.access_token_expire_minutes * 60,
+                    token_type="id_token",
+                    auth_code_id=auth_code.code,
+                    auth_time=user.last_login,
+                    amr=auth_code.amr or [],
+                ),
+            )
+
             # Add to response
             access_token_response.id_token = id_token
 
@@ -1460,7 +1630,7 @@ async def token_endpoint(
             target=ClaimTarget.ACCESS_TOKEN,
         )
 
-        return jwt_service.create_token_response(
+        cc_token_response = jwt_service.create_token_response(
             user_id=resolved_client_id,
             email=f"{resolved_client_id}@client.internal",
             scopes=validated_scopes,
@@ -1469,6 +1639,30 @@ async def token_endpoint(
             token_type="DPoP" if cc_dpop_cnf else "Bearer",
             extra_claims=extra_claims,
         )
+
+        # Audit: client credentials token issued
+        cc_token_data = jwt_service.decode_token(cc_token_response.access_token)
+        cc_token_id = cc_token_data.jti if cc_token_data and cc_token_data.jti else "unknown"
+        await audit_service.log_event(
+            event_type=AuditEventType.CLIENT_CREDENTIALS_TOKEN_ISSUED,
+            user_id=resolved_client_id,
+            email=f"{resolved_client_id}@client.internal",
+            client_id=resolved_client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=TokenIssuedMetadata(
+                token_id=cc_token_id,
+                client_id=resolved_client_id,
+                grant_type="client_credentials",
+                scopes=validated_scopes,
+                expires_in=settings.access_token_expire_minutes * 60,
+                dpop_bound=bool(cc_dpop_cnf),
+                dpop_jkt=cc_dpop_cnf.get("jkt") if cc_dpop_cnf else None,
+                token_type="access",
+            ),
+        )
+
+        return cc_token_response
 
     elif grant_type == "refresh_token":
         # Refresh token flow with rotation (supports body + cookie)
@@ -1555,6 +1749,47 @@ async def token_endpoint(
 
         # Add new refresh token to response
         access_token_response.refresh_token = new_rt.token
+
+        # Audit: access token refreshed
+        at_data = jwt_service.decode_token(access_token_response.access_token)
+        access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
+        await audit_service.log_event(
+            event_type=AuditEventType.ACCESS_TOKEN_REFRESHED,
+            user_id=user.id,
+            email=user.email,
+            client_id=resolved_client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=TokenRefreshedMetadata(
+                client_id=resolved_client_id,
+                old_token_id=refresh_token[:32] + "...",  # Truncated for privacy
+                new_token_id=access_token_id,
+                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, 'family_id') else None,
+                rotation=True,
+                reused=False,
+            ),
+        )
+
+        # Audit: refresh token rotated
+        if new_rt.token:
+            rt_data = jwt_service.decode_token(new_rt.token)
+            refresh_token_id = rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
+            await audit_service.log_event(
+            event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
+            user_id=user.id,
+            email=user.email,
+            client_id=resolved_client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=TokenRefreshedMetadata(
+                client_id=resolved_client_id,
+                old_token_id=refresh_token[:32] + "...",
+                new_token_id=refresh_token_id,
+                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, 'family_id') else None,
+                rotation=True,
+                reused=False,
+            ),
+        )
 
         # Set httpOnly auth cookies
         _set_auth_cookies(response, access_token_response.access_token, new_rt.token, settings)
@@ -1824,6 +2059,7 @@ async def cookie_refresh(
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Refresh tokens using httpOnly cookie (no request body needed).
 
@@ -1874,6 +2110,45 @@ async def cookie_refresh(
     )
     _set_auth_cookies(response, access_token, new_rt.token, settings)
 
+    # Audit: access token refreshed (cookie-based)
+    at_data = jwt_service.decode_token(access_token)
+    access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
+    await audit_service.log_event(
+        event_type=AuditEventType.ACCESS_TOKEN_REFRESHED,
+        user_id=user.id,
+        email=user.email,
+        client_id=settings.oauth2_client_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=TokenRefreshedMetadata(
+            client_id=settings.oauth2_client_id,
+            old_token_id=rt_cookie[:32] + "...",
+            new_token_id=access_token_id,
+            rotation=True,
+            reused=False,
+        ),
+    )
+
+    # Audit: refresh token rotated (cookie-based)
+    if new_rt.token:
+        rt_data = jwt_service.decode_token(new_rt.token)
+        refresh_token_id = rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
+        await audit_service.log_event(
+            event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
+            user_id=user.id,
+            email=user.email,
+            client_id=settings.oauth2_client_id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=TokenRefreshedMetadata(
+                client_id=settings.oauth2_client_id,
+                old_token_id=rt_cookie[:32] + "...",
+                new_token_id=refresh_token_id,
+                rotation=True,
+                reused=False,
+            ),
+        )
+
     return {"ok": True}
 
 
@@ -1883,6 +2158,7 @@ async def cookie_logout(
     response: Response,
     jwt_service: JWTService = Depends(get_jwt_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Logout — clears auth cookies, blacklists access/refresh JWT jti, revokes refresh tokens."""
     from authglow.services.auth.token_blacklist import token_blacklist as get_blacklist
@@ -1923,6 +2199,29 @@ async def cookie_logout(
         await get_blacklist().revoke(rt_jti, rt_exp)
 
     _clear_auth_cookies(response, settings)
+
+    # Audit: logout
+    # Try to get user_id from access token
+    logout_user_id: Optional[str] = None
+    logout_email: Optional[str] = None
+    if access_token:
+        at_data = jwt_service.decode_token(access_token)
+        if at_data:
+            logout_user_id = at_data.sub
+            logout_email = at_data.email
+
+    await audit_service.log_event(
+        event_type=AuditEventType.LOGOUT,
+        user_id=logout_user_id,
+        email=logout_email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=LogoutMetadata(
+            logout_type="user",
+            session_id=access_jti,
+        ),
+    )
+
     return {"ok": True}
 
 
@@ -2193,10 +2492,16 @@ async def register_user(
         pass
 
     await audit_service.log_event(
-        event_type="user_registered",
+        event_type=AuditEventType.USER_REGISTERED,
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=UserRegisteredMetadata(
+            registration_method="self",
+            email_verified=False,
+            scopes=["read"],
+        ),
     )
 
     return UserResponse(**user.model_dump())

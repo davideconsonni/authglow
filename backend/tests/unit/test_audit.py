@@ -5,6 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import LoginSuccessMetadata, TokenIssuedMetadata
+
 
 class TestAuditLogging:
     def test_log_event_returns_entry(self, audit_service):
@@ -22,13 +25,13 @@ class TestAuditLogging:
     def test_log_event_with_metadata(self, audit_service):
         entry = asyncio.get_event_loop().run_until_complete(
             audit_service.log_event(
-                event_type="api_key_used",
+                event_type="custom_api_event",  # No schema defined, allows flexible metadata
                 user_id="u2",
                 metadata={"key_id": "ak_12345678"},
                 severity="info",
             )
         )
-        assert entry.event_type == "api_key_used"
+        assert entry.event_type == "custom_api_event"
         assert entry.metadata["key_id"] == "ak_12345678"
 
     def test_log_event_severity(self, audit_service):
@@ -414,3 +417,224 @@ class TestWriteOnlyArchitecture:
                 )
             )
             mock_err.assert_called_once()
+
+
+class TestAuditEventTypeEnum:
+    """Tests for AuditEventType enum integration."""
+
+    def test_log_event_accepts_enum(self, audit_service):
+        """log_event accepts AuditEventType enum and extracts value."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.LOGIN_SUCCESS,
+                user_id="u1",
+                email="test@example.com",
+            )
+        )
+        assert entry.event_type == "login_success"
+        assert entry.event_category == "auth"
+
+    def test_log_event_enum_sets_default_severity(self, audit_service):
+        """Enum provides default severity when not explicitly set."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.ACCOUNT_LOCKED,
+                user_id="u1",
+            )
+        )
+        assert entry.severity == "critical"
+
+        entry2 = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.LOGIN_FAILED,
+                user_id="u1",
+            )
+        )
+        assert entry2.severity == "warning"
+
+        entry3 = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.LOGIN_SUCCESS,
+                user_id="u1",
+            )
+        )
+        assert entry3.severity == "info"
+
+    def test_log_event_explicit_severity_overrides_enum(self, audit_service):
+        """Explicit severity parameter overrides enum default."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.ACCOUNT_LOCKED,
+                user_id="u1",
+                severity="warning",  # Override critical
+            )
+        )
+        assert entry.severity == "warning"
+
+    def test_log_event_string_event_type_still_works(self, audit_service):
+        """String event_type still works (backward compat)."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type="custom_event",
+                user_id="u1",
+            )
+        )
+        assert entry.event_type == "custom_event"
+        assert entry.event_category == "unknown"
+
+
+class TestTypedMetadata:
+    """Tests for typed metadata schemas."""
+
+    def test_log_event_accepts_pydantic_metadata(self, audit_service):
+        """log_event accepts Pydantic metadata model."""
+        metadata = LoginSuccessMetadata(
+            auth_method="password",
+            mfa_used=False,
+            session_id="sess_123",
+            scopes=["read", "write"],
+        )
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.LOGIN_SUCCESS,
+                user_id="u1",
+                email="test@example.com",
+                metadata=metadata,
+            )
+        )
+        assert entry.metadata["auth_method"] == "password"
+        assert entry.metadata["mfa_used"] is False
+        assert entry.metadata["session_id"] == "sess_123"
+        assert entry.metadata["scopes"] == ["read", "write"]
+
+    def test_log_event_metadata_validation(self, audit_service):
+        """Metadata is validated against schema."""
+        # TokenIssuedMetadata requires token_id, client_id, grant_type, scopes, expires_in, token_type
+        metadata = TokenIssuedMetadata(
+            token_id="tok_123",
+            client_id="client_123",
+            grant_type="authorization_code",
+            scopes=["read"],
+            expires_in=3600,
+            token_type="access",
+        )
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
+                user_id="u1",
+                metadata=metadata,
+            )
+        )
+        assert entry.metadata["token_id"] == "tok_123"
+        assert entry.metadata["client_id"] == "client_123"
+        assert entry.metadata["token_type"] == "access"
+
+    def test_log_event_dict_metadata_still_works(self, audit_service):
+        """Dict metadata still works (backward compat)."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type="custom_event",
+                user_id="u1",
+                metadata={"custom_key": "custom_value"},
+            )
+        )
+        assert entry.metadata["custom_key"] == "custom_value"
+
+
+class TestNewAuditFields:
+    """Tests for new AuditLogEntry fields."""
+
+    def test_log_event_populates_session_id(self, audit_service):
+        """session_id is populated and returned."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type="login_success",
+                user_id="u1",
+                session_id="sess_abc123",
+            )
+        )
+        assert entry.session_id == "sess_abc123"
+
+    def test_log_event_populates_client_id(self, audit_service):
+        """client_id is populated and returned."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
+                user_id="u1",
+                client_id="client_xyz",
+            )
+        )
+        assert entry.client_id == "client_xyz"
+
+    def test_log_event_populates_correlation_id(self, audit_service):
+        """correlation_id is populated and returned."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.AUTHORIZATION_CODE_REDEEMED,
+                user_id="u1",
+                correlation_id="corr_123",
+            )
+        )
+        assert entry.correlation_id == "corr_123"
+
+    def test_log_event_populates_event_category(self, audit_service):
+        """event_category is set from enum."""
+        entry = asyncio.get_event_loop().run_until_complete(
+            audit_service.log_event(
+                event_type=AuditEventType.MFA_ENABLED,
+                user_id="u1",
+            )
+        )
+        assert entry.event_category == "mfa"
+
+
+class TestAuditSampling:
+    """Tests for audit sampling."""
+
+    def test_sampling_rate_zero_skips_logging(self, monkeypatch, test_settings):
+        """Sample rate 0.0 means no events are logged."""
+        from authglow.services.audit import AuditService, _audit_log
+
+        test_settings.audit_sample_rate = 0.0
+        monkeypatch.setattr("authglow.services.audit.get_settings", lambda: test_settings)
+        svc = AuditService()
+
+        with patch.object(_audit_log, "info", wraps=_audit_log.info) as mock_info:
+            asyncio.get_event_loop().run_until_complete(
+                svc.log_event(
+                    event_type="login_success",
+                    user_id="u1",
+                )
+            )
+            mock_info.assert_not_called()
+
+    def test_sampling_rate_one_always_logs(self, monkeypatch, test_settings):
+        """Sample rate 1.0 means all events are logged."""
+        from authglow.services.audit import AuditService, _audit_log
+
+        test_settings.audit_sample_rate = 1.0
+        monkeypatch.setattr("authglow.services.audit.get_settings", lambda: test_settings)
+        svc = AuditService()
+
+        with patch.object(_audit_log, "info", wraps=_audit_log.info) as mock_info:
+            asyncio.get_event_loop().run_until_complete(
+                svc.log_event(
+                    event_type="login_success",
+                    user_id="u1",
+                )
+            )
+            mock_info.assert_called_once()
+
+
+class TestAuditConfig:
+    """Tests for audit configuration."""
+
+    def test_audit_config_defaults(self, test_settings):
+        """Audit config has expected defaults."""
+        assert test_settings.audit_enabled is True
+        assert test_settings.audit_email_log_level == "hash"
+        assert test_settings.audit_sample_rate == 1.0
+        assert test_settings.audit_retention_days_auth == 90
+        assert test_settings.audit_retention_days_oauth2 == 90
+        assert test_settings.audit_retention_days_admin == 365
+        assert test_settings.audit_retention_days_security == 730

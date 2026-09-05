@@ -7,13 +7,16 @@ retention are handled by the cloud platform.
 """
 
 import ipaddress
-from typing import Optional
+import random
+from typing import Any, Dict, Optional, Union
 
 import structlog
 
 from authglow.core.config import get_settings
 from authglow.core.pii import hash_pii, mask_ip, truncate
 from authglow.models.admin import AuditLogEntry
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import BaseAuditMetadata, validate_metadata
 
 if not structlog.is_configured():
     structlog.configure(
@@ -156,16 +159,71 @@ class AuditService:
 
     async def log_event(
         self,
-        event_type: str,
+        event_type: Union[str, AuditEventType],
         user_id: Optional[str] = None,
         email: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        metadata: Optional[dict] = None,
-        severity: str = "info",
+        metadata: Optional[Union[Dict[str, Any], BaseAuditMetadata]] = None,
+        severity: Optional[str] = None,
         request_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        client_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> AuditLogEntry:
-        """Log an audit event to stdout (JSON via structlog)."""
+        """Log an audit event to stdout (JSON via structlog).
+
+        Args:
+            event_type: Event type (string or AuditEventType enum)
+            user_id: User ID associated with the event
+            email: User email (will be masked per config)
+            ip_address: Client IP (will be truncated to /24 or /48)
+            user_agent: User agent (will be truncated to 256 chars)
+            metadata: Event metadata (dict or typed Pydantic model)
+            severity: Override default severity (info, warning, error, critical)
+            request_id: Correlation ID from request context
+            session_id: Session ID for session-scoped events
+            client_id: OAuth2 client ID for client-scoped events
+            correlation_id: Cross-request correlation ID (e.g., auth_code -> token)
+        """
+        # Handle enum event_type
+        if isinstance(event_type, AuditEventType):
+            event_type_str = event_type.value
+            event_category = event_type.category
+            default_severity = event_type.default_severity
+        else:
+            event_type_str = event_type
+            # Infer category from event_type string
+            from authglow.models.audit_events import AuditEventType as _AuditEventType
+            try:
+                event_category = _AuditEventType(event_type_str).category
+                default_severity = _AuditEventType(event_type_str).default_severity
+            except ValueError:
+                event_category = "unknown"
+                default_severity = "info"
+
+        # Use provided severity or default from enum
+        final_severity = severity or default_severity
+
+        # Sampling for high-volume events
+        sample_rate = getattr(self.settings, "audit_sample_rate", 1.0)
+        if sample_rate < 1.0 and random.random() > sample_rate:
+            # Return a dummy entry without logging (sampling)
+            return AuditLogEntry(
+                user_id=user_id,
+                email=email,
+                event_type=event_type_str,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                metadata=metadata.model_dump(mode="json", exclude_none=True) if isinstance(metadata, BaseAuditMetadata) else (metadata or {}),
+                severity=final_severity,
+                request_id=request_id,
+                session_id=session_id,
+                client_id=client_id,
+                correlation_id=correlation_id,
+                event_category=event_category,
+            )
+
         # VAPT-131: correlation ID. Default to the current
         # ``structlog.contextvars`` binding so middleware (VAPT-042)
         # can propagate ``request_id`` across the request lifecycle
@@ -178,15 +236,28 @@ class AuditService:
             except Exception:
                 request_id = None
 
+        # Handle typed metadata
+        if isinstance(metadata, BaseAuditMetadata):
+            metadata_dict = metadata.model_dump(mode="json", exclude_none=True)
+        else:
+            metadata_dict = metadata or {}
+
+        # Validate metadata against schema if available
+        metadata_dict = validate_metadata(event_type_str, metadata_dict)
+
         log_entry = AuditLogEntry(
             user_id=user_id,
             email=email,
-            event_type=event_type,
+            event_type=event_type_str,
             ip_address=ip_address,
             user_agent=user_agent,
-            metadata=metadata or {},
-            severity=severity,
+            metadata=metadata_dict,
+            severity=final_severity,
             request_id=request_id,
+            session_id=session_id,
+            client_id=client_id,
+            correlation_id=correlation_id,
+            event_category=event_category,
         )
 
         entry_dict = log_entry.model_dump(mode="json")
@@ -200,7 +271,7 @@ class AuditService:
 
         event = entry_dict.pop("event_type")
         # request_id is in the dump; preserve it on the log line
-        log_method = getattr(_audit_log, _LEVEL_METHOD.get(severity, "info"))
+        log_method = getattr(_audit_log, _LEVEL_METHOD.get(final_severity, "info"))
         log_method(event, **entry_dict)
 
         return log_entry

@@ -454,10 +454,60 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
     },
     "passkey_origin": {"category": "passkey", "label": "WebAuthn origin", "restart_required": True},
     # --- Audit ---
+    "audit_enabled": {
+        "category": "audit",
+        "label": "Enable audit logging",
+        "restart_required": False,
+    },
     "audit_email_log_level": {
         "category": "audit",
         "label": "Audit email log level",
         "restart_required": True,
+    },
+    "audit_sample_rate": {
+        "category": "audit",
+        "label": "Audit sampling rate (0.0-1.0)",
+        "restart_required": False,
+    },
+    "audit_retention_days_auth": {
+        "category": "audit",
+        "label": "Audit retention auth events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_oauth2": {
+        "category": "audit",
+        "label": "Audit retention OAuth2 events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_admin": {
+        "category": "audit",
+        "label": "Audit retention admin events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_security": {
+        "category": "audit",
+        "label": "Audit retention security events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_lifecycle": {
+        "category": "audit",
+        "label": "Audit retention lifecycle events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_mfa": {
+        "category": "audit",
+        "label": "Audit retention MFA events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_federation": {
+        "category": "audit",
+        "label": "Audit retention federation events (days)",
+        "restart_required": False,
+    },
+    "audit_retention_days_api_key": {
+        "category": "audit",
+        "label": "Audit retention API key events (days)",
+        "restart_required": False,
     },
     # --- Request ---
     "max_request_body_size_mb": {

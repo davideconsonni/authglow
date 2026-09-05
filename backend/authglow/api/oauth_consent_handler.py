@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from authglow.api.auth import _build_oauth_redirect, _first_party_oauth_client
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import ConsentMetadata
 from authglow.services.audit import AuditService
 from authglow.services.oauth2 import OAuth2Service
 from authglow.services.oauth_client import OAuth2ClientStorage
@@ -177,15 +179,18 @@ async def process_consent(
         )
 
     await audit_service.log_event(
-        event_type="oauth2_consent_granted",
+        event_type=AuditEventType.CONSENT_GRANTED,
         user_id=session["user_id"],
-        metadata={
-            "client_id": session["client_id"],
-            "scopes": requested_scopes,
-            "remembered": remember_consent,
-        },
-        severity="info",
+        client_id=session["client_id"],
         ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=ConsentMetadata(
+            client_id=session["client_id"],
+            consent_id="",  # Will be set after creation
+            granted_by=session["user_id"],
+            scopes=requested_scopes,
+        ),
+        severity="info",
     )
 
     auth_code = await oauth2_service.create_authorization_code(

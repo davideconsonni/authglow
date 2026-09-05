@@ -332,16 +332,6 @@ class Settings(BaseSettings):
     # Timing Side-Channel Protection
     timing_leak_protection: bool = True
 
-    # Audit Log Settings
-    # VAPT-080: default flipped from "mask" to "hash". The "mask"
-    # format (e.g. ``jo***@gm***.com``) is too weak — an attacker
-    # who steals the audit log can often recover the original email.
-    # ``hash`` produces a 16-char hex digest that is stable per
-    # email (so events for the same user can still be grouped) but
-    # not reversible. ``"none"`` is refused at runtime when
-    # ``is_production`` is True (see ``AuditService._mask_pii``).
-    audit_email_log_level: str = "hash"  # "mask", "hash", "none"
-
     # Security Headers Settings
     # img-src data: — MFA enrollment renders the TOTP QR code as an
     # inline data: URL (services/mfa.generate_qr_code). Safe: images
@@ -422,6 +412,19 @@ class Settings(BaseSettings):
     # automatically when the JWT expires.
     cache_jti_maxsize: int = 10000
     cache_jti_ttl: int = 3600
+
+    # Audit Logging Settings
+    audit_enabled: bool = True
+    audit_email_log_level: str = "hash"  # none, mask, hash (VAPT-080: none not allowed in production)
+    audit_sample_rate: float = 1.0  # Sampling rate for high-volume events (0.0-1.0)
+    audit_retention_days_auth: int = 90
+    audit_retention_days_oauth2: int = 90
+    audit_retention_days_admin: int = 365
+    audit_retention_days_security: int = 730
+    audit_retention_days_lifecycle: int = 365
+    audit_retention_days_mfa: int = 365
+    audit_retention_days_federation: int = 365
+    audit_retention_days_api_key: int = 365
 
     # Admin runtime config refresh. Every node re-reads the persisted
     # rate-limit config and settings overrides this often, so admin

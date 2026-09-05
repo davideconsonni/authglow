@@ -152,6 +152,11 @@ class AuditLogEntry(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
     severity: str = "info"  # info, warning, error, critical
     request_id: Optional[str] = None  # correlation ID propagated by middleware (VAPT-042)
+    # Extended fields for enhanced audit logging
+    session_id: Optional[str] = None
+    client_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    event_category: str = "auth"
 
 
 class AuditLogFilter(BaseModel):
