@@ -564,13 +564,10 @@ export function AdminOAuthClientsPage() {
   }
 
   // Code snippets for success screen
-  const getCodeSnippet = (framework: string, client: { client_id: string; client_secret: string; client_secret_jwt_key?: string | null }): string => {
-    const { client_id, client_secret, client_secret_jwt_key } = client
+  const getCodeSnippet = (framework: string, client: { client_id: string; client_secret: string }): string => {
+    const { client_id, client_secret } = client
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://your-authglow.example.com'
-    const authUrl = `${baseUrl}/oauth/authorize`
-    const tokenUrl = `${baseUrl}/oauth/token`
-    const jwksUrl = `${baseUrl}/oauth/jwks`
-    const scopes = 'openid profile email offline_access'
+    let scopes = 'openid profile email offline_access'
 
     switch (framework) {
       case 'nextjs':
