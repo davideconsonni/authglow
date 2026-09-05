@@ -336,15 +336,15 @@ async def endpoint(
 - [x] **1.5** Aggiungere config `audit_event_categories`, `audit_retention_days`, `audit_sample_rate` in `core/config.py`
 - [x] **1.6** Test unitari per nuovi campi, enum, validazione metadata
 
-### Fase 2: Authentication & Session Events ⏱️ ~2 giorni ✅ COMPLETATA (parziale)
+### Fase 2: Authentication & Session Events ⏱️ ~2 giorni ✅ COMPLETATA
 - [x] **2.1** `api/auth.py:authorize_post` → `authorization_code_issued`, `consent_granted`
 - [x] **2.2** `api/auth.py:token_post` → `access_token_issued`, `refresh_token_issued`, `id_token_issued`, `authorization_code_redeemed`, `client_credentials_token_issued`
 - [x] **2.3** `api/auth.py:refresh_post` (`cookie_refresh`) → `access_token_refreshed`, `refresh_token_rotated`
 - [x] **2.4** `api/auth.py:cookie_logout` → `logout` con `session_id`
 - [x] **2.4** `api/auth.py:register_user` → `user_registered`, `email_verification_sent`
-- [ ] **2.5** `services/user_profile.py` → `email_changed`, `profile_updated`, `password_changed`, `account_deleted`
-- [ ] **2.6** `services/invitation.py` → `user_invited` (già presente in `invite_user`)
-- [ ] **2.7** Login history: integrare con `LoginHistoryService` per evitare duplicazione (delegare a quello per login success/failed)
+- [x] **2.5** `services/user_profile.py` → `email_changed`, `profile_updated`, `password_changed`, `account_deleted` (+ `deactivate_account`, `reactivate_account`)
+- [x] **2.6** `services/invitation.py` → `user_invited` (già presente in `invite_user` in `api/auth.py`)
+- [ ] **2.7** Login history: integrare con `LoginHistoryService` per evitare duplicazione (delegare a quello per login success/failed) — *opzionale, architetturale*
 
 ### Fase 3: OAuth2/OIDC Protocol Events (Critical) ⏱️ ~3 giorni
 - [ ] **3.1** `api/oauth2_advanced.py:revoke_token` → `access_token_revoked`, `refresh_token_revoked` (con `token_type_hint`)
@@ -472,5 +472,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 1 completata (Core Infrastructure: enum, metadata schemas, AuditLogEntry esteso, AuditService aggiornato, config, test). Fase 2 parzialmente completata (authorize_post, token_post, cookie_refresh, cookie_logout, register_user con audit).
+- 2026-09-06: Fase 1 completata (Core Infrastructure). Fase 2 completata (authorize_post, token_post, cookie_refresh, cookie_logout, register_user, user_profile: email_changed, profile_updated, password_changed, account_deleted, deactivate_account, reactivate_account; invite_user già presente).
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy

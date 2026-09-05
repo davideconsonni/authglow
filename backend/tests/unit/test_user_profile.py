@@ -173,18 +173,17 @@ class TestChangeEmail:
         )
         assert success is True
         # VAPT-130: self-service change_email must call the audit
-        # log with event_type="user_email_changed", severity
+        # log with event_type="email_changed", severity
         # "warning", and both old + new email in metadata.
         user_profile_service.audit_service.log_event.assert_awaited_once()
         call_kwargs = user_profile_service.audit_service.log_event.call_args.kwargs
-        assert call_kwargs["event_type"] == "user_email_changed"
+        assert call_kwargs["event_type"] == "email_changed"
         assert call_kwargs["severity"] == "warning"
         assert call_kwargs["user_id"] == "profile-user-1"
-        # The user's existing email is "profile1@example.com"
-        # (set in ``_make_user``); the new email is the one
-        # passed to ``change_email``.
-        assert call_kwargs["metadata"]["old_email"] == "profile1@example.com"
-        assert call_kwargs["metadata"]["new_email"] == "newemail@example.com"
+        # The metadata is a Pydantic model, access attributes directly
+        metadata = call_kwargs["metadata"]
+        assert metadata.old_email_hash == "profile1@example.com"
+        assert metadata.new_email_hash == "newemail@example.com"
 
     def test_change_email_wrong_password(self, user_profile_service):
         user = _make_user()

@@ -19,6 +19,13 @@ from typing import TYPE_CHECKING, Optional
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import (
+    AccountDeletedMetadata,
+    EmailChangedMetadata,
+    PasswordChangedMetadata,
+    ProfileUpdatedMetadata,
+)
 from authglow.models.user_profile import (
     UserPreferences,
     UserPreferencesUpdate,
@@ -123,6 +130,18 @@ class UserProfileService:
             # for PII encryption + atomic write).
             await self.user_storage.update_user(user, acquire_lock=False)
 
+        # Audit: profile updated
+        await self.audit_service.log_event(
+            event_type=AuditEventType.PROFILE_UPDATED,
+            user_id=user_id,
+            email=user.email,
+            metadata=ProfileUpdatedMetadata(
+                changed_by=user_id,
+                actor_type="user",
+                fields_changed=sorted(update_data.keys()),
+            ),
+        )
+
         from authglow.models.webhook_events import USER_UPDATED
         from authglow.services.webhook_dispatcher import emit_webhook_event
 
@@ -162,12 +181,24 @@ class UserProfileService:
 
             await self.user_storage.update_user(user, acquire_lock=False)
 
-            # Credential rotation kills every refresh token issued to this
+# Credential rotation kills every refresh token issued to this
             # user (ported from the removed POST /api/password/change
             # duplicate): stolen sessions cannot outlive the new password.
             from authglow.services.refresh_token import RefreshTokenService
 
             await RefreshTokenService().revoke_user_tokens(user_id)
+
+        # Audit: password changed
+        await self.audit_service.log_event(
+            event_type=AuditEventType.PASSWORD_CHANGED,
+            user_id=user_id,
+            email=user.email,
+            ip_address=ip_address,
+            metadata=PasswordChangedMetadata(
+                method="current_password",
+                require_change_on_next_login=False,
+            ),
+        )
 
         from authglow.models.webhook_events import PASSWORD_CHANGED
         from authglow.services.webhook_dispatcher import emit_webhook_event
@@ -235,14 +266,17 @@ class UserProfileService:
         # are masked by the audit service (default hash) so the
         # log line is itself PII-safe.
         await self.audit_service.log_event(
-            event_type="user_email_changed",
+            event_type=AuditEventType.EMAIL_CHANGED,
             user_id=user_id,
             email=new_email,
             ip_address=ip_address,
-            metadata={
-                "old_email": old_email,
-                "new_email": new_email,
-            },
+            metadata=EmailChangedMetadata(
+                changed_by=user_id,
+                actor_type="user",
+                old_email_hash=old_email,
+                new_email_hash=new_email,
+                verification_required=True,
+            ),
             severity="warning",
         )
 
@@ -287,6 +321,18 @@ class UserProfileService:
 
         # Delete user
         await self.user_storage.delete_user(user_id)
+
+        # Audit: account deleted
+        await self.audit_service.log_event(
+            event_type=AuditEventType.ACCOUNT_DELETED,
+            user_id=user_id,
+            email=user.email,
+            metadata=AccountDeletedMetadata(
+                deletion_reason="user_request",
+                gdpr_erasure=True,
+                data_exported=False,
+            ),
+        )
 
         # VAPT-082: GDPR Art. 17 right-to-erasure. Drop the
         # remaining per-user PII in parallel. ``return_exceptions``
@@ -418,6 +464,18 @@ class UserProfileService:
 
             await self.user_storage.update_user(user)
 
+        # Audit: account deactivated
+        await self.audit_service.log_event(
+            event_type=AuditEventType.ACCOUNT_DELETED,
+            user_id=user_id,
+            email=user.email,
+            metadata=AccountDeletedMetadata(
+                deletion_reason="deactivated",
+                gdpr_erasure=False,
+                data_exported=False,
+            ),
+        )
+
         return True, "Account deactivated successfully"
 
     async def reactivate_account(self, user_id: str) -> tuple[bool, str]:
@@ -431,5 +489,17 @@ class UserProfileService:
             user.updated_at = utcnow()
 
             await self.user_storage.update_user(user)
+
+        # Audit: account reactivated (using PROFILE_UPDATED with status change)
+        await self.audit_service.log_event(
+            event_type=AuditEventType.PROFILE_UPDATED,
+            user_id=user_id,
+            email=user.email,
+            metadata=ProfileUpdatedMetadata(
+                changed_by=user_id,
+                actor_type="user",
+                fields_changed=["is_active"],
+            ),
+        )
 
         return True, "Account reactivated successfully"
