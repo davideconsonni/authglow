@@ -58,6 +58,7 @@ class AuditEventType(str, Enum):
     BACKUP_CODE_USED = "backup_code_used"
     BACKUP_CODE_FAILED = "backup_code_failed"
     PASSKEY_REGISTERED = "passkey_registered"
+    PASSKEY_REGISTRATION_FAILED = "passkey_registration_failed"
     PASSKEY_AUTHENTICATED = "passkey_authenticated"
     PASSKEY_DELETED = "passkey_deleted"
     TRUSTED_DEVICE_ADDED = "trusted_device_added"

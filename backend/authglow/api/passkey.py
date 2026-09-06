@@ -12,7 +12,11 @@ from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.audit_events import AuditEventType
-from authglow.models.audit_metadata import PasskeyAuthenticatedMetadata, PasskeyRegisteredMetadata
+from authglow.models.audit_metadata import (
+    PasskeyAuthenticatedMetadata,
+    PasskeyRegisteredMetadata,
+    PasskeyRegistrationFailedMetadata,
+)
 from authglow.models.claim_policy import ClaimTarget
 from authglow.models.passkey import (
     PasskeyAuthenticationVerification,
@@ -178,7 +182,7 @@ async def complete_registration(
                 credential_id=passkey.credential_id,
                 aaguid=passkey.aaguid,
                 transports=passkey.transports,
-                user_verification=passkey.user_verification or "preferred",
+                user_verification="preferred",
             ),
         )
 
@@ -200,9 +204,13 @@ async def complete_registration(
         # stable generic detail, full error server-side in the audit log.
         audit_service = AuditService()
         await audit_service.log_event(
-            event_type=AuditEventType.PASSKEY_REGISTERED,
+            event_type=AuditEventType.PASSKEY_REGISTRATION_FAILED,
             severity="warning",
-            metadata={"error_class": type(e).__name__, "error": str(e), "success": False},
+            metadata=PasskeyRegistrationFailedMetadata(
+                error_class=type(e).__name__,
+                error=str(e),
+                success=False,
+            ),
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -200,7 +200,7 @@ class BackupCodeMetadata(MFAMetadata):
 class PasskeyMetadata(BaseAuditMetadata):
     """Base metadata for passkey events."""
 
-    credential_id: str
+    credential_id: Optional[str] = None
     aaguid: Optional[str] = None
     transports: List[str] = Field(default_factory=list)
     user_verification: Optional[str] = None  # required, preferred, discouraged
@@ -211,6 +211,14 @@ class PasskeyRegisteredMetadata(PasskeyMetadata):
 
     attestation_type: Optional[str] = None  # none, indirect, direct
     attestation_statement: Optional[Dict[str, Any]] = None
+
+
+class PasskeyRegistrationFailedMetadata(PasskeyMetadata):
+    """Metadata for failed passkey registration."""
+
+    error_class: str
+    error: str
+    success: bool = False
 
 
 class PasskeyAuthenticatedMetadata(PasskeyMetadata):
@@ -530,6 +538,7 @@ METADATA_SCHEMAS: Dict[str, type[BaseAuditMetadata]] = {
     "backup_code_used": BackupCodeMetadata,
     "backup_code_failed": BackupCodeMetadata,
     "passkey_registered": PasskeyRegisteredMetadata,
+    "passkey_registration_failed": PasskeyRegistrationFailedMetadata,
     "passkey_authenticated": PasskeyAuthenticatedMetadata,
     "passkey_deleted": PasskeyMetadata,
     "trusted_device_added": TrustedDeviceMetadata,
