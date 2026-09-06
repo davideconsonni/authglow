@@ -638,3 +638,80 @@ class TestAuditConfig:
         assert test_settings.audit_retention_days_oauth2 == 90
         assert test_settings.audit_retention_days_admin == 365
         assert test_settings.audit_retention_days_security == 730
+
+
+class TestAllEventTypes:
+    """Ensure all AuditEventType enum values have proper metadata schemas."""
+
+    def test_all_enum_values_have_category_and_severity(self):
+        """Every enum value should have category and default_severity properties."""
+        for event_type in AuditEventType:
+            # These properties should not raise
+            _ = event_type.category
+            _ = event_type.default_severity
+            # Category should be one of known categories
+            assert event_type.category in {
+                "auth", "oauth2", "admin", "security", "lifecycle",
+                "mfa", "federation", "api_key", "unknown"
+            }
+            # Severity should be valid
+            assert event_type.default_severity in {"info", "warning", "critical"}
+
+    def test_all_enum_values_have_metadata_schema(self):
+        """Every enum value should have a metadata schema (or be allowed to have none)."""
+        from authglow.models.audit_metadata import get_metadata_schema, validate_metadata
+
+        for event_type in AuditEventType:
+            schema = get_metadata_schema(event_type.value)
+            if schema is not None:
+                # If schema exists, it should validate empty dict (optional fields)
+                validated = validate_metadata(event_type.value, {})
+                assert isinstance(validated, dict)
+
+    def test_api_key_rotated_event_type_exists(self):
+        """API_KEY_ROTATED event type should exist with correct properties."""
+        assert hasattr(AuditEventType, "API_KEY_ROTATED")
+        assert AuditEventType.API_KEY_ROTATED.value == "api_key_rotated"
+        assert AuditEventType.API_KEY_ROTATED.category == "api_key"
+        assert AuditEventType.API_KEY_ROTATED.default_severity == "warning"
+
+    def test_api_key_rotated_metadata_schema_exists(self):
+        """API_KEY_ROTATED should have a metadata schema."""
+        from authglow.models.audit_metadata import get_metadata_schema, APIKeyRotatedMetadata
+
+        schema = get_metadata_schema("api_key_rotated")
+        assert schema is not None
+        assert schema == APIKeyRotatedMetadata
+
+    def test_api_key_rotated_metadata_validation(self):
+        """API_KEY_ROTATED metadata should validate correctly."""
+        from authglow.models.audit_metadata import validate_metadata, APIKeyRotatedMetadata
+
+        metadata = {
+            "client_id": "test-client",
+            "key_id": "key-123",
+            "key_name": "test-key",
+            "scopes": ["read"],
+            "revoked_by": "user-123",
+            "revocation_reason": "Rotated by user",
+            "new_key_id": "key-456",
+        }
+        validated = validate_metadata("api_key_rotated", metadata)
+        assert validated["client_id"] == "test-client"
+        assert validated["key_id"] == "key-123"
+        assert validated["new_key_id"] == "key-456"
+
+    def test_all_api_key_events_have_schemas(self):
+        """All api_key_* events should have metadata schemas."""
+        from authglow.models.audit_metadata import get_metadata_schema
+
+        api_key_events = [
+            "api_key_created",
+            "api_key_used",
+            "api_key_revoked",
+            "api_key_rotated",
+            "api_key_expired",
+        ]
+        for event in api_key_events:
+            schema = get_metadata_schema(event)
+            assert schema is not None, f"Missing schema for {event}"

@@ -413,6 +413,14 @@ class APIKeyRevokedMetadata(APIKeyMetadata):
     revocation_reason: Optional[str] = None
 
 
+class APIKeyRotatedMetadata(APIKeyMetadata):
+    """Metadata for API key rotation."""
+
+    revoked_by: str
+    revocation_reason: Optional[str] = None
+    new_key_id: Optional[str] = None
+
+
 # ============================================================
 # Security & Anomaly Metadata
 # ============================================================
@@ -562,6 +570,7 @@ METADATA_SCHEMAS: Dict[str, type[BaseAuditMetadata]] = {
     "api_key_created": APIKeyCreatedMetadata,
     "api_key_used": APIKeyUsedMetadata,
     "api_key_revoked": APIKeyRevokedMetadata,
+    "api_key_rotated": APIKeyRotatedMetadata,
     "api_key_expired": APIKeyMetadata,
     # Security
     "brute_force_detected": BruteForceMetadata,

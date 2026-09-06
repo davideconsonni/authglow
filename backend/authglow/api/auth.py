@@ -29,6 +29,7 @@ from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import (
+    APIKeyUsedMetadata,
     AuthorizationCodeMetadata,
     LoginSuccessMetadata,
     LogoutMetadata,
@@ -526,10 +527,17 @@ async def get_current_user(
         )
         if api_key_obj:
             await audit_service.log_event(
-                event_type="api_key_used",
+                event_type=AuditEventType.API_KEY_USED,
                 user_id=api_key_obj.user_id,
-                metadata={"key_id": api_key_obj.key_id, "key_name": api_key_obj.name},
+                email=api_key_obj.user_id,  # will be masked by audit service
+                client_id=api_key_obj.key_id,
                 ip_address=client_ip,
+                user_agent=user_agent,
+                metadata=APIKeyUsedMetadata(
+                    key_id=api_key_obj.key_id,
+                    key_name=api_key_obj.name,
+                    scopes=list(api_key_obj.scopes),
+                ),
             )
 
             user = await storage.get_user(api_key_obj.user_id)
@@ -2018,11 +2026,17 @@ async def exchange_api_key_for_token(
 
     # Log successful authentication
     await audit_service.log_event(
-        event_type="api_key_auth_success",
+        event_type=AuditEventType.API_KEY_USED,
         user_id=user.id,
         email=user.email,
+        client_id=key_data.key_id,
         ip_address=request.client.host if request.client else None,
-        metadata={"api_key_name": key_data.name},
+        user_agent=request.headers.get("user-agent"),
+        metadata=APIKeyUsedMetadata(
+            key_id=key_data.key_id,
+            key_name=key_data.name,
+            scopes=list(key_data.scopes),
+        ),
     )
 
     # Return access token with API key scopes

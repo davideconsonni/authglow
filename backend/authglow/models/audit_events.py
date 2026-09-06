@@ -107,6 +107,7 @@ class AuditEventType(str, Enum):
     API_KEY_CREATED = "api_key_created"
     API_KEY_USED = "api_key_used"
     API_KEY_REVOKED = "api_key_revoked"
+    API_KEY_ROTATED = "api_key_rotated"
     API_KEY_EXPIRED = "api_key_expired"
 
     # ============================================================
@@ -187,6 +188,7 @@ class AuditEventType(str, Enum):
             "federated_login_failed",
             "authorization_code_redeemed",  # could be replay
             "refresh_token_rotated",  # rotation is sensitive
+            "api_key_rotated",  # rotation is sensitive
             "access_token_revoked",
             "refresh_token_revoked",
             "consent_revoked",

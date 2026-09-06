@@ -477,5 +477,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 5.3 completata (RBAC events: admin_role_assigned/removed). Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
+- 2026-09-06: API key rotation audit fix (added API_KEY_ROTATED event type, metadata schema, proper event in api_key.py rotate endpoint). Fase 5.3 completata (RBAC events: admin_role_assigned/removed). Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy
