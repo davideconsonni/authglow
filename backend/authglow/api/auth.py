@@ -987,6 +987,14 @@ async def authorize_post(
         auth_acr = "1"
         auth_amr = ["pwd"]
 
+        # Enforce concurrent session limit
+        await storage.check_and_enforce_concurrent_sessions(
+            user_id=user.id,
+            client_id=client_id,
+            request_ip=request.client.host if request.client else None,
+            request_ua=request.headers.get("user-agent"),
+        )
+
     if "consent" not in parsed_prompts:
         if not client.require_consent:
             auth_code = await oauth2_service.create_authorization_code(

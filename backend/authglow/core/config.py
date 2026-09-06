@@ -413,6 +413,9 @@ class Settings(BaseSettings):
     cache_jti_maxsize: int = 10000
     cache_jti_ttl: int = 3600
 
+    # Session Settings
+    max_concurrent_sessions: int = 5  # Maximum concurrent sessions per user (0 = unlimited)
+
     # Audit Logging Settings
     audit_enabled: bool = True
     audit_email_log_level: str = "hash"  # none, mask, hash (VAPT-080: none not allowed in production)

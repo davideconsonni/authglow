@@ -42,7 +42,7 @@ from authglow.core.cache import user_by_id_cache, user_cache
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.models.audit_events import AuditEventType
-from authglow.models.audit_metadata import AccountLockMetadata
+from authglow.models.audit_metadata import AccountLockMetadata, ConcurrentSessionMetadata
 from authglow.models.user import User
 from authglow.services.audit import AuditService
 
@@ -471,3 +471,59 @@ class UserService:
                     user_id=user.id,
                 )
         return True, user
+
+    async def check_and_enforce_concurrent_sessions(
+        self,
+        user_id: str,
+        client_id: str,
+        request_ip: Optional[str] = None,
+        request_ua: Optional[str] = None,
+    ) -> None:
+        """Check if user has exceeded max concurrent sessions and revoke oldest if needed.
+
+        This is called after a successful login to enforce the max concurrent sessions limit.
+        If the user has more active sessions than the limit, the oldest ones are revoked.
+        """
+        settings = self.settings
+        max_sessions = getattr(settings, "max_concurrent_sessions", 5)
+
+        # 0 = unlimited
+        if max_sessions <= 0:
+            return
+
+        # Get all active refresh tokens for this user
+        from authglow.services.refresh_token import RefreshTokenService
+
+        refresh_token_service = RefreshTokenService()
+        active_tokens = await refresh_token_service.list_all_tokens(
+            active_only=True, user_id=user_id, limit=1000
+        )
+
+        # Filter tokens for this client if applicable
+        client_tokens = [t for t in active_tokens[0] if t.client_id == client_id]
+
+        if len(client_tokens) <= max_sessions:
+            return
+
+        # Sort by created_at (oldest first) and revoke excess tokens
+        client_tokens.sort(key=lambda t: t.created_at)
+        excess_count = len(client_tokens) - max_sessions
+        tokens_to_revoke = client_tokens[:excess_count]
+
+        # Revoke the oldest tokens
+        for token in tokens_to_revoke:
+            if token.token:
+                await refresh_token_service.revoke_token(
+                    token.token, reason="Concurrent session limit exceeded"
+                )
+
+        # Audit: concurrent session limit exceeded
+        await self.audit_service.log_event(
+            event_type=AuditEventType.CONCURRENT_SESSION_LIMIT_EXCEEDED,
+            user_id=user_id,
+            metadata=ConcurrentSessionMetadata(
+                current_count=len(client_tokens) + 1,  # +1 for the new session
+                limit=max_sessions,
+                action_taken="revoked_oldest",
+            ),
+        )

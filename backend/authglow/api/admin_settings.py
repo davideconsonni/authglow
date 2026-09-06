@@ -179,6 +179,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Auth cookie domain",
         "restart_required": True,
     },
+    "max_concurrent_sessions": {
+        "category": "sessions",
+        "label": "Max concurrent sessions per user (0 = unlimited)",
+        "restart_required": False,
+    },
     # --- CORS ---
     "cors_allowed_origins": {
         "category": "cors",

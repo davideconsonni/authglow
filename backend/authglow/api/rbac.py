@@ -5,6 +5,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from authglow.core.permissions import get_current_user, require_admin, require_permission
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import AdminRoleMetadata
 from authglow.models.rbac import (
     AssignRoleRequest,
     PermissionCreate,
@@ -16,6 +18,7 @@ from authglow.models.rbac import (
     UserPermissions,
     UserRoleResponse,
 )
+from authglow.services.audit import AuditService
 from authglow.services.rbac import RBACService
 from authglow.services.user import UserService
 
@@ -23,6 +26,11 @@ from authglow.services.user import UserService
 UserStorage = UserService
 
 router = APIRouter(prefix="/api/rbac", tags=["RBAC"])
+
+
+def get_audit_service():
+    """Get audit service instance."""
+    return AuditService()
 
 
 # Permission Endpoints
@@ -212,7 +220,9 @@ async def delete_role(role_id: str, _: str = require_admin()):
 
 @router.post("/user-roles", response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role_to_user(
-    assignment: AssignRoleRequest, current_user_id: str = require_admin()
+    assignment: AssignRoleRequest,
+    current_user_id: str = require_admin(),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Assign a role to a user."""
     rbac_service = RBACService()
@@ -246,6 +256,20 @@ async def assign_role_to_user(
 
     created = await rbac_service.assign_role_to_user(user_role)
 
+    # Audit: admin role assigned
+    await audit_service.log_event(
+        event_type=AuditEventType.ADMIN_ROLE_ASSIGNED,
+        user_id=current_user_id,
+        email=current_user_id,  # will be masked by audit service
+        metadata=AdminRoleMetadata(
+            target_user_id=assignment.user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user_id,
+            admin_user_email_hash=current_user_id,  # will be masked
+            role=role.name,
+        ),
+    )
+
     return UserRoleResponse(
         assignment_id=created.assignment_id,
         user_id=created.user_id,
@@ -259,15 +283,40 @@ async def assign_role_to_user(
 
 
 @router.delete("/user-roles/{user_id}/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_role_from_user(user_id: str, role_id: str, _: str = require_admin()):
+async def remove_role_from_user(
+    user_id: str,
+    role_id: str,
+    current_user_id: str = require_admin(),
+    audit_service: AuditService = Depends(get_audit_service),
+):
     """Remove a role from a user."""
     rbac_service = RBACService()
+    user_storage = UserStorage()
+
+    # Get user and role info for audit before removal
+    user = await user_storage.get_user(user_id)
+    role = await RBACService().get_role(role_id)
+
     success = await rbac_service.remove_role_from_user(user_id, role_id)
 
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Role assignment not found"
         )
+
+    # Audit: admin role removed
+    await audit_service.log_event(
+        event_type=AuditEventType.ADMIN_ROLE_REMOVED,
+        user_id=current_user_id,
+        email=current_user_id,
+        metadata=AdminRoleMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email if user else "unknown",
+            admin_user_id=current_user_id,
+            admin_user_email_hash=current_user_id,
+            role=role.name if role else "unknown",
+        ),
+    )
 
 
 @router.get("/user-roles/{user_id}", response_model=List[UserRoleResponse])

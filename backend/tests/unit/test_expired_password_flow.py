@@ -87,6 +87,7 @@ def _build_authorize_app_with_mocks(test_settings):
     storage.update_last_login = AsyncMock()
     storage.set_password = AsyncMock()
     storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, None))
+    storage.check_and_enforce_concurrent_sessions = AsyncMock()
 
     app = FastAPI()
     app.include_router(router)
