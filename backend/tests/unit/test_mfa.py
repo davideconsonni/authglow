@@ -502,6 +502,97 @@ class TestMFAVerifyRequestModel:
         decrypted = decrypt_totp_secret(single_encrypted)
         assert decrypted == secret
 
+    def test_login_succeeds_with_legacy_double_encrypted_secret(self):
+        """A mfa_secret written to disk while mfa_secret was still in
+        _PII_FIELDS must remain verifiable at login after the
+        mfa_secret removal from _PII_FIELDS (a3ee4aa..7c19404).
+
+        This reproduces the exact failure mode from the bug report:
+        decrypt_totp_secret(on_disk_double_encrypted) used to raise
+        InvalidTag and propagate as HTTP 500. With the fallback
+        it must return the original plaintext TOTP secret.
+        """
+        import pyotp
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret, encrypt_field
+        from authglow.services.mfa import MFAService
+
+        mfa_service = MFAService()
+        secret = mfa_service.generate_totp_secret()
+        service_enc = encrypt_totp_secret(secret)
+        legacy_double_encrypted = encrypt_field(service_enc)
+
+        code = pyotp.TOTP(secret).now()
+
+        # The fix 3c makes this assertion pass:
+        assert mfa_service.verify_totp(
+            decrypt_totp_secret(legacy_double_encrypted), code
+        ) is True
+
+    def test_self_heal_mfa_secret_rewraps_double_encrypted(self, test_settings):
+        """After a successful login with a doubly-encrypted secret, the
+        self-heal helper must rewrite the user record with single-layer
+        encryption so subsequent logins are fast.
+        """
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from authglow.api.mfa import _self_heal_mfa_secret
+        from authglow.core.crypto import encrypt_totp_secret, encrypt_field, decrypt_totp_secret
+        from authglow.models.user import User
+        from authglow.services.user import UserService
+
+        plain = "JBSWY3DPEHPK3PXP"
+        user = User(
+            id="self-heal-user",
+            email="self-heal@example.com",
+            hashed_password="$2b$12$dummy",
+            mfa_secret=encrypt_field(encrypt_totp_secret(plain)),  # legacy double
+            mfa_enabled=True,
+            mfa_verified=True,
+        )
+        storage = MagicMock(spec=UserService)
+        storage.update_user = AsyncMock()
+
+        asyncio.run(_self_heal_mfa_secret(user, storage, plain))
+
+        storage.update_user.assert_awaited_once_with(user)
+        # After self-heal, decrypt_totp_secret must succeed WITHOUT the
+        # legacy-double fallback (proving the on-disk value is now
+        # single-layer only).
+        assert decrypt_totp_secret(user.mfa_secret, _allow_legacy_double=False) == plain
+
+    def test_self_heal_noop_when_already_single_encrypted(self, test_settings):
+        """When the on-disk secret is already single-encrypted, the
+        self-heal helper must be a no-op (no extra write to disk).
+        """
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from authglow.api.mfa import _self_heal_mfa_secret
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
+        from authglow.models.user import User
+        from authglow.services.user import UserService
+
+        plain = "JBSWY3DPEHPK3PXP"
+        original_ciphertext = encrypt_totp_secret(plain)
+        user = User(
+            id="self-heal-noop-user",
+            email="self-heal-noop@example.com",
+            hashed_password="$2b$12$dummy",
+            mfa_secret=original_ciphertext,  # already single-layer
+            mfa_enabled=True,
+            mfa_verified=True,
+        )
+        storage = MagicMock(spec=UserService)
+        storage.update_user = AsyncMock()
+
+        asyncio.run(_self_heal_mfa_secret(user, storage, plain))
+
+        storage.update_user.assert_not_awaited()
+        # The on-disk ciphertext must be byte-identical to what we put
+        # there (i.e. NOT re-encrypted with a fresh IV).
+        assert user.mfa_secret == original_ciphertext
+        # And it must decrypt without the legacy-double fallback.
+        assert decrypt_totp_secret(user.mfa_secret, _allow_legacy_double=False) == plain
+
     def test_mfa_enroll_and_verify_full_flow(self, mfa_service, test_settings):
         """Test complete MFA enrollment and verification flow with encryption."""
         import asyncio

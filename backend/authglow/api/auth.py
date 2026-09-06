@@ -2374,7 +2374,12 @@ async def oauth2_mfa_verify(
     is_valid = False
 
     if user.mfa_secret and len(code) == 6:
-        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), code)
+        plain_secret = decrypt_totp_secret(user.mfa_secret)
+        is_valid = mfa_service.verify_totp(plain_secret, code)
+        if is_valid:
+            # Self-heal legacy double-encrypted secrets on successful login.
+            from authglow.api.mfa import _self_heal_mfa_secret
+            await _self_heal_mfa_secret(user, storage, plain_secret)
 
     if not is_valid and len(code) >= 8:
         try:

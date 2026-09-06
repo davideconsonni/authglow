@@ -124,11 +124,16 @@ def encrypt_totp_secret(plaintext: str) -> str:
     return _PREFIX + base64.b64encode(iv + ciphertext).decode()
 
 
-def decrypt_totp_secret(ciphertext: str) -> str:
+def decrypt_totp_secret(ciphertext: str, *, _allow_legacy_double: bool = True) -> str:
     """Decrypt a TOTP secret, tolerating the legacy AAD (VAPT-041)
     and the transient double-encryption window (a3ee4aa..7c19404,
     where mfa_secret was briefly wrapped again by the PII
     field-encryption layer before being written to disk).
+
+    ``_allow_legacy_double`` is a private hook for self-healing: when
+    set to ``False`` the fallback that peels the outer PII layer is
+    disabled, so callers can detect whether the on-disk record is
+    still doubly-encrypted by catching ``InvalidTag``.
     """
     if not ciphertext:
         return ciphertext
@@ -141,9 +146,11 @@ def decrypt_totp_secret(ciphertext: str) -> str:
     try:
         plaintext_bytes = _try_decrypt_with_aads(iv, encrypted, (_AAD, _AAD_LEGACY), key)
     except InvalidTag:
+        if not _allow_legacy_double:
+            raise
         # Legacy double-encrypted secret: peel the outer PII-field
         # layer once, then retry the normal TOTP decrypt.
-        return decrypt_totp_secret(decrypt_field(ciphertext))
+        return decrypt_totp_secret(decrypt_field(ciphertext), _allow_legacy_double=False)
     return plaintext_bytes.decode()
 
 

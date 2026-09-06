@@ -59,6 +59,38 @@ def get_audit_service():
     return AuditService()
 
 
+async def _self_heal_mfa_secret(user: User, storage: UserStorage, plain_secret: str) -> None:
+    """Re-save the TOTP secret with single-layer encryption.
+
+    During commit window a3ee4aa..7c19404, ``mfa_secret`` was briefly
+    listed in ``_PII_FIELDS``, so users who enrolled MFA in that window
+    have a doubly-encrypted secret on disk. ``decrypt_totp_secret`` has
+    a fallback that peels the outer PII layer, but paying the cost on
+    every login is wasteful: this helper re-wraps the now-plaintext
+    secret with the current single-layer ``encrypt_totp_secret`` so
+    the record self-repairs on the first successful login.
+
+    Detection: we attempt a normal (no-fallback) ``decrypt_totp_secret``
+    of the user's current ``mfa_secret``. If it raises ``InvalidTag``
+    the on-disk value is still doubly-encrypted (or otherwise
+    unreadable with the current single-layer key) and we re-wrap.
+    We never compare ciphertexts directly because ``encrypt_totp_secret``
+    uses a random IV on every call, so the same plaintext yields a
+    different ciphertext each time.
+    """
+    from cryptography.exceptions import InvalidTag
+
+    if not plain_secret or not user.mfa_secret:
+        return
+
+    try:
+        decrypt_totp_secret(user.mfa_secret, _allow_legacy_double=False)
+    except InvalidTag:
+        # Still doubly-encrypted: re-wrap with single-layer and persist.
+        user.mfa_secret = encrypt_totp_secret(plain_secret)
+        await storage.update_user(user)
+
+
 @router.post("/api/mfa/enroll", response_model=MFAEnrollResponse)
 async def enroll_mfa(
     current_user: User = Depends(get_current_user),
@@ -135,10 +167,13 @@ async def verify_mfa_enrollment(
         raise HTTPException(status_code=400, detail="MFA is already verified")
 
     # Verify TOTP code (decrypt stored secret first)
-    if not mfa_service.verify_totp(
-        decrypt_totp_secret(current_user.mfa_secret), verify_request.code
-    ):
+    plain_secret = decrypt_totp_secret(current_user.mfa_secret)
+    if not mfa_service.verify_totp(plain_secret, verify_request.code):
         raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    # Self-heal: re-save the secret with single-layer encryption if the
+    # current on-disk value was doubly-encrypted by the legacy bug.
+    await _self_heal_mfa_secret(current_user, storage, plain_secret)
 
     # Mark as enabled AND verified atomically — both flags are required
     # for the login flow to demand a TOTP code, so flipping only one
@@ -362,7 +397,11 @@ async def verify_mfa_login(
         if not user.mfa_secret:
             raise HTTPException(status_code=500, detail="MFA secret not configured")
 
-        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), login_request.code)
+        plain_secret = decrypt_totp_secret(user.mfa_secret)
+        is_valid = mfa_service.verify_totp(plain_secret, login_request.code)
+        if is_valid:
+            # Self-heal legacy double-encrypted secrets on successful login.
+            await _self_heal_mfa_secret(user, storage, plain_secret)
     else:
         # Try backup code
         try:
@@ -497,7 +536,11 @@ async def verify_oauth_mfa_login(
     if len(login_request.code) == 6 and login_request.code.isdigit():
         if not user.mfa_secret:
             raise HTTPException(status_code=500, detail="MFA secret not configured")
-        is_valid = mfa_service.verify_totp(decrypt_totp_secret(user.mfa_secret), login_request.code)
+        plain_secret = decrypt_totp_secret(user.mfa_secret)
+        is_valid = mfa_service.verify_totp(plain_secret, login_request.code)
+        if is_valid:
+            # Self-heal legacy double-encrypted secrets on successful login.
+            await _self_heal_mfa_secret(user, storage, plain_secret)
     else:
         try:
             is_valid = await mfa_service.verify_user_backup_code(user.id, login_request.code)
