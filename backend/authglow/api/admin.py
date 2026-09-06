@@ -26,6 +26,13 @@ from authglow.models.admin import (
     UserUpdate,
 )
 from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import (
+    AdminActionMetadata,
+    AdminPasswordResetMetadata,
+    AdminScopeMetadata,
+    AdminTokenRevokedMetadata,
+    AdminUserMetadata,
+)
 from authglow.models.user import User, UserCreate, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
@@ -274,15 +281,21 @@ async def update_user(
     else:
         user = await storage.update_user(user)
 
+    # Determine fields changed
+    changed_fields = list(update_data.model_dump(exclude_none=True).keys())
+
     await audit_service.log_event(
-        event_type="user_updated",
+        event_type=AuditEventType.ADMIN_USER_UPDATED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email,
-            "changes": update_data.model_dump(exclude_none=True),
-        },
+        metadata=AdminUserMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            fields_changed=changed_fields,
+            old_values_hash=None,
+        ),
     )
 
     from authglow.services.admin_action import AdminActionService
@@ -353,13 +366,17 @@ async def create_user(
         await verification_service.send_verification_email(user, token.verification_code)
 
     await audit_service.log_event(
-        event_type="user_created_by_admin",
+        event_type=AuditEventType.ADMIN_USER_CREATED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "created_user_id": user.id,
-            "created_user_email": user.email,
-        },
+        metadata=AdminUserMetadata(
+            target_user_id=user.id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            fields_changed=None,
+            old_values_hash=None,
+        ),
         severity="info",
     )
 
@@ -406,10 +423,17 @@ async def delete_user(
 
     # Log action
     await audit_service.log_event(
-        event_type="user_deleted",
+        event_type=AuditEventType.ADMIN_USER_DELETED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"target_user_id": user_id, "target_user_email": user.email},
+        metadata=AdminUserMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            fields_changed=None,
+            old_values_hash=None,
+        ),
         severity="warning",
     )
 
@@ -728,14 +752,17 @@ async def set_user_password(
         raise HTTPException(status_code=404, detail="User not found")
 
     await audit_service.log_event(
-        event_type="password_set_by_admin",
+        event_type=AuditEventType.ADMIN_PASSWORD_RESET,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email,
-            "require_change": body.require_change,
-        },
+        metadata=AdminPasswordResetMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            require_change=body.require_change,
+            temporary_password=False,
+        ),
         severity="warning",
     )
 
@@ -1045,16 +1072,32 @@ async def bulk_user_operation(
             results["errors"].append(f"Error processing {user_id}: {str(e)}")
 
     # Log action
-    await audit_service.log_event(
-        event_type="bulk_user_operation",
-        user_id=current_user.id,
-        email=current_user.email,
-        metadata={
-            "operation": operation.operation,
-            "user_count": len(operation.user_ids),
-            "results": results,
-        },
-    )
+    if operation.operation in ("assign_scope", "remove_scope"):
+        event_type = AuditEventType.ADMIN_SCOPE_ASSIGNED if operation.operation == "assign_scope" else AuditEventType.ADMIN_SCOPE_REMOVED
+        await audit_service.log_event(
+            event_type=event_type,
+            user_id=current_user.id,
+            email=current_user.email,
+            metadata=AdminScopeMetadata(
+                target_user_id=user_id,
+                target_user_email_hash=user.email if 'user' in locals() else "unknown",
+                admin_user_id=current_user.id,
+                admin_user_email_hash=current_user.email,
+                scopes=[operation.scope] if operation.scope else [],
+            ),
+        )
+    else:
+        await audit_service.log_event(
+            event_type=AuditEventType.ADMIN_USER_UPDATED,
+            user_id=current_user.id,
+            email=current_user.email,
+            metadata=AdminActionMetadata(
+                target_user_id=user_id,
+                target_user_email_hash=user.email if 'user' in locals() else "unknown",
+                admin_user_id=current_user.id,
+                admin_user_email_hash=current_user.email,
+            ),
+        )
 
     return results
 
@@ -1139,10 +1182,17 @@ async def revoke_refresh_token_admin(
 
     if success:
         await audit_service.log_event(
-            event_type="refresh_token_revoked_by_admin",
+            event_type=AuditEventType.ADMIN_TOKEN_REVOKED,
             user_id=current_user.id,
             email=current_user.email,
-            metadata={"token_id": token_id, "target_user_id": rt.user_id},
+            metadata=AdminTokenRevokedMetadata(
+                token_id=token_id,
+                token_type="refresh_token",
+                target_user_id=rt.user_id,
+                target_user_email_hash=rt.user_id,  # We don't have email here easily
+                admin_user_id=current_user.id,
+                admin_user_email_hash=current_user.email,
+            ),
             severity="warning",
         )
 
@@ -1488,15 +1538,17 @@ async def suspend_user(
     await storage.update_user(user)
 
     await audit_service.log_event(
-        event_type="user_suspended",
+        event_type=AuditEventType.ADMIN_USER_UPDATED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email,
-            "duration_hours": body.duration_hours,
-            "suspended_until": suspended_until.isoformat(),
-        },
+        metadata=AdminUserMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            fields_changed=["suspended_until"],
+            old_values_hash=None,
+        ),
         severity="warning",
     )
 
@@ -1539,13 +1591,17 @@ async def unsuspend_user(
     await storage.update_user(user)
 
     await audit_service.log_event(
-        event_type="user_unsuspended",
+        event_type=AuditEventType.ADMIN_USER_UPDATED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "target_user_id": user_id,
-            "target_user_email": user.email,
-        },
+        metadata=AdminUserMetadata(
+            target_user_id=user_id,
+            target_user_email_hash=user.email,
+            admin_user_id=current_user.id,
+            admin_user_email_hash=current_user.email,
+            fields_changed=["suspended_until"],
+            old_values_hash=None,
+        ),
         severity="info",
     )
 

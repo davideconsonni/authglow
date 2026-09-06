@@ -19,6 +19,11 @@ from authglow.models.api_key import (
     APIKeyUpdate,
     APIKeyWithSecret,
 )
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import (
+    APIKeyCreatedMetadata,
+    APIKeyRevokedMetadata,
+)
 from authglow.models.user import User
 from authglow.services.api_key import APIKeyService
 from authglow.services.audit import AuditService
@@ -85,15 +90,16 @@ async def create_api_key(
 
     # Log the creation
     await audit_service.log_event(
-        event_type="api_key_created",
+        event_type=AuditEventType.API_KEY_CREATED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "key_id": api_key.key_id,
-            "key_name": api_key.name,
-            "scopes": api_key.scopes,
-            "owner_id": owner_id,
-        },
+        metadata=APIKeyCreatedMetadata(
+            key_id=api_key.key_id,
+            key_name=api_key.name,
+            scopes=api_key.scopes,
+            created_by=current_user.id,
+            expires_at=api_key.expires_at if hasattr(api_key, 'expires_at') else None,
+        ),
         ip_address=request.client.host if request.client else None,
     )
 
@@ -219,10 +225,16 @@ async def revoke_api_key(
 
     # Log the revocation
     await audit_service.log_event(
-        event_type="api_key_revoked",
+        event_type=AuditEventType.API_KEY_REVOKED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"key_id": key_id, "key_name": api_key.name},
+        metadata=APIKeyRevokedMetadata(
+            key_id=key_id,
+            key_name=api_key.name,
+            scopes=api_key.scopes,
+            revoked_by=current_user.id,
+            revocation_reason="Revoked by user/admin",
+        ),
         severity="warning",
         ip_address=request.client.host if request.client else None,
     )
@@ -289,10 +301,16 @@ async def delete_api_key(
 
     # Log the deletion
     await audit_service.log_event(
-        event_type="api_key_deleted",
+        event_type=AuditEventType.API_KEY_REVOKED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"key_id": key_id, "key_name": api_key.name},
+        metadata=APIKeyRevokedMetadata(
+            key_id=key_id,
+            key_name=api_key.name,
+            scopes=api_key.scopes,
+            revoked_by=current_user.id,
+            revocation_reason="Deleted by user/admin",
+        ),
         severity="warning",
         ip_address=request.client.host if request.client else None,
     )
@@ -367,13 +385,16 @@ async def rotate_api_key(
     new_api_key, plaintext = rotated
 
     await audit_service.log_event(
-        event_type="api_key_rotated",
+        event_type=AuditEventType.API_KEY_REVOKED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={
-            "key_id": key_id,
-            "key_name": new_api_key.name,
-        },
+        metadata=APIKeyRevokedMetadata(
+            key_id=key_id,
+            key_name=new_api_key.name,
+            scopes=new_api_key.scopes,
+            revoked_by=current_user.id,
+            revocation_reason="Rotated by user/admin",
+        ),
         severity="warning",
         ip_address=request.client.host if request.client else None,
     )
@@ -463,10 +484,16 @@ async def cleanup_expired_keys(
 
     # Log cleanup
     await audit_service.log_event(
-        event_type="api_keys_cleanup",
+        event_type=AuditEventType.API_KEY_REVOKED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"deleted_count": deleted_count},
+        metadata=APIKeyRevokedMetadata(
+            key_id="multiple",
+            key_name="expired_keys_cleanup",
+            scopes=[],
+            revoked_by=current_user.id,
+            revocation_reason=f"Cleanup: {deleted_count} expired keys removed",
+        ),
     )
 
     return {"message": f"Cleaned up {deleted_count} expired API keys"}
