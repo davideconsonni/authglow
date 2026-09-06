@@ -41,7 +41,10 @@ from authglow.core.async_io import AsyncFileSystem
 from authglow.core.cache import user_by_id_cache, user_cache
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import AccountLockMetadata
 from authglow.models.user import User
+from authglow.services.audit import AuditService
 
 if TYPE_CHECKING:
     from authglow.repositories.protocols import (
@@ -85,6 +88,7 @@ class UserService:
 
         self._afs = AsyncFileSystem(self.fs)
         self._lock = named_lock()
+        self.audit_service = AuditService()
 
         if user_repository is None:
             from authglow.repositories.dependencies import get_user_repository
@@ -335,14 +339,55 @@ class UserService:
         """Record a failed login attempt and lock account if
         threshold exceeded."""
         async with self._lock(f"user:{user_id}"):
-            return await self._user_repo.record_failed_login(
+            # Read user before to check if lockout will be triggered
+            user = await self._user_repo.get_by_id(user_id)
+            if user is None:
+                return None
+
+            # Check if this attempt will trigger lockout
+            will_lock = user.failed_login_attempts + 1 >= 5
+
+            locked_until = await self._user_repo.record_failed_login(
                 user_id, max_attempts, lockout_duration_minutes
             )
+
+            # Audit: account locked
+            if will_lock and locked_until:
+                await self.audit_service.log_event(
+                    event_type=AuditEventType.ACCOUNT_LOCKED,
+                    user_id=user_id,
+                    email=user.email,
+                    metadata=AccountLockMetadata(
+                        lockout_reason="brute_force",
+                        locked_until=locked_until,
+                        failed_count=user.failed_login_attempts + 1,
+                    ),
+                    severity="critical",
+                )
+
+            return locked_until
 
     async def reset_failed_login_attempts(self, user_id: str) -> None:
         """Reset failed login attempts and clear lockout."""
         async with self._lock(f"user:{user_id}"):
+            # Check if user was locked before resetting
+            user = await self._user_repo.get_by_id(user_id)
+            was_locked = user is not None and user.locked_until is not None
+
             await self._user_repo.reset_failed_login_attempts(user_id)
+
+            # Audit: account unlocked
+            if was_locked:
+                await self.audit_service.log_event(
+                    event_type=AuditEventType.ACCOUNT_UNLOCKED,
+                    user_id=user_id,
+                    email=user.email if user else None,
+                    metadata=AccountLockMetadata(
+                        lockout_reason="admin_reset",
+                        locked_until=None,
+                    ),
+                    severity="info",
+                )
 
     async def clear_failed_login_attempts(self, user_id: str) -> None:
         """Zero out failed_login_attempts without clearing lockout."""

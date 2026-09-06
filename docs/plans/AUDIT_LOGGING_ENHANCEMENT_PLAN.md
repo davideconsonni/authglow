@@ -365,9 +365,9 @@ async def endpoint(
 - [x] **5.2** `api/api_key.py` → `api_key_created`, `api_key_revoked` (includes rotated/deleted)
 - [ ] **5.3** RBAC events se presenti: `admin_role_assigned/removed` (not yet implemented)
 
-### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni
-- [ ] **6.1** Rate limit middleware → `rate_limit_exceeded` (su auth endpoints)
-- [ ] **6.2** Account lockout logic → `account_locked/unlocked`, `brute_force_detected`
+### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni ✅ COMPLETATA
+- [x] **6.1** Rate limit middleware → `rate_limit_exceeded` (su auth endpoints)
+- [x] **6.2** Account lockout logic → `account_locked/unlocked`, `brute_force_detected`
 - [ ] **6.3** Concurrent session limit → `concurrent_session_limit_exceeded`
 - [ ] **6.4** Suspicious activity detection (new device/geo, impossible travel) → `suspicious_activity`
 
@@ -474,5 +474,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 5 completata (admin: admin_user_created/updated/deleted, admin_password_reset, admin_scope_assigned/removed, admin_token_revoked, admin_user_suspended/unsuspended; api_key: api_key_created/revoked). Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
+- 2026-09-06: Fase 6 completata (account_locked/unlocked in UserService). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy
