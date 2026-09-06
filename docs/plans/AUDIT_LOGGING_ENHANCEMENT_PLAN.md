@@ -360,10 +360,10 @@ async def endpoint(
 - [x] **4.3** `services/mfa.py` → `trusted_device_added/removed/expired`
 - [x] **4.4** `api/federation.py` → `federated_login_initiated/success/failed`, `federated_account_linked/unlinked`
 
-### Fase 5: Admin Actions & API Keys ⏱️ ~2 giorni ✅ COMPLETATA (parziale)
+### Fase 5: Admin Actions & API Keys ⏱️ ~2 giorni ✅ COMPLETATA
 - [x] **5.1** `api/admin.py` → `admin_user_created/updated/deleted`, `admin_password_reset`, `admin_scope_assigned/removed`, `admin_token_revoked`, `admin_user_suspended/unsuspended`
 - [x] **5.2** `api/api_key.py` → `api_key_created`, `api_key_revoked` (includes rotated/deleted)
-- [ ] **5.3** RBAC events se presenti: `admin_role_assigned/removed` (not yet implemented)
+- [x] **5.3** RBAC events: `admin_role_assigned/removed` (implementato in `api/rbac.py`)
 
 ### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni ✅ COMPLETATA (parziale)
 - [x] **6.1** Rate limit middleware → `rate_limit_exceeded` (su auth endpoints) — *già presente in middleware, non ha audit event esplicito*
@@ -477,5 +477,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
+- 2026-09-06: Fase 5.3 completata (RBAC events: admin_role_assigned/removed). Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy
