@@ -11,6 +11,8 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import TokenIntrospectedMetadata, TokenRevokedMetadata
 from authglow.models.user import User
 from authglow.services.audit import AuditService
 from authglow.services.auth.token_blacklist import token_blacklist
@@ -113,11 +115,19 @@ async def revoke_token(
             if success:
                 # Log revocation
                 await audit_service.log_event(
-                    event_type="refresh_token_revoked",
+                    event_type=AuditEventType.REFRESH_TOKEN_REVOKED,
                     user_id=rt.user_id,
-                    metadata={"client_id": rt.client_id, "token_id": rt.token_id},
-                    severity="info",
+                    email=rt.user_id,  # Will be masked by audit service
+                    client_id=rt.client_id,
                     ip_address=request.client.host if request.client else None,
+                    metadata=TokenRevokedMetadata(
+                        client_id=rt.client_id,
+                        token_id=rt.token_id,
+                        token_type_hint="refresh_token",
+                        revoked_by=resolved_client_id,
+                        revocation_reason="Revoked via revocation endpoint",
+                    ),
+                    severity="warning",
                 )
 
             # Return success regardless (per RFC 7009)
@@ -144,15 +154,19 @@ async def revoke_token(
             # Actually revoke: add jti to in-process blacklist
             await token_blacklist().revoke(token_data.jti, token_data.exp.timestamp())
             await audit_service.log_event(
-                event_type="access_token_revoked",
+                event_type=AuditEventType.ACCESS_TOKEN_REVOKED,
                 user_id=token_data.sub,
                 email=token_data.email,
-                metadata={
-                    "token_type": "access_token",
-                    "jti": token_data.jti,
-                },
-                severity="info",
+                client_id=resolved_client_id,
                 ip_address=request.client.host if request.client else None,
+                metadata=TokenRevokedMetadata(
+                    client_id=resolved_client_id,
+                    token_id=token_data.jti,
+                    token_type_hint="access_token",
+                    revoked_by=resolved_client_id,
+                    revocation_reason="Revoked via revocation endpoint",
+                ),
+                severity="warning",
             )
 
     # Always return 200 OK per RFC 7009
@@ -171,6 +185,7 @@ async def introspect_token(
     jwt_service: JWTService = Depends(get_jwt_service),
     user_storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """RFC 7662: Token Introspection Endpoint.
 
@@ -227,6 +242,21 @@ async def introspect_token(
                 response["username"] = user.email
                 response["email"] = user.email
 
+            # Audit: token introspected
+            await audit_service.log_event(
+                event_type=AuditEventType.TOKEN_INTROSPECTED,
+                user_id=rt.user_id,
+                email=user.email if user else None,
+                client_id=resolved_client_id,
+                ip_address=request.client.host if request.client else None,
+                metadata=TokenIntrospectedMetadata(
+                    client_id=resolved_client_id,
+                    token_id=rt.token_id,
+                    active=active,
+                    token_type="refresh_token",
+                ),
+            )
+
             return response
 
     # Try as access token (JWT)
@@ -264,6 +294,21 @@ async def introspect_token(
 
             if user and active:
                 response["username"] = user.email
+
+            # Audit: token introspected
+            await audit_service.log_event(
+                event_type=AuditEventType.TOKEN_INTROSPECTED,
+                user_id=token_data.sub,
+                email=token_data.email,
+                client_id=resolved_client_id,
+                ip_address=request.client.host if request.client else None,
+                metadata=TokenIntrospectedMetadata(
+                    client_id=resolved_client_id,
+                    token_id=token_data.jti or "unknown",
+                    active=active,
+                    token_type="access_token",
+                ),
+            )
 
             return response
 

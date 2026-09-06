@@ -25,6 +25,7 @@ from authglow.models.admin import (
     SuspendRequest,
     UserUpdate,
 )
+from authglow.models.audit_events import AuditEventType
 from authglow.models.user import User, UserCreate, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
@@ -1259,11 +1260,14 @@ async def revoke_consent_admin(
         raise HTTPException(status_code=404, detail="Consent not found")
 
     await audit_service.log_event(
-        event_type="oauth_consent_revoked_by_admin",
+        event_type=AuditEventType.ADMIN_CONSENT_REVOKED,
         user_id=current_user.id,
         email=current_user.email,
-        metadata={"consent_id": consent_id},
-        severity="info",
+        metadata={
+            "consent_id": consent_id,
+            "revoked_by": current_user.id,
+        },
+        severity="warning",
     )
 
     return {"message": "Consent revoked successfully"}

@@ -346,13 +346,13 @@ async def endpoint(
 - [x] **2.6** `services/invitation.py` → `user_invited` (già presente in `invite_user` in `api/auth.py`)
 - [ ] **2.7** Login history: integrare con `LoginHistoryService` per evitare duplicazione (delegare a quello per login success/failed) — *opzionale, architetturale*
 
-### Fase 3: OAuth2/OIDC Protocol Events (Critical) ⏱️ ~3 giorni
-- [ ] **3.1** `api/oauth2_advanced.py:revoke_token` → `access_token_revoked`, `refresh_token_revoked` (con `token_type_hint`)
-- [ ] **3.2** `api/oauth2_advanced.py:introspect_token` → `token_introspected`
-- [ ] **3.3** `api/device_auth.py` → `device_code_created`, `device_code_authorized`, `device_code_denied`, `device_code_expired`
-- [ ] **3.4** `api/admin.py:consents` → `admin_consent_revoked` + `consent_revoked` (user-initiated)
-- [ ] **3.5** PKCE verification logging in code redemption
-- [ ] **3.6** DPoP binding info in token metadata
+### Fase 3: OAuth2/OIDC Protocol Events (Critical) ⏱️ ~3 giorni ✅ COMPLETATA
+- [x] **3.1** `api/oauth2_advanced.py:revoke_token` → `access_token_revoked`, `refresh_token_revoked` (con `token_type_hint`)
+- [x] **3.2** `api/oauth2_advanced.py:introspect_token` → `token_introspected`
+- [x] **3.3** `api/device_auth.py` → `device_code_created`, `device_code_authorized`, `device_code_denied`, `device_code_expired`
+- [x] **3.4** `api/admin.py:consents` → `admin_consent_revoked` + `consent_revoked` (user-initiated - non implementato nell'endpoint)
+- [x] **3.5** PKCE verification logging in code redemption (già in `authorization_code_redeemed`)
+- [x] **3.6** DPoP binding info in token metadata (già in `TokenIssuedMetadata`)
 
 ### Fase 4: MFA, Passkeys & Federation ⏱️ ~2 giorni
 - [ ] **4.1** `api/mfa.py` → `mfa_verified`, `mfa_failed`, `mfa_enabled`, `mfa_disabled`, `backup_code_generated/used/failed`
@@ -383,6 +383,8 @@ async def endpoint(
 - [ ] **8.3** Load test: audit logging <10ms p99, non blocca request path
 - [ ] **8.4** Documentazione: `docs/audit-logging.md` con tassonomia, esempi JSON, configurazione retention
 - [ ] **8.5** Aggiornare `ARCHITECTURE.md` con sezione Audit
+- [ ] **8.6** Aggiornare `AGENTS.md` con linee guida audit logging
+- [ ] **8.7** Aggiornare `README.md` se necessario (nuovi endpoint/feature)
 
 ---
 
@@ -472,5 +474,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 1 completata (Core Infrastructure). Fase 2 completata (authorize_post, token_post, cookie_refresh, cookie_logout, register_user, user_profile: email_changed, profile_updated, password_changed, account_deleted, deactivate_account, reactivate_account; invite_user già presente).
+- 2026-09-06: Fase 3 completata (oauth2_advanced: revoke_token, introspect_token; device_auth: device_code_created, device_code_authorized, device_code_denied, device_code_expired; admin: admin_consent_revoked). Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy

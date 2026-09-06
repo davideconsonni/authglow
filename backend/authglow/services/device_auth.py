@@ -20,8 +20,11 @@ from typing import List, Optional
 import structlog
 
 from authglow.core.config import Settings, get_settings
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import DeviceCodeMetadata
 from authglow.models.token import DeviceAuthorization
 from authglow.repositories.protocols import DeviceAuthorizationRepository
+from authglow.services.audit import AuditService
 
 logger = structlog.get_logger("authglow.audit")
 
@@ -36,6 +39,7 @@ class DeviceAuthorizationService:
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
         self._repo: DeviceAuthorizationRepository = self._default_repository()
+        self.audit_service = AuditService()
 
     def _default_repository(self) -> DeviceAuthorizationRepository:
         from authglow.repositories.file.device_authorization import (
@@ -147,7 +151,29 @@ class DeviceAuthorizationService:
 
     async def cleanup_expired(self) -> int:
         """Delete all expired device authorizations."""
+        # Get expired authorizations before deleting for audit
+        all_auths = await self._repo.list_all()
+        now = datetime.now(timezone.utc)
+        expired_auths = [a for a in all_auths if a.expires_at < now and a.status == "pending"]
+
         count: int = await self._repo.delete_expired()
+
+        # Audit: device codes expired
+        for auth in expired_auths:
+            await self.audit_service.log_event(
+                event_type=AuditEventType.DEVICE_CODE_EXPIRED,
+                user_id=None,
+                email=None,
+                client_id=auth.client_id,
+                metadata=DeviceCodeMetadata(
+                    client_id=auth.client_id,
+                    device_code_id=auth.device_code,
+                    user_code=auth.user_code,
+                    expires_in=0,
+                    interval=0,
+                ),
+            )
+
         return count
 
     async def list_all(self, status_filter: Optional[str] = None) -> List[DeviceAuthorization]:

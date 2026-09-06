@@ -18,7 +18,10 @@ from authglow.api.oauth_errors import (
 )
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import DeviceCodeMetadata
 from authglow.models.user import User
+from authglow.services.audit import AuditService
 from authglow.services.device_auth import DeviceAuthorizationService
 from authglow.services.oauth2 import OAuth2Service
 
@@ -120,6 +123,25 @@ async def device_authorize(
         client_id, " ".join(processed_scopes), verification_uri
     )
 
+    # Audit: device code created
+    audit_service = AuditService()
+    await audit_service.log_event(
+        event_type=AuditEventType.DEVICE_CODE_CREATED,
+        user_id=None,  # No user yet - device flow
+        email=None,
+        client_id=client_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=DeviceCodeMetadata(
+            client_id=client_id,
+            device_code_id=auth.device_code,
+            user_code=auth.user_code,
+            expires_in=settings.device_code_expire_seconds,
+            interval=auth.interval,
+            scopes=processed_scopes,
+        ),
+    )
+
     return DeviceAuthorizationResponse(
         device_code=auth.device_code,
         user_code=auth.user_code,
@@ -169,10 +191,33 @@ async def device_approve(
 ):
     """User-facing endpoint: approve a device authorization."""
     service = DeviceAuthorizationService()
+
+    # Get the auth first to get details for audit
+    auth = await service.verify_user_code(body.user_code)
+
     success = await service.approve(body.user_code, current_user.id)
 
     if not success:
         raise HTTPException(status_code=400, detail="Invalid or expired user code")
+
+    # Audit: device code authorized
+    audit_service = AuditService()
+    await audit_service.log_event(
+        event_type=AuditEventType.DEVICE_CODE_AUTHORIZED,
+        user_id=current_user.id,
+        email=current_user.email,
+        client_id=auth.client_id if auth else None,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=DeviceCodeMetadata(
+            client_id=auth.client_id if auth else "unknown",
+            device_code_id=auth.device_code if auth else "unknown",
+            user_code=body.user_code,
+            expires_in=0,  # Already authorized
+            interval=0,
+            authorized_by=current_user.id,
+        ),
+    )
 
     return {"status": "approved"}
 
@@ -186,10 +231,32 @@ async def device_deny(
 ):
     """User-facing endpoint: deny a device authorization."""
     service = DeviceAuthorizationService()
+
+    # Get the auth first to get details for audit
+    auth = await service.verify_user_code(body.user_code)
+
     success = await service.deny(body.user_code)
 
     if not success:
         raise HTTPException(status_code=400, detail="Invalid or expired user code")
+
+    # Audit: device code denied
+    audit_service = AuditService()
+    await audit_service.log_event(
+        event_type=AuditEventType.DEVICE_CODE_DENIED,
+        user_id=current_user.id,
+        email=current_user.email,
+        client_id=auth.client_id if auth else None,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=DeviceCodeMetadata(
+            client_id=auth.client_id if auth else "unknown",
+            device_code_id=auth.device_code if auth else "unknown",
+            user_code=body.user_code,
+            expires_in=0,
+            interval=0,
+        ),
+    )
 
     return {"status": "denied"}
 
