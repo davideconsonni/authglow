@@ -480,6 +480,28 @@ class TestMFAVerifyRequestModel:
         code = totp.now()
         assert len(code) == 6
 
+    def test_decrypt_totp_secret_handles_double_encryption(self):
+        """Test that decrypt_totp_secret handles the double-encryption
+        bug that occurred when mfa_secret was in _PII_FIELDS.
+        """
+        import pyotp
+        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret, encrypt_field
+
+        secret = pyotp.random_base32()
+        service_enc = encrypt_totp_secret(secret)
+        # Simulate the double-encryption bug that occurred when
+        # mfa_secret was in _PII_FIELDS
+        double_encrypted = encrypt_field(service_enc)
+
+        # The fixed decrypt_totp_secret should handle this
+        decrypted = decrypt_totp_secret(double_encrypted)
+        assert decrypted == secret
+
+        # Also test that normal single-encrypted secrets still work
+        single_encrypted = encrypt_totp_secret(secret)
+        decrypted = decrypt_totp_secret(single_encrypted)
+        assert decrypted == secret
+
     def test_mfa_enroll_and_verify_full_flow(self, mfa_service, test_settings):
         """Test complete MFA enrollment and verification flow with encryption."""
         import asyncio

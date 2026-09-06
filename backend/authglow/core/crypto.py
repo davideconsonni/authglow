@@ -125,22 +125,25 @@ def encrypt_totp_secret(plaintext: str) -> str:
 
 
 def decrypt_totp_secret(ciphertext: str) -> str:
-    """Decrypt a TOTP secret, tolerating the legacy AAD (VAPT-041).
-
-    Order matters: the versioned AAD is tried first because
-    every freshly-written ciphertext uses it, so the happy
-    path stays single-try. The legacy AAD is a fallback for
-    pre-VAPT-041 on-disk data only.
+    """Decrypt a TOTP secret, tolerating the legacy AAD (VAPT-041)
+    and the transient double-encryption window (a3ee4aa..7c19404,
+    where mfa_secret was briefly wrapped again by the PII
+    field-encryption layer before being written to disk).
     """
     if not ciphertext:
         return ciphertext
     if not ciphertext.startswith(_PREFIX):
         return ciphertext
-    raw = base64.b64decode(ciphertext[len(_PREFIX) :])
+    raw = base64.b64decode(ciphertext[len(_PREFIX):])
     iv = raw[:12]
     encrypted = raw[12:]
     key = _derive_key()
-    plaintext_bytes = _try_decrypt_with_aads(iv, encrypted, (_AAD, _AAD_LEGACY), key)
+    try:
+        plaintext_bytes = _try_decrypt_with_aads(iv, encrypted, (_AAD, _AAD_LEGACY), key)
+    except InvalidTag:
+        # Legacy double-encrypted secret: peel the outer PII-field
+        # layer once, then retry the normal TOTP decrypt.
+        return decrypt_totp_secret(decrypt_field(ciphertext))
     return plaintext_bytes.decode()
 
 
