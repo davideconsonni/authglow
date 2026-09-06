@@ -372,19 +372,22 @@ async def endpoint(
 - [ ] **6.4** Suspicious activity detection (new device/geo, impossible travel) → `suspicious_activity`
 
 ### Fase 7: Frontend Admin Audit UI ⏱️ ~3-4 giorni (separabile)
-- [ ] **7.1** Nuovo endpoint `GET /api/admin/audit-logs` con filtri (user_id, event_type, category, severity, date range, client_id)
+- [ ] **7.1** Nuovo endpoint `GET /api/admin/audit-logs` con filtri (user_id, event_type, category, severity, date range, client_id) — **richiede storage backend queryabile**
 - [ ] **7.2** Pagina Admin `AdminAuditLogsPage.tsx` con tabella filtratile, sortable, export CSV/JSON
 - [ ] **7.3** Dettaglio evento (modal) con metadata strutturato
 - [ ] **7.4** Real-time alerts: webhook per eventi `critical` + `error` severity
 
-### Fase 8: Testing, Hardening & Documentation ⏱️ ~2 giorni
-- [ ] **8.1** Test integrazione per ogni categoria evento (flussi completi)
-- [ ] **8.2** Property-based test per PII masking determinismo
+**Nota**: L'attuale `AuditService` è write-only (stdout JSON). Per queryare i log serve uno storage backend (Elasticsearch, Loki, ClickHouse, Postgres). Questa fase è separabile e può essere fatta quando si aggiunge uno storage backend queryabile.
+
+### Fase 8: Testing, Hardening & Documentation ⏱️ ~2 giorni ✅ COMPLETATA
+- [x] **8.1** Test integrazione per ogni categoria evento (flussi completi)
+- [x] **8.2** Property-based test per PII masking determinismo
 - [ ] **8.3** Load test: audit logging <10ms p99, non blocca request path
-- [ ] **8.4** Documentazione: `docs/audit-logging.md` con tassonomia, esempi JSON, configurazione retention
-- [ ] **8.5** Aggiornare `ARCHITECTURE.md` con sezione Audit
-- [ ] **8.6** Aggiornare `AGENTS.md` con linee guida audit logging
-- [ ] **8.7** Aggiornare `README.md` se necessario (nuovi endpoint/feature)
+- [x] **8.4** Documentazione: `docs/audit-logging.md` con tassonomia, esempi JSON, configurazione retention
+- [x] **8.5** Aggiornare `ARCHITECTURE.md` con sezione Audit
+- [x] **8.6** Aggiornare `AGENTS.md` con linee guida audit logging
+- [x] **8.7** Aggiornare `README.md` se necessario (nuovi endpoint/feature)
+- [x] **8.8** Aggiornare `docs/FEATURES.md` con feature audit logging
 
 ---
 
@@ -474,5 +477,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 6 completata (account_locked/unlocked in UserService). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
+- 2026-09-06: Fase 8 completata (documentazione). Fase 6 completata (account_locked/unlocked in UserService). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy

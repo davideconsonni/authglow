@@ -296,6 +296,87 @@ rejected unless they are in the `OIDC_STANDARD_CLAIMS`
 whitelist (which only contains the OIDC Core / RFC 9068 /
 RFC 9449 standard names).
 
+## Audit Logging
+
+AuthGlow implements a comprehensive, structured audit logging system via
+`authglow/services/audit.py` — write-only, stdout JSON via `structlog`,
+compatible with AWS CloudWatch, GCP Cloud Logging, Azure Monitor, Loki,
+Elasticsearch, and other cloud logging platforms.
+
+### Design Principles
+
+1. **Write-only** — The app never reads audit logs back. Analysis, search, and
+   retention are handled by the cloud platform. No read/delete methods exposed.
+2. **Structured JSON** — Every event is a single JSON line with typed fields,
+   compatible with cloud logging agents (CloudWatch Agent, Fluent Bit, OTEL
+   Collector, Promtail, Filebeat).
+3. **PII Protection** — Email masking (`hash`/`mask`/`none`), IP truncation
+   (IPv4 `/24`, IPv6 `/48`), User-Agent truncation (256 chars). Recursive
+   metadata scanning catches email/IP patterns in nested objects.
+4. **Request Correlation** — `request_id` from `RequestIDMiddleware` (VAPT-042)
+   propagated via `structlog.contextvars`. Multi-request flows (auth_code →
+   token) use explicit `correlation_id`.
+5. **OAuth2/OIDC Compliance** — Events mapped to RFC sections (6749, 6750, 7009,
+   7662, 8628, 9068, 9449, OIDC Core).
+
+### Event Categories
+
+| Category | Events | Retention |
+|----------|--------|-----------|
+| `auth` | login_success, login_failed, logout, session_created, session_revoked, account_locked/unlocked | 90 days |
+| `oauth2` | authorization_code_issued/redeemed, access_token_issued/refreshed/revoked, id_token_issued, refresh_token_issued/rotated/revoked, consent_granted/revoked, device_code_*, client_credentials_token_issued, token_introspected | 90 days |
+| `admin` | admin_user_created/updated/deleted, admin_password_reset, admin_scope_assigned/removed, admin_mfa_reset, admin_consent_revoked, admin_token_revoked, admin_role_assigned/removed | 365 days |
+| `security` | brute_force_detected, suspicious_activity, concurrent_session_limit_exceeded, rate_limit_exceeded | 730 days |
+| `lifecycle` | user_registered/invited, email_verification_sent/verified, email_changed, profile_updated, password_changed/reset, account_deleted | 365 days |
+| `mfa` | mfa_enabled/disabled/verified/failed, backup_codes_generated/used/failed, passkey_registered/authenticated/deleted, trusted_device_added/removed/expired | 365 days |
+| `federation` | federated_login_initiated/success/failed, federated_account_linked/unlinked | 365 days |
+| `api_key` | api_key_created/used/revoked/expired | 365 days |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/authglow/services/audit.py` | `AuditService` — write-only, structlog JSON, PII masking, sampling |
+| `backend/authglow/models/audit_events.py` | `AuditEventType` enum (~60 events, 8 categories) with `category` and `default_severity` properties |
+| `backend/authglow/models/audit_metadata.py` | Typed Pydantic metadata schemas per event category + `validate_metadata()` |
+| `backend/authglow/models/admin.py` | `AuditLogEntry` model (extended: `session_id`, `client_id`, `correlation_id`, `event_category`) |
+| `backend/authglow/core/config.py` | Audit config: `audit_enabled`, `audit_email_log_level`, `audit_sample_rate`, retention per category |
+| `backend/authglow/services/user.py` | Account lockout audit in `record_failed_login` / `reset_failed_login_attempts` |
+
+### Configuration
+
+```python
+# core/config.py
+audit_enabled: bool = True
+audit_email_log_level: str = "hash"  # "mask", "hash", "none" (VAPT-080: none not allowed in production)
+audit_sample_rate: float = 1.0  # 0.0-1.0 for high-volume events
+
+# Retention per category (days)
+audit_retention_days_auth: int = 90
+audit_retention_days_oauth2: int = 90
+audit_retention_days_admin: int = 365
+audit_retention_days_security: int = 730
+audit_retention_days_lifecycle: int = 365
+audit_retention_days_mfa: int = 365
+audit_retention_days_federation: int = 365
+audit_retention_days_api_key: int = 365
+```
+
+### Production Hardening
+
+- `audit_email_log_level="none"` rejected in production (VAPT-080)
+- Default `hash` level (VAPT-080: stable 16-char HMAC per email)
+- Sampling for high-volume events (token refresh)
+- No secrets in logs — token IDs only
+
+### Future: Queryable UI (Phase 7)
+
+Current implementation is write-only to stdout. For queryable admin UI:
+1. Add storage backend (Elasticsearch, Loki, ClickHouse, Postgres)
+2. Implement `GET /api/admin/audit-logs` with filters
+3. Build `AdminAuditLogsPage.tsx` with table, filters, export
+4. Real-time alerts via webhook for `critical`/`error` severity
+
 ## Maintenance
 
 After adding, removing, or renaming a structural module (new API router, service,

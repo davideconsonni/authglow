@@ -415,7 +415,88 @@ the lru_cache is bypassed).
 After structural changes (new router, service, repository, store, page),
 update `ARCHITECTURE.md` to keep the directory maps and reference table accurate.
 
-## Secret Management
+## Audit Logging Guidelines
+
+### When to Add Audit Logging
+
+Add `AuditService.log_event()` calls to **every** security-relevant endpoint:
+- Authentication (login, logout, MFA, passkey, federated)
+- Token lifecycle (issue, refresh, revoke, introspect)
+- User lifecycle (create, update, delete, email/password change)
+- Admin actions (user management, scope/role changes, token revocation)
+- API key lifecycle (create, revoke, rotate)
+- OAuth2/OIDC protocol events (auth code, consent, device code)
+
+### Integration Pattern
+
+```python
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import TokenIssuedMetadata
+from authglow.services.audit import AuditService
+from fastapi import Depends
+
+@router.post("/my-endpoint")
+async def my_endpoint(
+    ...,
+    audit_service: AuditService = Depends(get_audit_service),
+):
+    await audit_service.log_event(
+        event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
+        user_id=user.id,
+        email=user.email,
+        client_id=client_id,
+        correlation_id=auth_code.code,
+        metadata=TokenIssuedMetadata(
+            token_id=access_token_id,
+            client_id=client_id,
+            grant_type="authorization_code",
+            scopes=scopes,
+            expires_in=1800,
+            dpop_bound=bool(dpop_proof),
+            token_type="access",
+        ),
+    )
+```
+
+### Key Principles
+
+1. **Use enum, not strings** — `AuditEventType` enum ensures consistency
+2. **Typed metadata** — Use Pydantic models from `audit_metadata.py` for validation
+3. **Request correlation** — Pass `correlation_id` for multi-request flows (auth_code → token)
+4. **PII protection** — All metadata goes through automatic masking (hash/mask/none per `audit_email_log_level`)
+5. **Request ID propagation** — `request_id` from middleware automatically included via `structlog.contextvars`
+
+### Required Fields per Event
+
+| Event Category | Required Fields |
+|----------------|-----------------|
+| Auth | `user_id`, `email`, `ip_address`, `user_agent`, `auth_method` |
+| OAuth2 | `client_id`, `correlation_id` (auth_code), `token_id` (jti) |
+| Admin | `target_user_id`, `admin_user_id`, `fields_changed` |
+| Security | `source_ip_prefix`, `risk_score` |
+
+### Testing Audit Events
+
+```python
+# Unit test
+await audit_service.log_event(
+    event_type=AuditEventType.LOGIN_SUCCESS,
+    user_id="u1",
+    email="test@example.com",
+    metadata=LoginSuccessMetadata(auth_method="password", scopes=["read"]),
+)
+assert entry.event_type == "login_success"
+assert entry.metadata["auth_method"] == "password"
+```
+
+### PII Protection
+
+- Default `audit_email_log_level="hash"` (VAPT-080)
+- `none` rejected in production
+- IP truncated to /24 (IPv4) / /48 (IPv6)
+- User-Agent truncated to 256 chars
+
+### Secret Management
 
 AuthGlow is regularly scanned by GitGuardian. The repo's policy is: **no real secret ever touches git history**. This section covers how that's enforced, how to handle test fixtures, and what to do if a real secret is leaked.
 
