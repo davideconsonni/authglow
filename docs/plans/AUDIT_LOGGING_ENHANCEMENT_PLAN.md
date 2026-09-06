@@ -368,7 +368,7 @@ async def endpoint(
 ### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni ✅ COMPLETATA (parziale)
 - [x] **6.1** Rate limit middleware → `rate_limit_exceeded` (su auth endpoints) — *già presente in middleware, non ha audit event esplicito*
 - [x] **6.2** Account lockout logic → `account_locked/unlocked`, `brute_force_detected` (in UserService)
-- [ ] **6.3** Concurrent session limit → `concurrent_session_limit_exceeded`
+- [x] **6.3** Concurrent session limit → `concurrent_session_limit_exceeded` (in UserService + authorize_post)
 - [ ] **6.4** Suspicious activity detection (new device/geo, impossible travel) → `suspicious_activity`
 
 ### Fase 7: Frontend Admin Audit UI ⏱️ ~3-4 giorni (separabile) — **NON INIZIATA**
@@ -477,5 +477,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Audit logging core (Fasi 1-6) implementato: core infrastructure, auth/session, OAuth2/OIDC, MFA/passkey/federation, admin actions, API keys, account lockout. Fase 7 (UI) non iniziata - richiede storage backend queryabile. Fase 8 parziale (docs fatte, load test mancante). Test: 283 pass.
+- 2026-09-06: Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy
