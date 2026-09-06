@@ -182,8 +182,9 @@ class TestSetPassword:
 
         mock_audit.log_event.assert_called_once()
         call_kwargs = mock_audit.log_event.call_args[1]
-        assert call_kwargs["event_type"] == "password_set_by_admin"
-        assert call_kwargs["metadata"]["target_user_id"] == "user-to-act-on"
+        assert call_kwargs["event_type"] == "admin_password_reset"
+        metadata = call_kwargs["metadata"]
+        assert metadata.target_user_id == "user-to-act-on"
 
 
 class TestSendPasswordReset:

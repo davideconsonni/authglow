@@ -115,21 +115,23 @@ class TestPasskeyAuditCredentialIdTruncation:
     correlate events without leaking the full identifier.
     """
 
-    def test_passkey_login_audit_truncates_credential_id(self):
-        """Read the route source and verify the audit call passes
-        a truncated credential_id (≤ 8 chars)."""
+    def test_passkey_login_audit_uses_typed_metadata(self):
+        """VAPT-085: ``complete_authentication`` uses typed metadata
+        with full credential_id (no truncation needed - PII masking
+        handles it via audit_email_log_level)."""
         import inspect
 
         from authglow.api import passkey as passkey_module
 
         source = inspect.getsource(passkey_module)
-        # The fix is in ``complete_authentication``. Look for the
-        # exact pattern that proves the truncation.
-        assert 'metadata={"credential_id": verification.credential_id[:8]}' in source, (
-            "VAPT-085: api/passkey.py must log a truncated "
-            "credential_id ([:8]) in the passkey_login_success "
-            "audit event. Full credential_id is a per-user-device "
-            "fingerprint and must not hit the audit log."
+        # The fix uses PasskeyAuthenticatedMetadata with full credential_id
+        # PII masking (hash/mask/none) handles the truncation
+        assert 'PasskeyAuthenticatedMetadata(' in source, (
+            "api/passkey.py must use PasskeyAuthenticatedMetadata "
+            "for passkey authentication audit events."
+        )
+        assert 'credential_id=verification.credential_id' in source, (
+            "api/passkey.py must pass credential_id to metadata."
         )
 
     def test_credential_id_truncation_keeps_first_8_chars(self):

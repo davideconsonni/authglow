@@ -428,6 +428,7 @@ class TestUpdateUserAuditLogging:
 
         mock_audit.log_event.assert_called_once()
         call_kwargs = mock_audit.log_event.call_args[1]
-        assert call_kwargs["event_type"] == "user_updated"
-        assert call_kwargs["metadata"]["target_user_id"] == "user-to-update"
-        assert call_kwargs["metadata"]["changes"]["first_name"] == "NewFirst"
+        assert call_kwargs["event_type"] == "admin_user_updated"
+        metadata = call_kwargs["metadata"]
+        assert metadata.target_user_id == "user-to-update"
+        assert metadata.fields_changed == ["first_name"]
