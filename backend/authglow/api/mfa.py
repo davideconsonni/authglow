@@ -147,6 +147,10 @@ async def verify_mfa_enrollment(
     current_user.mfa_verified = True
     await storage.update_user(current_user)
 
+    # Get backup codes count for audit log
+    backup_codes_obj = await mfa_service.get_backup_codes(current_user.id)
+    backup_codes_count = len(backup_codes_obj.codes) if backup_codes_obj else 0
+
     from authglow.models.webhook_events import MFA_ENROLLED
     from authglow.services.webhook_dispatcher import emit_webhook_event
 
@@ -159,7 +163,7 @@ async def verify_mfa_enrollment(
         email=current_user.email,
         metadata=MFAEnabledMetadata(
             method="totp",
-            backup_codes_generated=len(backup_codes),
+            backup_codes_generated=backup_codes_count,
         ),
     )
 
@@ -248,6 +252,7 @@ async def remove_trusted_device(
     device_id: str,
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Remove a trusted device."""
     # Verify device belongs to current user
@@ -278,6 +283,7 @@ async def remove_trusted_device(
 async def regenerate_backup_codes(
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Regenerate backup codes (requires MFA to be enabled)."""
     if not current_user.mfa_enabled or not current_user.mfa_verified:
