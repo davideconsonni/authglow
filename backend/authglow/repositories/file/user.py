@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 # Fields encrypted at rest with AES-256-GCM. Other fields
 # (id, created_at, scopes, is_active, etc.) are stored in
 # plaintext — they are not PII.
-_PII_FIELDS = ("email", "first_name", "last_name", "phone", "avatar_url", "mfa_secret")
+_PII_FIELDS = ("email", "first_name", "last_name", "phone", "avatar_url")
 
 
 class FileUserRepository(BaseFileRepository, UserRepository):
