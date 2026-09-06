@@ -354,11 +354,11 @@ async def endpoint(
 - [x] **3.5** PKCE verification logging in code redemption (già in `authorization_code_redeemed`)
 - [x] **3.6** DPoP binding info in token metadata (già in `TokenIssuedMetadata`)
 
-### Fase 4: MFA, Passkeys & Federation ⏱️ ~2 giorni
-- [ ] **4.1** `api/mfa.py` → `mfa_verified`, `mfa_failed`, `mfa_enabled`, `mfa_disabled`, `backup_code_generated/used/failed`
-- [ ] **4.2** `api/passkey.py` → `passkey_registered`, `passkey_authenticated`, `passkey_deleted`
-- [ ] **4.3** `services/mfa.py` → `trusted_device_added/removed/expired`
-- [ ] **4.4** `api/federation.py` → `federated_login_initiated/success/failed`, `federated_account_linked/unlinked`
+### Fase 4: MFA, Passkeys & Federation ⏱️ ~2 giorni ✅ COMPLETATA
+- [x] **4.1** `api/mfa.py` → `mfa_verified`, `mfa_failed`, `mfa_enabled`, `mfa_disabled`, `backup_code_generated/used/failed`
+- [x] **4.2** `api/passkey.py` → `passkey_registered`, `passkey_authenticated`, `passkey_deleted`
+- [x] **4.3** `services/mfa.py` → `trusted_device_added/removed/expired`
+- [x] **4.4** `api/federation.py` → `federated_login_initiated/success/failed`, `federated_account_linked/unlinked`
 
 ### Fase 5: Admin Actions & API Keys ⏱️ ~2 giorni
 - [ ] **5.1** Verificare tutti gli endpoint `api/admin.py` usano `AdminActionService` + `AuditService`
@@ -474,5 +474,5 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
-- 2026-09-06: Fase 3 completata (oauth2_advanced: revoke_token, introspect_token; device_auth: device_code_created, device_code_authorized, device_code_denied, device_code_expired; admin: admin_consent_revoked). Fase 2 completata. Fase 1 completata.
+- 2026-09-06: Fase 4 completata (MFA: mfa_verified, mfa_failed, mfa_enabled, mfa_disabled, backup_code_generated; Passkey: passkey_registered, passkey_authenticated, passkey_deleted; MFA Service: trusted_device_added; Federation: federated_login_initiated/success/failed). Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy

@@ -15,6 +15,8 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import FederatedLoginMetadata
 from authglow.models.federation import (
     ExternalIdpConfig,
     ExternalIdpConfigCreate,
@@ -135,6 +137,22 @@ async def federation_login(
         oauth2_context=oauth2_context,
     )
 
+    # Audit: federation login initiated
+    audit_service = AuditService()
+    await audit_service.log_event(
+        event_type=AuditEventType.FEDERATED_LOGIN_INITIATED,
+        user_id=None,
+        email=None,
+        client_id=client_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=FederatedLoginMetadata(
+            provider=provider.id,
+            provider_subject="",  # Not known yet
+            client_id=client_id or "",
+        ),
+    )
+
     try:
         service = FederationService()
         auth_url, _state, _nonce = await service.get_authorization_url(
@@ -148,10 +166,14 @@ async def federation_login(
     except Exception as e:
         # VAPT-073: upstream IdP response fragments must not reach the
         # client — generic detail, full error server-side.
-        await AuditService().log_event(
-            event_type="federation_provider_unreachable",
+        await audit_service.log_event(
+            event_type=AuditEventType.FEDERATED_LOGIN_FAILED,
             severity="warning",
-            metadata={"error_class": type(e).__name__, "error": str(e)},
+            metadata=FederatedLoginMetadata(
+                provider=provider.id,
+                provider_subject="",
+                failure_reason=f"provider_unreachable: {type(e).__name__}",
+            ),
         )
         raise HTTPException(
             status_code=502,
@@ -186,9 +208,13 @@ async def federation_callback(
         state_claims = FederationStateToken().verify(state)
     except FederationStateError as e:
         await audit_service.log_event(
-            event_type="federation_login_failed",
+            event_type=AuditEventType.FEDERATED_LOGIN_FAILED,
             email="unknown",
-            metadata={"provider_id": provider_id, "error": f"state_invalid: {e}"},
+            metadata=FederatedLoginMetadata(
+                provider=provider_id or "unknown",
+                provider_subject="",
+                failure_reason=f"state_invalid: {e}",
+            ),
         )
         raise HTTPException(status_code=400, detail=f"Invalid state: {e}") from e
 
@@ -202,13 +228,13 @@ async def federation_callback(
         and state_claims.get("provider_id") != provider_id
     ):
         await audit_service.log_event(
-            event_type="federation_login_failed",
+            event_type=AuditEventType.FEDERATED_LOGIN_FAILED,
             email="unknown",
-            metadata={
-                "provider_id": provider_id,
-                "error": "provider_mismatch",
-                "state_provider_id": state_claims.get("provider_id"),
-            },
+            metadata=FederatedLoginMetadata(
+                provider=provider_id,
+                provider_subject="",
+                failure_reason="provider_mismatch",
+            ),
         )
         raise HTTPException(status_code=400, detail="State provider does not match request")
 
@@ -233,13 +259,13 @@ async def federation_callback(
                 # VAPT-073: JWT validation internals must not reach the
                 # client — generic detail, full error server-side.
                 await audit_service.log_event(
-                    event_type="federation_id_token_invalid",
+                    event_type=AuditEventType.FEDERATED_LOGIN_FAILED,
                     severity="warning",
-                    metadata={
-                        "provider_id": provider.id,
-                        "error_class": type(e).__name__,
-                        "error": str(e),
-                    },
+                    metadata=FederatedLoginMetadata(
+                        provider=provider.id,
+                        provider_subject="",
+                        failure_reason=f"id_token_invalid: {type(e).__name__}",
+                    ),
                 )
                 raise HTTPException(status_code=400, detail="ID token validation failed") from e
 
@@ -466,16 +492,14 @@ async def federation_callback(
                     path=settings.auth_cookie_path,
                 )
                 await audit_service.log_event(
-                    event_type="federation_login_success",
+                    event_type=AuditEventType.FEDERATED_LOGIN_SUCCESS,
                     user_id=user.id,
                     email=user.email,
-                    metadata={
-                        "provider_id": resolved_provider_id,
-                        "provider_label": provider.label,
-                        "external_id": external_id,
-                        "oauth2_client_id": oauth2_ctx["client_id"],
-                        "consent_cached": True,
-                    },
+                    metadata=FederatedLoginMetadata(
+                        provider=resolved_provider_id,
+                        provider_subject=external_id,
+                        email_verified=True,
+                    ),
                 )
                 return response
 
@@ -517,30 +541,27 @@ async def federation_callback(
             )
 
             await audit_service.log_event(
-                event_type="federation_login_success",
+                event_type=AuditEventType.FEDERATED_LOGIN_SUCCESS,
                 user_id=user.id,
                 email=user.email,
-                metadata={
-                    "provider_id": resolved_provider_id,
-                    "provider_label": provider.label,
-                    "external_id": external_id,
-                    "state_jti": state_claims.get("jti"),
-                    "oauth2_client_id": oauth2_ctx["client_id"],
-                },
+                metadata=FederatedLoginMetadata(
+                    provider=resolved_provider_id,
+                    provider_subject=external_id,
+                    email_verified=True,
+                ),
             )
 
             return response
 
         await audit_service.log_event(
-            event_type="federation_login_success",
+            event_type=AuditEventType.FEDERATED_LOGIN_SUCCESS,
             user_id=user.id,
             email=user.email,
-            metadata={
-                "provider_id": resolved_provider_id,
-                "provider_label": provider.label,
-                "external_id": external_id,
-                "state_jti": state_claims.get("jti"),
-            },
+            metadata=FederatedLoginMetadata(
+                provider=resolved_provider_id,
+                provider_subject=external_id,
+                email_verified=True,
+            ),
         )
 
         settings = get_settings()
@@ -572,13 +593,13 @@ async def federation_callback(
         raise
     except Exception as e:
         await audit_service.log_event(
-            event_type="federation_login_failed",
+            event_type=AuditEventType.FEDERATED_LOGIN_FAILED,
             email="unknown",
-            metadata={
-                "provider_id": provider_id,
-                "provider_label": provider.label,
-                "error": str(e),
-            },
+            metadata=FederatedLoginMetadata(
+                provider=provider_id or provider.id,
+                provider_subject="",
+                failure_reason=str(e),
+            ),
         )
         # VAPT-073: generic detail — str(e) stays server-side (audit above).
         raise HTTPException(status_code=400, detail="Federation login failed") from e

@@ -15,12 +15,15 @@ import qrcode
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import TrustedDeviceMetadata
 from authglow.models.mfa import BackupCodeAttempt, BackupCodes, TrustedDevice
 from authglow.repositories.protocols import (
     BackupCodeAttemptRepository,
     BackupCodeRepository,
     TrustedDeviceRepository,
 )
+from authglow.services.audit import AuditService
 from authglow.services.password import hash_password
 
 
@@ -77,6 +80,7 @@ class MFAService:
         self._attempts_repo = backup_code_attempt_repository or get_backup_code_attempt_repository()
         self._td_repo = trusted_device_repository or get_trusted_device_repository()
         self._lock = named_lock()
+        self.audit_service = AuditService()
 
     # ------------------------------------------------------------------
     # Pure crypto / QR helpers — no I/O
@@ -240,6 +244,17 @@ class MFAService:
             expires_at=utcnow() + timedelta(days=30),
         )
         await self._td_repo.add(device)
+
+        # Audit: trusted device added
+        await self.audit_service.log_event(
+            event_type=AuditEventType.TRUSTED_DEVICE_ADDED,
+            user_id=user_id,
+            metadata=TrustedDeviceMetadata(
+                device_fingerprint=device_fingerprint,
+                device_name=device_name,
+                expires_at=device.expires_at,
+            ),
+        )
         return device
 
     async def is_device_trusted(self, user_id: str, device_fingerprint: str) -> bool:
@@ -269,6 +284,8 @@ class MFAService:
 
     async def remove_trusted_device(self, device_id: str) -> bool:
         """Remove a trusted device."""
+        # We can't easily get user_id here without fetching the device first
+        # The API layer will handle audit logging
         return await self._td_repo.delete(device_id)
 
     async def cleanup_expired_devices(self):

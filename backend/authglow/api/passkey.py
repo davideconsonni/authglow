@@ -11,6 +11,8 @@ from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import PasskeyAuthenticatedMetadata, PasskeyRegisteredMetadata
 from authglow.models.claim_policy import ClaimTarget
 from authglow.models.passkey import (
     PasskeyAuthenticationVerification,
@@ -166,6 +168,20 @@ async def complete_registration(
             name=verification.name,
         )
 
+        # Audit: passkey registered
+        audit_service = AuditService()
+        await audit_service.log_event(
+            event_type=AuditEventType.PASSKEY_REGISTERED,
+            user_id=current_user.id,
+            email=current_user.email,
+            metadata=PasskeyRegisteredMetadata(
+                credential_id=passkey.credential_id,
+                aaguid=passkey.aaguid,
+                transports=passkey.transports,
+                user_verification=passkey.user_verification or "preferred",
+            ),
+        )
+
         return {
             "success": True,
             "passkey": PasskeyResponse(
@@ -182,10 +198,11 @@ async def complete_registration(
     except Exception as e:
         # VAPT-073: never leak WebAuthn library internals to the client —
         # stable generic detail, full error server-side in the audit log.
-        await AuditService().log_event(
-            event_type="passkey_registration_failed",
+        audit_service = AuditService()
+        await audit_service.log_event(
+            event_type=AuditEventType.PASSKEY_REGISTERED,
             severity="warning",
-            metadata={"error_class": type(e).__name__, "error": str(e)},
+            metadata={"error_class": type(e).__name__, "error": str(e), "success": False},
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -342,11 +359,14 @@ async def complete_authentication(
         # the same passkey; the full id is still in the
         # ``passkeys`` table for lookups.
         await audit_service.log_event(
-            event_type="passkey_login_success",
+            event_type=AuditEventType.PASSKEY_AUTHENTICATED,
             user_id=user.id,
             email=user.email,
             ip_address=request.client.host if request.client else None,
-            metadata={"credential_id": verification.credential_id[:8]},
+            metadata=PasskeyAuthenticatedMetadata(
+                credential_id=verification.credential_id,
+                sign_count=new_sign_count,
+            ),
             severity="info",
         )
 
@@ -378,10 +398,10 @@ async def complete_authentication(
     except Exception as e:
         # VAPT-073: never leak WebAuthn library internals to the client —
         # stable generic detail, full error server-side in the audit log.
-        await AuditService().log_event(
-            event_type="passkey_authentication_failed",
+        await audit_service.log_event(
+            event_type=AuditEventType.PASSKEY_AUTHENTICATED,
             severity="warning",
-            metadata={"error_class": type(e).__name__, "error": str(e)},
+            metadata={"error_class": type(e).__name__, "error": str(e), "success": False},
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -428,5 +448,16 @@ async def delete_passkey(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Passkey not found",
         )
+
+    # Audit: passkey deleted
+    audit_service = AuditService()
+    await audit_service.log_event(
+        event_type=AuditEventType.PASSKEY_DELETED,
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata=PasskeyRegisteredMetadata(
+            credential_id=credential_id,
+        ),
+    )
 
     return {"success": True, "message": "Passkey deleted"}

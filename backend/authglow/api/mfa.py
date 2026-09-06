@@ -12,6 +12,14 @@ from authglow.core.crypto import decrypt_totp_secret, encrypt_totp_secret
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import (
+    BackupCodeMetadata,
+    MFAEnabledMetadata,
+    MFAFailedMetadata,
+    MFAVerifiedMetadata,
+    TrustedDeviceMetadata,
+)
 from authglow.models.mfa import (
     MFAEnrollResponse,
     MFALoginRequest,
@@ -146,7 +154,13 @@ async def verify_mfa_enrollment(
 
     # Log MFA enabled
     await audit_service.log_event(
-        event_type="mfa_enabled", user_id=current_user.id, email=current_user.email
+        event_type=AuditEventType.MFA_ENABLED,
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata=MFAEnabledMetadata(
+            method="totp",
+            backup_codes_generated=len(backup_codes),
+        ),
     )
 
     return UserResponse(**current_user.model_dump())
@@ -188,10 +202,11 @@ async def disable_mfa(
     client_ip = request.client.host if request.client else None
 
     await audit_service.log_event(
-        event_type="mfa_disabled",
+        event_type=AuditEventType.MFA_DISABLED,
         user_id=current_user.id,
         email=current_user.email,
         ip_address=client_ip,
+        metadata=MFAEnabledMetadata(method="totp"),
         severity="warning",
     )
 
@@ -246,6 +261,16 @@ async def remove_trusted_device(
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    # Audit: trusted device removed
+    await audit_service.log_event(
+        event_type=AuditEventType.TRUSTED_DEVICE_REMOVED,
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata=TrustedDeviceMetadata(
+            device_fingerprint=device_id,
+        ),
+    )
+
     return {"message": "Device removed successfully"}
 
 
@@ -266,6 +291,17 @@ async def regenerate_backup_codes(
 
     # Save new backup codes (replaces old ones)
     await mfa_service.save_backup_codes(current_user.id, backup_codes)
+
+    # Audit: backup codes regenerated
+    await audit_service.log_event(
+        event_type=AuditEventType.BACKUP_CODES_GENERATED,
+        user_id=current_user.id,
+        email=current_user.email,
+        metadata=BackupCodeMetadata(
+            method="backup_code",
+            codes_remaining=len(backup_codes),
+        ),
+    )
 
     return {
         "message": "Backup codes regenerated successfully",
@@ -336,10 +372,15 @@ async def verify_mfa_login(
 
     if not is_valid:
         await audit_service.log_event(
-            event_type="mfa_verification_failed",
+            event_type=AuditEventType.MFA_FAILED,
             user_id=user.id,
             email=user.email,
             ip_address=request.client.host if request and request.client else None,
+            user_agent=request.headers.get("user-agent") if request else None,
+            metadata=MFAFailedMetadata(
+                method="backup_code" if is_backup_code else "totp",
+                failure_reason="invalid_code",
+            ),
             severity="warning",
         )
         from authglow.services.login_history import LoginHistoryService
@@ -360,12 +401,14 @@ async def verify_mfa_login(
 
     # Log successful login with MFA
     await audit_service.log_event(
-        event_type="login_success_with_mfa",
+        event_type=AuditEventType.MFA_VERIFIED,
         user_id=user.id,
         email=user.email,
         ip_address=request.client.host if request and request.client else None,
         user_agent=request.headers.get("user-agent") if request else None,
-        metadata={"backup_code_used": is_backup_code},
+        metadata=MFAVerifiedMetadata(
+            method="backup_code" if is_backup_code else "totp",
+        ),
     )
 
     from authglow.services.login_history import LoginHistoryService
