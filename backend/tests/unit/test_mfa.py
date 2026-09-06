@@ -42,70 +42,7 @@ class TestTOTPGeneration:
         secret = mfa_service.generate_totp_secret()
         assert not mfa_service.verify_totp(secret, "000000")
 
-    def test_mfa_enroll_and_verify_full_flow(self, mfa_service, test_settings):
-        """Test complete MFA enrollment and verification flow with encryption."""
-        import asyncio
-        from authglow.models.user import User
-        from authglow.core.crypto import encrypt_totp_secret, decrypt_totp_secret
-        from authglow.services.user import UserService
-        from authglow.services.mfa import MFAService
-
-        # Test 1: Enroll MFA
-        mfa_service_enroll = MFAService()
-        secret = mfa_service_enroll.generate_totp_secret()
-        qr_code = mfa_service_enroll.generate_qr_code(
-            mfa_service_enroll.get_totp_uri(secret, "test@example.com")
-        )
-        backup_codes = mfa_service_enroll.generate_backup_codes(10)
-
-        # Simulate enroll: encrypt secret and store
-        encrypted_secret = encrypt_totp_secret(secret)
-        
-        # Simulate user object after enrollment
-        user = User(
-            id="test-mfa-user",
-            email="test@example.com",
-            hashed_password="$2b$12$dummy",
-            mfa_secret=encrypted_secret,
-            mfa_enabled=False,
-            mfa_verified=False,
-        )
-
-        # Test 2: Verify TOTP with encrypted secret
-        mfa_service_verify = MFAService()
-        
-        # Get a valid TOTP code
-        import pyotp
-        totp = pyotp.TOTP(secret)
-        valid_code = totp.now()
-        
-        # Verify with decrypted secret
-        decrypted_secret = decrypt_totp_secret(user.mfa_secret)
-        is_valid = mfa_service_verify.verify_totp(decrypted_secret, valid_code)
-        assert is_valid, f"TOTP verification failed with valid code {valid_code}"
-
-        # Test invalid code
-        is_invalid = mfa_service_verify.verify_totp(decrypted_secret, "000000")
-        assert not is_invalid, "Invalid code should be rejected"
-
-        # Test with backup codes - use single event loop
-        async def test_backup_codes():
-            backup_codes = mfa_service.generate_backup_codes(10)
-            await mfa_service.save_backup_codes("test-user", backup_codes)
-            
-            # Test backup code verification
-            first_code = backup_codes[0]
-            is_valid = await mfa_service.verify_user_backup_code("test-user", backup_codes[0])
-            assert is_valid, "Valid backup code should be accepted"
-            
-            # Second use should fail (single-use)
-            is_valid_second = await mfa_service.verify_user_backup_code("test-user", backup_codes[0])
-            assert not is_valid_second, "Backup code should be single-use"
-            
-            return True
-        
-        asyncio.run(test_backup_codes())
-        print("All MFA integration tests passed!")
+    
     def test_generate_backup_codes_format(self, mfa_service):
         codes = mfa_service.generate_backup_codes(10)
         assert len(codes) == 10
@@ -543,7 +480,7 @@ class TestMFAVerifyRequestModel:
         code = totp.now()
         assert len(code) == 6
 
-def test_mfa_enroll_and_verify_full_flow(self, mfa_service, test_settings):
+    def test_mfa_enroll_and_verify_full_flow(self, mfa_service, test_settings):
         """Test complete MFA enrollment and verification flow with encryption."""
         import asyncio
         from authglow.models.user import User
