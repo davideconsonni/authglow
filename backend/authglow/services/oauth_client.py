@@ -236,3 +236,48 @@ def _default_repository(settings: Settings) -> OAuth2ClientRepository:
     )
 
     return FileOAuth2ClientRepository(settings)
+
+
+# ``offline_access`` keeps the dashboard's browser session backed by a
+# refresh token once the OIDC §11 gate on third-party code/device flows
+# is in effect (see the token endpoint).
+FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin offline_access"
+
+
+def first_party_oauth_client(settings: Settings) -> OAuth2Client:
+    """Build the configured public client used by the AuthGlow dashboard."""
+    return OAuth2Client(
+        client_id=settings.oauth2_client_id,
+        client_secret="first-party-public-client",
+        client_name="AuthGlow Dashboard",
+        redirect_uris=[settings.oauth2_first_party_redirect_uri],
+        allowed_scopes=FIRST_PARTY_OAUTH_SCOPES.split(),
+        grant_types=["authorization_code", "refresh_token"],
+        is_confidential=False,
+        require_pkce=True,
+        require_consent=False,
+        token_endpoint_auth_method="none",
+    )
+
+
+async def ensure_first_party_client(settings: Optional[Settings] = None) -> bool:
+    """Persist the first-party dashboard client if it is not on disk yet.
+
+    The dashboard client used to exist only as a settings-derived
+    in-memory fallback scattered across endpoints, so any endpoint doing
+    a strict repository lookup (e.g. ``verify_oauth_mfa_login``) failed
+    with "Invalid or inactive OAuth client" on a deployment where the
+    client had never been created. The client is a normal, persisted
+    client — just auto-created at startup, like the demo user.
+
+    Idempotent: returns ``True`` when the client was created now,
+    ``False`` when it already existed (admin-configured state is left
+    untouched — no re-activation, no secret rotation).
+    """
+    settings = settings or get_settings()
+    storage = OAuth2ClientStorage(settings=settings)
+    existing = await storage.get_client(settings.oauth2_client_id)
+    if existing is not None:
+        return False
+    await storage.create_client(first_party_oauth_client(settings), "first-party-public-client")
+    return True

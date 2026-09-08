@@ -558,6 +558,10 @@ async def verify_oauth_mfa_login(
     await session_service.delete_mfa_session(login_request.session_token)
 
     client = await client_storage.get_client(session.client_id)
+    # Strict repository lookup on purpose: the first-party client is
+    # auto-persisted at startup (see ``ensure_first_party_client``), so
+    # a missing client is a real configuration error — surfaced, not
+    # papered over.
     if not client or not client.is_active:
         raise HTTPException(status_code=400, detail="Invalid or inactive OAuth client")
 

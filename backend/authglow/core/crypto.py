@@ -27,6 +27,7 @@ _AAD_LEGACY = b"authglow-totp"
 _KEY_PREFIX = "agk1:"
 _KEY_INFO = b"authglow-key-encryption-v1"
 
+
 # VAPT-041: same pattern for the RSA-private-key AAD. Legacy
 # value kept for backward-compatible decryption of any
 # pre-versioning ciphertext (the keyring was added in Fase 20
@@ -139,7 +140,7 @@ def decrypt_totp_secret(ciphertext: str, *, _allow_legacy_double: bool = True) -
         return ciphertext
     if not ciphertext.startswith(_PREFIX):
         return ciphertext
-    raw = base64.b64decode(ciphertext[len(_PREFIX):])
+    raw = base64.b64decode(ciphertext[len(_PREFIX) :])
     iv = raw[:12]
     encrypted = raw[12:]
     key = _derive_key()

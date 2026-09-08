@@ -54,6 +54,7 @@ from authglow.services.email_verification import EmailVerificationService
 from authglow.services.jwt import JWTService
 from authglow.services.mfa import BackupCodeLockedException, MFAService
 from authglow.services.oauth2 import OAuth2Service
+from authglow.services.oauth_client import FIRST_PARTY_OAUTH_SCOPES, first_party_oauth_client
 from authglow.services.oidc_claims import (
     ClaimsParameterError,
     parse_claims_parameter,
@@ -73,26 +74,15 @@ UserStorage = UserService
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/oauth2/token", auto_error=False)
 FIRST_PARTY_BROWSER_CLIENT_ID = "password_grant"
-# ``offline_access`` keeps the dashboard's browser session backed by a
-# refresh token once the OIDC §11 gate on third-party code/device flows
-# is in effect (see the token endpoint).
-FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin offline_access"
 
 
 def _first_party_oauth_client(settings: Settings) -> OAuth2Client:
-    """Build the configured public client used by the AuthGlow dashboard."""
-    return OAuth2Client(
-        client_id=settings.oauth2_client_id,
-        client_secret="first-party-public-client",
-        client_name="AuthGlow Dashboard",
-        redirect_uris=[settings.oauth2_first_party_redirect_uri],
-        allowed_scopes=FIRST_PARTY_OAUTH_SCOPES.split(),
-        grant_types=["authorization_code", "refresh_token"],
-        is_confidential=False,
-        require_pkce=True,
-        require_consent=False,
-        token_endpoint_auth_method="none",
-    )
+    """Build the configured public client used by the AuthGlow dashboard.
+
+    Delegates to the service-layer builder (single source of truth —
+    the same function used by the startup auto-persistence).
+    """
+    return first_party_oauth_client(settings)
 
 
 def _cookie_kwargs(settings: Settings) -> dict:
@@ -1780,7 +1770,7 @@ async def token_endpoint(
                 client_id=resolved_client_id,
                 old_token_id=refresh_token[:32] + "...",  # Truncated for privacy
                 new_token_id=access_token_id,
-                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, 'family_id') else None,
+                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
                 rotation=True,
                 reused=False,
             ),
@@ -1791,21 +1781,23 @@ async def token_endpoint(
             rt_data = jwt_service.decode_token(new_rt.token)
             refresh_token_id = rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
             await audit_service.log_event(
-            event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
-            user_id=user.id,
-            email=user.email,
-            client_id=resolved_client_id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            metadata=TokenRefreshedMetadata(
+                event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
+                user_id=user.id,
+                email=user.email,
                 client_id=resolved_client_id,
-                old_token_id=refresh_token[:32] + "...",
-                new_token_id=refresh_token_id,
-                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, 'family_id') else None,
-                rotation=True,
-                reused=False,
-            ),
-        )
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                metadata=TokenRefreshedMetadata(
+                    client_id=resolved_client_id,
+                    old_token_id=refresh_token[:32] + "...",
+                    new_token_id=refresh_token_id,
+                    refresh_token_family_id=new_rt.family_id
+                    if hasattr(new_rt, "family_id")
+                    else None,
+                    rotation=True,
+                    reused=False,
+                ),
+            )
 
         # Set httpOnly auth cookies
         _set_auth_cookies(response, access_token_response.access_token, new_rt.token, settings)
@@ -2379,6 +2371,7 @@ async def oauth2_mfa_verify(
         if is_valid:
             # Self-heal legacy double-encrypted secrets on successful login.
             from authglow.api.mfa import _self_heal_mfa_secret
+
             await _self_heal_mfa_secret(user, storage, plain_secret)
 
     if not is_valid and len(code) >= 8:

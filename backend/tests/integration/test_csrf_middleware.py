@@ -154,3 +154,36 @@ class TestCsrfMiddlewareGate:
             return {"ok": True}
 
         assert client.get("/api/echo").status_code == 200
+
+
+class TestCsrfRejectionCarriesCorsHeaders:
+    """Regression (main.py middleware order): CORS must wrap CSRF so
+    that its 403 rejections reach the browser with CORS headers.
+
+    A CSRF 403 generated OUTSIDE ``CORSMiddleware`` leaves the server
+    with no ``Access-Control-Allow-Origin``, so the browser blocks the
+    response and the SPA sees a generic CORS failure instead of the
+    real status — which also silently defeats the retry-on-403-CSRF
+    logic in ``api.ts`` (stale token after TOKEN_EXPIRY_SECONDS never
+    gets refreshed). Mirrors the production stack order: CORS is added
+    AFTER CSRFMiddleware, so it is the outer of the two.
+    """
+
+    def test_csrf_403_carries_acao_header(self, _csrf_app, test_settings):
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app = _csrf_app
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=test_settings.get_cors_origins(),
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        client = TestClient(app)
+        client.cookies.set(test_settings.auth_cookie_access_name, "jwt", domain="testserver.local")
+        allowed_origin = test_settings.get_cors_origins()[0]
+        response = client.post("/api/echo", headers={"Origin": allowed_origin})
+        assert response.status_code == 403
+        assert "CSRF" in response.json()["detail"]
+        assert response.headers.get("access-control-allow-origin") == allowed_origin

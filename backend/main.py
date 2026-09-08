@@ -121,6 +121,18 @@ async def lifespan(app: FastAPI):
     capture_pristine(settings_override_service.settings)
     await settings_override_service.refresh_if_changed()
 
+    # Auto-persist the first-party dashboard client. It is a normal,
+    # persisted client — just created automatically on first boot (and
+    # after a data reset), like the demo user below. Endpoints must be
+    # able to rely on a strict repository lookup.
+    from authglow.services.oauth_client import ensure_first_party_client
+
+    if await ensure_first_party_client():
+        logger.info(
+            "FIRST_PARTY_OAUTH_CLIENT_CREATED",
+            client_id=settings.oauth2_client_id,
+        )
+
     refresher_task = asyncio.create_task(
         _admin_config_refresher(rate_limit_config_service, settings_override_service)
     )
@@ -176,14 +188,6 @@ app.state.limiter = limiter
 register_oauth2_error_handler(app)
 register_global_error_handler(app)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.get_cors_origins(),
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.get_cors_methods(),
-    allow_headers=settings.get_cors_headers(),
-)
-
 app.add_middleware(ProxyHeadersMiddleware)
 
 app.add_middleware(SlowAPIMiddleware)
@@ -192,6 +196,21 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(HttpsEnforcementMiddleware)
 app.add_middleware(CSRFMiddleware)
+# CORSMiddleware sits OUTSIDE the CSRF gate but inside RequestID.
+# Middleware responses generated above CORS (CSRF 403 rejections,
+# rate-limit 429s, HTTPS redirects) leave the server without an
+# ``Access-Control-Allow-Origin`` header, so the browser blocks them
+# and the SPA sees a generic CORS failure instead of the real status —
+# which also silently defeats api.ts's retry-on-403-CSRF logic. With
+# CORS here, every response the browser can observe carries the CORS
+# headers whenever the Origin is allow-listed.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.get_cors_origins(),
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.get_cors_methods(),
+    allow_headers=settings.get_cors_headers(),
+)
 # VAPT-042: RequestIDMiddleware is added LAST so it is the
 # outermost wrapper. The contextvar is set before any other
 # middleware or the app code runs, so every structlog
