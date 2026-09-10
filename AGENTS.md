@@ -159,6 +159,16 @@ Lazy imports inside functions for circular-dependency avoidance.
 - `pytest.raises` for exception testing.
 - Test files: `tests/unit/`, `tests/integration/`, `tests/conftest.py`.
 
+**New protocol/conformance tests — isolation precautions:**
+
+- New test packages (e.g. `tests/conformance/`) get their OWN `conftest.py` — never modify root `tests/conftest.py` for a new area.
+- Fixtures must depend on `test_settings` (`tmp_path`-backed) and pass `settings=` explicitly to every service/storage/factory ctor (lru_cache-bypass pattern) — otherwise tests poison each other under `-n auto`.
+- Keep `bcrypt_rounds=4` from `test_settings` — never raise it in fixtures (each `create_client` would cost ~25x).
+- No real-looking secrets: runtime values via `secrets.token_urlsafe()`, RSA keys via `_generate_rsa_keys()` from root conftest.
+- Known-gap tests use `pytest.mark.xfail(strict=True, reason="OA-xxx: <description>")` so a future fix surfaces as XPASS instead of staying silently green.
+- Prefer REAL storage/clients over `MagicMock` for wire-format assertions (mocks are fine only for pure HTTP-shape tests) — otherwise you test the mock, not the protocol.
+- Few requests per test against rate-limited endpoints (slowapi counters are shared per worker — excess calls cause flaky 429s).
+
 **Running tests — token-saving rules:**
 
 - When running the full suite, always use `pytest -q --tb=line -n auto` to minimize output.
