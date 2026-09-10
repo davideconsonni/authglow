@@ -512,6 +512,7 @@ async def logout_get(
                 f'?{urlencode({"iss": issuer, "sid": sid})}" '
                 f'style="display:none"></iframe>'
                 for c in frontchannel_clients
+                if c.frontchannel_logout_uri is not None
             )
             redirect_url = post_logout_redirect_uri
             if state:
