@@ -1171,26 +1171,32 @@ async def bulk_user_operation(
     # Log action
     if operation.operation in ("assign_scope", "remove_scope"):
         event_type = AuditEventType.ADMIN_SCOPE_ASSIGNED if operation.operation == "assign_scope" else AuditEventType.ADMIN_SCOPE_REMOVED
+        _last_user = locals().get("user")
         await audit_service.log_event(
             event_type=event_type,
             user_id=current_user.id,
             email=current_user.email,
             metadata=AdminScopeMetadata(
                 target_user_id=user_id,
-                target_user_email_hash=user.email if 'user' in locals() else "unknown",
+                target_user_email_hash=_last_user.email
+                if isinstance(_last_user, User)
+                else "unknown",
                 admin_user_id=current_user.id,
                 admin_user_email_hash=current_user.email,
                 scopes=[operation.scope] if operation.scope else [],
             ),
         )
     else:
+        _last_user = locals().get("user")
         await audit_service.log_event(
             event_type=AuditEventType.ADMIN_USER_UPDATED,
             user_id=current_user.id,
             email=current_user.email,
             metadata=AdminActionMetadata(
                 target_user_id=user_id,
-                target_user_email_hash=user.email if 'user' in locals() else "unknown",
+                target_user_email_hash=_last_user.email
+                if isinstance(_last_user, User)
+                else "unknown",
                 admin_user_id=current_user.id,
                 admin_user_email_hash=current_user.email,
             ),
