@@ -1,0 +1,88 @@
+# OWASP ZAP Automation Framework — full active scan, unauthenticated.
+#
+# INVASIVE: sends attack payloads and may create/modify/delete data in the
+# running instance. Back up `backend/data/` before running (run-zap.ps1 does
+# it automatically).
+#
+# Covers the SPA via AJAX spider (client-side routing) and the FastAPI
+# surface via the OpenAPI definition + active scan.
+#
+# Placeholders substituted by run-zap.ps1:
+#   __REPORT_DIR__  output directory for this run (host path, or /zap/reports in Docker)
+#   __FRONTEND__    frontend base URL (e.g. http://localhost:5173)
+#   __API__         API base URL      (e.g. http://localhost:8001)
+env:
+  contexts:
+    - name: authglow-frontend
+      urls:
+        - __FRONTEND__
+      includePaths:
+        - __FRONTEND__.*
+    - name: authglow-api
+      urls:
+        - __API__
+      includePaths:
+        - __API__.*
+  parameters:
+    failOnError: false
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # --- SPA (client-side routed) ---
+  - type: spiderAjax
+    parameters:
+      context: authglow-frontend
+      browserId: firefox-headless
+      maxDuration: 5
+      maxCrawlDepth: 5
+
+  # --- API: import the OpenAPI schema, then crawl ---
+  - type: openapi
+    parameters:
+      apiUrl: __API__/openapi.json
+      targetUrl: __API__
+      context: authglow-api
+
+  - type: spider
+    parameters:
+      context: authglow-api
+      maxDuration: 3
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  # --- Active scan (bounded) ---
+  - type: activeScan
+    parameters:
+      context: authglow-frontend
+      maxRuleDurationInMins: 2
+      maxScanDurationInMins: 15
+      threadPerHost: 4
+
+  - type: activeScan
+    parameters:
+      context: authglow-api
+      maxRuleDurationInMins: 2
+      maxScanDurationInMins: 20
+      threadPerHost: 4
+
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: __REPORT_DIR__
+      reportFile: full.html
+      reportTitle: "AuthGlow VAPT — full active scan"
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: __REPORT_DIR__
+      reportFile: full.json
+
+  - type: report
+    parameters:
+      template: traditional-md
+      reportDir: __REPORT_DIR__
+      reportFile: full.md

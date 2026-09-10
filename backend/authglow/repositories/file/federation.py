@@ -36,11 +36,27 @@ deprecation shim for ``FederationService``, see
 ``services/federation.py`` and the Fase 18 pattern).
 """
 
+import re
 from typing import Any, Dict, List, Optional
 
 from authglow.models.federation import ExternalIdpConfig
 from authglow.repositories.file.base import BaseFileRepository
 from authglow.repositories.protocols import FederationProviderRepository
+
+# A provider id is used verbatim as a filename component. Restrict it to a
+# conservative, cross-backend-safe set so a caller-supplied value can never
+# escape the federation directory (``../``), break the path on Windows
+# (``"``, ``:``, ``\``) or hit a cloud key restriction.
+_PROVIDER_ID_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+
+
+def _is_safe_provider_id(provider_id: Any) -> bool:
+    """Return ``True`` when *provider_id* is safe as a path component."""
+    return (
+        isinstance(provider_id, str)
+        and ".." not in provider_id
+        and _PROVIDER_ID_PATTERN.match(provider_id) is not None
+    )
 
 
 class FileFederationProviderRepository(BaseFileRepository, FederationProviderRepository):
@@ -57,7 +73,13 @@ class FileFederationProviderRepository(BaseFileRepository, FederationProviderRep
     # ------------------------------------------------------------------
 
     def _provider_path(self, provider_id: str) -> str:
-        """Return the on-disk path for a provider file."""
+        """Return the on-disk path for a provider file.
+
+        Raises :class:`ValueError` for an unsafe id so write paths fail
+        closed; read paths validate first and return "not found".
+        """
+        if not _is_safe_provider_id(provider_id):
+            raise ValueError(f"Unsafe provider_id: {provider_id!r}")
         return self._path(f"{provider_id}.json")
 
     # ------------------------------------------------------------------
@@ -90,7 +112,13 @@ class FileFederationProviderRepository(BaseFileRepository, FederationProviderRep
         ``_read_json`` helper swallows ``FileNotFoundError``
         and ``(ValueError, TypeError)`` so the service layer
         can treat missing and corrupt providers uniformly.
+
+        Ids are validated first: an unsafe id (path separators,
+        traversal, filename-illegal characters) yields ``None``
+        (→ "provider not found") instead of an ``OSError``/500.
         """
+        if not _is_safe_provider_id(provider_id):
+            return None
         data = await self._read_json(self._provider_path(provider_id))
         if not isinstance(data, dict):
             return None
@@ -135,7 +163,13 @@ class FileFederationProviderRepository(BaseFileRepository, FederationProviderRep
     # ------------------------------------------------------------------
 
     async def delete(self, provider_id: str) -> bool:
-        """Remove the provider. Returns ``True`` if it existed."""
+        """Remove the provider. Returns ``True`` if it existed.
+
+        An unsafe id is a no-op (``False``) — it can never map to a
+        file inside the federation directory.
+        """
+        if not _is_safe_provider_id(provider_id):
+            return False
         return await self._delete(self._provider_path(provider_id))
 
     # ------------------------------------------------------------------

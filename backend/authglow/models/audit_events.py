@@ -63,6 +63,7 @@ class AuditEventType(str, Enum):
     PASSKEY_REGISTERED = "passkey_registered"
     PASSKEY_REGISTRATION_FAILED = "passkey_registration_failed"
     PASSKEY_AUTHENTICATED = "passkey_authenticated"
+    PASSKEY_AUTHENTICATION_FAILED = "passkey_authentication_failed"
     PASSKEY_DELETED = "passkey_deleted"
     TRUSTED_DEVICE_ADDED = "trusted_device_added"
     TRUSTED_DEVICE_REMOVED = "trusted_device_removed"
@@ -189,6 +190,7 @@ class AuditEventType(str, Enum):
             "login_failed",
             "mfa_failed",
             "backup_code_failed",
+            "passkey_authentication_failed",
             "federated_login_failed",
             "authorization_code_redeemed",  # could be replay
             "refresh_token_rotated",  # rotation is sensitive

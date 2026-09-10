@@ -215,6 +215,27 @@ class TestFileFederationProviderRepository:
         path.write_text("not valid json {")
         assert await repo.get_by_id("corrupt") is None
 
+    # ----- unsafe-id hardening (VAPT) -----
+
+    async def test_unsafe_provider_id_is_treated_as_missing(self, test_settings):
+        """A malformed ``provider_id`` must not raise (→ HTTP 500) and must
+        never escape the federation directory: reads return ``None`` and
+        deletes are a no-op.
+        """
+        repo = self._make_repo(test_settings)
+        for bad in ['"', "../escape", "a/b", "a\\b", ".", "", "a:b", "*"]:
+            assert await repo.get_by_id(bad) is None
+            assert await repo.delete(bad) is False
+
+    async def test_create_rejects_unsafe_id(self, test_settings):
+        """Write paths fail closed on an unsafe id instead of writing
+        outside the federation directory."""
+        import pytest
+
+        repo = self._make_repo(test_settings)
+        with pytest.raises(ValueError):
+            await repo.create(_make_provider('"'))
+
 
 # ---------------------------------------------------------------------------
 # Patched-settings construction smoke test

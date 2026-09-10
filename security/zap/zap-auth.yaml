@@ -1,0 +1,120 @@
+# OWASP ZAP Automation Framework — authenticated full scan.
+#
+# Uses Browser-based Authentication (Authentication Helper add-on):
+# ZAP drives a headless browser to the login page, fills the credentials,
+# submits, and keeps the session cookies for spidering/scanning.
+#
+# Session cookies are host-scoped (not port-scoped), so the same context
+# covers both the SPA (:5173) and the API (:8001).
+#
+# INVASIVE: sends attack payloads and may create/modify/delete data in the
+# running instance. Back up `backend/data/` before running (run-zap.ps1 does
+# it automatically).
+#
+# Placeholders substituted by run-zap.ps1 (never committed):
+#   __REPORT_DIR__      output directory for this run (host path, or /zap/reports in Docker)
+#   __FRONTEND__        frontend base URL (e.g. http://localhost:5173)
+#   __API__             API base URL      (e.g. http://localhost:8001)
+#   __DEMO_PASSWORD__   live demo password read from GET /api/meta
+env:
+  contexts:
+    - name: authglow-auth
+      urls:
+        - __FRONTEND__
+        - __API__
+      includePaths:
+        - __FRONTEND__.*
+        - __API__.*
+      authentication:
+        method: browser
+        parameters:
+          loginPageUrl: __FRONTEND__/auth/login
+          loginPageWait: 5
+          stepDelay: 1
+          browserId: firefox-headless
+          diagnostics: true
+          steps:
+            - description: "Email"
+              type: USERNAME
+              cssSelector: 'input[type="email"]'
+              timeout: 10000
+            - description: "Password"
+              type: PASSWORD
+              cssSelector: '#password'
+              timeout: 10000
+            - description: "Submit"
+              type: CLICK
+              cssSelector: 'button[type="submit"]'
+              timeout: 10000
+        verification:
+          method: poll
+          pollUrl: __API__/api/users/me
+          pollUnits: requests
+          pollFrequency: 5
+          loggedInRegex: '"email"'
+          loggedOutRegex: '"detail"'
+      sessionManagement:
+        method: cookie
+      users:
+        - name: demo-admin
+          credentials:
+            username: admin@example.com
+            password: __DEMO_PASSWORD__
+  parameters:
+    failOnError: false
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # --- SPA (client-side routed), authenticated ---
+  - type: spiderAjax
+    parameters:
+      context: authglow-auth
+      user: demo-admin
+      browserId: firefox-headless
+      maxDuration: 3
+      maxCrawlDepth: 4
+
+  # --- API: import the OpenAPI schema, then crawl authenticated ---
+  - type: openapi
+    parameters:
+      apiUrl: __API__/openapi.json
+      targetUrl: __API__
+      context: authglow-auth
+
+  - type: spider
+    parameters:
+      context: authglow-auth
+      user: demo-admin
+      maxDuration: 2
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  - type: activeScan
+    parameters:
+      context: authglow-auth
+      user: demo-admin
+      maxRuleDurationInMins: 1
+      maxScanDurationInMins: 5
+      threadPerHost: 6
+
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: __REPORT_DIR__
+      reportFile: auth.html
+      reportTitle: "AuthGlow VAPT — authenticated scan"
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: __REPORT_DIR__
+      reportFile: auth.json
+
+  - type: report
+    parameters:
+      template: traditional-md
+      reportDir: __REPORT_DIR__
+      reportFile: auth.md

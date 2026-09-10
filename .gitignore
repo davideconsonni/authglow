@@ -219,3 +219,8 @@ nul
 .serena/
 .agents/skills/international-english-writing
 .agents/skills/italian-common-writing
+
+# Security scans (VAPT)
+/security/reports/
+/security/backups/
+/security/zap/zap/

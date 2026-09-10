@@ -1,0 +1,39 @@
+# VAPT reports
+
+Results of the local ZAP scans (OWASP ZAP 2.17.0 in Docker, official
+`zaproxy/zap-stable` image). Scanned 2026-09-11 against the local dev stack:
+
+| Target                | URL                     |
+|-----------------------|-------------------------|
+| SPA (Vite dev server) | `http://localhost:5173` |
+| API (FastAPI)         | `http://localhost:8001` |
+
+> These scans assess the **development setup**, not the production artifact.
+> The Vite dev server is not the built SPA (the single-container image serves the
+> pre-built SPA from the backend). Findings located on `:5173` are dev-only unless
+> stated otherwise.
+
+## Runs
+
+| Directory                                             | Mode             | Auth                       | Summary                         |
+|-------------------------------------------------------|------------------|----------------------------|---------------------------------|
+| [20260911-001810-baseline](20260911-001810-baseline/) | passive baseline | no                         | 3 Medium, 1 Low, 2 Info         |
+| [20260911-001909-full](20260911-001909-full/)         | active full      | no                         | 2 High, 5 Medium, 4 Low, 6 Info |
+| [20260911-004542-auth](20260911-004542-auth/)         | active full      | browser login (demo admin) | 4 Medium, 3 Low, 4 Info         |
+
+Each directory contains `*.html` (readable), `*.json` (machine-readable) and
+`*.md` (Markdown summary).
+
+## Reproduce
+
+```powershell
+pwsh -File security/zap/run-zap.ps1 -Mode baseline -Docker
+pwsh -File security/zap/run-zap.ps1 -Mode full -Docker
+pwsh -File security/zap/run-zap.ps1 -Mode auth -Docker
+```
+
+See `security/zap/README.md` for prerequisites and configuration.
+
+## Remediation
+
+Tracked in [`../plans/active/zap-vapt-remediation-plan.md`](../plans/active/zap-vapt-remediation-plan.md).

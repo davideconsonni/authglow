@@ -715,3 +715,45 @@ class TestAllEventTypes:
         for event in api_key_events:
             schema = get_metadata_schema(event)
             assert schema is not None, f"Missing schema for {event}"
+
+
+class TestPasskeyAuthenticationFailedEvent:
+    """ZAP-002: failed passkey auth logs a failure event instead of raising."""
+
+    def test_event_type_registered(self):
+        from authglow.models.audit_metadata import (
+            PasskeyAuthenticationFailedMetadata,
+            get_metadata_schema,
+        )
+
+        assert AuditEventType.PASSKEY_AUTHENTICATION_FAILED.value == "passkey_authentication_failed"
+        assert AuditEventType.PASSKEY_AUTHENTICATION_FAILED.category == "mfa"
+        assert AuditEventType.PASSKEY_AUTHENTICATION_FAILED.default_severity == "warning"
+        assert (
+            get_metadata_schema("passkey_authentication_failed")
+            is PasskeyAuthenticationFailedMetadata
+        )
+
+    def test_failure_metadata_validates(self):
+        from authglow.models.audit_metadata import validate_metadata
+
+        validated = validate_metadata(
+            "passkey_authentication_failed",
+            {"error_class": "UnicodeDecodeError", "error": "boom", "success": False},
+        )
+        assert validated["error_class"] == "UnicodeDecodeError"
+        assert validated["success"] is False
+
+    def test_validate_metadata_degrades_instead_of_raising(self):
+        """A metadata payload that mismatches its schema must not raise.
+
+        ``passkey_authenticated`` requires ``sign_count``; a failure-shaped
+        payload does not provide it. Raising here would turn a handled 400
+        into a 500 (the ZAP-002 bug).
+        """
+        from authglow.models.audit_metadata import validate_metadata
+
+        result = validate_metadata("passkey_authenticated", {"error": "x", "success": False})
+        assert isinstance(result, dict)
+        assert result["error"] == "x"
+

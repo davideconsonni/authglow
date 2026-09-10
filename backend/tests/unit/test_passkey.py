@@ -141,3 +141,39 @@ class TestPasskeyAuditCredentialIdTruncation:
         truncated = credential_id[:8]
         assert len(truncated) == 8
         assert truncated == "a1B2c3D4"
+
+
+class TestCompleteAuthenticationErrorHandling:
+    """ZAP-002: malformed passkey-auth input must return 400, never 500."""
+
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from slowapi.middleware import SlowAPIMiddleware
+
+        from authglow.api import passkey as passkey_api
+        from authglow.core.rate_limit import limiter
+
+        app = FastAPI()
+        app.state.limiter = limiter
+        app.add_middleware(SlowAPIMiddleware)
+        app.include_router(passkey_api.router)
+        app.dependency_overrides[passkey_api.get_passkey_service] = lambda: MagicMock()
+        app.dependency_overrides[passkey_api.get_jwt_service] = lambda: MagicMock()
+        app.dependency_overrides[passkey_api.get_user_storage] = lambda: MagicMock()
+        return TestClient(app)
+
+    def test_malformed_body_returns_400_not_500(self):
+        client = self._client()
+        resp = client.post(
+            "/api/passkey/auth/complete",
+            json={
+                "credential_id": "x",
+                "client_data_json": "!!!not-base64!!!",
+                "authenticator_data": "x",
+                "signature": "x",
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        assert "Internal server error" not in resp.text
+

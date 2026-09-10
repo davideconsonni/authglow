@@ -406,8 +406,11 @@ async def complete_authentication(
     except Exception as e:
         # VAPT-073: never leak WebAuthn library internals to the client —
         # stable generic detail, full error server-side in the audit log.
+        # ZAP-002: log the *failure* event (not PASSKEY_AUTHENTICATED, whose
+        # schema requires sign_count and used to raise inside this handler,
+        # turning the intended 400 into a 500).
         await audit_service.log_event(
-            event_type=AuditEventType.PASSKEY_AUTHENTICATED,
+            event_type=AuditEventType.PASSKEY_AUTHENTICATION_FAILED,
             severity="warning",
             metadata={"error_class": type(e).__name__, "error": str(e), "success": False},
         )

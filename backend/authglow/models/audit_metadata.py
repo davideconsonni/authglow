@@ -8,7 +8,10 @@ to ensure consistent, queryable metadata.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+import structlog
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+_logger = structlog.get_logger("authglow.audit")
 
 
 class BaseAuditMetadata(BaseModel):
@@ -215,6 +218,14 @@ class PasskeyRegisteredMetadata(PasskeyMetadata):
 
 class PasskeyRegistrationFailedMetadata(PasskeyMetadata):
     """Metadata for failed passkey registration."""
+
+    error_class: str
+    error: str
+    success: bool = False
+
+
+class PasskeyAuthenticationFailedMetadata(PasskeyMetadata):
+    """Metadata for failed passkey authentication."""
 
     error_class: str
     error: str
@@ -547,6 +558,7 @@ METADATA_SCHEMAS: Dict[str, type[BaseAuditMetadata]] = {
     "passkey_registered": PasskeyRegisteredMetadata,
     "passkey_registration_failed": PasskeyRegistrationFailedMetadata,
     "passkey_authenticated": PasskeyAuthenticatedMetadata,
+    "passkey_authentication_failed": PasskeyAuthenticationFailedMetadata,
     "passkey_deleted": PasskeyMetadata,
     "trusted_device_added": TrustedDeviceMetadata,
     "trusted_device_removed": TrustedDeviceMetadata,
@@ -614,7 +626,11 @@ def validate_metadata(event_type: str, metadata: Dict[str, Any]) -> Dict[str, An
     """Validate metadata against schema for event type.
 
     Returns the validated metadata dict (with defaults applied).
-    Raises ValidationError if metadata is invalid.
+
+    Validation is best-effort: if the typed schema rejects the payload (e.g.
+    a failure path reuses an event whose schema requires a field it does not
+    set), the raw metadata is returned and a warning is logged. The audit
+    layer must never raise and turn a handled 4xx into a 500.
     Only validates when metadata is non-empty to allow optional metadata.
     """
     if not metadata:
@@ -622,5 +638,14 @@ def validate_metadata(event_type: str, metadata: Dict[str, Any]) -> Dict[str, An
     schema = get_metadata_schema(event_type)
     if schema is None:
         return metadata
-    validated = schema(**metadata)
+    try:
+        validated = schema(**metadata)
+    except ValidationError as exc:
+        _logger.warning(
+            "audit_metadata_validation_failed",
+            event_type=event_type,
+            error_class=type(exc).__name__,
+            reason=str(exc),
+        )
+        return metadata
     return validated.to_dict()

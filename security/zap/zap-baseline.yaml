@@ -1,0 +1,53 @@
+# OWASP ZAP Automation Framework — passive baseline (non-invasive).
+#
+# Spider + passive scan only: never sends attack payloads. Safe to run at
+# any time. Scans both the SPA dev server (:5173) and the FastAPI surface
+# (:8001).
+#
+# Placeholders substituted by run-zap.ps1:
+#   __REPORT_DIR__  output directory for this run (host path, or /zap/reports in Docker)
+#   __FRONTEND__    frontend base URL (e.g. http://localhost:5173)
+#   __API__         API base URL      (e.g. http://localhost:8001)
+env:
+  contexts:
+    - name: authglow
+      urls:
+        - __FRONTEND__
+        - __API__
+      includePaths:
+        - __FRONTEND__.*
+        - __API__.*
+  parameters:
+    failOnError: false
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  - type: spider
+    parameters:
+      context: authglow
+      maxDuration: 3
+      maxDepth: 5
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: __REPORT_DIR__
+      reportFile: baseline.html
+      reportTitle: "AuthGlow VAPT — baseline"
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: __REPORT_DIR__
+      reportFile: baseline.json
+
+  - type: report
+    parameters:
+      template: traditional-md
+      reportDir: __REPORT_DIR__
+      reportFile: baseline.md
