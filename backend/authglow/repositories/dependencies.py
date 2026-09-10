@@ -17,8 +17,11 @@ selects the fsspec object store (file/s3/gcs/abfs) underneath the
 import importlib
 from typing import TYPE_CHECKING, Any, Callable, Dict, TypeVar
 
+from fastapi import Depends, params
+
+from authglow.core.config import Settings, get_settings
+
 if TYPE_CHECKING:
-    from authglow.core.config import Settings
     from authglow.repositories.protocols import (
         AdminActionRepository,
         APIKeyClaimPolicyRepository,
@@ -500,16 +503,32 @@ def get_api_key_claim_policy_repository(
 
 
 def get_webhook_repository(
-    settings: "Settings | None" = None,
+    settings: Settings | None = Depends(get_settings),
 ) -> "WebhookRepository":
-    """FastAPI factory for the webhook-endpoint repository."""
+    """FastAPI factory for the webhook-endpoint repository.
+
+    ``settings`` is injected by FastAPI via ``Depends(get_settings)`` so
+    the function can be used directly as a dependency without the
+    parameter leaking into the request schema. Direct callers (e.g.
+    ``WebhookDispatcher``) invoke it with no arguments, in which case the
+    ``Depends`` sentinel is normalized to ``None`` and :func:`_resolve`
+    falls back to ``get_settings()``.
+    """
+    if isinstance(settings, params.Depends):
+        settings = None
     return _resolve("webhook", settings)
 
 
 def get_webhook_delivery_repository(
-    settings: "Settings | None" = None,
+    settings: Settings | None = Depends(get_settings),
 ) -> "WebhookDeliveryRepository":
-    """FastAPI factory for the webhook-delivery repository."""
+    """FastAPI factory for the webhook-delivery repository.
+
+    See :func:`get_webhook_repository` for the ``Depends`` normalization
+    rationale.
+    """
+    if isinstance(settings, params.Depends):
+        settings = None
     return _resolve("webhook_delivery", settings)
 
 

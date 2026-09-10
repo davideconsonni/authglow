@@ -241,3 +241,17 @@ class TestUpdateDeleteRotate:
         client = _build(test_settings)
         resp = client.post("/api/admin/webhooks/wh_nope0000001/rotate-secret")
         assert resp.status_code == 404
+
+
+def test_openapi_schema_generates():
+    """Regression: the webhook repository factories are FastAPI dependencies.
+
+    FastAPI introspects their signatures while building the OpenAPI schema.
+    They must not expose an unresolvable ``settings`` forward reference (or
+    any request parameter) or ``/openapi.json`` raises a ``PydanticUserError``.
+    """
+    app = FastAPI()
+    app.include_router(router)
+
+    assert TestClient(app).get("/openapi.json").status_code == 200
+
