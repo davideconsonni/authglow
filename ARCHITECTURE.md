@@ -26,6 +26,7 @@ For code style, naming, and test commands see `AGENTS.md`.
 | New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)         |
 | New API constant / route path          | `frontend/src/lib/constants.ts`                                                                        |
 | New phone verification provider        | `backend/authglow/services/phone/<name>.py` → subclass `PhoneVerificationProvider`, add case in `factory.py` |
+| New email provider                       | `backend/authglow/services/email/<name>.py` → subclass `EmailProvider`, `register_email_provider("<name>", builder)` in `factory.py` (selected by `EMAIL_BACKEND`) |
 | HTTP client change                     | `frontend/src/lib/api.ts`                                                                              |
 
 ## Directory Map

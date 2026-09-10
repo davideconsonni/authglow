@@ -2,6 +2,7 @@
 
 from authglow.services.email.base import EmailProvider, EmailService, EmailTemplateRenderer
 from authglow.services.email.console import ConsoleEmailProvider
+from authglow.services.email.factory import create_email_provider, register_email_provider
 from authglow.services.email.file_storage import FileStorageEmailProvider
 from authglow.services.email.mailgun import MailgunEmailProvider
 from authglow.services.email.resend import ResendEmailProvider
@@ -12,6 +13,8 @@ __all__ = [
     "EmailProvider",
     "EmailService",
     "EmailTemplateRenderer",
+    "create_email_provider",
+    "register_email_provider",
     "ConsoleEmailProvider",
     "FileStorageEmailProvider",
     "SMTPEmailProvider",
