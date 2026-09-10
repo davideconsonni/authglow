@@ -8,7 +8,7 @@
 // Each row composes its own <button>; we only share the icon +
 // hover-color mapping (no shared component by design).
 import { useState } from 'react'
-import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, ChevronDown, ChevronRight, Edit, AlertTriangle, Eye, KeyRound, Monitor, Tv, ArrowRight, ArrowLeft, ExternalLink, Terminal, Code, FileText, CheckCircle2, X } from 'lucide-react'
+import { Trash2, RefreshCw, Plus, Loader2, Save, Globe, Cog, Smartphone, ChevronDown, ChevronRight, Edit, AlertTriangle, Eye, KeyRound, Monitor, Tv, ArrowRight, ArrowLeft, ExternalLink, CheckCircle2, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useApiQuery } from '../../hooks/useApi'
 import { cn } from '../../lib/utils'
@@ -23,6 +23,7 @@ import { TokenClaimsTab } from '../../components/admin/TokenClaimsTab'
 import { ScopePicker } from '../../components/shared/ScopePicker'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { notify } from '../../stores/toastStore'
+import { ClientSnippetsList } from './ClientSnippetsList'
 
 interface OAuthClient {
   id?: string
@@ -53,7 +54,11 @@ interface OAuthClient {
   dpop_bound?: boolean
 }
 
-type GrantType = 'authorization_code' | 'client_credentials' | 'refresh_token'
+type GrantType =
+  | 'authorization_code'
+  | 'client_credentials'
+  | 'refresh_token'
+  | 'urn:ietf:params:oauth:grant-type:device_code'
 // T.2: extended to cover the FAPI 2.0 / RFC 7521 alternatives.
 type AuthMethod = 'client_secret_basic' | 'client_secret_post' | 'client_secret_jwt' | 'private_key_jwt' | 'none'
 
@@ -61,6 +66,11 @@ const ALL_GRANT_TYPES: { id: GrantType; label: string; desc: string }[] = [
   { id: 'authorization_code', label: 'Authorization Code', desc: 'User logs in via browser redirect' },
   { id: 'client_credentials', label: 'Client Credentials', desc: 'Machine-to-machine, no user' },
   { id: 'refresh_token', label: 'Refresh Token', desc: 'Issue long-lived refresh tokens' },
+  {
+    id: 'urn:ietf:params:oauth:grant-type:device_code',
+    label: 'Device Code',
+    desc: 'TV/CLI/IoT — RFC 8628 device flow',
+  },
 ]
 
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
@@ -121,7 +131,7 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'device', label: 'Device Flow', desc: 'TV/CLI/IoT — no browser on device', icon: Tv,
-    grant_types: ['device_code', 'refresh_token'], is_confidential: false,
+    grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'], is_confidential: false,
     auth_method: 'none', require_pkce: false, require_consent: false,
     show_redirect_uris: false, show_logout_uris: false, access_token_lifetime: 3600, refresh_token_lifetime: 2592000,
   },
@@ -563,228 +573,6 @@ export function AdminOAuthClientsPage() {
   const handleSubmit = async () => {
     if (editClientId) await handleUpdate()
     else await handleCreate()
-  }
-
-  // Code snippets for success screen
-  const getCodeSnippet = (framework: string, client: { client_id: string; client_secret: string }): string => {
-    const { client_id, client_secret } = client
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://your-authglow.example.com'
-    let scopes = 'openid profile email offline_access'
-
-    switch (framework) {
-      case 'nextjs':
-        return `# .env.local
-AUTH_SECRET=$(openssl rand -base64 32)
-AUTH_AUTHGLOW_ID=${client_id}
-AUTH_AUTHGLOW_SECRET=${client_secret}
-AUTH_AUTHGLOW_ISSUER=${baseUrl}
-
-# app/api/auth/[...nextauth]/route.ts
-import NextAuth from "next-auth"
-import AuthGlow from "next-auth/providers/authglow"
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [AuthGlow({
-    clientId: process.env.AUTH_AUTHGLOW_ID,
-    clientSecret: process.env.AUTH_AUTHGLOW_SECRET,
-    issuer: process.env.AUTH_AUTHGLOW_ISSUER,
-  })],
-})`
-
-      case 'react':
-        return `# .env
-VITE_AUTHGLOW_CLIENT_ID=${client_id}
-VITE_AUTHGLOW_ISSUER=${baseUrl}
-
-# main.tsx / App.tsx
-import { AuthGlowProvider, useAuthGlow } from 'react-authglow'
-
-<AuthGlowProvider
-  clientId={import.meta.env.VITE_AUTHGLOW_CLIENT_ID}
-  issuer={import.meta.env.VITE_AUTHGLOW_ISSUER}
-  redirectUri={window.location.origin + '/callback'}
-  scopes="${scopes}"
->
-  <App />
-</AuthGlowProvider>
-
-// In your component:
-const { login, logout, user, accessToken } = useAuthGlow()`
-
-      case 'python':
-        return `# requirements.txt
-authlib==1.3.1
-python-dotenv==1.0.1
-
-# .env
-AUTHGLOW_CLIENT_ID=${client_id}
-AUTHGLOW_CLIENT_SECRET=${client_secret}
-AUTHGLOW_ISSUER=${baseUrl}
-AUTHGLOW_REDIRECT_URI=http://localhost:8000/callback
-
-# main.py
-from authlib.integrations.starlette_client import OAuth
-from starlette.applications import Starlette
-from starlette.middleware.sessions import SessionMiddleware
-import os
-
-app = Starlette()
-app.add_middleware(SessionMiddleware, secret_key=os.urandom(32))
-
-oauth = OAuth()
-oauth.register(
-  name='authglow',
-  client_id=os.getenv('AUTHGLOW_CLIENT_ID'),
-  client_secret=os.getenv('AUTHGLOW_CLIENT_SECRET'),
-  server_metadata_url=f"{os.getenv('AUTHGLOW_ISSUER')}/.well-known/openid-configuration",
-  client_kwargs={'scope': '${scopes}'}
-)
-
-@app.route('/login')
-async def login(request):
-  redirect_uri = os.getenv('AUTHGLOW_REDIRECT_URI')
-  return await oauth.authglow.authorize_redirect(request, redirect_uri)
-
-@app.route('/callback')
-async def auth_callback(request):
-  token = await oauth.authglow.authorize_access_token(request)
-  user = token.get('userinfo')
-  request.session['user'] = user
-  return RedirectResponse(url='/')`
-
-      case 'node':
-        return `# npm i openid-client express-session dotenv
-# .env
-AUTHGLOW_CLIENT_ID=${client_id}
-AUTHGLOW_CLIENT_SECRET=${client_secret}
-AUTHGLOW_ISSUER=${baseUrl}
-AUTHGLOW_REDIRECT_URI=http://localhost:3000/callback
-SESSION_SECRET=$(openssl rand -base64 32)
-
-// app.js
-import { Issuer, generators } from 'openid-client'
-import express from 'express'
-import session from 'express-session'
-import dotenv from 'dotenv'
-dotenv.config()
-
-const app = express()
-app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUninitialized: true }))
-
-const issuer = await Issuer.discover(process.env.AUTHGLOW_ISSUER)
-const client = new issuer.Client({
-  client_id: process.env.AUTHGLOW_CLIENT_ID,
-  client_secret: process.env.AUTHGLOW_CLIENT_SECRET,
-  redirect_uris: [process.env.AUTHGLOW_REDIRECT_URI],
-  response_types: ['code'],
-})
-
-app.get('/login', (req, res) => {
-  const codeVerifier = generators.codeVerifier()
-  const codeChallenge = generators.codeChallenge(codeVerifier)
-  req.session.codeVerifier = codeVerifier
-  res.redirect(client.authorizationUrl({ scope: '${scopes}', code_challenge: codeChallenge, code_challenge_method: 'S256' }))
-})
-
-app.get('/callback', async (req, res) => {
-  const params = client.callbackParams(req)
-  const tokenSet = await client.callback(process.env.AUTHGLOW_REDIRECT_URI, params, { code_verifier: req.session.codeVerifier })
-  req.session.user = tokenSet.claims()
-  res.redirect('/')
-})`
-
-      case 'go':
-        return `# go get github.com/coreos/go-oidc/v3/oidc golang.org/x/oauth2
-
-package main
-
-import (
-  "context"
-  "net/http"
-  "github.com/coreos/go-oidc/v3/oidc"
-  "golang.org/x/oauth2"
-)
-
-var (
-  clientID     = "${client_id}"
-  clientSecret = "${client_secret}"
-  issuerURL    = "${baseUrl}"
-  redirectURL  = "http://localhost:8080/callback"
-)
-
-func main() {
-  ctx := context.Background()
-  provider, _ := oidc.NewProvider(ctx, issuerURL)
-  oauth2Config := &oauth2.Config{
-    ClientID:     clientID,
-    ClientSecret: clientSecret,
-    RedirectURL:  redirectURL,
-    Endpoint:     provider.Endpoint(),
-    Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access"},
-  }
-
-  http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-    http.Redirect(w, r, oauth2Config.AuthCodeURL("state", oauth2.AccessTypeOffline), http.StatusFound)
-  })
-
-  http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-    token, _ := oauth2Config.Exchange(ctx, r.URL.Query().Get("code"))
-    // Use token.AccessToken, token.RefreshToken
-  })
-
-  http.ListenAndServe(":8080", nil)
-}`
-
-      case 'dotnet':
-        return `# NuGet: Microsoft.AspNetCore.Authentication.OpenIdConnect
-
-// appsettings.json
-{
-  "AuthGlow": {
-    "ClientId": "${client_id}",
-    "ClientSecret": "${client_secret}",
-    "Authority": "${baseUrl}",
-    "CallbackPath": "/signin-oidc",
-    "Scopes": ["openid", "profile", "email", "offline_access"]
-  }
-}
-
-// Program.cs
-builder.Services.AddAuthentication(options => {
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
-  })
-  .AddCookie()
-  .AddOpenIdConnect("AuthGlow", options => {
-    var cfg = builder.Configuration.GetSection("AuthGlow");
-    options.ClientId = cfg["ClientId"];
-    options.ClientSecret = cfg["ClientSecret"];
-    options.Authority = cfg["Authority"];
-    options.CallbackPath = cfg["CallbackPath"];
-    options.ResponseType = "code";
-    options.SaveTokens = true;
-    foreach (var scope in cfg.GetSection("Scopes").Get<string[]>())
-      options.Scope.Add(scope);
-  });
-
-app.UseAuthentication();
-app.UseAuthorization();`
-
-      default:
-        return ''
-    }
-  }
-
-  const getDocUrl = (framework: string): string => {
-    const docs: Record<string, string> = {
-      nextjs: 'https://next-auth.js.org/providers/authglow',
-      react: 'https://github.com/authglow/react-authglow',
-      python: 'https://docs.authlib.org/en/latest/client/oidc.html',
-      node: 'https://github.com/panva/node-openid-client',
-      go: 'https://github.com/coreos/go-oidc',
-      dotnet: 'https://learn.microsoft.com/aspnet/core/security/authentication/oidc',
-    }
-    return docs[framework] || '#'
   }
 
   const toggleGrantType = (g: GrantType) => {
@@ -1864,6 +1652,16 @@ app.UseAuthorization();`
 
             {/* Edit mode footer */}
             {editClientId && (
+              <div className="border-t border-surface-2 p-4">
+                <ClientSnippetsList
+                  clientId={editClientId}
+                  clientSecret="<YOUR_CLIENT_SECRET>"
+                  secretKnown={false}
+                  startCollapsed
+                />
+              </div>
+            )}
+            {editClientId && (
               <div className="flex flex-shrink-0 gap-3 border-t border-surface-2 p-4">
                 <button type="button" onClick={() => { setShowForm(false); resetForm() }} className="flex-1 rounded-xl border border-surface-2 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors">Cancel</button>
                 <button type="button" onClick={handleSubmit} disabled={saving} data-testid="update-client-submit" className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2.5 text-sm font-semibold text-white shadow-glow-accent transition-all hover:scale-[1.02] disabled:hover:scale-100">
@@ -1916,34 +1714,11 @@ app.UseAuthorization();`
 
                 {/* Code Snippets */}
                 <div className="border-t border-surface-2 pt-6">
-                  <h4 className="mb-4 text-sm font-semibold text-text-primary">Quick Start — Copy-Paste Config</h4>
-                  <div className="space-y-3" role="tablist" aria-label="Framework examples">
-                    {[
-                      { id: 'nextjs', label: 'Next.js (App Router)', icon: FileText },
-                      { id: 'react', label: 'React SPA', icon: Code },
-                      { id: 'python', label: 'Python / FastAPI', icon: Terminal },
-                      { id: 'node', label: 'Node / Express', icon: Terminal },
-                      { id: 'go', label: 'Go', icon: Terminal },
-                      { id: 'dotnet', label: 'ASP.NET Core', icon: Terminal },
-                    ].map((fw) => (
-                      <details key={fw.id} className="group rounded-xl border border-surface-2 bg-surface-1">
-                        <summary className="flex items-center gap-3 p-3 cursor-pointer list-none text-sm font-medium text-text-primary hover:bg-surface-2">
-                          <fw.icon size={16} className="text-text-muted" />
-                          {fw.label}
-                          <ChevronDown size={14} className="ml-auto text-text-muted group-open:rotate-180 transition-transform" />
-                        </summary>
-                        <div className="p-3 border-t border-surface-2 bg-surface-2">
-                          <pre className="overflow-x-auto text-[11px] font-mono text-text-primary"><code>{getCodeSnippet(fw.id, createdClientData)}</code></pre>
-                          <div className="mt-2 flex gap-2">
-                            <CopyButton text={getCodeSnippet(fw.id, createdClientData)} label="Copy" className="text-[11px]" />
-                            <a href={getDocUrl(fw.id)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-brand-accent hover:underline">
-                              <ExternalLink size={12} /> Docs
-                            </a>
-                          </div>
-                        </div>
-                      </details>
-                    ))}
-                  </div>
+                  <ClientSnippetsList
+                    clientId={createdClientData.client_id}
+                    clientSecret={createdClientData.client_secret}
+                    secretKnown
+                  />
                 </div>
 
                 <div className="mt-6 flex gap-3">

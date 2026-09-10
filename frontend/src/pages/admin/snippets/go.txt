@@ -1,0 +1,40 @@
+# go get github.com/coreos/go-oidc/v3/oidc golang.org/x/oauth2
+
+package main
+
+import (
+  "context"
+  "net/http"
+  "github.com/coreos/go-oidc/v3/oidc"
+  "golang.org/x/oauth2"
+)
+
+var (
+  clientID     = "__CLIENT_ID__"
+  clientSecret = "__CLIENT_SECRET__"
+  issuerURL    = "__BASE_URL__"
+  redirectURL  = "http://localhost:8080/callback"
+)
+
+func main() {
+  ctx := context.Background()
+  provider, _ := oidc.NewProvider(ctx, issuerURL)
+  oauth2Config := &oauth2.Config{
+    ClientID:     clientID,
+    ClientSecret: clientSecret,
+    RedirectURL:  redirectURL,
+    Endpoint:     provider.Endpoint(),
+    Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "offline_access"},
+  }
+
+  http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+    http.Redirect(w, r, oauth2Config.AuthCodeURL("state", oauth2.AccessTypeOffline), http.StatusFound)
+  })
+
+  http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+    token, _ := oauth2Config.Exchange(ctx, r.URL.Query().Get("code"))
+    // Use token.AccessToken, token.RefreshToken
+  })
+
+  http.ListenAndServe(":8080", nil)
+}

@@ -1,0 +1,18 @@
+# .env
+VITE_AUTHGLOW_CLIENT_ID=__CLIENT_ID__
+VITE_AUTHGLOW_ISSUER=__BASE_URL__
+
+# main.tsx / App.tsx
+import { AuthGlowProvider, useAuthGlow } from 'react-authglow'
+
+<AuthGlowProvider
+  clientId={import.meta.env.VITE_AUTHGLOW_CLIENT_ID}
+  issuer={import.meta.env.VITE_AUTHGLOW_ISSUER}
+  redirectUri={window.location.origin + '/callback'}
+  scopes="__SCOPES__"
+>
+  <App />
+</AuthGlowProvider>
+
+// In your component:
+const { login, logout, user, accessToken } = useAuthGlow()

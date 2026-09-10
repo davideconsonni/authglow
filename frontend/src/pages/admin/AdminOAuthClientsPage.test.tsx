@@ -336,3 +336,41 @@ describe('AdminOAuthClientsPage — Rotate Secret', () => {
     })
   })
 })
+
+
+describe('AdminOAuthClientsPage — Edit quick-start snippets', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockQueryData.clients = [
+      {
+        client_id: 'c9',
+        client_name: 'Snippet Client',
+        is_confidential: true,
+        redirect_uris: ['https://example.com/cb'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        allowed_scopes: ['read'],
+        is_active: true,
+        token_endpoint_auth_method: 'client_secret_basic',
+        has_client_secret_jwt_key: false,
+        dpop_bound: false,
+      },
+    ]
+  })
+
+  it('edit modal shows collapsed snippets with placeholder secret', () => {
+    render(<Wrapper><AdminOAuthClientsPage /></Wrapper>)
+
+    fireEvent.click(screen.getByTitle('Edit client'))
+
+    const section = screen.getByTestId('client-snippets')
+    expect(section).toBeInTheDocument()
+    // Collapsed wrapper + all six frameworks present
+    expect(section.tagName).toBe('DETAILS')
+    for (const fw of ['nextjs', 'react', 'python', 'node', 'go', 'dotnet']) {
+      expect(screen.getByTestId(`snippet-${fw}`)).toBeInTheDocument()
+    }
+    // Real client_id, placeholder secret
+    expect(section.textContent).toContain('c9')
+    expect(section.textContent).toContain('<YOUR_CLIENT_SECRET>')
+  })
+})

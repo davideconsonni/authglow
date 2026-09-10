@@ -62,7 +62,7 @@ authglow/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx            # Routing, provider stack, route guards
-│   │   ├── pages/             # Route-level components (auth/, admin/)
+│   │   ├── pages/             # Route-level components (auth/, admin/ — incl. admin/snippets/*.txt quick-start templates loaded via ?raw by oauthClientSnippets.ts, rendered by ClientSnippetsList.tsx)
 │   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/
 │   │   ├── stores/            # Zustand: authStore, toastStore, playgroundStore
 │       │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle, useDemoMeta, useDemoInbox

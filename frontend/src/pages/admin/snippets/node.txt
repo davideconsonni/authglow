@@ -1,0 +1,39 @@
+# npm i openid-client express-session dotenv
+# .env
+AUTHGLOW_CLIENT_ID=__CLIENT_ID__
+AUTHGLOW_CLIENT_SECRET=__CLIENT_SECRET__
+AUTHGLOW_ISSUER=__BASE_URL__
+AUTHGLOW_REDIRECT_URI=http://localhost:3000/callback
+SESSION_SECRET=$(openssl rand -base64 32)
+
+// app.js
+import { Issuer, generators } from 'openid-client'
+import express from 'express'
+import session from 'express-session'
+import dotenv from 'dotenv'
+dotenv.config()
+
+const app = express()
+app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUninitialized: true }))
+
+const issuer = await Issuer.discover(process.env.AUTHGLOW_ISSUER)
+const client = new issuer.Client({
+  client_id: process.env.AUTHGLOW_CLIENT_ID,
+  client_secret: process.env.AUTHGLOW_CLIENT_SECRET,
+  redirect_uris: [process.env.AUTHGLOW_REDIRECT_URI],
+  response_types: ['code'],
+})
+
+app.get('/login', (req, res) => {
+  const codeVerifier = generators.codeVerifier()
+  const codeChallenge = generators.codeChallenge(codeVerifier)
+  req.session.codeVerifier = codeVerifier
+  res.redirect(client.authorizationUrl({ scope: '__SCOPES__', code_challenge: codeChallenge, code_challenge_method: 'S256' }))
+})
+
+app.get('/callback', async (req, res) => {
+  const params = client.callbackParams(req)
+  const tokenSet = await client.callback(process.env.AUTHGLOW_REDIRECT_URI, params, { code_verifier: req.session.codeVerifier })
+  req.session.user = tokenSet.claims()
+  res.redirect('/')
+})

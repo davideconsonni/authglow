@@ -1,0 +1,33 @@
+# NuGet: Microsoft.AspNetCore.Authentication.OpenIdConnect
+
+// appsettings.json
+{
+  "AuthGlow": {
+    "ClientId": "__CLIENT_ID__",
+    "ClientSecret": "__CLIENT_SECRET__",
+    "Authority": "__BASE_URL__",
+    "CallbackPath": "/signin-oidc",
+    "Scopes": ["openid", "profile", "email", "offline_access"]
+  }
+}
+
+// Program.cs
+builder.Services.AddAuthentication(options => {
+    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+  })
+  .AddCookie()
+  .AddOpenIdConnect("AuthGlow", options => {
+    var cfg = builder.Configuration.GetSection("AuthGlow");
+    options.ClientId = cfg["ClientId"];
+    options.ClientSecret = cfg["ClientSecret"];
+    options.Authority = cfg["Authority"];
+    options.CallbackPath = cfg["CallbackPath"];
+    options.ResponseType = "code";
+    options.SaveTokens = true;
+    foreach (var scope in cfg.GetSection("Scopes").Get<string[]>())
+      options.Scope.Add(scope);
+  });
+
+app.UseAuthentication();
+app.UseAuthorization();

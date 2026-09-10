@@ -1,0 +1,17 @@
+# .env.local
+AUTH_SECRET=$(openssl rand -base64 32)
+AUTH_AUTHGLOW_ID=__CLIENT_ID__
+AUTH_AUTHGLOW_SECRET=__CLIENT_SECRET__
+AUTH_AUTHGLOW_ISSUER=__BASE_URL__
+
+# app/api/auth/[...nextauth]/route.ts
+import NextAuth from "next-auth"
+import AuthGlow from "next-auth/providers/authglow"
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [AuthGlow({
+    clientId: process.env.AUTH_AUTHGLOW_ID,
+    clientSecret: process.env.AUTH_AUTHGLOW_SECRET,
+    issuer: process.env.AUTH_AUTHGLOW_ISSUER,
+  })],
+})
