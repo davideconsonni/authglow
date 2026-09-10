@@ -1,7 +1,7 @@
 ---
 type: plan
 status: superseded
-superseded-by: ../active/rbac-administrator-migration.md
+superseded-by: rbac-administrator-migration.md
 ---
 
 # Plan — RBAC-driven admin gating + system OAuth client bootstrap

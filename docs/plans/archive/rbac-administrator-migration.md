@@ -1,7 +1,8 @@
 ---
 type: plan
-status: active
-supersedes: rbac-admin-gating-and-system-oauth-client (admin-gating parts)
+status: done
+closed: 2026-09-10
+supersedes: rbac-admin-gating-and-system-oauth-client.md (admin-gating parts)
 ---
 
 # Plan — Eliminazione scope `admin` → ruolo RBAC "Authglow Administrator"
@@ -406,17 +407,25 @@ Verification: `rtk pytest tests/unit/test_rbac.py -q` + new tests.
 
 ---
 
-## [ ] Fase 8 — E2E + docs + full verification
+## [x] Fase 8 — E2E + docs + full verification
 
-- [ ] `npx playwright test` (chromium + mobile) — the demo admin
+- [x] `npx playwright test` (chromium + mobile) — the demo admin
       keeps the role via `seed_demo_user`; admin pages remain
       reachable. Known pre-existing E2E failures are out of scope.
-- [ ] `frontend/test-e2e-ux.py` — same expectation.
-- [ ] `ARCHITECTURE.md`: authorization section — admin = RBAC role
+      (E2E 44/0 per addendum riparazione test pre-esistenti.)
+- [x] `frontend/test-e2e-ux.py` — same expectation.
+- [x] `ARCHITECTURE.md`: authorization section — admin = RBAC role
       "Authglow Administrator"; scope `admin` rejected at ingestion.
-- [ ] Full backend suite one last time
+      (Verificato: sezione `Authorization (RBAC-driven)` presente.)
+- [x] Full backend suite one last time
       (`rtk pytest -q --tb=line -n auto`, timeout 300s).
-- [ ] `rtk mypy authglow/` clean.
+      (Backend 2666/0 per addendum; riverifica mirata 2026-09-10:
+      83 passed su test_rbac/test_setup/test_demo/test_permissions/test_reserved_scopes, ruff pulito.)
+- [x] `rtk mypy authglow/` clean.
+
+> **Chiusura 2026-09-10**: tutte le Fasi 0–8 implementate e verificate
+> contro il codice; D8 superato da rimozione bypass (addendum).
+> Piano archiviato.
 
 **Commit checkpoint**: `docs: authorization is RBAC-driven (Authglow Administrator role)`
 
