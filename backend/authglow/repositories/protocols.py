@@ -45,6 +45,7 @@ from authglow.models.oauth_client import OAuth2Client
 from authglow.models.oauth_consent import OAuth2Consent
 from authglow.models.passkey import Passkey, PasskeyChallenge
 from authglow.models.password_reset import PasswordResetToken
+from authglow.models.phone_verification import PhoneVerificationToken
 from authglow.models.rate_limit_config import RateLimitConfig
 from authglow.models.rbac import Permission, Role, UserRole
 from authglow.models.refresh_token import RefreshToken
@@ -534,6 +535,35 @@ class EmailVerificationRepository(Protocol):
 
     async def delete(self, code_lookup: str) -> None:
         """Remove the token. No-op if absent."""
+
+    async def cleanup_expired(self) -> int:
+        """Delete every expired token."""
+
+
+@runtime_checkable
+class PhoneVerificationRepository(Protocol):
+    """Persistence for phone-verification OTP tokens.
+
+    Tokens are stored with HMAC filenames keyed on ``phone:code``;
+    the plaintext numeric code is stored in the JSON body for O(1)
+    lookup and constant-time comparison (mirrors the
+    email-verification flow).
+    """
+
+    async def create(self, token: PhoneVerificationToken) -> None:
+        """Persist a new verification token."""
+
+    async def get_by_lookup(self, code_lookup: str) -> Optional[PhoneVerificationToken]:
+        """Return the token with the given HMAC lookup, or ``None``."""
+
+    async def update(self, token: PhoneVerificationToken) -> None:
+        """Persist changes. May raise ``ConcurrentWriteError``."""
+
+    async def delete(self, code_lookup: str) -> None:
+        """Remove the token. No-op if absent."""
+
+    async def list_for_phone(self, phone: str) -> List[PhoneVerificationToken]:
+        """Return every token issued for a phone number (for rate limiting)."""
 
     async def cleanup_expired(self) -> int:
         """Delete every expired token."""

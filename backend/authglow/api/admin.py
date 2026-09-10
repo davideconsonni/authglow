@@ -327,8 +327,11 @@ async def update_user(
         user.first_name = update_data.first_name
     if update_data.last_name is not None:
         user.last_name = update_data.last_name
-    if update_data.phone is not None:
+    if update_data.phone is not None and update_data.phone != user.phone:
         user.phone = update_data.phone
+        # A changed phone number is unverified until proven via OTP.
+        user.phone_verified = False
+        user.phone_verified_at = None
     if update_data.avatar_url is not None:
         user.avatar_url = update_data.avatar_url
 

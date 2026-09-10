@@ -68,6 +68,9 @@ from authglow.repositories.file.oauth_consent import (
 from authglow.repositories.file.password_reset import (
     FilePasswordResetRepository,
 )
+from authglow.repositories.file.phone_verification import (
+    FilePhoneVerificationRepository,
+)
 from authglow.repositories.file.rate_limit_config import (
     FileRateLimitConfigRepository,
 )
@@ -108,6 +111,7 @@ from authglow.repositories.protocols import (
     OAuth2ConsentRepository,
     PasswordResetRepository,
     PermissionRepository,
+    PhoneVerificationRepository,
     RateLimitConfigRepository,
     RefreshTokenRepository,
     RoleRepository,
@@ -141,6 +145,11 @@ _IMPL_TABLE = [
         FileEmailVerificationRepository,
         EmailVerificationRepository,
         "EmailVerification",
+    ),
+    (
+        FilePhoneVerificationRepository,
+        PhoneVerificationRepository,
+        "PhoneVerification",
     ),
     (
         FilePasswordResetRepository,

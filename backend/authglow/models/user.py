@@ -58,6 +58,10 @@ class User(BaseModel):
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None
 
+    # Phone verification (OTP via pluggable provider, see services/phone/)
+    phone_verified: bool = False
+    phone_verified_at: Optional[datetime] = None
+
     # Temporary suspension
     suspended_until: Optional[datetime] = None
 
@@ -131,6 +135,7 @@ class UserResponse(BaseModel):
     mfa_enabled: bool = False
     mfa_verified: bool = False
     email_verified: bool = False
+    phone_verified: bool = False
     is_federated: bool = False
     is_bootstrap: bool = False
 

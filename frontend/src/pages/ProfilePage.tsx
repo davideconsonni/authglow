@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save, Mail, Calendar, Shield, Key, ArrowRight, Monitor } from 'lucide-react'
+import { Loader2, Save, Mail, Calendar, Shield, Key, ArrowRight, Monitor, Smartphone } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import { useApiQuery } from '../hooks/useApi'
@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { RotateSecretDialog } from '../components/admin/RotateSecretDialog'
 import { Banner } from '../components/shared/Banner'
 import { ResendVerificationBanner } from '../components/auth/ResendVerificationBanner'
+import { PhoneVerificationCard } from '../components/auth/PhoneVerificationCard'
 import { formatDateTime } from '../lib/utils'
 import { ROUTES } from '../lib/constants'
 import { notify } from '../stores/toastStore'
@@ -52,6 +53,8 @@ interface UserProfile {
   mfa_enabled: boolean
   mfa_verified: boolean
   email_verified: boolean
+  phone?: string | null
+  phone_verified?: boolean
   is_bootstrap: boolean
 }
 
@@ -163,6 +166,30 @@ export function ProfilePage() {
                     <ResendVerificationBanner />
                   </div>
                 )}
+                {(p?.phone || p?.phone_verified !== undefined) && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-text-muted">
+                    <Smartphone size={12} />
+                    <span>{p?.phone || 'No phone number'}</span>
+                  </div>
+                )}
+                {p?.phone_verified !== undefined && (
+                  <div className="mt-2">
+                    <StatusBadge
+                      status={p.phone_verified}
+                      trueLabel="Phone verified"
+                      falseLabel="Phone not verified"
+                      trueClass="bg-semantic-success/10 text-semantic-success"
+                      falseClass="bg-semantic-warning/10 text-semantic-warning"
+                    />
+                  </div>
+                )}
+                <div className="mt-4">
+                  <PhoneVerificationCard
+                    phone={p?.phone ?? null}
+                    phoneVerified={p?.phone_verified ?? false}
+                    onVerified={() => void fetchCurrentUser()}
+                  />
+                </div>
               </div>
               <button
                 onClick={() => setShowForm(!showForm)}

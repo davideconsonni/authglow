@@ -31,6 +31,7 @@ from authglow.api.oauth_errors import register_oauth2_error_handler
 from authglow.api.oidc import router as oidc_router
 from authglow.api.passkey import router as passkey_router
 from authglow.api.password_reset import router as password_reset_router
+from authglow.api.phone_verification import router as phone_verification_router
 from authglow.api.rbac import router as rbac_router
 from authglow.api.setup import router as setup_router
 from authglow.api.user_profile import router as user_profile_router
@@ -240,6 +241,7 @@ app.include_router(passkey_router, tags=["Passkeys"])
 app.include_router(oauth_client_router, tags=["OAuth2 Clients"])
 app.include_router(api_key_router, tags=["API Keys"])
 app.include_router(password_reset_router, tags=["Password Reset"])
+app.include_router(phone_verification_router, tags=["Phone Verification"])
 app.include_router(email_verification_router, tags=["Email Verification"])
 app.include_router(consent_router, tags=["OAuth2 Consent"])
 app.include_router(rbac_router, tags=["RBAC"])

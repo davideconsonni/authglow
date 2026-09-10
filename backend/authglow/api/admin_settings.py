@@ -58,6 +58,7 @@ def _get_settings_override_service() -> SettingsOverrideService:
     """Build a per-request ``SettingsOverrideService``."""
     return SettingsOverrideService()
 
+
 _FIELD_META: Dict[str, Dict[str, Any]] = {
     # fmt: off
     # --- General ---
@@ -543,6 +544,77 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Demo admin user email",
         "restart_required": True,
     },
+    # --- Phone verification ---
+    "phone_verification_backend": {
+        "category": "phone",
+        "label": "Phone verification backend",
+        "restart_required": True,
+    },
+    "phone_message_template": {
+        "category": "phone",
+        "label": "OTP message template ({code})",
+        "restart_required": False,
+    },
+    "phone_code_length": {
+        "category": "phone",
+        "label": "OTP code length (digits)",
+        "restart_required": False,
+    },
+    "phone_code_expire_minutes": {
+        "category": "phone",
+        "label": "OTP expiry (minutes)",
+        "restart_required": False,
+    },
+    "phone_max_attempts": {
+        "category": "phone",
+        "label": "OTP max verify attempts",
+        "restart_required": False,
+    },
+    "phone_max_sends_per_hour": {
+        "category": "phone",
+        "label": "OTP max sends per number per hour",
+        "restart_required": False,
+    },
+    "phone_resend_cooldown_seconds": {
+        "category": "phone",
+        "label": "OTP resend cooldown (seconds)",
+        "restart_required": False,
+    },
+    "infobip_api_key": {
+        "category": "phone",
+        "label": "Infobip API key",
+        "restart_required": True,
+    },
+    "infobip_base_url": {
+        "category": "phone",
+        "label": "Infobip API base URL",
+        "restart_required": True,
+    },
+    "infobip_sms_sender": {
+        "category": "phone",
+        "label": "Infobip SMS sender",
+        "restart_required": True,
+    },
+    "infobip_whatsapp_sender": {
+        "category": "phone",
+        "label": "Infobip WhatsApp sender",
+        "restart_required": True,
+    },
+    "infobip_whatsapp_template_name": {
+        "category": "phone",
+        "label": "Infobip WhatsApp template name",
+        "restart_required": True,
+    },
+    "infobip_whatsapp_template_lang": {
+        "category": "phone",
+        "label": "Infobip WhatsApp template language",
+        "restart_required": True,
+    },
+    "infobip_timeout": {
+        "category": "phone",
+        "label": "Infobip API timeout (seconds)",
+        "restart_required": True,
+    },
     # fmt: on
 }
 
@@ -559,6 +631,7 @@ _CATEGORY_ORDER = [
     "oauth2_client",
     "devices",
     "email",
+    "phone",
     "storage",
     "cache",
     "passkey",
@@ -575,6 +648,7 @@ _EXCLUDED_FIELDS = frozenset(
         "mailgun_api_key",
         "mailgun_domain",
         "resend_api_key",
+        "infobip_api_key",
         "aws_access_key_id",
         "aws_secret_access_key",
         "aws_region",
@@ -733,9 +807,7 @@ async def patch_admin_settings(
         try:
             validated = service.validate_updates(updates_with_values)
         except InvalidSettingUpdateError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
         persisted = await service.set_overrides(validated)
         service.apply_overrides(validated)
@@ -749,9 +821,7 @@ async def patch_admin_settings(
     # import-time consumers (lru_cache / TTLCache construction) only
     # pick the new value up after a restart / deploy.
     restart_required = sorted(
-        key
-        for key in validated
-        if _FIELD_META.get(key, {}).get("restart_required", False)
+        key for key in validated if _FIELD_META.get(key, {}).get("restart_required", False)
     )
     logger.info(
         "settings_updated",
@@ -885,9 +955,7 @@ async def put_rate_limits_config(
             overrides_update=update.overrides,
         )
     except InvalidRateLimitError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     logger.info(
         "rate_limit_config_updated",

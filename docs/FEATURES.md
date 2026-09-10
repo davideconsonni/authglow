@@ -46,6 +46,17 @@
 - `POST /api/email/resend-verification` — resend email (5/hour)
 - `GET /resend-verification` — HTML page to request resend
 
+### Phone Verification
+- OTP (6-digit numeric code, 10-minute expiry) via pluggable provider
+- `POST /api/phone/request` — generate + send code (5/hour, 60s cooldown)
+- `POST /api/phone/verify` — prove code, sets `phone_verified` (attempt-capped)
+- Providers: `always_allow` (dev default), `infobip_sms`, `infobip_whatsapp` (template-first)
+- Message template with `{code}` placeholder; overridable via env and admin settings UI
+- Changing the number (profile or admin) resets `phone_verified` automatically
+- Feeds OIDC `phone_number_verified` claim (`phone` scope)
+- Audit log: events `phone_verification_sent`, `phone_verified`, `phone_verification_failed`
+- Full documentation: [phone-verification.md](phone-verification.md)
+
 ### Account Lifecycle
 - **Deactivation**: `POST /api/profile/me/deactivate` — account deactivated but recoverable (blocked for federated users)
 - **Reactivation**: `POST /api/profile/me/reactivate`
@@ -1040,6 +1051,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | API Keys | `api/api_key.py` | `services/api_key.py` | `models/api_key.py` |
 | Password Reset | `api/password_reset.py` | `services/password_reset.py` | `models/password_reset.py` |
 | Email Verify | `api/email_verification.py` | `services/email_verification.py` | `models/email_verification.py` |
+| Phone Verify | `api/phone_verification.py` | `services/phone_verification.py`, `services/phone/` | `models/phone_verification.py` |
 | User Profile | `api/user_profile.py` | `services/user_profile.py` | `models/user_profile.py`, `models/user_preferences.py` |
 | Admin | `api/admin.py`, `api/admin_settings.py` | (uses user, audit, mfa, passkey, device-auth services) | `models/admin.py` |
 | Setup | `api/setup.py` | — | — |

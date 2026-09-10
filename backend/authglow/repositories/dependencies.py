@@ -31,6 +31,7 @@ if TYPE_CHECKING:
         PasskeyRepository,
         PasswordResetRepository,
         PermissionRepository,
+        PhoneVerificationRepository,
         RateLimitConfigRepository,
         RefreshTokenRepository,
         RoleRepository,
@@ -129,6 +130,26 @@ def get_password_reset_repository() -> "PasswordResetRepository":
     )
 
     return FilePasswordResetRepository()
+
+
+def get_phone_verification_repository(
+    settings: "Settings | None" = None,
+) -> "PhoneVerificationRepository":
+    """FastAPI factory for the phone-verification-token repository.
+
+    Returns a fresh ``FilePhoneVerificationRepository`` per call —
+    the repository holds no mutable state, only fsspec handles. The
+    ``PhoneVerificationService`` (in
+    ``services/phone_verification.py``) creates its own default
+    repository by default; this factory is exposed for FastAPI
+    route handlers or tests that want to inject the repository
+    directly.
+    """
+    from authglow.repositories.file.phone_verification import (
+        FilePhoneVerificationRepository,
+    )
+
+    return FilePhoneVerificationRepository(settings=settings)
 
 
 def get_authorization_code_repository() -> "AuthorizationCodeRepository":

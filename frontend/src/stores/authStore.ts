@@ -11,6 +11,8 @@ export interface AuthUser {
   is_active?: boolean
   created_at?: string
   email_verified?: boolean
+  phone?: string | null
+  phone_verified?: boolean
   is_bootstrap?: boolean
   mfa_enabled: boolean
   roles: string[]

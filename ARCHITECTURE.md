@@ -25,6 +25,7 @@ For code style, naming, and test commands see `AGENTS.md`.
 | New API hook                           | `frontend/src/hooks/use<Name>.ts` → wraps `useApiQuery`/`useApiMutation`                               |
 | New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)         |
 | New API constant / route path          | `frontend/src/lib/constants.ts`                                                                        |
+| New phone verification provider        | `backend/authglow/services/phone/<name>.py` → subclass `PhoneVerificationProvider`, add case in `factory.py` |
 | HTTP client change                     | `frontend/src/lib/api.ts`                                                                              |
 
 ## Directory Map
@@ -46,7 +47,7 @@ authglow/
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
 │       ├── api/               # 20 FastAPI routers (HTTP layer, one per domain)
-│       ├── services/          # 45 modules / 50 classes (business logic, cross-entity coordination; auth/ + email/ subpackages)
+│       ├── services/          # 45 modules / 50 classes (business logic, cross-entity coordination; auth/ + email/ + phone/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError

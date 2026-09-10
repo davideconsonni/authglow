@@ -471,6 +471,36 @@ class Settings(BaseSettings):
     resend_api_key: Optional[str] = None
     resend_base_url: str = "https://api.resend.com"
 
+    # Phone verification settings (OTP via pluggable provider).
+    # 'always_allow': accept every code without sending (development default).
+    # 'infobip_sms': send OTP via Infobip SMS (POST {base}/sms/3/messages).
+    # 'infobip_whatsapp': send OTP via Infobip WhatsApp. Template-first
+    # (POST {base}/whatsapp/1/message/template) so codes are delivered
+    # immediately, outside the 24-hour customer-service window; free-form
+    # text is only a fallback when no template is configured. The
+    # AuthGlow message template (phone_message_template) is still used
+    # for SMS and every other channel.
+    phone_verification_backend: str = "always_allow"
+    # Default OTP message. "{code}" is replaced with the numeric code.
+    # Overridable at runtime via the admin settings UI (wins over this value).
+    phone_message_template: str = "Your AuthGlow code is {code}. It expires in 10 minutes."
+    phone_code_length: int = 6
+    phone_code_expire_minutes: int = 10
+    phone_max_attempts: int = 5
+    phone_max_sends_per_hour: int = 5
+    phone_resend_cooldown_seconds: int = 60
+
+    # Infobip Settings (if phone_verification_backend = "infobip_sms"
+    # or "infobip_whatsapp"). The base URL is the per-account host
+    # (e.g. "k98x68.api.infobip.com"); "https://" is added by the provider.
+    infobip_api_key: Optional[str] = None
+    infobip_base_url: Optional[str] = None
+    infobip_sms_sender: Optional[str] = None
+    infobip_whatsapp_sender: Optional[str] = None
+    infobip_whatsapp_template_name: Optional[str] = None
+    infobip_whatsapp_template_lang: str = "en_GB"
+    infobip_timeout: float = 30.0
+
     # Base URL for links in emails
     base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:5173"

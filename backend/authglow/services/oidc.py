@@ -82,8 +82,8 @@ class OIDCService:
             phone = getattr(user, "phone", None)
             if phone:
                 user_info_data["phone_number"] = phone
-                user_info_data["phone_number_verified"] = (
-                    False  # TODO: implement phone verification
+                user_info_data["phone_number_verified"] = getattr(
+                    user, "phone_verified", False
                 )
 
         if "address" in scopes:
@@ -153,7 +153,7 @@ class OIDCService:
             phone = getattr(user, "phone", None)
             if phone:
                 claims["phone_number"] = phone
-                claims["phone_number_verified"] = False
+                claims["phone_number_verified"] = getattr(user, "phone_verified", False)
 
         # Address scope
         if "address" in scopes:

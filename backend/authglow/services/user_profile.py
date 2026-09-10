@@ -102,6 +102,7 @@ class UserProfileService:
             id=user.id,
             email=user.email,
             email_verified=user.email_verified,
+            phone_verified=getattr(user, "phone_verified", False),
             first_name=user.first_name,
             last_name=user.last_name,
             avatar_url=getattr(user, "avatar_url", None),
@@ -130,8 +131,14 @@ class UserProfileService:
 
             # Update fields that are provided
             update_data = profile_update.model_dump(exclude_unset=True)
+            old_phone = user.phone
             for field, value in update_data.items():
                 setattr(user, field, value)
+
+            # A changed phone number is unverified until proven via OTP.
+            if "phone" in update_data and update_data["phone"] != old_phone:
+                user.phone_verified = False
+                user.phone_verified_at = None
 
             user.updated_at = utcnow()
 

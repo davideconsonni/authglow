@@ -95,6 +95,7 @@ class UserProfileResponse(BaseModel):
     id: str
     email: EmailStr
     email_verified: bool
+    phone_verified: bool = False
     first_name: Optional[str]
     last_name: Optional[str]
     avatar_url: Optional[str]

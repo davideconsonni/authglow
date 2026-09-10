@@ -84,6 +84,12 @@ def test_settings(tmp_path, test_keys_dir):
         # the default 12 (see ``Settings.bcrypt_rounds``).
         bcrypt_rounds=4,
         jwt_auto_rotate=False,
+        # Phone verification: tests must never touch the real
+        # provider — the developer's local .env may select
+        # infobip_sms/infobip_whatsapp, which would attempt live
+        # network calls. Individual tests opt into other backends
+        # by mutating this field.
+        phone_verification_backend="always_allow",
     )
     return settings
 
@@ -435,6 +441,17 @@ def email_verification_service(test_settings):
     with patch("authglow.services.email_verification.get_settings", return_value=test_settings):
         with patch("authglow.services.email_verification.UserStorage"):
             svc = EmailVerificationService()
+            svc.user_storage = MagicMock()
+            yield svc
+
+
+@pytest.fixture
+def phone_verification_service(test_settings):
+    from authglow.services.phone_verification import PhoneVerificationService
+
+    with patch("authglow.services.phone_verification.get_settings", return_value=test_settings):
+        with patch("authglow.services.phone_verification.UserStorage"):
+            svc = PhoneVerificationService(settings=test_settings)
             svc.user_storage = MagicMock()
             yield svc
 

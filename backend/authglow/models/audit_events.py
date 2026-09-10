@@ -40,6 +40,9 @@ class AuditEventType(str, Enum):
     EMAIL_VERIFICATION_SENT = "email_verification_sent"
     EMAIL_VERIFIED = "email_verified"
     EMAIL_CHANGED = "email_changed"
+    PHONE_VERIFICATION_SENT = "phone_verification_sent"
+    PHONE_VERIFIED = "phone_verified"
+    PHONE_VERIFICATION_FAILED = "phone_verification_failed"
     PROFILE_UPDATED = "profile_updated"
     PASSWORD_CHANGED = "password_changed"
     PASSWORD_RESET_REQUESTED = "password_reset_requested"
@@ -139,7 +142,7 @@ class AuditEventType(str, Enum):
             "account_unlocked",
         }:
             return "auth"
-        if self.value.startswith("user_") or self.value.startswith("email_") or self.value.startswith("profile_") or self.value.startswith("password_") or self.value == "account_deleted":
+        if self.value.startswith("user_") or self.value.startswith("email_") or self.value.startswith("phone_") or self.value.startswith("profile_") or self.value.startswith("password_") or self.value == "account_deleted":
             return "lifecycle"
         if self.value.startswith("mfa_") or self.value.startswith("backup_code_") or self.value.startswith("passkey_") or self.value.startswith("trusted_device_"):
             return "mfa"
