@@ -62,4 +62,6 @@
 
 - Implementato: `repository_backend` in `Settings`, `_REGISTRY`/`register_backend()`/`_resolve()` in `dependencies.py` (35 factory → wrapper con `settings=`), stub `repositories/postgres/`, `test_registry.py` (9 test), `REPOSITORY_BACKEND` in `.env.example`, `ARCHITECTURE.md` aggiornato. Extra: `_resolve` tipizzato con generico `_T` per mypy strict.
 - Test: `tests/unit/repositories/` 728 passed; `test_registry + test_config` 66 passed; `ruff check`/`ruff format`/`mypy` puliti.
+- Follow-up dalla full suite (stesso item): (a) `repository_backend` aggiunto a `_FIELD_META` in `api/admin_settings.py` (il test di copertura config lo richiede); (b) `_resolve_backend_name` tollera Settings mockati (non-string → `"file"`, settings inoltrato intatto — preserva i test JWT con `MagicMock`); (c) `REPOSITORY_BACKEND=file` in `.env.example`.
+- Full suite finale: **2716 passed** (`pytest -q --tb=line -n auto`, Python 3.13). Nota: mypy segnala 2 errori pre-esistenti in `api/admin.py:1180,1193` (file non toccato — da valutare separatamente).
 - Non committato (nessuna richiesta di commit).
