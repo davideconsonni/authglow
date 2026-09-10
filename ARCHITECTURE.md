@@ -48,11 +48,12 @@ authglow/
 │   └── authglow/
 │       ├── api/               # 20 FastAPI routers (HTTP layer, one per domain)
 │       ├── services/          # 45 modules / 50 classes (business logic, cross-entity coordination; auth/ + email/ + phone/ subpackages)
-│       ├── repositories/      # Storage abstraction (Protocols → File impls)
-│       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
-│       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
-│       │   ├── dependencies.py# Factory functions: get_<entity>_repository()
-│       │   └── file/          # 25 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
+  │       ├── repositories/      # Storage abstraction (Protocols → File impls)
+  │       │   ├── protocols.py   # 30 Protocol contracts (@runtime_checkable)
+  │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
+  │       │   ├── dependencies.py# Config-driven selector: _REGISTRY + register_backend() + get_<entity>_repository() (selected by Settings.repository_backend, default "file")
+  │       │   ├── postgres/      # Placeholder for the Postgres backend (unregistered — fail-fast until implemented)
+  │       │   └── file/          # 25 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
 │       ├── models/            # Pydantic request/response/domain models (24 modules)
 │       ├── core/              # config, crypto, cache, concurrency, permissions, password, pii, datetime, async_io, http_client, jwt_singleton, rate_limit
 │       └── middleware/        # Security headers, HTTPS enforcement, request size, request ID, proxy headers
@@ -260,7 +261,7 @@ Page component
 
 ## Architectural Principles
 
-1. **Protocol-driven repositories** — Services depend on Protocol contracts, not concrete implementations. Adding a new storage backend (Postgres, Redis) requires only new `repositories/<backend>/` files — zero changes to services or API.
+1. **Protocol-driven repositories** — Services depend on Protocol contracts, not concrete implementations. `repositories/dependencies.py` is a config-driven selector (`_REGISTRY` + `register_backend()`, chosen by `Settings.repository_backend`, env `REPOSITORY_BACKEND`, default `"file"` — fail-fast on unknown backends). Adding a new storage backend (Postgres, Redis) requires only new `repositories/<backend>/` files + one `register_backend()` call — zero changes to services or API. (`Settings.storage_backend` is unrelated: it selects the fsspec object store under the `file` backend.)
 
 2. **Cross-entity coordination in services** — Atomicity across multiple entities (e.g., User + EmailIndex + FederatedIdentity) is enforced by `named_lock()` inside the service, not in repositories.
 

@@ -1,12 +1,21 @@
 """FastAPI dependency-injection factories for repositories.
 
-One ``get_<entity>_repository()`` factory per entity. Services
-depend on these factories (or take an injected repository directly),
-so a new storage backend only adds a new ``repositories/<backend>/``
-implementation — zero changes to services or API.
+One ``get_<entity>_repository()`` factory per entity. Each factory is a
+thin wrapper over :func:`_resolve`, which selects the concrete
+implementation from :data:`_REGISTRY` based on
+``Settings.repository_backend`` (env ``REPOSITORY_BACKEND``).
+
+A new storage backend only adds a new ``repositories/<backend>/``
+implementation plus one :func:`register_backend` call — zero changes
+to services or API.
+
+``storage_backend`` (``Settings.storage_backend``) is unrelated: it
+selects the fsspec object store (file/s3/gcs/abfs) underneath the
+``file`` repository backend.
 """
 
-from typing import TYPE_CHECKING
+import importlib
+from typing import TYPE_CHECKING, Any, Callable, Dict, TypeVar
 
 if TYPE_CHECKING:
     from authglow.core.config import Settings
@@ -48,251 +57,325 @@ if TYPE_CHECKING:
         WebhookRepository,
     )
 
+# A factory takes an already-resolved Settings (or None) and returns a
+# repository instance. Factories lazy-import the concrete class so this
+# module never creates import cycles at startup.
+_Factory = Callable[[Any], Any]
+_BackendMap = Dict[str, _Factory]
+_T = TypeVar("_T")
 
-def get_token_blacklist_repository() -> "TokenBlacklistRepository":
-    """FastAPI factory for the token-blacklist repository.
+_REGISTRY: Dict[str, _BackendMap] = {}
 
-    Returns a fresh ``FileTokenBlacklistRepository`` per request — the
-    repository holds no mutable state, only fsspec handles, so this is
-    cheap. The service layer in ``services/auth/token_blacklist.py``
-    wraps the repository in a process-singleton, but FastAPI route
-    handlers that need direct access (none today, but added in case
-    of future admin / introspection endpoints) can inject this
-    factory.
+
+def _file_factory(module: str, class_name: str) -> _Factory:
+    """Build a lazy factory for a ``File*Repository`` class."""
+
+    def _make(settings: Any = None) -> Any:
+        mod = importlib.import_module(module)
+        cls = getattr(mod, class_name)
+        return cls(settings=settings)
+
+    _make.__name__ = f"file_{class_name}"
+    return _make
+
+
+def register_backend(name: str, mapping: _BackendMap) -> None:
+    """Register (or replace) a named repository backend.
+
+    ``mapping`` keys are entity names (e.g. ``"user"``,
+    ``"refresh_token"``); values are factories taking ``settings``.
     """
-    from authglow.repositories.file.token_blacklist import (
-        FileTokenBlacklistRepository,
-    )
-
-    return FileTokenBlacklistRepository()
+    _REGISTRY[name] = dict(mapping)
 
 
-def get_csrf_token_repository() -> "CSRFTokenRepository":
-    """FastAPI factory for the CSRF-token repository.
+def _resolve_backend_name(settings: Any = None) -> str:
+    """Return the configured backend name, resolving Settings lazily.
 
-    Returns a fresh ``FileCSRFTokenRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``CSRFTokenService`` (in ``services/csrf.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
+    Non-string values (e.g. ``MagicMock``-mocked Settings in tests,
+    which auto-create attributes) fall back to ``"file"`` — fail-fast
+    applies to real (string) misconfigurations only.
     """
-    from authglow.repositories.file.csrf import FileCSRFTokenRepository
+    if settings is None:
+        from authglow.core.config import get_settings
 
-    return FileCSRFTokenRepository()
+        settings = get_settings()
+    backend = getattr(settings, "repository_backend", "file")
+    if not isinstance(backend, str):
+        return "file"
+    return backend
 
 
-def get_session_repository() -> "SessionRepository":
-    """FastAPI factory for the MFA + consent-session repository.
+def _resolve(entity: str, settings: Any = None, _expect: "type[_T] | None" = None) -> _T:
+    """Instantiate the repository for *entity* on the configured backend.
 
-    Returns a fresh ``FileSessionRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``SessionService`` (in ``services/session.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
+    Fail-fast: unknown backends or entities raise ``ValueError`` with
+    the available names — never a silent fallback to ``file``.
+    The passed ``settings`` object is always forwarded to the
+    concrete constructor (``lru_cache`` bypass); only backend-name
+    lookup tolerates non-string values (see
+    :func:`_resolve_backend_name`).
     """
-    from authglow.repositories.file.session import FileSessionRepository
+    backend = _resolve_backend_name(settings)
+    try:
+        mapping = _REGISTRY[backend]
+    except KeyError:
+        raise ValueError(
+            f"Unknown repository_backend={backend!r} for entity {entity!r}. "
+            f"Available backends: {sorted(_REGISTRY)}"
+        ) from None
+    try:
+        factory = mapping[entity]
+    except KeyError:
+        raise ValueError(
+            f"Backend {backend!r} has no repository for entity {entity!r}. "
+            f"Available entities: {sorted(mapping)}"
+        ) from None
+    if settings is None:
+        from authglow.core.config import get_settings
 
-    return FileSessionRepository()
+        settings = get_settings()
+    return factory(settings)  # type: ignore[no-any-return]
 
 
-def get_email_verification_repository() -> "EmailVerificationRepository":
-    """FastAPI factory for the email-verification-token repository.
+_FILE_BACKEND: _BackendMap = {
+    "token_blacklist": _file_factory(
+        "authglow.repositories.file.token_blacklist", "FileTokenBlacklistRepository"
+    ),
+    "csrf_token": _file_factory("authglow.repositories.file.csrf", "FileCSRFTokenRepository"),
+    "session": _file_factory("authglow.repositories.file.session", "FileSessionRepository"),
+    "email_verification": _file_factory(
+        "authglow.repositories.file.email_verification",
+        "FileEmailVerificationRepository",
+    ),
+    "password_reset": _file_factory(
+        "authglow.repositories.file.password_reset", "FilePasswordResetRepository"
+    ),
+    "phone_verification": _file_factory(
+        "authglow.repositories.file.phone_verification",
+        "FilePhoneVerificationRepository",
+    ),
+    "authorization_code": _file_factory(
+        "authglow.repositories.file.authorization_code",
+        "FileAuthorizationCodeRepository",
+    ),
+    "oauth2_client": _file_factory(
+        "authglow.repositories.file.oauth_client", "FileOAuth2ClientRepository"
+    ),
+    "oauth2_consent": _file_factory(
+        "authglow.repositories.file.oauth_consent", "FileOAuth2ConsentRepository"
+    ),
+    "backup_code": _file_factory("authglow.repositories.file.mfa", "FileBackupCodeRepository"),
+    "backup_code_attempt": _file_factory(
+        "authglow.repositories.file.mfa", "FileBackupCodeAttemptRepository"
+    ),
+    "trusted_device": _file_factory(
+        "authglow.repositories.file.mfa", "FileTrustedDeviceRepository"
+    ),
+    "passkey": _file_factory("authglow.repositories.file.passkey", "FilePasskeyRepository"),
+    "webauthn_challenge": _file_factory(
+        "authglow.repositories.file.passkey", "FileWebAuthnChallengeRepository"
+    ),
+    "api_key": _file_factory("authglow.repositories.file.api_key", "FileAPIKeyRepository"),
+    "refresh_token": _file_factory(
+        "authglow.repositories.file.refresh_token", "FileRefreshTokenRepository"
+    ),
+    "permission": _file_factory("authglow.repositories.file.rbac", "FilePermissionRepository"),
+    "role": _file_factory("authglow.repositories.file.rbac", "FileRoleRepository"),
+    "user_role": _file_factory("authglow.repositories.file.rbac", "FileUserRoleRepository"),
+    "login_history": _file_factory(
+        "authglow.repositories.file.login_history", "FileLoginHistoryRepository"
+    ),
+    "admin_action": _file_factory(
+        "authglow.repositories.file.admin_action", "FileAdminActionRepository"
+    ),
+    "security_event": _file_factory(
+        "authglow.repositories.file.security_event", "FileSecurityEventRepository"
+    ),
+    "email_index": _file_factory(
+        "authglow.repositories.file.email_index", "FileEmailIndexRepository"
+    ),
+    "federated_identity": _file_factory(
+        "authglow.repositories.file.federated_identity",
+        "FileFederatedIdentityRepository",
+    ),
+    "user": _file_factory("authglow.repositories.file.user", "FileUserRepository"),
+    "user_preferences": _file_factory(
+        "authglow.repositories.file.user_preferences", "FileUserPreferencesRepository"
+    ),
+    "federation_provider": _file_factory(
+        "authglow.repositories.file.federation", "FileFederationProviderRepository"
+    ),
+    "keystore": _file_factory("authglow.repositories.file.keystore", "FileKeyStoreRepository"),
+    "device_authorization": _file_factory(
+        "authglow.repositories.file.device_authorization",
+        "FileDeviceAuthorizationRepository",
+    ),
+    "claim_policy": _file_factory(
+        "authglow.repositories.file.claim_policy", "FileClientClaimPolicyRepository"
+    ),
+    "api_key_claim_policy": _file_factory(
+        "authglow.repositories.file.api_key_claim_policy",
+        "FileAPIKeyClaimPolicyRepository",
+    ),
+    "webhook": _file_factory("authglow.repositories.file.webhook", "FileWebhookRepository"),
+    "webhook_delivery": _file_factory(
+        "authglow.repositories.file.webhook", "FileWebhookDeliveryRepository"
+    ),
+    "rate_limit_config": _file_factory(
+        "authglow.repositories.file.rate_limit_config",
+        "FileRateLimitConfigRepository",
+    ),
+    "settings_override": _file_factory(
+        "authglow.repositories.file.settings_override",
+        "FileSettingsOverrideRepository",
+    ),
+}
 
-    Returns a fresh ``FileEmailVerificationRepository`` per request —
-    the repository holds no mutable state, only fsspec handles. The
-    ``EmailVerificationService`` (in
-    ``services/email_verification.py``) creates its own default
-    repository by default; this factory is exposed for FastAPI
-    route handlers or tests that want to inject the repository
-    directly.
-    """
-    from authglow.repositories.file.email_verification import (
-        FileEmailVerificationRepository,
-    )
+register_backend("file", _FILE_BACKEND)
 
-    return FileEmailVerificationRepository()
+__all__ = [
+    "register_backend",
+    "get_token_blacklist_repository",
+    "get_csrf_token_repository",
+    "get_session_repository",
+    "get_email_verification_repository",
+    "get_password_reset_repository",
+    "get_phone_verification_repository",
+    "get_authorization_code_repository",
+    "get_oauth2_client_repository",
+    "get_oauth2_consent_repository",
+    "get_backup_code_repository",
+    "get_backup_code_attempt_repository",
+    "get_trusted_device_repository",
+    "get_passkey_repository",
+    "get_webauthn_challenge_repository",
+    "get_api_key_repository",
+    "get_refresh_token_repository",
+    "get_permission_repository",
+    "get_role_repository",
+    "get_user_role_repository",
+    "get_login_history_repository",
+    "get_admin_action_repository",
+    "get_security_event_repository",
+    "get_email_index_repository",
+    "get_federated_identity_repository",
+    "get_user_repository",
+    "get_user_preferences_repository",
+    "get_federation_provider_repository",
+    "get_keystore_repository",
+    "get_device_authorization_repository",
+    "get_claim_policy_repository",
+    "get_api_key_claim_policy_repository",
+    "get_webhook_repository",
+    "get_webhook_delivery_repository",
+    "get_rate_limit_config_repository",
+    "get_settings_override_repository",
+]
 
 
-def get_password_reset_repository() -> "PasswordResetRepository":
-    """FastAPI factory for the password-reset-token repository.
+def get_token_blacklist_repository(
+    settings: "Settings | None" = None,
+) -> "TokenBlacklistRepository":
+    """FastAPI factory for the token-blacklist repository."""
+    return _resolve("token_blacklist", settings)
 
-    Returns a fresh ``FilePasswordResetRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``PasswordResetService`` (in ``services/password_reset.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-    """
-    from authglow.repositories.file.password_reset import (
-        FilePasswordResetRepository,
-    )
 
-    return FilePasswordResetRepository()
+def get_csrf_token_repository(
+    settings: "Settings | None" = None,
+) -> "CSRFTokenRepository":
+    """FastAPI factory for the CSRF-token repository."""
+    return _resolve("csrf_token", settings)
+
+
+def get_session_repository(
+    settings: "Settings | None" = None,
+) -> "SessionRepository":
+    """FastAPI factory for the MFA + consent-session repository."""
+    return _resolve("session", settings)
+
+
+def get_email_verification_repository(
+    settings: "Settings | None" = None,
+) -> "EmailVerificationRepository":
+    """FastAPI factory for the email-verification-token repository."""
+    return _resolve("email_verification", settings)
+
+
+def get_password_reset_repository(
+    settings: "Settings | None" = None,
+) -> "PasswordResetRepository":
+    """FastAPI factory for the password-reset-token repository."""
+    return _resolve("password_reset", settings)
 
 
 def get_phone_verification_repository(
     settings: "Settings | None" = None,
 ) -> "PhoneVerificationRepository":
-    """FastAPI factory for the phone-verification-token repository.
-
-    Returns a fresh ``FilePhoneVerificationRepository`` per call —
-    the repository holds no mutable state, only fsspec handles. The
-    ``PhoneVerificationService`` (in
-    ``services/phone_verification.py``) creates its own default
-    repository by default; this factory is exposed for FastAPI
-    route handlers or tests that want to inject the repository
-    directly.
-    """
-    from authglow.repositories.file.phone_verification import (
-        FilePhoneVerificationRepository,
-    )
-
-    return FilePhoneVerificationRepository(settings=settings)
+    """FastAPI factory for the phone-verification-token repository."""
+    return _resolve("phone_verification", settings)
 
 
-def get_authorization_code_repository() -> "AuthorizationCodeRepository":
-    """FastAPI factory for the OAuth2 authorization-code repository.
-
-    Returns a fresh ``FileAuthorizationCodeRepository`` per request —
-    the repository holds no mutable state, only fsspec handles. The
-    ``OAuth2Service`` (in ``services/oauth2.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.authorization_code import (
-        FileAuthorizationCodeRepository,
-    )
-
-    return FileAuthorizationCodeRepository()
+def get_authorization_code_repository(
+    settings: "Settings | None" = None,
+) -> "AuthorizationCodeRepository":
+    """FastAPI factory for the OAuth2 authorization-code repository."""
+    return _resolve("authorization_code", settings)
 
 
-def get_oauth2_client_repository() -> "OAuth2ClientRepository":
-    """FastAPI factory for the OAuth2-client repository.
-
-    Returns a fresh ``FileOAuth2ClientRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``OAuth2ClientStorage`` (in ``services/oauth_client.py``) creates
-    its own default repository by default; this factory is exposed
-    for FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.oauth_client import (
-        FileOAuth2ClientRepository,
-    )
-
-    return FileOAuth2ClientRepository()
+def get_oauth2_client_repository(
+    settings: "Settings | None" = None,
+) -> "OAuth2ClientRepository":
+    """FastAPI factory for the OAuth2-client repository."""
+    return _resolve("oauth2_client", settings)
 
 
-def get_oauth2_consent_repository() -> "OAuth2ConsentRepository":
-    """FastAPI factory for the OAuth2-consent repository.
-
-    Returns a fresh ``FileOAuth2ConsentRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``OAuth2ConsentService`` (in ``services/oauth_consent.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-    """
-    from authglow.repositories.file.oauth_consent import (
-        FileOAuth2ConsentRepository,
-    )
-
-    return FileOAuth2ConsentRepository()
+def get_oauth2_consent_repository(
+    settings: "Settings | None" = None,
+) -> "OAuth2ConsentRepository":
+    """FastAPI factory for the OAuth2-consent repository."""
+    return _resolve("oauth2_consent", settings)
 
 
-def get_backup_code_repository() -> "BackupCodeRepository":
-    """FastAPI factory for the MFA backup-codes repository.
-
-    Returns a fresh ``FileBackupCodeRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``MFAService`` (in ``services/mfa.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.mfa import FileBackupCodeRepository
-
-    return FileBackupCodeRepository()
+def get_backup_code_repository(
+    settings: "Settings | None" = None,
+) -> "BackupCodeRepository":
+    """FastAPI factory for the MFA backup-codes repository."""
+    return _resolve("backup_code", settings)
 
 
-def get_backup_code_attempt_repository() -> "BackupCodeAttemptRepository":
-    """FastAPI factory for the MFA backup-code-attempt counter.
-
-    Returns a fresh ``FileBackupCodeAttemptRepository`` per request —
-    the repository holds no mutable state, only fsspec handles. The
-    ``MFAService`` (in ``services/mfa.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.mfa import FileBackupCodeAttemptRepository
-
-    return FileBackupCodeAttemptRepository()
+def get_backup_code_attempt_repository(
+    settings: "Settings | None" = None,
+) -> "BackupCodeAttemptRepository":
+    """FastAPI factory for the MFA backup-code-attempt counter."""
+    return _resolve("backup_code_attempt", settings)
 
 
-def get_trusted_device_repository() -> "TrustedDeviceRepository":
-    """FastAPI factory for the trusted-device repository.
-
-    Returns a fresh ``FileTrustedDeviceRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``MFAService`` (in ``services/mfa.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.mfa import FileTrustedDeviceRepository
-
-    return FileTrustedDeviceRepository()
+def get_trusted_device_repository(
+    settings: "Settings | None" = None,
+) -> "TrustedDeviceRepository":
+    """FastAPI factory for the trusted-device repository."""
+    return _resolve("trusted_device", settings)
 
 
-def get_passkey_repository() -> "PasskeyRepository":
-    """FastAPI factory for the WebAuthn passkey repository.
-
-    Returns a fresh ``FilePasskeyRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``PasskeyService`` (in ``services/passkey.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.passkey import FilePasskeyRepository
-
-    return FilePasskeyRepository()
+def get_passkey_repository(
+    settings: "Settings | None" = None,
+) -> "PasskeyRepository":
+    """FastAPI factory for the WebAuthn passkey repository."""
+    return _resolve("passkey", settings)
 
 
-def get_webauthn_challenge_repository() -> "WebAuthnChallengeRepository":
-    """FastAPI factory for the WebAuthn challenge repository.
-
-    Returns a fresh ``FileWebAuthnChallengeRepository`` per request —
-    the repository holds no mutable state, only fsspec handles. The
-    ``PasskeyService`` (in ``services/passkey.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.passkey import (
-        FileWebAuthnChallengeRepository,
-    )
-
-    return FileWebAuthnChallengeRepository()
+def get_webauthn_challenge_repository(
+    settings: "Settings | None" = None,
+) -> "WebAuthnChallengeRepository":
+    """FastAPI factory for the WebAuthn challenge repository."""
+    return _resolve("webauthn_challenge", settings)
 
 
-def get_api_key_repository() -> "APIKeyRepository":
-    """FastAPI factory for the API-key repository.
-
-    Returns a fresh ``FileAPIKeyRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``APIKeyService`` (in ``services/api_key.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.api_key import FileAPIKeyRepository
-
-    return FileAPIKeyRepository()
+def get_api_key_repository(
+    settings: "Settings | None" = None,
+) -> "APIKeyRepository":
+    """FastAPI factory for the API-key repository."""
+    return _resolve("api_key", settings)
 
 
 def get_refresh_token_repository(
@@ -300,432 +383,145 @@ def get_refresh_token_repository(
 ) -> "RefreshTokenRepository":
     """FastAPI factory for the refresh-token repository.
 
-    Returns a fresh ``FileRefreshTokenRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``RefreshTokenService`` (in ``services/refresh_token.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-
     The optional ``settings`` argument lets the caller (typically
     the service constructor) propagate an already-resolved
     ``Settings`` instance — this is needed when the service
     resolves ``get_settings()`` against a patched binding and the
     repository must read from the same ``Settings`` (the
     ``BaseFileRepository`` default would otherwise hit the
-    ``lru_cache``'d global ``get_settings``, which is a
-    process-cached singleton that ignores per-test patches).
+    ``lru_cache``'d global ``get_settings``).
     """
-    from authglow.repositories.file.refresh_token import (
-        FileRefreshTokenRepository,
-    )
-
-    return FileRefreshTokenRepository(settings=settings)
+    return _resolve("refresh_token", settings)
 
 
-def get_permission_repository() -> "PermissionRepository":
-    """FastAPI factory for the RBAC permission repository.
-
-    Returns a fresh ``FilePermissionRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``RBACService`` (in ``services/rbac.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.rbac import FilePermissionRepository
-
-    return FilePermissionRepository()
+def get_permission_repository(
+    settings: "Settings | None" = None,
+) -> "PermissionRepository":
+    """FastAPI factory for the RBAC permission repository."""
+    return _resolve("permission", settings)
 
 
-def get_role_repository() -> "RoleRepository":
-    """FastAPI factory for the RBAC role repository.
-
-    Returns a fresh ``FileRoleRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``RBACService`` (in ``services/rbac.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.rbac import FileRoleRepository
-
-    return FileRoleRepository()
+def get_role_repository(
+    settings: "Settings | None" = None,
+) -> "RoleRepository":
+    """FastAPI factory for the RBAC role repository."""
+    return _resolve("role", settings)
 
 
-def get_user_role_repository() -> "UserRoleRepository":
-    """FastAPI factory for the RBAC user-role assignment repository.
-
-    Returns a fresh ``FileUserRoleRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``RBACService`` (in ``services/rbac.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.rbac import FileUserRoleRepository
-
-    return FileUserRoleRepository()
+def get_user_role_repository(
+    settings: "Settings | None" = None,
+) -> "UserRoleRepository":
+    """FastAPI factory for the RBAC user-role assignment repository."""
+    return _resolve("user_role", settings)
 
 
 def get_login_history_repository(
     settings: "Settings | None" = None,
 ) -> "LoginHistoryRepository":
-    """FastAPI factory for the login-history repository.
-
-    Returns a fresh ``FileLoginHistoryRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``LoginHistoryService`` (in ``services/login_history.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository`.
-    """
-    from authglow.repositories.file.login_history import (
-        FileLoginHistoryRepository,
-    )
-
-    return FileLoginHistoryRepository(settings=settings)
+    """FastAPI factory for the login-history repository."""
+    return _resolve("login_history", settings)
 
 
-def get_admin_action_repository() -> "AdminActionRepository":
-    """FastAPI factory for the admin-action repository.
-
-    Returns a fresh ``FileAdminActionRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``AdminActionService`` (in ``services/admin_action.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-    """
-    from authglow.repositories.file.admin_action import (
-        FileAdminActionRepository,
-    )
-
-    return FileAdminActionRepository()
+def get_admin_action_repository(
+    settings: "Settings | None" = None,
+) -> "AdminActionRepository":
+    """FastAPI factory for the admin-action repository."""
+    return _resolve("admin_action", settings)
 
 
-def get_security_event_repository() -> "SecurityEventRepository":
-    """FastAPI factory for the security-event repository.
-
-    Returns a fresh ``FileSecurityEventRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``SecurityEventService`` (in ``services/security_event.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-    """
-    from authglow.repositories.file.security_event import (
-        FileSecurityEventRepository,
-    )
-
-    return FileSecurityEventRepository()
+def get_security_event_repository(
+    settings: "Settings | None" = None,
+) -> "SecurityEventRepository":
+    """FastAPI factory for the security-event repository."""
+    return _resolve("security_event", settings)
 
 
 def get_email_index_repository(
     settings: "Settings | None" = None,
 ) -> "EmailIndexRepository":
-    """FastAPI factory for the email-index repository.
-
-    Returns a fresh ``FileEmailIndexRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``UserStorage`` (in ``services/storage.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository` /
-    :func:`get_login_history_repository`.
-    """
-    from authglow.repositories.file.email_index import (
-        FileEmailIndexRepository,
-    )
-
-    return FileEmailIndexRepository(settings=settings)
+    """FastAPI factory for the email-index repository."""
+    return _resolve("email_index", settings)
 
 
 def get_federated_identity_repository(
     settings: "Settings | None" = None,
 ) -> "FederatedIdentityRepository":
-    """FastAPI factory for the federated-identity repository.
-
-    Returns a fresh ``FileFederatedIdentityRepository`` per
-    request — the repository holds no mutable state, only fsspec
-    handles. The ``UserStorage`` (in ``services/storage.py``)
-    creates its own default repository by default; this factory
-    is exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository` /
-    :func:`get_login_history_repository`.
-    """
-    from authglow.repositories.file.federated_identity import (
-        FileFederatedIdentityRepository,
-    )
-
-    return FileFederatedIdentityRepository(settings=settings)
+    """FastAPI factory for the federated-identity repository."""
+    return _resolve("federated_identity", settings)
 
 
 def get_user_repository(
     settings: "Settings | None" = None,
 ) -> "UserRepository":
-    """FastAPI factory for the user repository.
-
-    Returns a fresh ``FileUserRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    ``UserStorage`` (in ``services/storage.py``) creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository` /
-    :func:`get_login_history_repository`.
-    """
-    from authglow.repositories.file.user import FileUserRepository
-
-    return FileUserRepository(settings=settings)
+    """FastAPI factory for the user repository."""
+    return _resolve("user", settings)
 
 
 def get_user_preferences_repository(
     settings: "Settings | None" = None,
 ) -> "UserPreferencesRepository":
-    """FastAPI factory for the user-preferences repository.
-
-    Returns a fresh ``FileUserPreferencesRepository`` per
-    request — the repository holds no mutable state, only fsspec
-    handles. The ``UserProfileService`` (in
-    ``services/user_profile.py``) creates its own default
-    repository by default; this factory is exposed for FastAPI
-    route handlers or tests that want to inject the repository
-    directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository` /
-    :func:`get_login_history_repository`.
-    """
-    from authglow.repositories.file.user_preferences import (
-        FileUserPreferencesRepository,
-    )
-
-    return FileUserPreferencesRepository(settings=settings)
+    """FastAPI factory for the user-preferences repository."""
+    return _resolve("user_preferences", settings)
 
 
 def get_federation_provider_repository(
     settings: "Settings | None" = None,
 ) -> "FederationProviderRepository":
-    """FastAPI factory for the federation-provider repository.
-
-    Returns a fresh ``FileFederationProviderRepository`` per
-    request — the repository holds no mutable state, only fsspec
-    handles. The ``FederationService`` (in
-    ``services/federation.py``) creates its own default
-    repository by default; this factory is exposed for FastAPI
-    route handlers or tests that want to inject the repository
-    directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale as
-    :func:`get_refresh_token_repository` /
-    :func:`get_login_history_repository`.
-    """
-    from authglow.repositories.file.federation import (
-        FileFederationProviderRepository,
-    )
-
-    return FileFederationProviderRepository(settings=settings)
+    """FastAPI factory for the federation-provider repository."""
+    return _resolve("federation_provider", settings)
 
 
 def get_keystore_repository(
     settings: "Settings | None" = None,
 ) -> "KeyStoreRepository":
-    """FastAPI factory for the keyring repository.
-
-    Returns a fresh ``FileKeyStoreRepository`` per request —
-    the repository holds the keyring state in-memory after
-    first load (subsequent calls are cheap, but the keyring
-    is small: typically 1-3 key pairs).
-
-    The ``JWTService`` (in ``services/jwt.py``) creates its
-    own default repository by default; this factory is
-    exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-
-    The optional ``settings`` argument lets the caller
-    (typically the service constructor) propagate an
-    already-resolved ``Settings`` instance so the repository
-    reads from the same ``Settings`` as the service (the
-    ``BaseFileRepository`` default would otherwise hit the
-    ``lru_cache``'d global ``get_settings``).
-    """
-    from authglow.repositories.file.keystore import (
-        FileKeyStoreRepository,
-    )
-
-    return FileKeyStoreRepository(settings=settings)
+    """FastAPI factory for the keyring repository."""
+    return _resolve("keystore", settings)
 
 
 def get_device_authorization_repository(
     settings: "Settings | None" = None,
 ) -> "DeviceAuthorizationRepository":
-    """FastAPI factory for the device-authorization repository.
-
-    Returns a fresh ``FileDeviceAuthorizationRepository`` per
-    request. The ``DeviceAuthorizationService`` creates its own
-    default repository by default; this factory is exposed for
-    FastAPI route handlers or tests that want to inject the
-    repository directly.
-    """
-    from authglow.repositories.file.device_authorization import (
-        FileDeviceAuthorizationRepository,
-    )
-
-    return FileDeviceAuthorizationRepository(settings=settings)
+    """FastAPI factory for the device-authorization repository."""
+    return _resolve("device_authorization", settings)
 
 
 def get_claim_policy_repository(
     settings: "Settings | None" = None,
 ) -> "ClientClaimPolicyRepository":
-    """FastAPI factory for the per-client claim policy repository.
-
-    Returns a fresh ``FileClientClaimPolicyRepository`` per
-    request — the repository holds no mutable state, only
-    fsspec handles. The :class:`ClaimPolicyService` (in
-    ``services/claim_policy.py``) creates its own default
-    repository by default; this factory is exposed for FastAPI
-    route handlers or tests that want to inject the repository
-    directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale
-    as :func:`get_refresh_token_repository` /
-    :func:`get_user_repository`.
-    """
-    from authglow.repositories.file.claim_policy import (
-        FileClientClaimPolicyRepository,
-    )
-
-    return FileClientClaimPolicyRepository(settings=settings)
+    """FastAPI factory for the per-client claim policy repository."""
+    return _resolve("claim_policy", settings)
 
 
 def get_api_key_claim_policy_repository(
     settings: "Settings | None" = None,
 ) -> "APIKeyClaimPolicyRepository":
-    """FastAPI factory for the per-API-key claim policy repository.
-
-    API key counterpart of :func:`get_claim_policy_repository`.
-    Returns a fresh ``FileAPIKeyClaimPolicyRepository`` per
-    request — the repository holds no mutable state, only
-    fsspec handles. The :class:`ClaimPolicyService` creates
-    its own default repository by default; this factory is
-    exposed for FastAPI route handlers or tests that want to
-    inject the repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale
-    as the other factory functions.
-    """
-    from authglow.repositories.file.api_key_claim_policy import (
-        FileAPIKeyClaimPolicyRepository,
-    )
-
-    return FileAPIKeyClaimPolicyRepository(settings=settings)
+    """FastAPI factory for the per-API-key claim policy repository."""
+    return _resolve("api_key_claim_policy", settings)
 
 
 def get_webhook_repository(
     settings: "Settings | None" = None,
 ) -> "WebhookRepository":
-    """FastAPI factory for the webhook-endpoint repository.
-
-    Returns a fresh ``FileWebhookRepository`` per request — the repository
-    holds no mutable state, only fsspec handles. The webhook API routes
-    inject this via ``Depends``; tests can pass ``settings=`` explicitly to
-    bypass any cached settings (same pattern as the other factories).
-    """
-    from authglow.repositories.file.webhook import FileWebhookRepository
-
-    if settings is not None:
-        return FileWebhookRepository(settings=settings)
-    return FileWebhookRepository()
+    """FastAPI factory for the webhook-endpoint repository."""
+    return _resolve("webhook", settings)
 
 
 def get_webhook_delivery_repository(
     settings: "Settings | None" = None,
 ) -> "WebhookDeliveryRepository":
-    """FastAPI factory for the webhook-delivery repository.
-
-    Returns a fresh ``FileWebhookDeliveryRepository`` per request. The
-    dispatcher (``services/webhook_dispatcher.py``) creates its own default
-    repository by default; this factory exists for FastAPI injection and
-    tests.
-    """
-    from authglow.repositories.file.webhook import FileWebhookDeliveryRepository
-
-    if settings is not None:
-        return FileWebhookDeliveryRepository(settings=settings)
-    return FileWebhookDeliveryRepository()
+    """FastAPI factory for the webhook-delivery repository."""
+    return _resolve("webhook_delivery", settings)
 
 
 def get_rate_limit_config_repository(
     settings: "Settings | None" = None,
 ) -> "RateLimitConfigRepository":
-    """FastAPI factory for the admin rate-limit config repository.
-
-    Returns a fresh ``FileRateLimitConfigRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    :class:`RateLimitConfigService` (in ``services/rate_limit_config.py``)
-    creates its own default repository by default; this factory is
-    exposed for FastAPI route handlers or tests that want to inject the
-    repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale
-    as the other factory functions.
-    """
-    from authglow.repositories.file.rate_limit_config import (
-        FileRateLimitConfigRepository,
-    )
-
-    return FileRateLimitConfigRepository(settings=settings)
+    """FastAPI factory for the admin rate-limit config repository."""
+    return _resolve("rate_limit_config", settings)
 
 
 def get_settings_override_repository(
     settings: "Settings | None" = None,
 ) -> "SettingsOverrideRepository":
-    """FastAPI factory for the settings-override repository.
-
-    Returns a fresh ``FileSettingsOverrideRepository`` per request — the
-    repository holds no mutable state, only fsspec handles. The
-    :class:`SettingsOverrideService` (in ``services/settings_override.py``)
-    creates its own default repository by default; this factory is
-    exposed for FastAPI route handlers or tests that want to inject the
-    repository directly.
-
-    The optional ``settings`` argument lets the caller (typically
-    the service constructor) propagate an already-resolved
-    ``Settings`` instance — same ``lru_cache`` bypass rationale
-    as the other factory functions.
-    """
-    from authglow.repositories.file.settings_override import (
-        FileSettingsOverrideRepository,
-    )
-
-    return FileSettingsOverrideRepository(settings=settings)
+    """FastAPI factory for the settings-override repository."""
+    return _resolve("settings_override", settings)

@@ -400,6 +400,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "restart_required": True,
     },
     "storage_path": {"category": "storage", "label": "Storage path", "restart_required": True},
+    "repository_backend": {
+        "category": "storage",
+        "label": "Repository backend",
+        "restart_required": True,
+    },
     # --- Cache ---
     "cache_refresh_token_maxsize": {
         "category": "cache",

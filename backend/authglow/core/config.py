@@ -248,6 +248,15 @@ class Settings(BaseSettings):
     # Storage Settings
     storage_backend: str = "file"
     storage_path: str = "./data/users"
+    repository_backend: Literal["file"] = Field(
+        default="file",
+        description=(
+            "Repository backend selector (entity storage). "
+            "'file' uses repositories/file/ via fsspec. "
+            "Distinct from storage_backend (fsspec file/s3/gcs/abfs). "
+            "Set via the REPOSITORY_BACKEND environment variable."
+        ),
+    )
 
     # Cloud provider credentials (optional)
     aws_access_key_id: Optional[str] = None
@@ -418,7 +427,9 @@ class Settings(BaseSettings):
 
     # Audit Logging Settings
     audit_enabled: bool = True
-    audit_email_log_level: str = "hash"  # none, mask, hash (VAPT-080: none not allowed in production)
+    audit_email_log_level: str = (
+        "hash"  # none, mask, hash (VAPT-080: none not allowed in production)
+    )
     audit_sample_rate: float = 1.0  # Sampling rate for high-volume events (0.0-1.0)
     audit_retention_days_auth: int = 90
     audit_retention_days_oauth2: int = 90
