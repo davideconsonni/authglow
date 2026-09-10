@@ -16,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.api.claim_policy import router as claim_policy_router
-from authglow.api.claim_policy import require_admin
 from authglow.models.claim_policy import (
     BUILTIN_TEMPLATES,
     ClaimRule,
@@ -26,18 +25,6 @@ from authglow.models.claim_policy import (
 )
 from authglow.models.oauth_client import OAuth2Client
 from authglow.services.password import hash_password
-
-
-def _make_admin_user():
-    from authglow.models.user import User
-
-    return User(
-        id="admin-1",
-        email="admin@test.com",
-        hashed_password=hash_password("TestP@ss123!"),
-        is_active=True,
-        scopes=["admin"],
-    )
 
 
 def _make_client(client_id: str = "test-client-1") -> OAuth2Client:
@@ -53,15 +40,14 @@ def _make_client(client_id: str = "test-client-1") -> OAuth2Client:
 
 
 @pytest.fixture
-def admin_client(test_settings):
-    """A FastAPI ``TestClient`` with ``require_admin`` bypassed
-    and the underlying services backed by the real
-    ``FileClientClaimPolicyRepository`` (against the
-    per-test tmp_path)."""
+def admin_client(admin_user_with_role, admin_auth_headers):
+    """A FastAPI ``TestClient`` authenticated as the persisted RBAC
+    admin (real JWT) with the underlying services backed by the real
+    ``FileClientClaimPolicyRepository`` (against the per-test
+    tmp_path)."""
     app = FastAPI()
     app.include_router(claim_policy_router)
-    app.dependency_overrides[require_admin] = lambda: _make_admin_user()
-    return TestClient(app)
+    return TestClient(app, headers=admin_auth_headers)
 
 
 class TestGetClaimPolicy:

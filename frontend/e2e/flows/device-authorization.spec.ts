@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { csrfHeaders, getCsrfToken } from '../auth.setup'
 
 const BACKEND = 'http://localhost:8001'
 
@@ -7,8 +8,14 @@ test.describe('Device Authorization — full flow', () => {
     page,
     request,
   }) => {
-    // 1. Create a test OAuth client via backend API
+    // Cookie-authenticated unsafe calls need the CSRF token header.
+    const csrf = await getCsrfToken(request)
+
+    // 1. Create a test OAuth client via backend API. Device-flow clients
+    // are PUBLIC (no secret on the device) — a confidential client gets
+    // 401 invalid_client at the device authorize endpoint.
     const clientRes = await request.post(`${BACKEND}/api/oauth-clients`, {
+      headers: csrfHeaders(csrf),
       data: {
         client_name: 'E2E Device Test',
         redirect_uris: ['http://localhost:6060/callback'],
@@ -18,6 +25,8 @@ test.describe('Device Authorization — full flow', () => {
           'refresh_token',
         ],
         scope: 'read',
+        is_confidential: false,
+        token_endpoint_auth_method: 'none',
       },
     })
     expect(clientRes.ok()).toBeTruthy()
@@ -42,8 +51,15 @@ test.describe('Device Authorization — full flow', () => {
     expect(trimmedUserCode.length).toBeGreaterThan(0)
     expect(trimmedUserCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/)
 
+    // The SPA fetched a fresh CSRF token during the page navigation
+    // (the server keeps ONE token per session and rotates on fetch),
+    // so the token captured at the start of the test is stale now.
+    // Re-fetch before the raw API calls.
+    const csrfAfterNav = await getCsrfToken(request)
+
     // 6. Verify user code via backend API (simulates browser fetch)
     const verifyRes = await request.post(`${BACKEND}/api/oauth2/device/verify`, {
+      headers: csrfHeaders(csrfAfterNav),
       data: { user_code: trimmedUserCode },
     })
     expect(verifyRes.ok()).toBeTruthy()
@@ -53,6 +69,7 @@ test.describe('Device Authorization — full flow', () => {
 
     // 7. Approve via API
     const approveRes = await request.post(`${BACKEND}/api/oauth2/device/approve`, {
+      headers: csrfHeaders(csrfAfterNav),
       data: { user_code: trimmedUserCode },
     })
     expect(approveRes.ok()).toBeTruthy()
@@ -65,14 +82,18 @@ test.describe('Device Authorization — full flow', () => {
     await expect(page.locator('td').filter({ hasText: 'authorized' }).first()).toBeVisible()
 
     // 9. Verify poll returns access denied on already-used code
+    // (the step-8 navigation rotated the token again)
+    const csrf3 = await getCsrfToken(request)
     const secondVerifyRes = await request.post(
       `${BACKEND}/api/oauth2/device/verify`,
-      { data: { user_code: trimmedUserCode } },
+      { headers: csrfHeaders(csrf3), data: { user_code: trimmedUserCode } },
     )
     expect(secondVerifyRes.status()).toBe(400)
 
     // 10. Clean up — delete test client
-    await request.delete(`${BACKEND}/api/oauth-clients/${client.client_id}`)
+    await request.delete(`${BACKEND}/api/oauth-clients/${client.client_id}`, {
+      headers: csrfHeaders(csrf3),
+    })
   })
 
   test('device verification page shows sign-in prompt when unauthenticated', async ({
@@ -106,15 +127,39 @@ test.describe('Device Authorization — full flow', () => {
   test('polling with invalid device_code returns expired_token', async ({
     request,
   }) => {
-    const res = await request.post(`${BACKEND}/oauth2/token`, {
-      form: {
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        code: 'nonexistent-device-code',
-        client_id: 'test-client',
+    // CSRF gate + a registered client: the poll must fail with
+    // expired_token (RFC 8628 §3.5), not a transport-level 403.
+    const csrf = await getCsrfToken(request)
+    const clientRes = await request.post(`${BACKEND}/api/oauth-clients`, {
+      headers: csrfHeaders(csrf),
+      data: {
+        client_name: 'E2E Device Poll Test',
+        redirect_uris: ['http://localhost:6060/callback'],
+        grant_types: ['urn:ietf:params:oauth:grant-type:device_code'],
+        scope: 'read',
+        is_confidential: false,
+        token_endpoint_auth_method: 'none',
       },
     })
-    expect(res.status()).toBe(400)
-    const body = await res.json()
-    expect(body.detail.error || body.detail).toContain('expired_token')
+    expect(clientRes.ok()).toBeTruthy()
+    const client = await clientRes.json()
+    try {
+      const res = await request.post(`${BACKEND}/oauth2/token`, {
+        headers: csrfHeaders(csrf),
+        form: {
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          // The token endpoint reuses the `code` param for device_code.
+          code: 'nonexistent-device-code',
+          client_id: client.client_id,
+        },
+      })
+      expect(res.status()).toBe(400)
+      const body = await res.json()
+      expect(body.error || body.detail).toContain('expired_token')
+    } finally {
+      await request.delete(`${BACKEND}/api/oauth-clients/${client.client_id}`, {
+        headers: csrfHeaders(csrf),
+      })
+    }
   })
 })

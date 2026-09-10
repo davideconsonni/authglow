@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from authglow.api.auth import get_current_user
+from authglow.api.admin import require_user_with_permission
 from authglow.core.rate_limit import limiter
 from authglow.core.safeword_store import (
     SafewordPurpose,
@@ -54,19 +54,12 @@ def get_audit_service() -> AuditService:
     return AuditService()
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require admin scope."""
-    if "admin" not in current_user.scopes:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return current_user
-
-
 @router.post("", response_model=OAuth2ClientWithSecret, status_code=status.HTTP_201_CREATED)
-@limiter.limit("10/hour")  # Max 10 client creations per hour
+@limiter.limit("60/hour")  # Max 10 client creations per hour
 async def create_oauth_client(
     request: Request,
     client_data: OAuth2ClientCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -153,7 +146,7 @@ async def list_oauth_clients(
     limit: int = 100,
     offset: int = 0,
     active_only: bool = False,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
 ):
     """List all OAuth2 clients (admin only)."""
@@ -165,7 +158,7 @@ async def list_oauth_clients(
 @router.get("/{client_id}", response_model=OAuth2ClientResponse)
 async def get_oauth_client(
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
 ):
     """Get a specific OAuth2 client (admin only)."""
@@ -178,12 +171,12 @@ async def get_oauth_client(
 
 
 @router.put("/{client_id}", response_model=OAuth2ClientResponse)
-@limiter.limit("30/hour")  # Max 30 client updates per hour
+@limiter.limit("120/hour")  # Max 30 client updates per hour
 async def update_oauth_client(
     request: Request,
     client_id: str,
     update_data: OAuth2ClientUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -212,11 +205,11 @@ async def update_oauth_client(
 
 
 @router.delete("/{client_id}")
-@limiter.limit("20/hour")  # Max 20 client deletions per hour
+@limiter.limit("60/hour")  # Max 20 client deletions per hour
 async def delete_oauth_client(
     request: Request,
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -249,11 +242,11 @@ async def delete_oauth_client(
 @router.post(
     "/{client_id}/rotate-secret/challenge", response_model=RotateSecretChallenge
 )
-@limiter.limit("60/hour")
+@limiter.limit("120/hour")
 async def request_rotate_secret_challenge(
     request: Request,
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -296,11 +289,11 @@ async def request_rotate_secret_challenge(
 @router.post(
     "/{client_id}/rotate-jwt-key/challenge", response_model=RotateSecretChallenge
 )
-@limiter.limit("60/hour")
+@limiter.limit("120/hour")
 async def request_rotate_jwt_key_challenge(
     request: Request,
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -347,12 +340,12 @@ async def request_rotate_jwt_key_challenge(
 
 
 @router.post("/{client_id}/rotate-secret", response_model=OAuth2ClientSecretRotation)
-@limiter.limit("10/day")  # Max 10 secret rotations per day
+@limiter.limit("60/day")  # Max 10 secret rotations per day
 async def rotate_client_secret(
     request: Request,
     client_id: str,
     body: RotateSecretConfirm,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -389,12 +382,12 @@ async def rotate_client_secret(
 
 
 @router.post("/{client_id}/rotate-jwt-key", response_model=OAuth2ClientSecretRotation)
-@limiter.limit("10/day")
+@limiter.limit("60/day")
 async def rotate_client_jwt_key(
     request: Request,
     client_id: str,
     body: RotateSecretConfirm,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -445,7 +438,7 @@ async def rotate_client_jwt_key(
 @router.post("/{client_id}/activate")
 async def activate_oauth_client(
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -472,7 +465,7 @@ async def activate_oauth_client(
 @router.post("/{client_id}/deactivate")
 async def deactivate_oauth_client(
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):

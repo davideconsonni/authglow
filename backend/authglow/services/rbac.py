@@ -25,7 +25,7 @@ from typing import List, Optional, Set
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
-from authglow.models.rbac import Permission, Role, UserRole
+from authglow.models.rbac import ADMIN_ROLE_NAME, Permission, Role, UserRole
 from authglow.repositories.protocols import (
     PermissionRepository,
     RoleRepository,
@@ -170,6 +170,13 @@ class RBACService:
         user_permissions = await self.get_user_permissions(user_id)
         return permission_name in user_permissions
 
+    async def user_has_any_permission(
+        self, user_id: str, permission_names: List[str]
+    ) -> bool:
+        """Check if user has at least one of the given permissions."""
+        user_permissions = await self.get_user_permissions(user_id)
+        return any(name in user_permissions for name in permission_names)
+
     async def user_has_role(self, user_id: str, role_name: str) -> bool:
         """Check if user has a specific role."""
         user_roles = await self.get_user_roles(user_id)
@@ -179,78 +186,156 @@ class RBACService:
                 return True
         return False
 
+    async def list_role_holders(self, role_id: str) -> List[str]:
+        """Return the user ids currently holding *role_id*.
+
+        Backed by the concrete File repository's ``list_all`` (not part
+        of the ``UserRoleRepository`` Protocol). Injected test doubles
+        that do not implement ``list_all`` yield an empty scan — the
+        anti-lockout caller treats that as "no other holders", i.e. the
+        conservative outcome (refuse the removal).
+        """
+        list_all = getattr(self._user_role_repo, "list_all", None)
+        if list_all is None:
+            return []
+        holders: List[str] = []
+        for ur in await list_all():
+            if ur.role_id == role_id and ur.user_id not in holders:
+                holders.append(ur.user_id)
+        return holders
+
+    # ------------------------------------------------------------------
+    # Bootstrap helpers (idempotent)
+    # ------------------------------------------------------------------
+
+    async def ensure_admin_role(self) -> str:
+        """Return the ``Authglow Administrator`` role id, creating the
+        role if missing.
+
+        Calls :meth:`initialize_defaults` first so the role is
+        guaranteed to carry the full permission catalog. Idempotent.
+        """
+        await self.initialize_defaults()
+        role = await self.get_role_by_name(ADMIN_ROLE_NAME)
+        if role is None:
+            role = Role(
+                name=ADMIN_ROLE_NAME,
+                description="Full system access (platform administrators)",
+                permissions=[],
+                is_system=True,
+            )
+            await self.create_role(role)
+        return role.role_id
+
+    async def assign_role_to_user_idempotent(
+        self, user_id: str, role_id: str, actor_id: str
+    ) -> bool:
+        """Assign *role_id* to *user_id* if not already assigned.
+
+        Returns ``True`` if a new assignment was created, ``False`` if
+        the user already held the role. The expiration is left as
+        ``None`` (permanent).
+        """
+        existing = await self._user_role_repo.list_for_user(user_id)
+        for ur in existing:
+            if ur.role_id == role_id:
+                return False
+        await self.assign_role_to_user(
+            UserRole(
+                user_id=user_id,
+                role_id=role_id,
+                assigned_by=actor_id,
+            )
+        )
+        return True
+
+    async def assign_role_names_to_user(
+        self,
+        user_id: str,
+        role_names: List[str],
+        actor_id: str,
+    ) -> List[str]:
+        """Assign each *named* role to *user_id* (idempotent per role).
+
+        Returns the names of the roles that were NEWLY assigned (a
+        role the user already held is skipped, not an error). Raises
+        ``ValueError`` for a role name that does not exist — the API
+        layer translates it into a 400.
+        """
+        newly_assigned: List[str] = []
+        for name in role_names or []:
+            role = await self.get_role_by_name(name)
+            if role is None:
+                raise ValueError(f"Role '{name}' does not exist")
+            created = await self.assign_role_to_user_idempotent(
+                user_id=user_id, role_id=role.role_id, actor_id=actor_id
+            )
+            if created:
+                newly_assigned.append(name)
+        return newly_assigned
+
     # ------------------------------------------------------------------
     # Initialize default roles and permissions
     # ------------------------------------------------------------------
 
     async def initialize_defaults(self):
-        """Initialize default roles and permissions."""
+        """Initialize the default permission vocabulary and the
+        ``Authglow Administrator`` system role.
+
+        The vocabulary is UX-driven: one ``*.manage`` permission per
+        admin section (matching the sidebar), plus ``admin.read`` for
+        view-only access everywhere and the legacy ``roles.read`` for
+        the RBAC read endpoints. Every permission is actually
+        enforced, route by route (see ``core.permissions``).
+        """
         default_permissions = [
             Permission(
-                name="users.read",
+                name="users.manage",
                 resource="users",
-                action="read",
-                description="View users",
+                action="manage",
+                description="User lifecycle: CRUD, MFA, passwords, suspend, bulk, invite",
             ),
             Permission(
-                name="users.write",
-                resource="users",
-                action="write",
-                description="Create/update users",
+                name="sessions.manage",
+                resource="sessions",
+                action="manage",
+                description="Operational hygiene: sessions, consents, device authorizations, password resets",
             ),
             Permission(
-                name="users.delete",
-                resource="users",
-                action="delete",
-                description="Delete users",
-            ),
-            Permission(
-                name="api_keys.read",
-                resource="api_keys",
-                action="read",
-                description="View API keys",
-            ),
-            Permission(
-                name="api_keys.write",
-                resource="api_keys",
-                action="write",
-                description="Create/update API keys",
-            ),
-            Permission(
-                name="api_keys.delete",
-                resource="api_keys",
-                action="delete",
-                description="Delete API keys",
-            ),
-            Permission(
-                name="oauth_clients.read",
+                name="clients.manage",
                 resource="oauth_clients",
-                action="read",
-                description="View OAuth clients",
+                action="manage",
+                description="Integration surface: OAuth clients, claim policies, playground, federation, webhooks",
             ),
             Permission(
-                name="oauth_clients.write",
-                resource="oauth_clients",
-                action="write",
-                description="Create/update OAuth clients",
+                name="keys.manage",
+                resource="api_keys",
+                action="manage",
+                description="Key material: API keys admin, JWK rotation and revocation",
             ),
             Permission(
-                name="audit.read",
-                resource="audit",
+                name="system.manage",
+                resource="system",
+                action="manage",
+                description="Platform settings and rate limits",
+            ),
+            Permission(
+                name="roles.manage",
+                resource="roles",
+                action="manage",
+                description="RBAC roles, permissions and assignments",
+            ),
+            Permission(
+                name="admin.read",
+                resource="admin",
                 action="read",
-                description="View audit logs",
+                description="View-only access to all admin sections",
             ),
             Permission(
                 name="roles.read",
                 resource="roles",
                 action="read",
                 description="View roles",
-            ),
-            Permission(
-                name="roles.write",
-                resource="roles",
-                action="write",
-                description="Create/update roles",
             ),
         ]
 
@@ -259,39 +344,29 @@ class RBACService:
             if not existing:
                 await self.create_permission(perm)
 
-        admin_role = await self.get_role_by_name("admin")
-        if not admin_role:
-            admin_role = Role(
-                name="admin",
-                description="Full system access",
+        administrator_role = await self.get_role_by_name(ADMIN_ROLE_NAME)
+        if not administrator_role:
+            administrator_role = Role(
+                name=ADMIN_ROLE_NAME,
+                description="Full system access (platform administrators)",
                 permissions=[p.name for p in default_permissions],
                 is_system=True,
             )
-            await self.create_role(admin_role)
-
-        user_role = await self.get_role_by_name("user")
-        if not user_role:
-            user_role = Role(
-                name="user",
-                description="Standard user access",
-                permissions=["users.read", "api_keys.read"],
-                is_system=True,
-            )
-            await self.create_role(user_role)
-
-        developer_role = await self.get_role_by_name("developer")
-        if not developer_role:
-            developer_role = Role(
-                name="developer",
-                description="Developer access",
-                permissions=[
-                    "users.read",
-                    "api_keys.read",
-                    "api_keys.write",
-                    "api_keys.delete",
-                    "oauth_clients.read",
-                    "oauth_clients.write",
-                ],
-                is_system=False,
-            )
-            await self.create_role(developer_role)
+            await self.create_role(administrator_role)
+        else:
+            # Backfill: an Administrator seeded before a vocabulary
+            # change keeps working — merge any missing default
+            # permissions in (never remove: operators may have trimmed
+            # the role on purpose... in practice nobody trims the
+            # admin role, but removal stays an explicit API action).
+            missing = [
+                p.name
+                for p in default_permissions
+                if p.name not in (administrator_role.permissions or [])
+            ]
+            if missing:
+                administrator_role.permissions = [
+                    *(administrator_role.permissions or []),
+                    *missing,
+                ]
+                await self.update_role(administrator_role)

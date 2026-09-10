@@ -351,7 +351,7 @@ async def regenerate_backup_codes(
 
 
 @router.post("/api/mfa/verify-login")
-@limiter.limit("3/minute")
+@limiter.limit("10/minute")
 async def verify_mfa_login(
     response: Response,
     login_request: MFALoginRequest,
@@ -512,7 +512,7 @@ async def verify_mfa_login(
 
 
 @router.post("/api/mfa/verify-oauth-login")
-@limiter.limit("3/minute")
+@limiter.limit("10/minute")
 async def verify_oauth_mfa_login(
     request: Request,
     login_request: MFALoginRequest,

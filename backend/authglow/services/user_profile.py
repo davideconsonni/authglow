@@ -87,6 +87,17 @@ class UserProfileService:
         # Get preferences
         preferences = await self.get_user_preferences(user_id)
 
+        # Real RBAC roles (replaces the old scopes-as-roles hack).
+        from authglow.services.rbac import RBACService
+
+        rbac = RBACService()
+        user_role_assignments = await rbac.get_user_roles(user_id)
+        role_names: list[str] = []
+        for assignment in user_role_assignments:
+            role = await rbac.get_role(assignment.role_id)
+            if role:
+                role_names.append(role.name)
+
         return UserProfileResponse(
             id=user.id,
             email=user.email,
@@ -101,7 +112,7 @@ class UserProfileService:
             mfa_enabled=user.mfa_enabled,
             created_at=user.created_at,
             last_login=user.last_login,
-            roles=user.scopes or [],  # Using scopes as roles for now
+            roles=role_names,
             scopes=user.scopes or [],
             preferences=preferences,
             total_logins=getattr(user, "total_logins", 0),
@@ -247,7 +258,10 @@ class UserProfileService:
             user.email_verified = False
             user.updated_at = utcnow()
 
-            await self.user_storage.update_user(user)
+            # acquire_lock=False: this method already holds the
+            # per-user named lock — re-acquiring it would self-deadlock
+            # (asyncio locks are not reentrant).
+            await self.user_storage.update_user(user, acquire_lock=False)
 
         # Send verification email to new address
         token = await self.email_service.create_verification_token(user)
@@ -462,7 +476,10 @@ class UserProfileService:
             user.is_active = False
             user.updated_at = utcnow()
 
-            await self.user_storage.update_user(user)
+            # acquire_lock=False: this method already holds the
+            # per-user named lock — re-acquiring it would self-deadlock
+            # (asyncio locks are not reentrant).
+            await self.user_storage.update_user(user, acquire_lock=False)
 
         # Audit: account deactivated
         await self.audit_service.log_event(
@@ -488,7 +505,8 @@ class UserProfileService:
             user.is_active = True
             user.updated_at = utcnow()
 
-            await self.user_storage.update_user(user)
+            # acquire_lock=False: see deactivate_account (self-deadlock).
+            await self.user_storage.update_user(user, acquire_lock=False)
 
         # Audit: account reactivated (using PROFILE_UPDATED with status change)
         await self.audit_service.log_event(

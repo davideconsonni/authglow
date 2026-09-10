@@ -10,7 +10,7 @@ def _make_admin_user():
         email="admin@authglow.io",
         hashed_password="not-used-in-test",
         is_active=True,
-        scopes=["admin"],
+        scopes=["read", "write"],
     )
 
 

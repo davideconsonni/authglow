@@ -105,7 +105,7 @@ def _make_service() -> UserService:
 
 class TestSeedDemoUser:
     """``seed_demo_user`` must be idempotent and create exactly the
-    well-known demo admin with admin scope."""
+    well-known demo admin holding the Authglow Administrator role."""
 
     @pytest.fixture(autouse=True)
     def _clear_user_caches(self):
@@ -123,14 +123,19 @@ class TestSeedDemoUser:
         yield
         _reset_cache_registry()
 
-    async def test_creates_demo_admin_with_admin_scope(self, test_settings):
+    async def test_creates_demo_admin_with_administrator_role(self, test_settings):
+        from authglow.models.rbac import ADMIN_ROLE_NAME
+        from authglow.services.rbac import RBACService
+
         test_settings.demo_mode = True
         service = _make_service()
         password = await seed_demo_user(service=service, settings=test_settings)
 
         user = await service.get_user_by_email(test_settings.demo_user_email)
         assert user is not None
-        assert "admin" in user.scopes
+        # OAuth scopes stay OAuth-only; admin authority is RBAC-driven.
+        assert "admin" not in user.scopes
+        assert await RBACService().user_has_role(user.id, ADMIN_ROLE_NAME)
         assert user.is_active is True
         assert user.email_verified is True
         assert user.hashed_password != password  # hashed, not plaintext
@@ -140,7 +145,11 @@ class TestSeedDemoUser:
     async def test_existing_demo_admin_is_reactivated_and_pinned(self, test_settings):
         """A deactivated demo admin must be re-activated on boot and
         marked as the bootstrap account (so it can no longer be
-        deactivated from the admin surface)."""
+        deactivated from the admin surface). The Administrator role is
+        re-granted idempotently on the existing-user path too."""
+        from authglow.models.rbac import ADMIN_ROLE_NAME
+        from authglow.services.rbac import RBACService
+
         test_settings.demo_mode = True
         service = _make_service()
         await seed_demo_user(service=service, settings=test_settings)
@@ -157,6 +166,7 @@ class TestSeedDemoUser:
         assert refreshed is not None
         assert refreshed.is_active is True
         assert refreshed.is_bootstrap is True
+        assert await RBACService().user_has_role(refreshed.id, ADMIN_ROLE_NAME)
 
     async def test_idempotent_two_runs_single_user(self, test_settings):
         test_settings.demo_mode = True

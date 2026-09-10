@@ -20,7 +20,7 @@ router = APIRouter(tags=["Meta"])
 
 
 @router.get("/api/meta")
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def get_meta(request: Request):
     """Return public environment metadata.
 

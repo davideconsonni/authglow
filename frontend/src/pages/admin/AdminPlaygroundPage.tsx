@@ -95,6 +95,7 @@ case 'rp-logout': return <RpInitiatedLogoutFlow />
             <select
               value={currentFlow}
               onChange={(e) => setCurrentFlow(e.target.value as PlaygroundFlow)}
+              data-testid="playground-flow-select"
               className="w-full rounded-xl border border-surface-2 bg-surface-2 px-3 py-2.5 text-sm text-text-primary"
             >
               {FLOWS.map((flow) => (

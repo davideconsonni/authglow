@@ -10,7 +10,9 @@ test.describe('API Keys — Create → Copy → Revoke', () => {
 
     await page.fill('[data-testid="key-name-input"]', 'E2E Test Key')
     await page.fill('[data-testid="key-description-input"]', 'Created during E2E for context tracking')
-    await page.fill('[data-testid="key-scopes-input"]', 'read')
+    // ScopePicker: scope chips + custom-scope input (Enter adds the token).
+    await page.fill('[data-testid="key-scopes-custom-input"]', 'read')
+    await page.keyboard.press('Enter')
     await page.click('[data-testid="key-create-submit"]')
 
     await expect(page.locator('[data-testid="key-created-display"]')).toBeVisible({ timeout: 5000 })
@@ -26,12 +28,13 @@ test.describe('API Keys — Create → Copy → Revoke', () => {
 
     await page.click('[data-testid="key-created-done"]')
 
-    await page.waitForSelector('[data-testid="api-key-row"]', { timeout: 5000 })
+    // Key description renders in both the desktop table and the mobile
+    // cards (the table rows are hidden on small viewports) — always
+    // target the visible variant.
+    const descDisplay = page.locator('[data-testid="key-description-display"]:visible').first()
+    await expect(descDisplay).toContainText('Created during E2E for context tracking', { timeout: 8000 })
 
-    const descDisplay = page.locator('[data-testid="key-description-display"]').first()
-    await expect(descDisplay).toContainText('Created during E2E for context tracking')
-
-    const editBtn = page.locator('[data-testid="key-edit-btn"]').first()
+    const editBtn = page.locator('[data-testid="key-edit-btn"]:visible').first()
     await editBtn.click()
     await expect(page.locator('[data-testid="key-edit-modal"]')).toBeVisible()
     await page.fill(
@@ -41,7 +44,7 @@ test.describe('API Keys — Create → Copy → Revoke', () => {
     await page.click('[data-testid="key-edit-submit"]')
     await expect(descDisplay).toContainText('Updated by E2E test', { timeout: 5000 })
 
-    const revokeBtn = page.locator('[data-testid="revoke-key-btn"]').first()
+    const revokeBtn = page.locator('[data-testid="revoke-key-btn"]:visible').first()
     if (await revokeBtn.isVisible()) {
       await revokeBtn.click()
       await page.click('[data-testid="confirm-dialog-confirm"]')

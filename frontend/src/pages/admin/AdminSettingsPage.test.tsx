@@ -22,7 +22,7 @@ vi.mock('../../lib/api', () => ({
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ user: { scopes: ['admin'], email: 'admin@test.com' }, isAuthenticated: true }),
+  useAuth: () => ({ user: { scopes: ['read', 'write'], roles: ['Authglow Administrator'], is_admin: true, email: 'admin@test.com' }, isAuthenticated: true }),
 }))
 
 import { api } from '../../lib/api'

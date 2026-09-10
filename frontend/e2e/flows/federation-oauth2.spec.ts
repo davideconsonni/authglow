@@ -19,7 +19,7 @@ test.describe('Federation + OAuth2 consent flow', () => {
       })
     })
 
-    await page.route('**/api/federation/providers', async (route) => {
+    await page.route('**/api/federation/providers**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -184,7 +184,7 @@ test.describe('Federation + OAuth2 consent flow', () => {
       })
     })
 
-    await page.route('**/api/federation/providers', async (route) => {
+    await page.route('**/api/federation/providers**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -222,7 +222,7 @@ test.describe('Federation + OAuth2 consent flow', () => {
   })
 
   test('federation login link without OAuth2 params works for direct login', async ({ page }) => {
-    await page.route('**/api/federation/providers', async (route) => {
+    await page.route('**/api/federation/providers**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -233,7 +233,7 @@ test.describe('Federation + OAuth2 consent flow', () => {
     })
 
     await clearAuth(page)
-    await page.route('**/api/federation/providers', async (route) => {
+    await page.route('**/api/federation/providers**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

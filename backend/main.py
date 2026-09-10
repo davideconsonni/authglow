@@ -43,6 +43,7 @@ from authglow.middleware.proxy_headers import ProxyHeadersMiddleware
 from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.request_id import RequestIDMiddleware
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
+from authglow.models.rbac import ADMIN_ROLE_NAME
 from authglow.services.auth.token_blacklist import token_blacklist
 
 settings = get_settings()
@@ -125,7 +126,17 @@ async def lifespan(app: FastAPI):
     # persisted client — just created automatically on first boot (and
     # after a data reset), like the demo user below. Endpoints must be
     # able to rely on a strict repository lookup.
+    # RBAC defaults are seeded FIRST so the "Authglow Administrator"
+    # role exists before any user (first-party setup or demo) is
+    # created and can be assigned to it.
     from authglow.services.oauth_client import ensure_first_party_client
+    from authglow.services.rbac import RBACService
+
+    rbac_service = RBACService()
+    await rbac_service.initialize_defaults()
+    administrator_role = await rbac_service.get_role_by_name(ADMIN_ROLE_NAME)
+    if administrator_role is not None and await rbac_service.list_roles():
+        logger.info("RBAC_DEFAULTS_SEEDED", admin_role_id=administrator_role.role_id)
 
     if await ensure_first_party_client():
         logger.info(

@@ -46,7 +46,29 @@ export function Sidebar() {
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const railNavRef = useRef<HTMLDivElement>(null)
   const [trail, setTrail] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
-  const isAdmin = user?.scopes?.includes('admin')
+  const isAdmin = user?.is_admin === true
+  const permissions = user?.permissions ?? []
+  // Section-level gating mirrors the backend vocabulary: a section is
+  // visible with the view-only `admin.read` or its area permission.
+  // The Administrator role holds every permission, so admins see all.
+  const can = (areaManage: string): boolean =>
+    isAdmin || permissions.includes('admin.read') || permissions.includes(areaManage)
+
+  // The whole Administration section requires *some* admin capability;
+  // each entry additionally requires its area permission.
+  const showAdminSection =
+    isAdmin ||
+    permissions.some((perm: string) =>
+      [
+        'admin.read',
+        'users.manage',
+        'sessions.manage',
+        'clients.manage',
+        'keys.manage',
+        'system.manage',
+        'roles.manage',
+      ].includes(perm),
+    )
 
   const updateTrail = useCallback(() => {
     const nav = railNavRef.current
@@ -86,25 +108,49 @@ export function Sidebar() {
     },
   ]
 
-  if (isAdmin) {
+  if (showAdminSection) {
     sections.push({
       label: 'Administration',
       items: [
         { label: 'Overview', icon: Settings, to: ROUTES.ADMIN.DASHBOARD },
-        { label: 'Users', icon: Users, to: ROUTES.ADMIN.USERS },
-        { label: 'OAuth Clients', icon: Server, to: ROUTES.ADMIN.OAUTH_CLIENTS },
-        { label: 'Sessions', icon: Activity, to: ROUTES.ADMIN.SESSIONS },
-        { label: 'Consents', icon: FileCheck, to: ROUTES.ADMIN.CONSENTS },
-        { label: 'API Keys', icon: Key, to: ROUTES.ADMIN.API_KEYS },
-        { label: 'RBAC', icon: Lock, to: ROUTES.ADMIN.RBAC },
-        { label: 'JWK Keys', icon: Shield, to: ROUTES.ADMIN.JWK_KEYS },
-        { label: 'Password Resets', icon: Lock, to: ROUTES.ADMIN.PASSWORD_RESETS },
-        { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
-        { label: 'Federation', icon: Globe, to: ROUTES.ADMIN.FEDERATION },
-        { label: 'Device Auths', icon: Smartphone, to: ROUTES.ADMIN.DEVICE_AUTHORIZATIONS },
-  { label: 'Settings', icon: SlidersHorizontal, to: ROUTES.ADMIN.SETTINGS },
-  { label: 'Rate Limits', icon: Gauge, to: ROUTES.ADMIN.RATE_LIMITS },
-  { label: 'Webhooks', icon: Webhook, to: ROUTES.ADMIN.WEBHOOKS },
+        ...(can('users.manage')
+          ? [{ label: 'Users', icon: Users, to: ROUTES.ADMIN.USERS }]
+          : []),
+        ...(can('clients.manage')
+          ? [
+              { label: 'OAuth Clients', icon: Server, to: ROUTES.ADMIN.OAUTH_CLIENTS },
+              { label: 'Playground', icon: Play, to: ROUTES.ADMIN.PLAYGROUND },
+              { label: 'Federation', icon: Globe, to: ROUTES.ADMIN.FEDERATION },
+              { label: 'Webhooks', icon: Webhook, to: ROUTES.ADMIN.WEBHOOKS },
+            ]
+          : []),
+        ...(can('sessions.manage')
+          ? [
+              { label: 'Sessions', icon: Activity, to: ROUTES.ADMIN.SESSIONS },
+              { label: 'Consents', icon: FileCheck, to: ROUTES.ADMIN.CONSENTS },
+              { label: 'Password Resets', icon: Lock, to: ROUTES.ADMIN.PASSWORD_RESETS },
+              {
+                label: 'Device Auths',
+                icon: Smartphone,
+                to: ROUTES.ADMIN.DEVICE_AUTHORIZATIONS,
+              },
+            ]
+          : []),
+        ...(can('keys.manage')
+          ? [
+              { label: 'API Keys', icon: Key, to: ROUTES.ADMIN.API_KEYS },
+              { label: 'JWK Keys', icon: Shield, to: ROUTES.ADMIN.JWK_KEYS },
+            ]
+          : []),
+        ...(can('roles.manage')
+          ? [{ label: 'RBAC', icon: Lock, to: ROUTES.ADMIN.RBAC }]
+          : []),
+        ...(can('system.manage')
+          ? [
+              { label: 'Settings', icon: SlidersHorizontal, to: ROUTES.ADMIN.SETTINGS },
+              { label: 'Rate Limits', icon: Gauge, to: ROUTES.ADMIN.RATE_LIMITS },
+            ]
+          : []),
       ],
     })
   }
@@ -266,7 +312,7 @@ export function Sidebar() {
       <div
         className={cn(
           'fixed inset-0 z-50 md:hidden transition-opacity duration-300',
-          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none invisible',
         )}
       >
         {/* Backdrop */}
@@ -277,6 +323,7 @@ export function Sidebar() {
           )}
           onClick={closeMobile}
           aria-hidden="true"
+          data-testid="sidebar-mobile-backdrop"
         />
 
         {/* Panel */}

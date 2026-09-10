@@ -1,16 +1,26 @@
 """API tests for the admin Webhook Endpoints CRUD (initiative B, B1).
 
 Exercises the real ``FileWebhookRepository`` against per-test tmp storage
-(same integration-style pattern as the claim-policy API tests), with
-``require_admin`` bypassed via dependency override.
+(same integration-style pattern as the claim-policy API tests).
+Admin routes gate on RBAC permissions (``require_permission`` decodes the
+bearer token itself), so an autouse fixture fakes the token decode and
+grants ``clients.manage`` + ``admin.read`` for the test caller, and the
+client sends a dummy Bearer token on every request.
 """
 
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from authglow.api.webhooks import get_webhook_repository, require_admin, router
+from authglow.api.auth import get_current_user
+from authglow.api.webhooks import get_webhook_repository, router
+from authglow.models.token import TokenData
 from authglow.models.user import User
 from authglow.repositories.file.webhook import FileWebhookRepository
+from authglow.services.rbac import RBACService
 
 ADMIN = User(
     id="admin-1",
@@ -18,18 +28,42 @@ ADMIN = User(
     hashed_password="not-a-real-hash",
     is_active=True,
     email_verified=True,
-    scopes=["admin", "read", "write"],
+    scopes=["read", "write"],
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_rbac_admin():
+    token_data = TokenData(
+        sub="admin-1",
+        email="admin@example.com",
+        scopes=["read", "write"],
+        token_type="access",
+        exp=datetime.now(timezone.utc) + timedelta(hours=1),
+        iat=datetime.now(timezone.utc),
+    )
+    fake_svc = MagicMock()
+    fake_svc.decode_token = MagicMock(return_value=token_data)
+    with (
+        patch("authglow.core.permissions.get_jwt_service", new_callable=AsyncMock) as mock_jwt,
+        patch.object(RBACService, "get_user_permissions", new_callable=AsyncMock) as mock_perms,
+    ):
+        mock_jwt.return_value = fake_svc
+        mock_perms.return_value = {"clients.manage", "admin.read"}
+        yield
 
 
 def _build(test_settings):
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[require_admin] = lambda: ADMIN
+    # The endpoints take the full User via get_current_user (audit
+    # fields); the permission gate goes through PermissionChecker
+    # (covered by the _mock_rbac_admin fixture).
+    app.dependency_overrides[get_current_user] = lambda: ADMIN
     app.dependency_overrides[get_webhook_repository] = lambda: FileWebhookRepository(
         settings=test_settings
     )
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 
 DEFAULT_EVENTS = ["user.created"]

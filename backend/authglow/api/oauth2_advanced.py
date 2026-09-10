@@ -65,7 +65,7 @@ def _audience_allowed(token_aud: Optional[str], caller_client_id: str, settings)
 
 
 @router.post("/oauth2/revoke")
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def revoke_token(
     request: Request,
     token: str = Form(...),
@@ -174,7 +174,7 @@ async def revoke_token(
 
 
 @router.post("/oauth2/introspect")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def introspect_token(
     request: Request,
     token: str = Form(...),
@@ -346,7 +346,7 @@ async def list_user_refresh_tokens(
 
 
 @router.post("/api/tokens/refresh/revoke-all")
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def revoke_all_user_refresh_tokens(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -373,7 +373,7 @@ async def revoke_all_user_refresh_tokens(
 
 
 @router.delete("/api/tokens/refresh/{token_id}")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def revoke_user_refresh_token(
     request: Request,
     token_id: str,

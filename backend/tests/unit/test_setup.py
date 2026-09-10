@@ -94,6 +94,7 @@ class TestSetupTokenValidation:
 
 class TestCreateAdminWithToken:
     def test_first_admin_creation_succeeds(self, setup_app):
+        from authglow.models.rbac import ADMIN_ROLE_NAME
         from authglow.models.user import User
 
         created_user = User(
@@ -101,7 +102,7 @@ class TestCreateAdminWithToken:
             email="admin@test.com",
             hashed_password="hashed",
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
             email_verified=True,
         )
 
@@ -112,20 +113,38 @@ class TestCreateAdminWithToken:
                 storage.count_users = AsyncMock(return_value=0)
                 storage.get_user_by_email = AsyncMock(return_value=None)
                 storage.create_user = AsyncMock(return_value=created_user)
+                with patch("authglow.api.setup.RBACService") as MockRBAC:
+                    rbac = MockRBAC.return_value
+                    rbac.ensure_admin_role = AsyncMock(return_value="admin-role-1")
+                    rbac.assign_role_to_user_idempotent = AsyncMock(return_value=True)
+                    with patch("authglow.api.setup.AuditService") as MockAudit:
+                        MockAudit.return_value.log_event = AsyncMock()
 
-                resp = setup_app.post(
-                    "/api/setup/create-admin",
-                    json={
-                        "email": "admin@test.com",
-                        "password": "StrongP@ss1!",
-                        "first_name": "Admin",
-                        "last_name": "User",
-                    },
-                    headers=_auth(),
-                )
+                        resp = setup_app.post(
+                            "/api/setup/create-admin",
+                            json={
+                                "email": "admin@test.com",
+                                "password": "StrongP@ss1!",
+                                "first_name": "Admin",
+                                "last_name": "User",
+                            },
+                            headers=_auth(),
+                        )
 
         assert resp.status_code == 200
         assert resp.json()["message"] == "Administrator account created successfully"
+        # The bootstrap user carries OAuth scopes only (no "admin") and
+        # gets the Authglow Administrator role assigned.
+        persisted = storage.create_user.call_args.args[0]
+        assert "admin" not in persisted.scopes
+        rbac.assign_role_to_user_idempotent.assert_awaited_once_with(
+            user_id=persisted.id, role_id="admin-role-1", actor_id=persisted.id
+        )
+        MockAudit.return_value.log_event.assert_awaited_once()
+        assert (
+            MockAudit.return_value.log_event.call_args.kwargs["metadata"].role
+            == ADMIN_ROLE_NAME
+        )
 
     def test_second_admin_creation_returns_404(self, setup_app):
         with patch.object(limiter, "enabled", False):
@@ -172,7 +191,7 @@ class TestLockPreventsConcurrentCreation:
             email="first@test.com",
             hashed_password="hashed",
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
             email_verified=True,
         )
 
@@ -197,40 +216,56 @@ class TestLockPreventsConcurrentCreation:
                     storage.count_users = AsyncMock(side_effect=count_users_sequence)
                     storage.get_user_by_email = AsyncMock(return_value=None)
                     storage.create_user = AsyncMock(side_effect=slow_create_user)
-
-                    from authglow.api.setup import CreateAdminRequest, create_admin_user
-                    from fastapi.security import HTTPAuthorizationCredentials
-
-                    req = CreateAdminRequest(
-                        email="first@test.com", password="StrongP@ss1!"
-                    )
-                    creds = HTTPAuthorizationCredentials(
-                        scheme="Bearer", credentials=TEST_TOKEN
-                    )
-
-                    loop = asyncio.new_event_loop()
-                    r1 = loop.run_until_complete(
-                        create_admin_user(
-                            request=MagicMock(),
-                            admin_request=req,
-                            credentials=creds,
+                    with patch("authglow.api.setup.RBACService") as MockRBAC:
+                        rbac = MockRBAC.return_value
+                        rbac.ensure_admin_role = AsyncMock(return_value="admin-role-1")
+                        rbac.assign_role_to_user_idempotent = AsyncMock(
+                            return_value=True
                         )
-                    )
-                    assert r1["message"] == "Administrator account created successfully"
+                        with patch("authglow.api.setup.AuditService") as MockAudit:
+                            MockAudit.return_value.log_event = AsyncMock()
 
-                    req2 = CreateAdminRequest(
-                        email="second@test.com", password="StrongP@ss1!"
-                    )
-                    with pytest.raises(Exception) as exc_info:
-                        loop.run_until_complete(
-                            create_admin_user(
-                                request=MagicMock(),
-                                admin_request=req2,
-                                credentials=creds,
+                            from authglow.api.setup import (
+                                CreateAdminRequest,
+                                create_admin_user,
                             )
-                        )
-                    assert "not available" in str(exc_info.value)
-                    loop.close()
+                            from fastapi.security import (
+                                HTTPAuthorizationCredentials,
+                            )
+
+                            req = CreateAdminRequest(
+                                email="first@test.com", password="StrongP@ss1!"
+                            )
+                            creds = HTTPAuthorizationCredentials(
+                                scheme="Bearer", credentials=TEST_TOKEN
+                            )
+
+                            loop = asyncio.new_event_loop()
+                            r1 = loop.run_until_complete(
+                                create_admin_user(
+                                    request=MagicMock(),
+                                    admin_request=req,
+                                    credentials=creds,
+                                )
+                            )
+                            assert (
+                                r1["message"]
+                                == "Administrator account created successfully"
+                            )
+
+                            req2 = CreateAdminRequest(
+                                email="second@test.com", password="StrongP@ss1!"
+                            )
+                            with pytest.raises(Exception) as exc_info:
+                                loop.run_until_complete(
+                                    create_admin_user(
+                                        request=MagicMock(),
+                                        admin_request=req2,
+                                        credentials=creds,
+                                    )
+                                )
+                            assert "not available" in str(exc_info.value)
+                            loop.close()
 
         assert call_order == ["count1", "create", "count2"]
 

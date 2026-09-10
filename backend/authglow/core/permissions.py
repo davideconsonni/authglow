@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from authglow.core.config import get_settings
 from authglow.core.jwt_singleton import get_jwt_service
+from authglow.models.rbac import ADMIN_ROLE_NAME  # noqa: F401  (re-exported)
 from authglow.services.rbac import RBACService
 
 security = HTTPBearer(auto_error=False)
@@ -56,6 +57,12 @@ class PermissionChecker:
     ) -> str:
         """Check if user has required permissions/roles.
 
+        No bypasses: every caller — including the ``Authglow
+        Administrator`` — passes only through explicitly held
+        permissions/roles. The Administrator role is seeded with the
+        whole vocabulary (see ``RBACService.initialize_defaults``),
+        so it passes everywhere by holding, not by skipping.
+
         Returns:
             user_id if authorized
 
@@ -78,11 +85,6 @@ class PermissionChecker:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing user ID",
             )
-
-        # Check if admin scope (admins bypass permission checks)
-        scopes = token_data.scopes or []
-        if "admin" in scopes:
-            return user_id
 
         rbac_service = RBACService()
 
@@ -159,16 +161,16 @@ def require_role(role: Union[str, List[str]], require_all: bool = False):
         require_all: If True and multiple roles, require all. Otherwise require any.
 
     Usage:
-        @require_role("admin")
-        @require_role(["admin", "developer"], require_all=False)
+        @require_role(ADMIN_ROLE_NAME)
+        @require_role(["support", "auditor"], require_all=False)
     """
     roles = [role] if isinstance(role, str) else role
     return Depends(PermissionChecker(required_roles=roles, require_all_roles=require_all))
 
 
-def require_admin():
-    """Decorator to require admin role."""
-    return require_role("admin")
+def require_administrator():
+    """Dependency factory requiring the ``Authglow Administrator`` role."""
+    return require_role(ADMIN_ROLE_NAME)
 
 
 # Convenience dependency for getting current user from token

@@ -56,7 +56,7 @@ class DeviceVerifyResponse(BaseModel):
 
 
 @router.post("/oauth2/device/authorize", response_model=DeviceAuthorizationResponse)
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def device_authorize(
     request: Request,
     client_id: str = Form(...),
@@ -153,7 +153,7 @@ async def device_authorize(
 
 
 @router.post("/api/oauth2/device/verify", response_model=DeviceVerifyResponse)
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def device_verify(
     request: Request,
     body: DeviceVerifyRequest,
@@ -183,7 +183,7 @@ async def device_verify(
 
 
 @router.post("/api/oauth2/device/approve")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def device_approve(
     request: Request,
     body: DeviceVerifyRequest,
@@ -223,7 +223,7 @@ async def device_approve(
 
 
 @router.post("/api/oauth2/device/deny")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def device_deny(
     request: Request,
     body: DeviceVerifyRequest,
@@ -262,7 +262,7 @@ async def device_deny(
 
 
 @router.get("/api/oauth2/device/authorizations")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def my_device_authorizations(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -289,7 +289,7 @@ async def my_device_authorizations(
 
 
 @router.post("/api/oauth2/device/authorizations/{user_code}/revoke")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def revoke_my_device_authorization(
     user_code: str,
     request: Request,

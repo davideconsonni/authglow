@@ -5,6 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
+from authglow.api.admin import user_has_any_permission, user_has_permission
 from authglow.api.auth import get_api_key_service, get_audit_service, get_current_user
 from authglow.core.rate_limit import limiter
 from authglow.core.safeword_store import (
@@ -47,7 +48,7 @@ class SafewordConfirm(BaseModel):
 
 
 @router.post("/api/keys", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("10/hour")  # Limit API key creation
+@limiter.limit("60/hour")  # Limit API key creation
 async def create_api_key(
     request: Request,
     key_data: APIKeyCreate,
@@ -63,10 +64,10 @@ async def create_api_key(
     The API key secret will only be shown once, so save it securely!
     """
     if key_data.user_email:
-        if "admin" not in current_user.scopes:
+        if (not await user_has_permission(current_user.id, "users.manage")):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins may create API keys for other users",
+                detail="Requires the users.manage permission to create API keys for other users",
             )
         user_storage = UserStorage()
         target_user = await user_storage.get_user_by_email(key_data.user_email)
@@ -85,7 +86,7 @@ async def create_api_key(
         key_data=key_data,
         created_by=current_user.id,
         caller_scopes=current_user.scopes,
-        is_admin="admin" in current_user.scopes,
+        is_admin=await user_has_permission(current_user.id, "keys.manage"),
     )
 
     # Log the creation
@@ -139,7 +140,7 @@ async def get_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     # Check ownership
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(status_code=403, detail="Not authorized to view this key")
 
     # Enrich with user email
@@ -152,7 +153,7 @@ async def get_api_key(
 
 
 @router.patch("/api/keys/{key_id}", response_model=APIKeyResponse)
-@limiter.limit("30/hour")
+@limiter.limit("120/hour")
 async def update_api_key(
     request: Request,
     key_id: str,
@@ -168,7 +169,7 @@ async def update_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     # Check ownership
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(status_code=403, detail="Not authorized to update this key")
 
     # Update
@@ -177,7 +178,7 @@ async def update_api_key(
         key_id,
         updates,
         caller_scopes=current_user.scopes,
-        is_admin="admin" in current_user.scopes,
+        is_admin=await user_has_permission(current_user.id, "keys.manage"),
     )
     if not updated_key:
         raise HTTPException(status_code=404, detail="API key not found after update")
@@ -199,7 +200,7 @@ async def update_api_key(
 
 
 @router.post("/api/keys/{key_id}/revoke", response_model=dict)
-@limiter.limit("20/hour")
+@limiter.limit("60/hour")
 async def revoke_api_key(
     request: Request,
     key_id: str,
@@ -214,7 +215,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     # Check ownership
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(status_code=403, detail="Not authorized to revoke this key")
 
     # Revoke
@@ -243,7 +244,7 @@ async def revoke_api_key(
 
 
 @router.post("/api/keys/{key_id}/delete/challenge", response_model=RotateSecretChallenge)
-@limiter.limit("60/hour")
+@limiter.limit("120/hour")
 async def request_delete_api_key_challenge(
     request: Request,
     key_id: str,
@@ -255,7 +256,7 @@ async def request_delete_api_key_challenge(
     api_key = await api_key_service.get_key(key_id)
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(
             status_code=403, detail="Not authorized to delete this key"
         )
@@ -269,7 +270,7 @@ async def request_delete_api_key_challenge(
 
 
 @router.delete("/api/keys/{key_id}")
-@limiter.limit("20/hour")
+@limiter.limit("60/hour")
 async def delete_api_key(
     request: Request,
     key_id: str,
@@ -290,7 +291,7 @@ async def delete_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     # Check ownership
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(status_code=403, detail="Not authorized to delete this key")
 
     # Delete
@@ -319,7 +320,7 @@ async def delete_api_key(
 
 
 @router.post("/api/keys/{key_id}/rotate/challenge", response_model=RotateSecretChallenge)
-@limiter.limit("60/hour")
+@limiter.limit("120/hour")
 async def request_rotate_api_key_challenge(
     request: Request,
     key_id: str,
@@ -337,7 +338,7 @@ async def request_rotate_api_key_challenge(
     api_key = await api_key_service.get_key(key_id)
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(
             status_code=403, detail="Not authorized to rotate this key"
         )
@@ -351,7 +352,7 @@ async def request_rotate_api_key_challenge(
 
 
 @router.post("/api/keys/{key_id}/rotate", response_model=APIKeyWithSecret)
-@limiter.limit("20/hour")
+@limiter.limit("60/hour")
 async def rotate_api_key(
     request: Request,
     key_id: str,
@@ -373,7 +374,7 @@ async def rotate_api_key(
     api_key = await api_key_service.get_key(key_id)
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
-    if api_key.user_id != current_user.id and "admin" not in current_user.scopes:
+    if api_key.user_id != current_user.id and (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(
             status_code=403, detail="Not authorized to rotate this key"
         )
@@ -417,8 +418,8 @@ async def list_all_api_keys(
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
-    """List all API keys (admin only)."""
-    if "admin" not in current_user.scopes:
+    """List all API keys (requires keys.manage or view-only admin.read)."""
+    if (not await user_has_any_permission(current_user.id, ["keys.manage", "admin.read"])):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     keys = await api_key_service.list_all_keys(limit=limit, offset=offset, active_only=active_only)
@@ -441,8 +442,8 @@ async def get_single_api_key(
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
-    """Get a single API key by ID (admin only)."""
-    if "admin" not in current_user.scopes:
+    """Get a single API key by ID (requires keys.manage or view-only admin.read)."""
+    if (not await user_has_any_permission(current_user.id, ["keys.manage", "admin.read"])):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     api_key = await api_key_service.get_key(key_id)
@@ -462,8 +463,8 @@ async def list_user_api_keys(
     current_user: User = Depends(get_current_user),
     api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
-    """List all API keys for a specific user (admin only)."""
-    if "admin" not in current_user.scopes:
+    """List all API keys for a specific user (requires keys.manage or view-only admin.read)."""
+    if (not await user_has_any_permission(current_user.id, ["keys.manage", "admin.read"])):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     keys = await api_key_service.get_user_keys(user_id)
@@ -476,8 +477,8 @@ async def cleanup_expired_keys(
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Delete all expired and inactive API keys (admin only)."""
-    if "admin" not in current_user.scopes:
+    """Delete all expired and inactive API keys (requires keys.manage)."""
+    if (not await user_has_permission(current_user.id, "keys.manage")):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     deleted_count = await api_key_service.cleanup_expired_keys()

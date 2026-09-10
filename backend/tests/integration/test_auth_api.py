@@ -404,6 +404,23 @@ class TestTokenEndpointClientAuth:
         mock_storage.get_user = AsyncMock(return_value=mock_user)
         mock_jwt = MagicMock()
         mock_jwt.create_token_response = MagicMock(return_value=MagicMock())
+        # Audit metadata reads decode_token(...).jti — must be a real string.
+        from datetime import timedelta as _td
+
+        from authglow.core.datetime import utcnow as _utcnow
+        from authglow.models.token import TokenData as _TokenData
+
+        mock_jwt.decode_token = MagicMock(
+            return_value=_TokenData(
+                sub="user-1",
+                email="user@example.com",
+                scopes=["read"],
+                token_type="access",
+                exp=_utcnow() + _td(minutes=30),
+                iat=_utcnow(),
+                jti="basic-auth-jti",
+            )
+        )
         mock_rt_service = AsyncMock()
         mock_rt = MagicMock()
         mock_rt.token = "rt-token"
@@ -422,6 +439,11 @@ class TestTokenEndpointClientAuth:
         oauth2_service.verify_client = AsyncMock(return_value=True)
         oauth2_service.process_scopes = AsyncMock(return_value=["read"])
 
+        # The direct call must supply every dependency the endpoint
+        # would normally receive via Depends (audit included).
+        audit_mock = MagicMock()
+        audit_mock.log_event = AsyncMock()
+
         await token_endpoint(
             request=mock_request,
             response=MagicMock(),
@@ -437,6 +459,7 @@ class TestTokenEndpointClientAuth:
             jwt_service=mock_jwt,
             oauth2_service=oauth2_service,
             refresh_token_service=mock_rt_service,
+            audit_service=audit_mock,
         )
 
         oauth2_service.verify_client.assert_called_once_with("test-client-id", "test-client-secret")
@@ -460,12 +483,32 @@ class TestInviteUserSetPasswordLink:
             email="admin@test.com",
             hashed_password=hash_password("AdminP@ss123!"),
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
             email_verified=True,
         )
 
+        # The invite endpoint gates on the Authglow Administrator role
+        # (RBAC-driven), so the inviter needs the assignment in the
+        # per-test RBAC store.
+        import asyncio
+
+        from authglow.services.rbac import RBACService
+
+        rbac = RBACService()
+        role_id = asyncio.run(rbac.ensure_admin_role())
+        asyncio.run(
+            rbac.assign_role_to_user_idempotent(
+                user_id=admin_user.id, role_id=role_id, actor_id=admin_user.id
+            )
+        )
+
         mock_storage = MagicMock()
-        mock_storage.get_user = AsyncMock(return_value=admin_user)
+        # Identity-aware: get_current_user resolves the caller from the
+        # token ``sub``; returning the admin for ANY id would make the
+        # RBAC role check (identity-based) meaningless.
+        mock_storage.get_user = AsyncMock(
+            side_effect=lambda uid: admin_user if uid == admin_user.id else None
+        )
         mock_storage.get_user_by_email = AsyncMock(return_value=None)
         mock_storage.create_user = AsyncMock(side_effect=lambda user: user)
 
@@ -623,7 +666,7 @@ class TestInviteUserSetPasswordLink:
             email="admin@test.com",
             hashed_password=hash_password("AdminP@ss123!"),
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
             email_verified=True,
         )
 
@@ -723,7 +766,7 @@ class TestInviteUserSetPasswordLink:
             expires_in_minutes=1440,
         )
 
-    def test_invite_user_requires_admin_scope(self, _invite_app, jwt_service):
+    def test_invite_user_requires_admin_role(self, _invite_app, jwt_service):
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
@@ -735,6 +778,10 @@ class TestInviteUserSetPasswordLink:
             scopes=["read"],
             email_verified=True,
         )
+
+        # Resolve the non-admin for the token's ``sub`` so the RBAC
+        # role check sees the actual caller (no Administrator role).
+        _invite_app._mock_storage.get_user = AsyncMock(return_value=non_admin)
 
         token = jwt_service.create_access_token(
             user_id=non_admin.id,

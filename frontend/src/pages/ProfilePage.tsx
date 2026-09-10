@@ -13,6 +13,7 @@ import { CopyButton } from '../components/shared/CopyButton'
 import { StatusBadge } from '../components/shared/StatusBadge'
 import { Section } from '../components/shared/Section'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
+import { RotateSecretDialog } from '../components/admin/RotateSecretDialog'
 import { Banner } from '../components/shared/Banner'
 import { ResendVerificationBanner } from '../components/auth/ResendVerificationBanner'
 import { formatDateTime } from '../lib/utils'
@@ -56,7 +57,8 @@ interface UserProfile {
 
 export function ProfilePage() {
   useDocumentTitle('Profile')
-  const { user, fetchCurrentUser } = useAuth()
+  const { user, fetchCurrentUser, logout } = useAuth()
+  const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deactivateDialog, setDeactivateDialog] = useState(false)
@@ -87,15 +89,14 @@ export function ProfilePage() {
 
   const p = user || profile
 
-  const handleDeactivate = async () => {
-    try {
-      await api.post('/api/profile/me/deactivate')
-      setDeactivateDialog(false)
-      notify.success('Account deactivated.')
-      await fetchCurrentUser()
-    } catch (err: unknown) {
-      notify.error(err instanceof Error ? err.message : 'Failed')
-    }
+  const handleDeactivated = async () => {
+    // The backend already revoked every refresh token and cleared the
+    // auth cookies — drop the local session too and send the user to
+    // the login page (they can sign in again after a reactivation).
+    setDeactivateDialog(false)
+    notify.success('Account deactivated. You have been signed out.')
+    await logout()
+    navigate(ROUTES.AUTH.LOGIN)
   }
 
   const handleReactivate = async () => {
@@ -114,7 +115,8 @@ export function ProfilePage() {
       await api.delete('/api/profile/me')
       setDeleteDialog(false)
       notify.success('Account deleted.')
-      // Auth store will handle redirect on next API call
+      await logout()
+      navigate(ROUTES.AUTH.LOGIN)
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Failed')
     }
@@ -237,11 +239,7 @@ export function ProfilePage() {
                   {p.scopes.map((scope) => (
                     <span
                       key={scope}
-                      className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                        scope === 'admin'
-                          ? 'bg-brand-wash text-brand-accent ring-1 ring-brand-accent/30'
-                          : 'bg-surface-2 text-text-secondary'
-                      }`}
+                      className="rounded-lg bg-surface-2 px-3 py-1.5 text-sm font-medium text-text-secondary"
                     >
                       {scope}
                     </span>
@@ -325,7 +323,15 @@ export function ProfilePage() {
       </Section>
       )}
 
-      <ConfirmDialog open={deactivateDialog} title="Deactivate Account" message="You will be logged out and your account will be inaccessible until reactivated by an administrator." confirmLabel="Deactivate" variant="danger" onConfirm={handleDeactivate} onCancel={() => setDeactivateDialog(false)} />
+      <RotateSecretDialog
+        open={deactivateDialog}
+        targetId={p?.id ?? user?.id ?? null}
+        targetLabel={p?.email}
+        purpose="account_deactivate"
+        onClose={() => setDeactivateDialog(false)}
+        onSuccess={() => void handleDeactivated()}
+        onError={(msg) => notify.error(msg)}
+      />
       <ConfirmDialog open={deleteDialog} title="Delete Account" message="This will permanently delete your account, data, API keys, and all associated information. This action CANNOT be undone." confirmLabel="Delete Forever" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteDialog(false)} />
     </div>
   )

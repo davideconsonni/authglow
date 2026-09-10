@@ -117,7 +117,7 @@ class TestGetUserInfo:
             hashed_password=hash_password("TestP@ss1!"),
             is_active=True,
             email_verified=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
         )
         oidc_service.user_storage = MagicMock()
         oidc_service.user_storage.get_user = AsyncMock(return_value=user)

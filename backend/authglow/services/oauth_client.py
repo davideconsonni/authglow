@@ -241,7 +241,7 @@ def _default_repository(settings: Settings) -> OAuth2ClientRepository:
 # ``offline_access`` keeps the dashboard's browser session backed by a
 # refresh token once the OIDC §11 gate on third-party code/device flows
 # is in effect (see the token endpoint).
-FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write admin offline_access"
+FIRST_PARTY_OAUTH_SCOPES = "openid profile email read write offline_access"
 
 
 def first_party_oauth_client(settings: Settings) -> OAuth2Client:

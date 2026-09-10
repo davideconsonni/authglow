@@ -4,6 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from authglow.api.admin import user_has_any_permission, user_has_permission
 from authglow.api.auth import get_current_user, get_password_validator
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
@@ -303,8 +304,10 @@ async def list_password_resets(
     current_user: User = Depends(get_current_user),
     reset_service: PasswordResetService = Depends(get_reset_service),
 ):
-    """List all password reset tokens (admin only)."""
-    if "admin" not in current_user.scopes:
+    """List all password reset tokens (requires sessions.manage or view-only admin.read).."""
+    if not await user_has_any_permission(
+        current_user.id, ["sessions.manage", "admin.read"]
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     tokens = await reset_service.list_all_tokens(
@@ -324,8 +327,10 @@ async def list_user_password_resets(
     current_user: User = Depends(get_current_user),
     reset_service: PasswordResetService = Depends(get_reset_service),
 ):
-    """List password reset tokens for a specific user (admin only)."""
-    if "admin" not in current_user.scopes:
+    """List password reset tokens for a specific user (requires sessions.manage or view-only admin.read).."""
+    if not await user_has_any_permission(
+        current_user.id, ["sessions.manage", "admin.read"]
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     tokens = await reset_service.list_user_tokens(user_id, active_only=active_only)
@@ -341,7 +346,7 @@ async def revoke_user_password_resets(
 ):
     """Revoke all active password reset tokens for a user (admin only).
     Accepts either user_id or email as the path parameter."""
-    if "admin" not in current_user.scopes:
+    if not await user_has_permission(current_user.id, "sessions.manage"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     # Resolve email to user_id if needed
@@ -374,7 +379,7 @@ async def delete_password_reset(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete a single password reset token (admin only)."""
-    if "admin" not in current_user.scopes:
+    if not await user_has_permission(current_user.id, "sessions.manage"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     success = await reset_service.delete_token(token_id)
@@ -398,7 +403,7 @@ async def cleanup_password_resets(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Cleanup expired password reset tokens (admin only)."""
-    if "admin" not in current_user.scopes:
+    if not await user_has_permission(current_user.id, "sessions.manage"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     deleted_count = await reset_service.cleanup_expired_tokens()
@@ -419,8 +424,10 @@ async def get_password_reset_stats(
     current_user: User = Depends(get_current_user),
     reset_service: PasswordResetService = Depends(get_reset_service),
 ):
-    """Get password reset statistics (admin only)."""
-    if "admin" not in current_user.scopes:
+    """Get password reset statistics (requires sessions.manage or view-only admin.read).."""
+    if not await user_has_any_permission(
+        current_user.id, ["sessions.manage", "admin.read"]
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     stats = await reset_service.get_stats()

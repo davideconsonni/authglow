@@ -87,6 +87,8 @@ class UserCreate(BaseModel):
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
     scopes: List[str] = Field(default_factory=lambda: ["read"])
+    # RBAC role names to assign at creation (validated by the API layer).
+    roles: Optional[List[str]] = None
     email_verified: bool = False
 
     @field_validator("scopes")
@@ -119,6 +121,13 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
     scopes: List[str]
+    # RBAC (populated on /api/users/me): role names assigned to the
+    # user, the aggregated permission names, and the convenience flag
+    # for the "Authglow Administrator" role. The frontend admin gate
+    # reads ``is_admin``; section-level gating reads ``permissions``.
+    roles: List[str] = []
+    permissions: List[str] = []
+    is_admin: bool = False
     mfa_enabled: bool = False
     mfa_verified: bool = False
     email_verified: bool = False
@@ -145,6 +154,8 @@ class InviteUser(BaseModel):
 
     email: EmailStr
     scopes: List[str] = Field(default_factory=lambda: ["read"])
+    # RBAC role names to assign when the invite completes creation.
+    roles: Optional[List[str]] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 

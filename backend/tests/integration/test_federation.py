@@ -21,28 +21,47 @@ def federation_app():
 
 
 @pytest.fixture
-def admin_app():
-    """FastAPI app with mocked admin auth for testing admin CRUD endpoints."""
-    from authglow.api.admin import require_admin
+def admin_app(test_settings, jwt_service, rbac_service, storage):
+    """FastAPI app authenticated as an RBAC admin for admin CRUD endpoints.
+
+    Admin routes gate on RBAC permissions (``require_user_with_permission``
+    resolves the full user via ``get_current_user``), so the fixture
+    persists the caller, grants it the Administrator role in the
+    per-test RBAC store, and mints a real JWT carried as a default
+    header on every test request.
+    """
+    import asyncio
+
     from authglow.models.user import User
     from authglow.services.password import hash_password
-
-    app = FastAPI()
-    app.include_router(federation_router)
 
     admin_user = User(
         id="admin-test-1",
         email="admin@authglow.io",
         hashed_password=hash_password("NotUsed123!"),
         is_active=True,
-        scopes=["read", "write", "admin"],
+        email_verified=True,
+        scopes=["read", "write"],
+    )
+    asyncio.run(storage.create_user(admin_user))
+
+    # Grant clients.manage (+ admin.read for the list views) via the
+    # Administrator role in the per-test RBAC store.
+    role_id = asyncio.run(rbac_service.ensure_admin_role())
+    asyncio.run(
+        rbac_service.assign_role_to_user_idempotent(
+            user_id=admin_user.id, role_id=role_id, actor_id=admin_user.id
+        )
+    )
+    token = jwt_service.create_access_token(
+        user_id=admin_user.id,
+        email=admin_user.email,
+        scopes=admin_user.scopes,
     )
 
-    async def override_require_admin():
-        return admin_user
-
-    app.dependency_overrides[require_admin] = override_require_admin
-    return TestClient(app)
+    app = FastAPI()
+    app.include_router(federation_router)
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 def _sign_state(test_settings, provider_id="google", redirect_uri=None, **overrides):
@@ -559,7 +578,7 @@ class TestVapt026FederationRateLimits:
             mock_service.get_providers_for_ui = AsyncMock(return_value=[])
             with patch("authglow.api.federation.FederationService", return_value=mock_service):
                 client = self._make_limited_app()
-                for _ in range(60):
+                for _ in range(120):
                     resp = client.get("/api/federation/providers")
                     assert resp.status_code == 200
                 resp = client.get("/api/federation/providers")
@@ -574,14 +593,14 @@ class TestVapt026FederationRateLimits:
             )
             with patch("authglow.api.federation.FederationService", return_value=mock_service):
                 client = self._make_limited_app()
-                for _ in range(5):
+                for _ in range(20):
                     resp = client.get("/api/federation/login/google", follow_redirects=False)
                     assert resp.status_code == 302
                 resp = client.get("/api/federation/login/google", follow_redirects=False)
                 assert resp.status_code == 429
 
     def test_callback_returns_429_after_limit(self, test_settings):
-        """VAPT-026: callback rate-limited — 429 after 10 requests/minute."""
+        """VAPT-026: callback rate-limited — 429 after 30 requests/minute."""
         valid_state = _sign_state(test_settings)
 
         with patch("authglow.api.federation.FederationStorage") as MockStorage:
@@ -630,7 +649,7 @@ class TestVapt026FederationRateLimits:
                                     AsyncMock(return_value={}),
                                 ):
                                     client = self._make_limited_app()
-                                    for _ in range(10):
+                                    for _ in range(30):
                                         resp = client.get(
                                             "/api/federation/callback",
                                             params={"code": "c", "state": valid_state},

@@ -1,10 +1,18 @@
 """User profile and account management API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 
 from authglow.api.auth import _clear_auth_cookies, get_current_user
 from authglow.core.config import get_settings
 from authglow.core.jwt_singleton import get_jwt_service
+from authglow.core.rate_limit import limiter
+from authglow.core.safeword_store import (
+    SafewordPurpose,
+    consume_challenge,
+    issue_challenge,
+)
+from authglow.models.oauth_client import RotateSecretChallenge
 from authglow.models.user import User
 from authglow.models.user_profile import (
     ChangeEmailRequest,
@@ -16,9 +24,18 @@ from authglow.models.user_profile import (
     UserProfileUpdate,
 )
 from authglow.services.auth.token_blacklist import token_blacklist
+from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.user_profile import UserProfileService
 
 router = APIRouter(tags=["User Profile"])
+
+
+class DeactivateConfirm(BaseModel):
+    """Safeword confirmation for self-deactivation (see
+    ``POST /api/profile/me/deactivate/challenge``)."""
+
+    challenge_id: str
+    word: str
 
 
 @router.get("/api/profile/me", response_model=UserProfileResponse)
@@ -128,15 +145,59 @@ async def delete_my_account(
     return {"message": message}
 
 
+@router.post("/api/profile/me/deactivate/challenge", response_model=RotateSecretChallenge)
+@limiter.limit("30/hour")
+async def request_deactivate_challenge(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Issue a single-use safeword challenge for self-deactivation.
+
+    The destructive ``POST /api/profile/me/deactivate`` call only
+    accepts a challenge minted here, bound to the caller's own user id.
+    """
+    issued = issue_challenge(current_user.id, SafewordPurpose.ACCOUNT_DEACTIVATE)
+    return RotateSecretChallenge(
+        challenge_id=issued["challenge_id"],
+        word=issued["word"],
+        expires_at=issued["expires_at"],
+    )
+
+
 @router.post("/api/profile/me/deactivate")
-async def deactivate_my_account(current_user: User = Depends(get_current_user)):
-    """Deactivate current user's account (can be reactivated)."""
+@limiter.limit("20/hour")
+async def deactivate_my_account(
+    confirm: DeactivateConfirm,
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+):
+    """Deactivate current user's account (can be reactivated).
+
+    Requires a valid safeword challenge from
+    ``POST /api/profile/me/deactivate/challenge``. On success all of
+    the user's refresh tokens are revoked and the auth cookies are
+    cleared, so the caller is effectively logged out and must sign in
+    again after a reactivation.
+    """
+    consume_challenge(
+        confirm.challenge_id,
+        current_user.id,
+        confirm.word,
+        SafewordPurpose.ACCOUNT_DEACTIVATE,
+    )
     profile_service = UserProfileService()
 
     success, message = await profile_service.deactivate_account(current_user.id)
 
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+    # Log the user out for real: revoke every refresh token (sessions)
+    # and drop the auth cookies, otherwise the just-deactivated account
+    # keeps working until the access token expires.
+    await RefreshTokenService().revoke_user_tokens(current_user.id)
+    _clear_auth_cookies(response, get_settings())
 
     return {"message": message}
 

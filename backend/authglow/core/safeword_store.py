@@ -68,6 +68,7 @@ class SafewordPurpose(str, Enum):
     API_KEY_DELETE = "api_key_delete"
     API_KEY_ROTATE = "api_key_rotate"
     JWK_ROTATE = "jwk_rotate"
+    ACCOUNT_DEACTIVATE = "account_deactivate"
 
 
 @dataclass

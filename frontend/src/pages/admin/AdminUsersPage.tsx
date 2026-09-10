@@ -16,6 +16,149 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuthStore } from '../../stores/authStore'
 import { notify } from '../../stores/toastStore'
 
+interface RoleOption {
+  role_id?: string
+  id?: string
+  name: string
+  is_system: boolean
+}
+
+interface UserRoleAssignmentRow {
+  assignment_id: string
+  user_id: string
+  role_id: string
+  role_name?: string | null
+}
+
+/** Checkbox picker of RBAC roles (assign at create/invite time). */
+function RolePicker(props: { value: string[]; onChange: (v: string[]) => void; testId?: string }) {
+  const { value, onChange, testId } = props
+  const { data } = useApiQuery<RoleOption[]>(['admin-roles-picker'], '/api/rbac/roles')
+  const options = Array.isArray(data) ? data : []
+  const toggle = (name: string) =>
+    onChange(value.includes(name) ? value.filter((n) => n !== name) : [...value, name])
+  return (
+    <div className="flex flex-wrap gap-2" data-testid={testId}>
+      {options.map((r) => (
+        <label
+          key={r.name}
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+            value.includes(r.name)
+              ? 'border-brand-accent/50 bg-brand-wash text-brand-accent'
+              : 'border-surface-2 bg-surface-1 text-text-secondary hover:border-brand-accent/40'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={value.includes(r.name)}
+            onChange={() => toggle(r.name)}
+            className="rounded border-surface-2 text-brand-accent focus:ring-brand-accent"
+          />
+          {r.name}
+        </label>
+      ))}
+      {options.length === 0 && (
+        <span className="text-[11px] text-text-muted">No roles defined yet — create them in Admin → RBAC.</span>
+      )}
+    </div>
+  )
+}
+
+/** Roles management block inside the UserDrawer profile tab. */
+function UserRolesSection({ userId, onUserUpdated }: { userId: string; onUserUpdated: () => void }) {
+  const { data: assignmentsRaw, refetch } = useApiQuery<UserRoleAssignmentRow[]>(
+    ['user-roles-drawer', userId],
+    `/api/rbac/user-roles/${userId}`,
+  )
+  const { data: rolesRaw } = useApiQuery<RoleOption[]>(['admin-roles-picker'], '/api/rbac/roles')
+  const assigned = Array.isArray(assignmentsRaw) ? assignmentsRaw : []
+  const allRoles = Array.isArray(rolesRaw) ? rolesRaw : []
+  const unassigned = allRoles.filter((r) => !assigned.some((a) => a.role_id === (r.role_id ?? r.id)))
+  const [selected, setSelected] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const assign = async () => {
+    const role = unassigned.find((r) => (r.role_id ?? r.id) === selected)
+    if (!role) return
+    setBusy(true)
+    try {
+      await api.post('/api/rbac/user-roles', { user_id: userId, role_id: selected })
+      notify.success(`Role "${role.name}" assigned.`)
+      setSelected('')
+      await refetch()
+      onUserUpdated()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Failed to assign role')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (roleId: string) => {
+    setBusy(true)
+    try {
+      await api.delete(`/api/rbac/user-roles/${userId}/${roleId}`)
+      notify.success('Role removed.')
+      await refetch()
+      onUserUpdated()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Failed to remove role')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3" data-testid="user-roles-section">
+      <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Roles</h3>
+      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+        {assigned.map((a) => (
+          <span key={a.assignment_id} className="inline-flex items-center gap-1 rounded-lg bg-brand-wash px-2 py-0.5 text-[11px] font-medium text-brand-accent">
+            {a.role_name ?? a.role_id}
+            <button
+              onClick={() => remove(a.role_id)}
+              disabled={busy}
+              aria-label={`Remove role ${a.role_name ?? a.role_id}`}
+              data-testid={`remove-role-${a.role_name ?? a.role_id}`}
+              className="text-brand-accent/70 hover:text-semantic-error disabled:opacity-40"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        {assigned.length === 0 && <span className="text-[11px] text-text-muted italic">No roles assigned</span>}
+      </div>
+      {unassigned.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            data-testid="assign-role-select"
+            className="flex-1 rounded-lg border border-surface-2 bg-surface-1 px-3 py-1.5 text-xs text-text-primary focus:border-brand-accent focus:outline-none"
+          >
+            <option value="">Assign a role…</option>
+            {unassigned.map((r) => (
+              <option key={r.role_id ?? r.id} value={r.role_id ?? r.id}>{r.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={assign}
+            disabled={busy || !selected}
+            data-testid="assign-role-btn"
+            className="rounded-lg bg-brand-wash px-2.5 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint disabled:opacity-40"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+      <p className="text-[11px] text-text-muted">
+        Admin authority comes from the &quot;Authglow Administrator&quot; role — the last administrator cannot be removed
+        (anti-lockout).
+      </p>
+    </div>
+  )
+}
+
 interface AdminUser {
   id: string; email: string; first_name: string; last_name: string
   is_active: boolean; mfa_enabled: boolean; created_at: string; login_count: number
@@ -65,9 +208,11 @@ export function AdminUsersPage() {
   const [revokeSessionsId, setRevokeSessionsId] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', first_name: '', last_name: '', scopes: '' })
+  const [inviteRoles, setInviteRoles] = useState<string[]>([])
   const [inviting, setInviting] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '', email_verified: false })
+  const [createRoles, setCreateRoles] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null)
@@ -116,8 +261,8 @@ export function AdminUsersPage() {
     }
     setInviting(true)
     try {
-      await api.post('/api/users/invite', { email: inviteForm.email, first_name: inviteForm.first_name, last_name: inviteForm.last_name, scopes: tokens })
-      setShowInvite(false); setInviteForm({ email: '', first_name: '', last_name: '', scopes: '' }); notify.success('User invited.'); await refetch()
+      await api.post('/api/users/invite', { email: inviteForm.email, first_name: inviteForm.first_name, last_name: inviteForm.last_name, scopes: tokens, roles: inviteRoles })
+      setShowInvite(false); setInviteForm({ email: '', first_name: '', last_name: '', scopes: '' }); setInviteRoles([]); notify.success('User invited.'); await refetch()
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setInviting(false) }
   }
 
@@ -138,9 +283,10 @@ export function AdminUsersPage() {
         phone: createForm.phone || null,
         avatar_url: createForm.avatar_url || null,
         scopes: tokens,
+        roles: createRoles,
         email_verified: createForm.email_verified,
       })
-      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '', email_verified: false }); notify.success('User created.'); await refetch()
+      setShowCreate(false); setCreateForm({ email: '', password: '', first_name: '', last_name: '', scopes: '', phone: '', avatar_url: '', email_verified: false }); setCreateRoles([]); notify.success('User created.'); await refetch()
     } catch (e) { notify.error(e instanceof Error ? e.message : 'Failed') } finally { setCreating(false) }
   }
 
@@ -243,6 +389,11 @@ export function AdminUsersPage() {
             testId="create-user-scopes"
           />
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-text-muted">Roles</label>
+          <RolePicker value={createRoles} onChange={setCreateRoles} testId="create-user-roles" />
+          <p className="mt-1 text-[11px] text-text-muted">Admin authority = the &quot;Authglow Administrator&quot; role.</p>
+        </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={createForm.email_verified} onChange={e => setCreateForm({...createForm, email_verified: e.target.checked})} data-testid="create-user-email-verified" className="rounded border-surface-2 text-brand-accent focus:ring-brand-accent" /><span className="text-text-primary">Email verified</span></label>
         <div className="flex gap-3 pt-2"><button onClick={() => setShowCreate(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password} data-testid="create-user-submit" className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent">{creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}Create User</button></div>
       </div></div>}
@@ -259,6 +410,11 @@ export function AdminUsersPage() {
             placeholder="Add custom scope"
             testId="invite-user-scopes"
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-text-muted">Roles</label>
+          <RolePicker value={inviteRoles} onChange={setInviteRoles} testId="invite-user-roles" />
+          <p className="mt-1 text-[11px] text-text-muted">Admin authority = the &quot;Authglow Administrator&quot; role.</p>
         </div>
         <div className="flex gap-3 pt-2"><button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-surface-2 px-4 py-2 text-sm text-text-secondary hover:bg-surface-2">Cancel</button><button onClick={handleInvite} disabled={inviting || !inviteForm.email} className="btn-cta flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-cta px-4 py-2 text-sm font-semibold text-white shadow-glow-accent">{inviting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Create User</button></div>
       </div></div>}
@@ -738,6 +894,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                         <button onClick={addScope} disabled={!newScope.trim()} className="rounded-lg bg-brand-wash px-2.5 py-1.5 text-xs font-medium text-brand-accent hover:bg-brand-wash-faint disabled:opacity-40"><Plus size={14} /></button>
                       </div>
                     </div>
+
+                    <UserRolesSection userId={userId} onUserUpdated={onUserUpdated} />
 
                     {!user.is_federated && (
                       <div className="rounded-xl border border-surface-2 bg-surface-1 p-4 space-y-3">

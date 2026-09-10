@@ -8,6 +8,14 @@ from pydantic import BaseModel, Field
 
 from authglow.core.datetime import utcnow
 
+#: Name of the RBAC system role that grants full administrative
+#: authority. Admin gating is RBAC-driven ONLY: the OAuth ``admin``
+#: scope is not an authorization signal (and is rejected at ingestion,
+#: see ``authglow.core.scopes.RESERVED_SCOPE_TOKENS``). Declared here
+#: (models layer) so both ``services.rbac`` and ``core.permissions``
+#: can import it without an import cycle.
+ADMIN_ROLE_NAME = "Authglow Administrator"
+
 
 class Permission(BaseModel):
     """Permission model.
@@ -32,7 +40,7 @@ class Role(BaseModel):
     """
 
     role_id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str  # e.g., "admin", "developer", "user"
+    name: str  # e.g., "Authglow Administrator", "support", "auditor"
     description: Optional[str] = None
     permissions: List[str] = Field(default_factory=list)  # List of permission names
     is_system: bool = False  # System roles cannot be deleted
@@ -138,4 +146,4 @@ class UserPermissions(BaseModel):
     user_email: str
     roles: List[str]  # Role names
     permissions: List[str]  # Aggregated permission names
-    is_admin: bool  # Has admin role or admin scope
+    is_admin: bool  # Holds the "Authglow Administrator" role (RBAC-driven)

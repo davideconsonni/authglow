@@ -129,7 +129,7 @@ async def check_consent_auto(
 
 
 @router.post("/oauth2/consent")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def process_consent(
     request: Request,
     session_token: str = Form(...),

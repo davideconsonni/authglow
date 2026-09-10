@@ -690,6 +690,8 @@ class TestIntrospectAudienceRestriction:
         rt.used = False
         rt.expires_at = utcnow() + timedelta(minutes=30)
         rt.created_at = utcnow()
+        # Audit metadata reads this — must be a real string.
+        rt.token_id = "introspect-rt-1"
         return rt
 
     def test_aud_less_token_rejected_for_third_party_client(self):

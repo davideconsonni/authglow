@@ -10,6 +10,25 @@ from authglow.models.api_key import APIKeyCreate, APIKeyCreateResponse, APIKeyUp
 from authglow.services.api_key import APIKeyLockedException, _enforce_scope_subset
 
 
+def _grant_admin_role(user_id: str) -> None:
+    """Assign the Authglow Administrator role in the per-test RBAC store.
+
+    Admin gating is RBAC-driven (role check, not OAuth scopes), so
+    admin-path tests must write the assignment for the caller.
+    """
+    import asyncio
+
+    from authglow.services.rbac import RBACService
+
+    rbac = RBACService()
+    role_id = asyncio.run(rbac.ensure_admin_role())
+    asyncio.run(
+        rbac.assign_role_to_user_idempotent(
+            user_id=user_id, role_id=role_id, actor_id=user_id
+        )
+    )
+
+
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
 
@@ -475,8 +494,9 @@ class TestAdminCreatesKeyForOtherUser:
             email="admin@authglow.io",
             hashed_password=hash_password("NotUsed123!"),
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
         )
+        _grant_admin_role("admin-test-1")
         target_user = User(
             id="target-user-1",
             email="target@example.com",
@@ -598,7 +618,7 @@ class TestAdminCreatesKeyForOtherUser:
         )
 
         assert response.status_code == 403
-        assert "admin" in response.json()["detail"].lower()
+        assert "users.manage" in response.json()["detail"]
 
     def test_admin_gets_404_for_unknown_user_email(self):
         from fastapi import FastAPI
@@ -614,8 +634,9 @@ class TestAdminCreatesKeyForOtherUser:
             email="admin@authglow.io",
             hashed_password=hash_password("NotUsed123!"),
             is_active=True,
-            scopes=["read", "write", "admin"],
+            scopes=["read", "write"],
         )
+        _grant_admin_role("admin-test-2")
 
         app = FastAPI()
         app.include_router(router)
@@ -761,7 +782,7 @@ class TestEnforceScopeSubset:
 
 class TestCreateKeyScopeFilter:
     def test_non_admin_create_with_unauthorized_scope_filtered(self, api_key_service):
-        key_data = APIKeyCreate(name="BOPLA Create", scopes=["admin", "read"], never_expires=True)
+        key_data = APIKeyCreate(name="BOPLA Create", scopes=["export", "read"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-bopla-c-1",
@@ -774,20 +795,20 @@ class TestCreateKeyScopeFilter:
         assert api_key.scopes == ["read"]
 
     def test_admin_create_passes_all_scopes(self, api_key_service):
-        key_data = APIKeyCreate(name="Admin Create", scopes=["admin", "read"], never_expires=True)
+        key_data = APIKeyCreate(name="Admin Create", scopes=["export", "read"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-bopla-c-2",
                 key_data=key_data,
                 created_by="admin-1",
-                caller_scopes=["read", "admin"],
+                caller_scopes=["read", "export"],
                 is_admin=True,
             )
         )
-        assert sorted(api_key.scopes) == sorted(["admin", "read"])
+        assert sorted(api_key.scopes) == sorted(["export", "read"])
 
     def test_create_without_caller_scopes_keeps_legacy_behavior(self, api_key_service):
-        key_data = APIKeyCreate(name="Legacy Create", scopes=["admin", "read"], never_expires=True)
+        key_data = APIKeyCreate(name="Legacy Create", scopes=["export", "read"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-bopla-c-3",
@@ -795,10 +816,10 @@ class TestCreateKeyScopeFilter:
                 created_by="user-bopla-c-3",
             )
         )
-        assert sorted(api_key.scopes) == sorted(["admin", "read"])
+        assert sorted(api_key.scopes) == sorted(["export", "read"])
 
     def test_create_non_admin_no_overlap_creates_empty_scopes(self, api_key_service):
-        key_data = APIKeyCreate(name="Empty Scopes", scopes=["admin"], never_expires=True)
+        key_data = APIKeyCreate(name="Empty Scopes", scopes=["export"], never_expires=True)
         api_key, _ = _run(
             api_key_service.create_key(
                 user_id="user-bopla-c-4",
@@ -841,7 +862,7 @@ class TestUpdateKeyScopeFilter:
             api_key_service.update_key(
                 api_key.key_id,
                 {"scopes": ["admin", "read"]},
-                caller_scopes=["read", "admin"],
+                caller_scopes=["read", "export"],
                 is_admin=True,
             )
         )
@@ -1114,7 +1135,7 @@ class TestAPIKeyCreateResponse:
         assert resp.filtered_scopes == []
 
     def test_create_key_response_includes_filtered_scopes_through_service(self, api_key_service):
-        key_data = APIKeyCreate(name="BOPLA Response", scopes=["admin", "read"], never_expires=True)
+        key_data = APIKeyCreate(name="BOPLA Response", scopes=["export", "read"], never_expires=True)
         api_key, plaintext = _run(
             api_key_service.create_key(
                 user_id="user-resp-1",
@@ -1134,9 +1155,9 @@ class TestAPIKeyCreateResponse:
             granted_scopes=granted,
             filtered_scopes=filtered,
         )
-        assert response.filtered_scopes == ["admin"]
+        assert response.filtered_scopes == ["export"]
         assert response.granted_scopes == ["read"]
-        assert response.requested_scopes == ["admin", "read"]
+        assert response.requested_scopes == ["export", "read"]
 
 
 class TestAPIKeyDescription:

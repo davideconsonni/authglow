@@ -23,16 +23,22 @@ Security posture while a demo instance is live:
   and NEVER written to logs, the keyring, or any audit record. It is
   exposed only via ``GET /api/meta`` (rate-limited, public by design —
   it is the whole point of a demo).
-* The demo user is created with ``admin`` scope because a demo of an
-  auth platform must be able to exercise the admin surface. The blast
-  radius is bounded by the ephemeral storage model above.
+* The demo user is assigned the ``Authglow Administrator`` RBAC role
+  (not an OAuth scope) because a demo of an auth platform must be able
+  to exercise the admin surface. The blast radius is bounded by the
+  ephemeral storage model above.
 """
 
 from typing import Optional
 
 from authglow.core.config import Settings, get_settings
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import AdminRoleMetadata
+from authglow.models.rbac import ADMIN_ROLE_NAME
 from authglow.models.user import User
+from authglow.services.audit import AuditService
 from authglow.services.password import hash_password_async
+from authglow.services.rbac import RBACService
 from authglow.services.user import UserService
 
 
@@ -87,18 +93,45 @@ async def seed_demo_user(
             existing.is_active = True
             existing.is_bootstrap = True
             await service.update_user(existing)
-        return password
+        demo_user = existing
+    else:
+        demo_user = User(
+            email=settings.demo_user_email,
+            hashed_password=hashed_password,
+            first_name="Demo",
+            last_name="Admin",
+            # OAuth scopes stay OAuth-only (D4). Admin authority comes
+            # from the Administrator role assigned right below.
+            scopes=["read", "write"],
+            is_active=True,
+            email_verified=True,
+            is_invited=False,
+            is_bootstrap=True,
+        )
+        await service.create_user(demo_user)
 
-    demo_user = User(
-        email=settings.demo_user_email,
-        hashed_password=hashed_password,
-        first_name="Demo",
-        last_name="Admin",
-        scopes=["read", "write", "admin"],
-        is_active=True,
-        email_verified=True,
-        is_invited=False,
-        is_bootstrap=True,
+    # The demo admin must always hold the Authglow Administrator role
+    # (idempotent — re-runs on every boot, both fresh and existing
+    # paths, so the public sandbox admin surface is never lost).
+    rbac = RBACService()
+    admin_role_id = await rbac.ensure_admin_role()
+    assigned = await rbac.assign_role_to_user_idempotent(
+        user_id=demo_user.id,
+        role_id=admin_role_id,
+        actor_id=demo_user.id,
     )
-    await service.create_user(demo_user)
+    if assigned:
+        await AuditService().log_event(
+            event_type=AuditEventType.ADMIN_ROLE_ASSIGNED,
+            user_id=demo_user.id,
+            email=demo_user.email,
+            metadata=AdminRoleMetadata(
+                target_user_id=demo_user.id,
+                target_user_email_hash=demo_user.email,
+                admin_user_id=demo_user.id,
+                admin_user_email_hash=demo_user.email,
+                role=ADMIN_ROLE_NAME,
+            ),
+        )
+
     return password

@@ -46,8 +46,15 @@ def _build_code_app(code_scope: str):
     auth_code.scope = code_scope
     auth_code.code_challenge = _CHALLENGE
     auth_code.code_challenge_method = "S256"
+    # Audit metadata reads these — they must be real values, otherwise
+    # pydantic (AuthorizationCodeMetadata) rejects the MagicMock attrs.
+    auth_code.code = "auth-code-1"
+    auth_code.nonce = ""
+    auth_code.acr = ""
+    auth_code.amr = []
 
     user = MagicMock(id="user-1", email="u@x.com", is_active=True)
+    user.last_login = None
 
     oauth2_service = MagicMock()
     oauth2_service.verify_grant_type = AsyncMock(return_value=True)
@@ -61,10 +68,29 @@ def _build_code_app(code_scope: str):
 
     storage = MagicMock()
     storage.get_user = AsyncMock(return_value=user)
+    # Concurrent-session enforcement (authorize flow) must be awaitable.
+    storage.check_and_enforce_concurrent_sessions = AsyncMock()
 
     jwt_svc = MagicMock()
     jwt_svc.create_token_response = MagicMock(
         return_value=Token(access_token="at-fake", token_type="Bearer", expires_in=300)
+    )
+    # Audit metadata reads decode_token(...).jti — must be a real string.
+    from datetime import timedelta as _td
+
+    from authglow.core.datetime import utcnow as _utcnow
+    from authglow.models.token import TokenData as _TokenData
+
+    jwt_svc.decode_token = MagicMock(
+        return_value=_TokenData(
+            sub="user-1",
+            email="u@x.com",
+            scopes=["read"],
+            token_type="access",
+            exp=_utcnow() + _td(minutes=30),
+            iat=_utcnow(),
+            jti="offline-gate-jti",
+        )
     )
 
     app = FastAPI()

@@ -21,10 +21,10 @@ applied to the live slowapi limiter (see
 from typing import Any, Dict, List, Optional
 
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from authglow.api.admin import require_admin
+from authglow.api.admin import require_user_with_permission
 from authglow.core.config import Settings, get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.user import User
@@ -651,11 +651,11 @@ def _format_limit_list(limit_list: Any) -> str:
 
 
 @router.get("/api/admin/settings")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_settings_list(
     request: Request,
     category: Optional[str] = Query(None),
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission(["system.manage", "admin.read"]),
 ):
     """List all application settings grouped by category."""
     settings = get_settings()
@@ -672,10 +672,10 @@ async def get_settings_list(
 
 
 @router.get("/api/admin/settings/schema")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_settings_schema(
     request: Request,
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission(["system.manage", "admin.read"]),
 ):
     """Return settings schema metadata for building a dynamic UI."""
     settings = get_settings()
@@ -694,11 +694,11 @@ async def get_settings_schema(
 
 
 @router.patch("/api/admin/settings")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def patch_admin_settings(
     request: Request,
     updates: Dict[str, Any] = Body(...),
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission("system.manage"),
 ):
     """Persist and live-apply admin settings updates.
 
@@ -769,10 +769,10 @@ async def patch_admin_settings(
 
 
 @router.get("/api/admin/rate-limits")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_rate_limits(
     request: Request,
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission(["system.manage", "admin.read"]),
 ):
     """List all rate-limited routes with their limits."""
     limiter_obj = request.app.state.limiter
@@ -860,11 +860,11 @@ class RateLimitConfigUpdate(BaseModel):
 
 
 @router.put("/api/admin/rate-limits/config")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def put_rate_limits_config(
     request: Request,
     update: RateLimitConfigUpdate,
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission("system.manage"),
 ):
     """Persist and apply the admin rate-limit configuration.
 
@@ -903,10 +903,10 @@ async def put_rate_limits_config(
 
 
 @router.get("/api/admin/rate-limits/status")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_rate_limits_status(
     request: Request,
-    _admin: User = Depends(require_admin),
+    _admin: User = require_user_with_permission(["system.manage", "admin.read"]),
 ):
     """Return global rate-limit statistics."""
     limiter_obj = request.app.state.limiter

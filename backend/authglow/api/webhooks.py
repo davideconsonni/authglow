@@ -13,7 +13,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from authglow.api.admin import require_admin
+from authglow.api.admin import require_user_with_permission
 from authglow.core.concurrency import named_lock
 from authglow.models.user import User
 from authglow.models.webhook import WebhookEndpoint
@@ -131,7 +131,7 @@ class WebhookUpdate(BaseModel):
 async def create_webhook(
     payload: WebhookCreate,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     """Register a new webhook endpoint. Returns the Signing Secret ONCE."""
@@ -169,7 +169,7 @@ async def create_webhook(
 async def list_webhooks(
     request: Request,
     active_only: bool = False,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     webhooks = await repo.list(active_only=active_only)
@@ -180,7 +180,7 @@ async def list_webhooks(
 async def get_webhook(
     webhook_id: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     webhook = await repo.get_by_id(webhook_id)
@@ -194,7 +194,7 @@ async def update_webhook(
     webhook_id: str,
     payload: WebhookUpdate,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     updates: Dict[str, Any] = {}
@@ -248,7 +248,7 @@ async def update_webhook(
 async def delete_webhook(
     webhook_id: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     async with _LOCKS("webhooks"):
@@ -261,7 +261,7 @@ async def delete_webhook(
 async def rotate_webhook_secret(
     webhook_id: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     repo: WebhookRepository = Depends(get_webhook_repository),
 ):
     """Replace the Signing Secret immediately (ADR 0002 — no grace period).
@@ -287,7 +287,7 @@ async def rotate_webhook_secret(
 async def test_webhook(
     webhook_id: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     repo: WebhookRepository = Depends(get_webhook_repository),
     dispatcher: WebhookDispatcher = Depends(get_dispatcher),
 ):
@@ -310,7 +310,7 @@ async def list_webhook_deliveries(
     webhook_id: str,
     request: Request,
     limit: int = 20,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     repo: WebhookRepository = Depends(get_webhook_repository),
     delivery_repo: "WebhookDeliveryRepository" = Depends(get_webhook_delivery_repository),
 ):

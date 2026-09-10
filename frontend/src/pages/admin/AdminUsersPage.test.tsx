@@ -22,6 +22,11 @@ const mockQueryData = vi.hoisted(() => {
     userDetail: null as Record<string, unknown> | null,
     userKeys: [] as unknown[],
     userPasskeys: [] as unknown[],
+    userRoles: [] as Array<Record<string, unknown>>,
+    roles: [
+      { role_id: 'role-admin', name: 'Authglow Administrator', is_system: true },
+      { role_id: 'role-viewer', name: 'viewer', is_system: false },
+    ] as Array<Record<string, unknown>>,
     refetch: vi.fn(),
   }
 })
@@ -43,6 +48,12 @@ vi.mock('../../hooks/useApi', () => ({
     }
     if (key[0] === 'user-passkeys') {
       return { data: mockQueryData.userPasskeys, isLoading: false }
+    }
+    if (key[0] === 'user-roles-drawer') {
+      return { data: mockQueryData.userRoles, refetch: vi.fn(), isLoading: false }
+    }
+    if (key[0] === 'admin-roles-picker') {
+      return { data: mockQueryData.roles, isLoading: false }
     }
     return { data: null, isLoading: false }
   },
@@ -160,19 +171,50 @@ describe('AdminUsersPage', () => {
 
   it('shows scopes in drawer', () => {
     mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
-    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read', 'write', 'admin'] }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read', 'write', 'export'] }
 
     renderPage()
     fireEvent.click(screen.getAllByTestId('user-table-row')[0])
 
     expect(screen.getByText('read')).toBeInTheDocument()
     expect(screen.getByText('write')).toBeInTheDocument()
-    expect(screen.getByText('admin')).toBeInTheDocument()
+    expect(screen.getByText('export')).toBeInTheDocument()
+  })
+
+  it('shows the roles section with the anti-lockout note in drawer', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read'] }
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByTestId('user-roles-section')).toBeInTheDocument()
+    expect(screen.getByText(/No roles assigned/)).toBeInTheDocument()
+    expect(screen.getByText(/anti-lockout/i)).toBeInTheDocument()
+  })
+
+  it('shows assigned role chips and unassigned roles in the drawer select', () => {
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read'] }
+    mockQueryData.userRoles = [
+      { assignment_id: 'a-1', user_id: 'user-0', role_id: 'role-admin', role_name: 'Authglow Administrator' },
+    ]
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+
+    expect(screen.getByTestId('remove-role-Authglow Administrator')).toBeInTheDocument()
+    const select = screen.getByTestId('assign-role-select') as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    // Only the unassigned role is selectable.
+    const options = Array.from(select.options).map((o) => o.textContent)
+    expect(options).toContain('viewer')
+    expect(options).not.toContain('Authglow Administrator')
   })
 
   it('removes a scope and saves the change', async () => {
     mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
-    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read', 'write', 'admin'] }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: ['read', 'write', 'export'] }
 
     renderPage()
     fireEvent.click(screen.getAllByTestId('user-table-row')[0])
@@ -203,7 +245,7 @@ describe('AdminUsersPage', () => {
     fireEvent.click(screen.getAllByTestId('user-table-row')[0])
 
     const scopeInput = screen.getByPlaceholderText('Add scope...')
-    fireEvent.change(scopeInput, { target: { value: 'admin' } })
+    fireEvent.change(scopeInput, { target: { value: 'export' } })
     fireEvent.keyDown(scopeInput, { key: 'Enter', code: 'Enter' })
 
     fireEvent.click(screen.getByText('Save Changes'))
@@ -211,7 +253,7 @@ describe('AdminUsersPage', () => {
     await waitFor(() => {
       expect(mockApi.put).toHaveBeenCalledWith(
         '/api/admin/users/user-0',
-        expect.objectContaining({ scopes: expect.arrayContaining(['admin']) }),
+        expect.objectContaining({ scopes: expect.arrayContaining(['export']) }),
       )
     })
   })
@@ -441,6 +483,28 @@ describe('AdminUsersPage', () => {
       expect(mockApi.post).toHaveBeenCalledWith(
         '/api/admin/users/create',
         expect.objectContaining({ email: 'new@test.com', password: 'StrongP@ss1', email_verified: true }),
+      )
+    })
+  })
+
+  it('role picker in create modal posts the selected roles', async () => {
+    mockApi.post.mockResolvedValue({})
+    renderPage()
+    fireEvent.click(screen.getByTestId('create-user-btn'))
+
+    fireEvent.change(screen.getByTestId('create-user-email'), { target: { value: 'admin2@test.com' } })
+    fireEvent.change(screen.getByTestId('create-user-password'), { target: { value: 'StrongP@ss1' } })
+
+    const picker = screen.getByTestId('create-user-roles')
+    const adminCheckbox = within(picker).getByRole('checkbox', { name: /Authglow Administrator/ })
+    fireEvent.click(adminCheckbox)
+
+    fireEvent.click(screen.getByTestId('create-user-submit'))
+
+    await waitFor(() => {
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/api/admin/users/create',
+        expect.objectContaining({ roles: ['Authglow Administrator'] }),
       )
     })
   })

@@ -12,28 +12,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from authglow.api.oauth_client import require_admin, router
-from authglow.models.user import User
-from authglow.services.password import hash_password
-
-
-def _admin() -> User:
-    return User(
-        id="admin-1",
-        email="admin@test.com",
-        hashed_password=hash_password("TestP@ss123!"),
-        is_active=True,
-        scopes=["admin"],
-    )
+from authglow.api.oauth_client import router
 
 
 @pytest.fixture
-def admin_client(test_settings) -> TestClient:
-    """``TestClient`` with ``require_admin`` bypassed."""
+def admin_client(admin_user_with_role, admin_auth_headers) -> TestClient:
+    """``TestClient`` authenticated as the persisted RBAC admin (real JWT)."""
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[require_admin] = _admin
-    return TestClient(app)
+    return TestClient(app, headers=admin_auth_headers)
 
 
 class TestCreateOAuthClient:

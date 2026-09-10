@@ -4,10 +4,14 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from authglow.core.permissions import get_current_user, require_admin, require_permission
+from authglow.core.permissions import (
+    get_current_user,
+    require_permission,
+)
 from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import AdminRoleMetadata
 from authglow.models.rbac import (
+    ADMIN_ROLE_NAME,
     AssignRoleRequest,
     PermissionCreate,
     PermissionResponse,
@@ -37,7 +41,7 @@ def get_audit_service():
 
 
 @router.post("/permissions", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
-async def create_permission(permission: PermissionCreate, _: str = require_admin()):
+async def create_permission(permission: PermissionCreate, _: str = require_permission("roles.manage")):
     """Create a new permission (admin only)."""
     rbac_service = RBACService()
 
@@ -66,7 +70,7 @@ async def create_permission(permission: PermissionCreate, _: str = require_admin
 
 
 @router.get("/permissions", response_model=List[PermissionResponse])
-async def list_permissions(_: str = require_permission("roles.read")):
+async def list_permissions(_: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
     """List all permissions."""
     rbac_service = RBACService()
     permissions = await rbac_service.list_permissions()
@@ -75,7 +79,7 @@ async def list_permissions(_: str = require_permission("roles.read")):
 
 
 @router.get("/permissions/{permission_id}", response_model=PermissionResponse)
-async def get_permission(permission_id: str, _: str = require_permission("roles.read")):
+async def get_permission(permission_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
     """Get permission by ID."""
     rbac_service = RBACService()
     permission = await rbac_service.get_permission(permission_id)
@@ -87,7 +91,7 @@ async def get_permission(permission_id: str, _: str = require_permission("roles.
 
 
 @router.delete("/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_permission(permission_id: str, _: str = require_admin()):
+async def delete_permission(permission_id: str, _: str = require_permission("roles.manage")):
     """Delete a permission (admin only)."""
     rbac_service = RBACService()
     success = await rbac_service.delete_permission(permission_id)
@@ -100,7 +104,7 @@ async def delete_permission(permission_id: str, _: str = require_admin()):
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def create_role(role: RoleCreate, _: str = require_admin()):
+async def create_role(role: RoleCreate, _: str = require_permission("roles.manage")):
     """Create a new role."""
     rbac_service = RBACService()
 
@@ -129,7 +133,7 @@ async def create_role(role: RoleCreate, _: str = require_admin()):
 
 
 @router.get("/roles", response_model=List[RoleResponse])
-async def list_roles(_: str = require_permission("roles.read")):
+async def list_roles(_: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
     """List all roles."""
     rbac_service = RBACService()
     roles = await rbac_service.list_roles()
@@ -138,7 +142,7 @@ async def list_roles(_: str = require_permission("roles.read")):
 
 
 @router.get("/roles/{role_id}", response_model=RoleWithPermissions)
-async def get_role(role_id: str, _: str = require_permission("roles.read")):
+async def get_role(role_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
     """Get role by ID with full permission details."""
     rbac_service = RBACService()
     role = await rbac_service.get_role(role_id)
@@ -160,7 +164,7 @@ async def get_role(role_id: str, _: str = require_permission("roles.read")):
 
 
 @router.patch("/roles/{role_id}", response_model=RoleResponse)
-async def update_role(role_id: str, role_update: RoleUpdate, _: str = require_admin()):
+async def update_role(role_id: str, role_update: RoleUpdate, _: str = require_permission("roles.manage")):
     """Update a role."""
     rbac_service = RBACService()
     role = await rbac_service.get_role(role_id)
@@ -204,7 +208,7 @@ async def update_role(role_id: str, role_update: RoleUpdate, _: str = require_ad
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_role(role_id: str, _: str = require_admin()):
+async def delete_role(role_id: str, _: str = require_permission("roles.manage")):
     """Delete a role (cannot delete system roles)."""
     rbac_service = RBACService()
     success = await rbac_service.delete_role(role_id)
@@ -221,7 +225,7 @@ async def delete_role(role_id: str, _: str = require_admin()):
 @router.post("/user-roles", response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role_to_user(
     assignment: AssignRoleRequest,
-    current_user_id: str = require_admin(),
+    current_user_id: str = require_permission("roles.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Assign a role to a user."""
@@ -286,16 +290,37 @@ async def assign_role_to_user(
 async def remove_role_from_user(
     user_id: str,
     role_id: str,
-    current_user_id: str = require_admin(),
+    current_user_id: str = require_permission("roles.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Remove a role from a user."""
+    """Remove a role from a user.
+
+    Anti-lockout (D6): the ``Authglow Administrator`` role cannot be
+    removed from yourself, nor from the last holder — either refusal
+    would leave the instance without a way back in.
+    """
     rbac_service = RBACService()
     user_storage = UserStorage()
 
     # Get user and role info for audit before removal
     user = await user_storage.get_user(user_id)
     role = await RBACService().get_role(role_id)
+
+    if role is not None and role.name == ADMIN_ROLE_NAME:
+        if user_id == current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot remove the Authglow Administrator role from yourself",
+            )
+        holders = await rbac_service.list_role_holders(role_id)
+        if not any(holder != user_id for holder in holders):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Cannot remove the last Authglow Administrator — "
+                    "assign the role to another user first"
+                ),
+            )
 
     success = await rbac_service.remove_role_from_user(user_id, role_id)
 
@@ -322,10 +347,13 @@ async def remove_role_from_user(
 @router.get("/user-roles/{user_id}", response_model=List[UserRoleResponse])
 async def get_user_roles(user_id: str, current_user_id: str = Depends(get_current_user)):
     """Get all roles assigned to a user (users can view their own roles)."""
-    # Users can view their own roles, or need permission to view others
+    # Users can view their own roles, or need RBAC-view capability
+    # (roles.read, roles.manage or the view-all admin.read) for others'.
     if user_id != current_user_id:
         rbac_service = RBACService()
-        has_permission = await rbac_service.user_has_permission(current_user_id, "roles.read")
+        has_permission = await rbac_service.user_has_any_permission(
+            current_user_id, ["roles.read", "roles.manage", "admin.read"]
+        )
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
@@ -362,10 +390,13 @@ async def get_user_roles(user_id: str, current_user_id: str = Depends(get_curren
 @router.get("/users/{user_id}/permissions", response_model=UserPermissions)
 async def get_user_permissions(user_id: str, current_user_id: str = Depends(get_current_user)):
     """Get all permissions for a user (users can view their own permissions)."""
-    # Users can view their own permissions, or need permission to view others
+    # Users can view their own permissions, or need RBAC-view capability
+    # (roles.read, roles.manage or the view-all admin.read) for others'.
     if user_id != current_user_id:
         rbac_service = RBACService()
-        has_permission = await rbac_service.user_has_permission(current_user_id, "roles.read")
+        has_permission = await rbac_service.user_has_any_permission(
+            current_user_id, ["roles.read", "roles.manage", "admin.read"]
+        )
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
@@ -389,8 +420,8 @@ async def get_user_permissions(user_id: str, current_user_id: str = Depends(get_
     # Get permissions
     permissions = await rbac_service.get_user_permissions(user_id)
 
-    # Check if admin
-    is_admin = await rbac_service.user_has_role(user_id, "admin")
+    # Check if admin (Administrator role — RBAC-driven)
+    is_admin = await rbac_service.user_has_role(user_id, ADMIN_ROLE_NAME)
 
     return UserPermissions(
         user_id=user_id,

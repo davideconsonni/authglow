@@ -16,9 +16,10 @@ test.describe('Admin — Search user → Toggle active → View detail', () => {
     const rowCount = await rows.count()
 
     if (rowCount > 0) {
-      // Toggle active status
+      // Toggle active status — skip the bootstrap admin (its toggle is
+      // intentionally disabled).
       const toggleBtn = rows.first().locator('[data-testid="toggle-active-btn"]')
-      if (await toggleBtn.isVisible()) {
+      if (await toggleBtn.isVisible() && (await toggleBtn.isEnabled())) {
         await toggleBtn.click()
         await page.waitForTimeout(500)
       }

@@ -70,8 +70,11 @@ class TestPermissionChecker:
             iat=datetime.now(timezone.utc),
         )
 
-    def test_admin_scope_bypasses_permissions(self, test_settings):
+    def test_admin_scope_does_not_grant_admin(self, test_settings):
+        """A JWT carrying scope=admin but no matching RBAC permission is
+        rejected: admin authority is RBAC-driven only."""
         from authglow.core.permissions import PermissionChecker
+        from authglow.services.rbac import RBACService
 
         with patch(
             "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
@@ -81,12 +84,87 @@ class TestPermissionChecker:
             fake_svc.decode_token = MagicMock(return_value=token_data)
             mock_jwt.return_value = fake_svc
 
-            checker = PermissionChecker(required_permissions=["users.delete"])
-            mock_request = MagicMock(spec=Request)
-            mock_request.cookies = {}
-            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
-            result = asyncio_run(checker.__call__(mock_request, creds))
-            assert result == "user-1"
+            with patch.object(
+                RBACService, "get_user_permissions", new_callable=AsyncMock
+            ) as mock_perms:
+                mock_perms.return_value = {"read"}
+
+                checker = PermissionChecker(required_permissions=["users.delete"])
+                mock_request = MagicMock(spec=Request)
+                mock_request.cookies = {}
+                creds = HTTPAuthorizationCredentials(
+                    scheme="Bearer", credentials="valid-token"
+                )
+                with pytest.raises(HTTPException) as exc_info:
+                    asyncio_run(checker.__call__(mock_request, creds))
+                assert exc_info.value.status_code == 403
+                mock_perms.assert_awaited_once_with("user-1")
+
+    def test_administrator_role_alone_does_not_bypass(self, test_settings):
+        """No bypasses: holding the Authglow Administrator role is NOT
+        enough by itself — the required permission must be in the
+        user's aggregated set (the Administrator role is seeded with
+        the whole vocabulary, so in practice it always is)."""
+        from authglow.core.permissions import PermissionChecker
+        from authglow.services.rbac import RBACService
+
+        with patch(
+            "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
+        ) as mock_jwt:
+            token_data = self._make_token_data(scopes=["read"])
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
+
+            with (
+                patch.object(
+                    RBACService, "user_has_role", new_callable=AsyncMock
+                ) as mock_has_role,
+                patch.object(
+                    RBACService, "get_user_permissions", new_callable=AsyncMock
+                ) as mock_perms,
+            ):
+                mock_has_role.return_value = True
+                mock_perms.return_value = set()
+
+                checker = PermissionChecker(required_permissions=["users.delete"])
+                mock_request = MagicMock(spec=Request)
+                mock_request.cookies = {}
+                creds = HTTPAuthorizationCredentials(
+                    scheme="Bearer", credentials="valid-token"
+                )
+                with pytest.raises(HTTPException) as exc_info:
+                    asyncio_run(checker.__call__(mock_request, creds))
+                assert exc_info.value.status_code == 403
+
+    def test_explicit_permission_grants_access(self, test_settings):
+        """A user whose aggregated set contains the required permission
+        passes — this is also how the seeded Administrator passes
+        everywhere (it holds the whole vocabulary)."""
+        from authglow.core.permissions import PermissionChecker
+        from authglow.services.rbac import RBACService
+
+        with patch(
+            "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
+        ) as mock_jwt:
+            token_data = self._make_token_data(scopes=["read"])
+            fake_svc = MagicMock()
+            fake_svc.decode_token = MagicMock(return_value=token_data)
+            mock_jwt.return_value = fake_svc
+
+            with patch.object(
+                RBACService, "get_user_permissions", new_callable=AsyncMock
+            ) as mock_perms:
+                mock_perms.return_value = {"users.delete"}
+
+                checker = PermissionChecker(required_permissions=["users.delete"])
+                mock_request = MagicMock(spec=Request)
+                mock_request.cookies = {}
+                creds = HTTPAuthorizationCredentials(
+                    scheme="Bearer", credentials="valid-token"
+                )
+                result = asyncio_run(checker.__call__(mock_request, creds))
+                assert result == "user-1"
 
     def test_any_permission_sufficient(self, test_settings):
         from authglow.core.permissions import PermissionChecker
@@ -206,6 +284,46 @@ class TestGetCurrentUser:
             with pytest.raises(HTTPException) as exc_info:
                 asyncio_run(get_current_user(mock_request, creds))
             assert exc_info.value.status_code == 401
+
+
+class TestRequireAdministrator:
+    """The ``require_administrator`` guard gates on the
+    Authglow Administrator role (RBAC-driven, D1)."""
+
+    def _make_user(self, user_id="caller-1"):
+        from authglow.models.user import User
+
+        return User(
+            id=user_id,
+            email="caller@example.com",
+            hashed_password="x",
+            is_active=True,
+            scopes=["read", "write"],
+        )
+
+    def test_403_without_role(self):
+        from authglow.api.admin import require_administrator
+        from authglow.services.rbac import RBACService
+
+        with patch.object(
+            RBACService, "user_has_role", new_callable=AsyncMock
+        ) as mock_has_role:
+            mock_has_role.return_value = False
+            with pytest.raises(HTTPException) as exc_info:
+                asyncio_run(require_administrator(self._make_user()))
+            assert exc_info.value.status_code == 403
+
+    def test_200_with_role(self):
+        from authglow.api.admin import require_administrator
+        from authglow.services.rbac import RBACService
+
+        user = self._make_user()
+        with patch.object(
+            RBACService, "user_has_role", new_callable=AsyncMock
+        ) as mock_has_role:
+            mock_has_role.return_value = True
+            result = asyncio_run(require_administrator(user))
+            assert result is user
 
 
 def asyncio_run(coro):

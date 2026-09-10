@@ -10,7 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 
-from authglow.api.admin import require_admin
+from authglow.api.admin import require_user_with_permission
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
@@ -59,7 +59,7 @@ def get_user_storage() -> UserStorage:
 
 
 @router.get("/api/federation/providers")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def list_public_providers(
     request: Request,
     context: Optional[str] = Query(default=None),
@@ -76,7 +76,7 @@ async def list_public_providers(
 
 
 @router.get("/api/federation/login/{provider_id}")
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def federation_login(
     request: Request,
     provider_id: str,
@@ -182,7 +182,7 @@ async def federation_login(
 
 
 @router.get("/api/federation/callback")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def federation_callback(
     request: Request,
     code: str,
@@ -666,11 +666,11 @@ async def federated_consent_check(
 
 
 @router.post("/api/federation/providers", response_model=ExternalIdpConfigResponse)
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def create_provider(
     request: Request,
     provider_data: ExternalIdpConfigCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: create a new external IdP provider."""
@@ -699,7 +699,7 @@ async def create_provider(
 
 @router.get("/api/federation/admin/providers", response_model=List[ExternalIdpConfigResponse])
 async def list_all_providers(
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: list all providers (including disabled)."""
@@ -711,7 +711,7 @@ async def list_all_providers(
 )
 async def get_provider(
     provider_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["clients.manage", "admin.read"]),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: get a single provider."""
@@ -724,12 +724,12 @@ async def get_provider(
 @router.put(
     "/api/federation/admin/providers/{provider_id}", response_model=ExternalIdpConfigResponse
 )
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def update_provider(
     request: Request,
     provider_id: str,
     updates: ExternalIdpConfigUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: update a provider."""
@@ -741,11 +741,11 @@ async def update_provider(
 
 
 @router.delete("/api/federation/admin/providers/{provider_id}")
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def delete_provider(
     request: Request,
     provider_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: delete a provider."""
@@ -758,7 +758,7 @@ async def delete_provider(
 @router.patch("/api/federation/admin/providers/{provider_id}/toggle")
 async def toggle_provider(
     provider_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     storage: FederationStorage = Depends(get_federation_storage),
 ):
     """Admin: toggle provider enabled/disabled."""

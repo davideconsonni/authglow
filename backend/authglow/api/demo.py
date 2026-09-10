@@ -26,7 +26,7 @@ router = APIRouter(tags=["Demo"])
 
 
 @router.get("/api/demo/inbox")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def demo_inbox(request: Request, email: str) -> dict:
     """Return the demo mailbox for a recipient address.
 

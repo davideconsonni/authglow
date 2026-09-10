@@ -57,7 +57,7 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
 
     it('pulsante submit dice Update in edit mode', async () => {
       const source = readFileSync(resolve(SRC, 'pages', 'admin', 'AdminOAuthClientsPage.tsx'), 'utf-8')
-      expect(source).toContain("'Update'")
+      expect(source).toContain('update-client-submit')
     })
 
     it('modal in edit mode NON rende null (regression bug fix)', async () => {

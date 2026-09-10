@@ -1,16 +1,21 @@
 import { test, expect } from '@playwright/test'
+import { clearAuth } from '../auth.setup'
 
 test.describe('Mobile layout — 375x812 (iPhone 14)', () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
   test('login page collapses to single column', async ({ page }) => {
+    // Drop the stored session: an authenticated user is bounced away
+    // from the login page.
+    await clearAuth(page)
     await page.goto('/auth/login')
     await page.waitForLoadState('networkidle')
     // Brand column should be hidden on mobile
     const brandText = page.locator('text=Enterprise CIAM Platform')
     await expect(brandText).toBeHidden()
-    // Form should be full width
-    await expect(page.locator('input[type="email"]')).toBeVisible()
+    // The OAuth2 sign-in entry point should be visible (the login page
+    // has no credential form — it starts the PKCE flow)
+    await expect(page.getByTestId('login-submit')).toBeVisible({ timeout: 20000 })
   })
 
   test('dashboard renders at mobile viewport', async ({ page }) => {
@@ -28,20 +33,23 @@ test.describe('Mobile layout — 375x812 (iPhone 14)', () => {
 
     // Open sidebar via hamburger
     await page.click('button[aria-label="Open sidebar"]')
-    await page.waitForTimeout(500)
-    // Sidebar content should be visible now
-    await expect(page.locator('text=Dashboard').first()).toBeVisible({ timeout: 3000 })
+    // The mobile navigation panel must be visible
+    const mobileNav = page.locator('aside[aria-label="Navigation menu"]')
+    await expect(mobileNav).toBeVisible({ timeout: 3000 })
+    await expect(mobileNav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
 
-    // Close sidebar via backdrop
-    await page.click('[data-testid="confirm-dialog-backdrop"]')
-    await page.waitForTimeout(300)
+    // Close sidebar via its backdrop — click the right edge, away from
+    // the panel itself (the backdrop center is covered by the panel and
+    // Playwright would retry until timeout).
+    await page.locator('[data-testid="sidebar-mobile-backdrop"]').click({ position: { x: 370, y: 60 } })
+    await expect(mobileNav).toBeHidden({ timeout: 3000 })
   })
 
   test('admin users table scrolls horizontally with key columns', async ({ page }) => {
     await page.goto('/admin/users')
     await page.waitForLoadState('networkidle')
-    // User column should always be visible
-    await expect(page.locator('text=User').first()).toBeVisible()
+    // Page renders with its title
+    await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible()
     // Action buttons should be accessible
     const rows = page.locator('[data-testid="user-table-row"]')
     const firstRow = rows.first()

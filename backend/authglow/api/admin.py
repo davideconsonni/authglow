@@ -1,15 +1,17 @@
 """Admin portal API endpoints."""
 
 from datetime import datetime, timedelta
-from typing import Optional, TypedDict
+from typing import Any, List, Optional, TypedDict, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
+from authglow.core.permissions import PermissionChecker
 from authglow.core.rate_limit import limiter
 from authglow.core.safeword_store import (
     SafewordPurpose,
@@ -29,10 +31,12 @@ from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import (
     AdminActionMetadata,
     AdminPasswordResetMetadata,
+    AdminRoleMetadata,
     AdminScopeMetadata,
     AdminTokenRevokedMetadata,
     AdminUserMetadata,
 )
+from authglow.models.rbac import ADMIN_ROLE_NAME
 from authglow.models.user import User, UserCreate, UserResponse
 from authglow.services.audit import AuditService
 from authglow.services.email_verification import EmailVerificationService
@@ -41,6 +45,7 @@ from authglow.services.oauth_consent import OAuth2ConsentService
 from authglow.services.passkey import PasskeyService
 from authglow.services.password import PasswordValidator, hash_password_async
 from authglow.services.password_reset import PasswordResetService
+from authglow.services.rbac import RBACService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.user import UserService
 
@@ -86,11 +91,77 @@ def get_passkey_service():
     )
 
 
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require admin scope."""
-    if "admin" not in current_user.scopes:
+async def require_administrator(current_user: User = Depends(get_current_user)) -> User:
+    """Require the caller to hold the ``Authglow Administrator`` role.
+
+    Admin gating is RBAC-driven only. The OAuth ``admin`` scope is
+    ignored — it does not grant admin access (and is rejected at
+    ingestion, see ``core.scopes.RESERVED_SCOPE_TOKENS``).
+    """
+    if not await RBACService().user_has_role(current_user.id, ADMIN_ROLE_NAME):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+async def user_has_admin_role(user_id: str) -> bool:
+    """Return ``True`` if *user_id* currently holds the
+    ``Authglow Administrator`` role.
+
+    Helper for compound ownership/admin checks that do not fit the
+    :func:`require_administrator` dependency pattern.
+    """
+    return await RBACService().user_has_role(user_id, ADMIN_ROLE_NAME)
+
+
+async def user_has_permission(user_id: str, permission: str) -> bool:
+    """Return ``True`` if *user_id* holds *permission* (via any role).
+
+    Helper for permission checks that do not fit the
+    :func:`require_permission <authglow.core.permissions.require_permission>`
+    dependency pattern (e.g. compound ownership checks).
+    """
+    return await RBACService().user_has_permission(user_id, permission)
+
+
+async def user_has_any_permission(user_id: str, permissions: List[str]) -> bool:
+    """Return ``True`` if *user_id* holds at least one of *permissions*.
+
+    Used for read endpoints visible to both area managers and
+    view-only (``admin.read``) operators.
+    """
+    return await RBACService().user_has_any_permission(user_id, permissions)
+
+
+_security = HTTPBearer(auto_error=False)
+
+
+def require_user_with_permission(
+    permission: Union[str, List[str]],
+) -> Any:
+    """User-returning variant of :func:`require_permission
+    <authglow.core.permissions.require_permission>`.
+
+    Most admin endpoints need the full ``User`` (audit fields, scopes)
+    in addition to the gate. The shared :class:`PermissionChecker`
+    performs the actual check (identical bypass semantics); the
+    already-resolved ``User`` from :func:`get_current_user` is then
+    returned.
+    """
+
+    async def dep(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        checker = PermissionChecker(
+            required_permissions=[permission]
+            if isinstance(permission, str)
+            else list(permission)
+        )
+        await checker(request, credentials)
+        return current_user
+
+    return Depends(dep)
 
 
 # API Endpoints
@@ -98,7 +169,7 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.get("/api/admin/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("admin.read"),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get dashboard statistics."""
@@ -133,7 +204,7 @@ async def list_users_admin(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     sort: Optional[str] = Query(None),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """List users with optional filters, pagination and sorting (admin only).
@@ -184,7 +255,7 @@ async def search_users(
     last_login_before: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Search and filter users with server-side pagination."""
@@ -216,7 +287,7 @@ async def search_users(
 @router.get("/api/admin/users/{user_id}", response_model=AdminUserDetail)
 async def get_user_detail(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get detailed user information."""
@@ -231,7 +302,7 @@ async def get_user_detail(
 async def update_user(
     user_id: str,
     update_data: UserUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -326,7 +397,7 @@ async def update_user(
 @router.post("/api/admin/users/create", status_code=201)
 async def create_user(
     body: UserCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -365,6 +436,29 @@ async def create_user(
         token = await verification_service.create_verification_token(user)
         await verification_service.send_verification_email(user, token.verification_code)
 
+    # Optional RBAC role assignment at creation (D9 UX). Unknown role
+    # names become a 400; each newly-assigned role is audited.
+    if body.roles:
+        try:
+            assigned = await RBACService().assign_role_names_to_user(
+                user_id=user.id, role_names=body.roles, actor_id=current_user.id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        for role_name in assigned:
+            await audit_service.log_event(
+                event_type=AuditEventType.ADMIN_ROLE_ASSIGNED,
+                user_id=current_user.id,
+                email=current_user.email,
+                metadata=AdminRoleMetadata(
+                    target_user_id=user.id,
+                    target_user_email_hash=user.email,
+                    admin_user_id=current_user.id,
+                    admin_user_email_hash=current_user.email,
+                    role=role_name,
+                ),
+            )
+
     await audit_service.log_event(
         event_type=AuditEventType.ADMIN_USER_CREATED,
         user_id=current_user.id,
@@ -394,11 +488,11 @@ async def create_user(
 
 
 @router.delete("/api/admin/users/{user_id}")
-@limiter.limit("20/minute")  # Max 20 user deletions per minute per IP
+@limiter.limit("60/minute")  # Max 20 user deletions per minute per IP
 async def delete_user(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -453,7 +547,7 @@ async def delete_user(
 @router.get("/api/admin/users/{user_id}/passkeys")
 async def get_user_passkey_count(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     passkey_service: PasskeyService = Depends(get_passkey_service),
 ):
     """Get passkey count for a user."""
@@ -464,7 +558,7 @@ async def get_user_passkey_count(
 @router.get("/api/admin/users/{user_id}/passkeys/list")
 async def get_user_passkeys_list(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     passkey_service: PasskeyService = Depends(get_passkey_service),
 ):
     """Get full list of passkeys for a user."""
@@ -487,12 +581,12 @@ async def get_user_passkeys_list(
 
 
 @router.delete("/api/admin/users/{user_id}/passkeys/{credential_id}")
-@limiter.limit("30/minute")  # Max 30 passkey deletions per minute per IP
+@limiter.limit("60/minute")  # Max 30 passkey deletions per minute per IP
 async def delete_user_passkey(
     request: Request,
     user_id: str,
     credential_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     passkey_service: PasskeyService = Depends(get_passkey_service),
     audit_service: AuditService = Depends(get_audit_service),
     storage: UserStorage = Depends(get_user_storage),
@@ -543,11 +637,11 @@ async def delete_user_passkey(
 
 
 @router.post("/api/admin/users/{user_id}/reset-mfa")
-@limiter.limit("20/minute")  # Max 20 MFA resets per minute per IP
+@limiter.limit("60/minute")  # Max 20 MFA resets per minute per IP
 async def reset_user_mfa(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -603,7 +697,7 @@ async def reset_user_mfa(
 @router.post("/api/admin/users/{user_id}/disable-mfa")
 async def disable_user_mfa(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -660,7 +754,7 @@ async def disable_user_mfa(
 @router.post("/api/admin/users/{user_id}/regenerate-backup-codes")
 async def regenerate_user_backup_codes(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -718,12 +812,12 @@ async def regenerate_user_backup_codes(
 
 
 @router.post("/api/admin/users/{user_id}/set-password")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def set_user_password(
     request: Request,
     user_id: str,
     body: SetPasswordRequest,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -789,11 +883,11 @@ async def set_user_password(
 
 
 @router.post("/api/admin/users/{user_id}/send-password-reset")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def send_password_reset(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -866,11 +960,11 @@ async def send_password_reset(
 
 
 @router.post("/api/admin/users/{user_id}/expire-password")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def expire_user_password(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -918,11 +1012,11 @@ async def expire_user_password(
 
 
 @router.post("/api/admin/users/{user_id}/unlock")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def unlock_user_account(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -963,11 +1057,11 @@ async def unlock_user_account(
 
 
 @router.post("/api/admin/users/{user_id}/reset-failed-attempts")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def reset_failed_attempts(
     request: Request,
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -1000,11 +1094,11 @@ async def reset_failed_attempts(
 
 
 @router.post("/api/admin/users/bulk", response_model=dict)
-@limiter.limit("10/minute")  # Max 10 bulk operations per minute per IP
+@limiter.limit("30/minute")  # Max 10 bulk operations per minute per IP
 async def bulk_user_operation(
     request: Request,
     operation: BulkUserOperation,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -1108,7 +1202,7 @@ async def get_active_sessions(
     type: str = Query("all"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["sessions.manage", "admin.read"]),
 ):
     """Get all active sessions and refresh tokens with pagination."""
     refresh_token_service = RefreshTokenService()
@@ -1168,7 +1262,7 @@ async def get_active_sessions(
 @router.post("/api/admin/tokens/refresh/{token_id}/revoke")
 async def revoke_refresh_token_admin(
     token_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("sessions.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a refresh token (admin)."""
@@ -1204,7 +1298,7 @@ async def get_user_sessions(
     user_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
 ):
     """Get active sessions for a specific user."""
     refresh_token_service = RefreshTokenService()
@@ -1233,7 +1327,7 @@ async def get_user_sessions(
 @router.post("/api/admin/users/{user_id}/sessions/revoke-all")
 async def revoke_all_user_sessions(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke all sessions for a specific user."""
@@ -1273,7 +1367,7 @@ async def revoke_all_user_sessions(
 
 
 @router.post("/api/admin/sessions/cleanup")
-async def cleanup_expired_sessions(current_user: User = Depends(require_admin)):
+async def cleanup_expired_sessions(current_user: User = require_user_with_permission("sessions.manage")):
     """Clean up expired sessions and tokens."""
     refresh_token_service = RefreshTokenService()
 
@@ -1287,7 +1381,7 @@ async def get_oauth_consents_admin(
     email: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["sessions.manage", "admin.read"]),
 ):
     """Get all OAuth2 consents with pagination."""
     consent_service = OAuth2ConsentService()
@@ -1298,7 +1392,7 @@ async def get_oauth_consents_admin(
 @router.post("/api/admin/oauth-consents/{consent_id}/revoke")
 async def revoke_consent_admin(
     consent_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("sessions.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke an OAuth2 consent (admin)."""
@@ -1331,7 +1425,7 @@ async def get_user_login_history(
     user_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get login history for a specific user."""
@@ -1352,7 +1446,7 @@ async def get_user_security_events(
     user_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get security events for a specific user."""
@@ -1371,7 +1465,7 @@ async def get_user_security_events(
 @router.get("/api/admin/users/{user_id}/oauth-consents")
 async def get_user_oauth_consents(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get OAuth2 consents for a specific user."""
@@ -1414,7 +1508,7 @@ async def get_user_oauth_consents(
 @router.get("/api/admin/users/{user_id}/export")
 async def export_user_data(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Export all data for a specific user as JSON."""
@@ -1504,7 +1598,7 @@ async def get_user_admin_actions(
     user_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["users.manage", "admin.read"]),
     storage: UserStorage = Depends(get_user_storage),
 ):
     """Get admin actions for a specific user."""
@@ -1524,7 +1618,7 @@ async def get_user_admin_actions(
 async def suspend_user(
     user_id: str,
     body: SuspendRequest,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -1575,7 +1669,7 @@ async def suspend_user(
 @router.post("/api/admin/users/{user_id}/unsuspend")
 async def unsuspend_user(
     user_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -1623,7 +1717,7 @@ async def unsuspend_user(
 
 @router.get("/api/admin/jwk-keys")
 async def get_jwk_keys(
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["keys.manage", "admin.read"]),
 ):
     """Get all JWK keys in the keyring."""
     jwt_service = await get_jwt_service()
@@ -1673,10 +1767,10 @@ async def get_jwk_keys(
 
 
 @router.post("/api/admin/jwk-keys/rotate/challenge", response_model=JwkRotateChallenge)
-@limiter.limit("60/hour")
+@limiter.limit("120/hour")
 async def request_rotate_jwk_keys_challenge(
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("keys.manage"),
 ):
     """Issue a single-use safeword challenge for the destructive
     ``POST /api/admin/jwk-keys/rotate`` call.
@@ -1698,11 +1792,11 @@ async def request_rotate_jwk_keys_challenge(
 
 
 @router.post("/api/admin/jwk-keys/rotate")
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def rotate_jwk_keys(
     request: Request,
     body: JwkRotateConfirm,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("keys.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Rotate the active JWK signing key.
@@ -1733,11 +1827,11 @@ async def rotate_jwk_keys(
 
 
 @router.post("/api/admin/jwk-keys/{kid}/revoke")
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def revoke_jwk_key(
     kid: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("keys.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a JWK key. Active key cannot be revoked."""
@@ -1769,7 +1863,7 @@ async def revoke_jwk_key(
 @router.get("/api/admin/device-authorizations")
 async def list_device_authorizations(
     status: Optional[str] = Query(None),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission(["sessions.manage", "admin.read"]),
 ):
     """List all device authorizations, optionally filtered by status."""
     from authglow.services.device_auth import DeviceAuthorizationService
@@ -1800,7 +1894,7 @@ async def list_device_authorizations(
 async def revoke_device_authorization(
     device_code: str,
     request: Request,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("sessions.manage"),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Revoke a device authorization (admin)."""

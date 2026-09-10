@@ -35,12 +35,16 @@ export function DashboardPage() {
   useDocumentTitle('Dashboard')
   const { user } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.scopes?.includes('admin')
+  const isAdmin = user?.is_admin === true
+  // /api/admin/stats requires admin.read (or any admin capability via
+  // the Administrator role) — enable for view-only operators too.
+  const canSeeStats =
+    isAdmin || (user?.permissions ?? []).includes('admin.read')
 
   const { data: profile } = useApiQuery<ProfileMe>(['profile-me'], '/api/profile/me')
   const { data: sessionsData } = useApiQuery<SessionsResponse>(['my-dash-sessions'], '/api/tokens/refresh/list')
   const { data: keysData } = useApiQuery<unknown[]>(['my-dash-keys'], '/api/keys')
-  const { data: stats } = useApiQuery<AdminStats>(['dash-stats-v2'], '/api/admin/stats', { enabled: isAdmin })
+  const { data: stats } = useApiQuery<AdminStats>(['dash-stats-v2'], '/api/admin/stats', { enabled: canSeeStats })
 
   const sessionCount = sessionsData?.total ?? 0
   const keyCount = keysData?.length ?? 0
@@ -248,7 +252,7 @@ export function DashboardPage() {
             onClick={() => navigate(ROUTES.API_KEYS)}
             detail={keyCount === 1 ? '1 key' : `${keyCount} keys active`}
           />
-          {isAdmin && (
+          {canSeeStats && (
             <StatCard
               icon={Users} label="Total users"
               value={String(stats?.total_users ?? 0)} color="brand-cool"
@@ -259,7 +263,7 @@ export function DashboardPage() {
         </div>
       </Section>
 
-      {isAdmin && (
+      {canSeeStats && (
         <Section title="Administration">
           <button
             onClick={() => navigate(ROUTES.ADMIN.DASHBOARD)}

@@ -38,7 +38,7 @@ security = HTTPBearer()
 
 
 @router.get("/.well-known/openid-configuration", response_model=OpenIDConfiguration)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def openid_configuration(request: Request, response: Response):
     """OpenID Connect Discovery endpoint.
 
@@ -158,7 +158,7 @@ async def openid_configuration(request: Request, response: Response):
 
 
 @router.get("/.well-known/jwks.json", response_model=JWKSResponse)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def jwks(request: Request, response: Response):
     """JSON Web Key Set (JWKS) endpoint.
 
@@ -244,7 +244,7 @@ async def jwks(request: Request, response: Response):
 
 
 @router.get("/oauth2/jwks/status", response_model=KeyringInfo)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def jwks_status(request: Request):
     """JWKS Status endpoint.
 
@@ -402,7 +402,7 @@ async def userinfo(
 
 
 @router.get("/oauth2/logout")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def logout_get(
     request: Request,
     response: Response,
@@ -580,7 +580,7 @@ async def logout_get(
 
 
 @router.post("/oauth2/logout")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def logout_post(
     request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
@@ -671,7 +671,7 @@ def _validate_redirect_uri(uri: str) -> None:
 
 
 @router.post("/oauth2/register", status_code=status.HTTP_201_CREATED)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def register_oauth_client(
     request: Request,
     payload: ClientRegistrationRequest,
@@ -983,7 +983,7 @@ async def get_oauth_client_registration(
 
 
 @router.put("/oauth2/register/{client_id}")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def update_oauth_client_registration(
     client_id: str,
     request: Request,
@@ -1018,7 +1018,7 @@ async def update_oauth_client_registration(
 
 
 @router.delete("/oauth2/register/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def delete_oauth_client_registration(
     client_id: str,
     request: Request,

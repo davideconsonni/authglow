@@ -114,6 +114,26 @@ def _override_settings(test_settings):
 
 
 @pytest.fixture(autouse=True)
+def _reset_shared_caches():
+    """Drop ALL process-wide lazy cache namespaces around every test.
+
+    The ``_CacheProxy`` namespaces (user, oauth_client, api_key, …) are
+    TTL-backed singletons that survive across tests within a worker: a
+    test that stores a client (or user) under a well-known id poisons
+    later tests that read the same id — the classic symptom is the
+    order-dependent ``test_verify_client_with_settings_defaults``
+    flake under ``-n auto``. Resetting the registry around every test
+    makes the isolation explicit instead of depending on which
+    fixtures a test happens to request.
+    """
+    from authglow.core.cache import _reset_cache_registry
+
+    _reset_cache_registry()
+    yield
+    _reset_cache_registry()
+
+
+@pytest.fixture(autouse=True)
 def _reset_jwt_singleton():
     """Drop the process-wide :func:`authglow.core.jwt_singleton.get_jwt_service`
     cache between tests so each case reloads the keyring against the
@@ -226,18 +246,80 @@ def test_user():
 
 
 @pytest.fixture
-def test_admin_user():
+def test_admin_user(test_settings, rbac_service):
+    """A user holding the ``Authglow Administrator`` RBAC role.
+
+    Admin gating is RBAC-driven: the OAuth ``admin`` scope no longer
+    exists on users (rejected at ingestion). Any test hitting an
+    admin-gated endpoint must persist this user AND rely on the role
+    assignment written here (per-test RBAC store).
+    """
+    import asyncio
+
     from authglow.models.user import User
     from authglow.services.password import hash_password
 
-    return User(
+    user = User(
         id="admin-user-001",
         email="admin@example.com",
         hashed_password=hash_password("AdminP@ss123!"),
         is_active=True,
-        scopes=["read", "write", "admin"],
+        scopes=["read", "write"],
         email_verified=True,
     )
+    role_id = asyncio.run(rbac_service.ensure_admin_role())
+    asyncio.run(
+        rbac_service.assign_role_to_user_idempotent(
+            user_id=user.id, role_id=role_id, actor_id=user.id
+        )
+    )
+    return user
+
+
+@pytest.fixture
+def admin_user_with_role(test_settings, rbac_service, storage):
+    """Persist ``admin-test-1`` and grant it the Administrator role.
+
+    For integration tests that hit admin-gated endpoints through a
+    real ``TestClient`` (no dependency overrides): the endpoint
+    resolves the caller via ``get_current_user`` (needs the user in
+    the per-test store) and the permission via the RBAC store.
+    """
+    import asyncio
+
+    from authglow.models.user import User
+    from authglow.services.password import hash_password
+
+    user = User(
+        id="admin-test-1",
+        email="admin@authglow.io",
+        hashed_password=hash_password("NotUsed123!"),
+        is_active=True,
+        email_verified=True,
+        scopes=["read", "write"],
+    )
+    try:
+        asyncio.run(storage.create_user(user))
+    except ValueError:
+        pass  # already persisted within this test
+    role_id = asyncio.run(rbac_service.ensure_admin_role())
+    asyncio.run(
+        rbac_service.assign_role_to_user_idempotent(
+            user_id=user.id, role_id=role_id, actor_id=user.id
+        )
+    )
+    return user
+
+
+@pytest.fixture
+def admin_auth_headers(admin_user_with_role, jwt_service):
+    """Bearer headers for the persisted admin (real JWT, per-test keys)."""
+    token = jwt_service.create_access_token(
+        user_id=admin_user_with_role.id,
+        email=admin_user_with_role.email,
+        scopes=admin_user_with_role.scopes,
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

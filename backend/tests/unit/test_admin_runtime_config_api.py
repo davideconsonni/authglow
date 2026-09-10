@@ -3,28 +3,58 @@
 Covers ``PUT /api/admin/rate-limits/config`` and
 ``PATCH /api/admin/settings`` plus the extended
 ``GET /api/admin/rate-limits`` rows, using a minimal FastAPI app that
-mounts the ``admin_settings`` router with ``require_admin`` overridden.
+mounts the ``admin_settings`` router. Admin routes gate on RBAC
+permissions (``require_permission`` decodes the bearer token itself),
+so an autouse fixture fakes the token decode and grants
+``system.manage`` + ``admin.read`` for the test caller, and the client
+sends a dummy Bearer token on every request.
 Persistence goes through the real File repositories bound to the
 per-test ``test_settings`` (autouse fixture); the rate-limit service
 patches the process-wide limiter singleton, so an autouse fixture
 restores its ``enabled`` flag after each test.
 """
 
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from authglow.api.admin import require_admin
 from authglow.api.admin_settings import router as admin_settings_router
+from authglow.api.auth import get_current_user
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.models.token import TokenData
 from authglow.repositories.file.rate_limit_config import (
     FileRateLimitConfigRepository,
 )
 from authglow.repositories.file.settings_override import (
     FileSettingsOverrideRepository,
 )
+from authglow.services.rbac import RBACService
 from authglow.services.settings_override import SettingsOverrideService
+
+
+@pytest.fixture(autouse=True)
+def _mock_rbac_admin():
+    token_data = TokenData(
+        sub="admin-1",
+        email="admin@example.com",
+        scopes=["read", "write"],
+        token_type="access",
+        exp=datetime.now(timezone.utc) + timedelta(hours=1),
+        iat=datetime.now(timezone.utc),
+    )
+    fake_svc = MagicMock()
+    fake_svc.decode_token = MagicMock(return_value=token_data)
+    with (
+        patch("authglow.core.permissions.get_jwt_service", new_callable=AsyncMock) as mock_jwt,
+        patch.object(RBACService, "get_user_permissions", new_callable=AsyncMock) as mock_perms,
+    ):
+        mock_jwt.return_value = fake_svc
+        mock_perms.return_value = {"system.manage", "admin.read"}
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -42,8 +72,10 @@ def client(test_admin_user):
     app = FastAPI()
     app.state.limiter = limiter
     app.include_router(admin_settings_router)
-    app.dependency_overrides[require_admin] = lambda: test_admin_user
-    return TestClient(app)
+    # Full User via get_current_user; the permission gate is covered
+    # by the _mock_rbac_admin fixture.
+    app.dependency_overrides[get_current_user] = lambda: test_admin_user
+    return TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 
 class TestPutRateLimitsConfig:

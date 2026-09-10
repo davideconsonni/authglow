@@ -1,6 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from authglow.models.user import User
 from authglow.models.user_profile import UserPreferencesUpdate, UserProfileUpdate
 from authglow.services.password import hash_password
@@ -381,3 +383,116 @@ class TestUserPreferences:
         prefs = asyncio_run(user_profile_service.update_user_preferences("profile-user-1", update))
         assert prefs.theme == "dark"
         assert prefs.language == "it"
+
+
+class TestDeactivateSafewordFlow:
+    """Self-deactivation requires a server-issued safeword challenge and
+    logs the user out for real (tokens revoked, cookies cleared)."""
+
+    @pytest.fixture(autouse=True)
+    def _bind_service_settings(self, test_settings):
+        """Keep service-module settings bindings patched for the test.
+
+        The deactivate endpoint builds ``UserProfileService`` /
+        ``UserService`` per request, and those modules hold
+        from-imported ``get_settings`` bindings that the global
+        ``_override_settings`` patch does not rebind. Without this,
+        requests after the first TestClient test in the worker can
+        resolve a previous test's settings (own tmp dir missed →
+        user still active / bootstrap check bypassed).
+        """
+        with patch(
+            "authglow.services.user_profile.get_settings", return_value=test_settings
+        ):
+            with patch("authglow.services.user.get_settings", return_value=test_settings):
+                with patch(
+                    "authglow.api.user_profile.get_settings", return_value=test_settings
+                ):
+                    yield
+
+    def _client(self, test_settings, user):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from authglow.api.auth import get_current_user
+        from authglow.api.user_profile import router
+
+        app = FastAPI()
+        app.include_router(router)
+
+        async def override_get_current_user():
+            return user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        return TestClient(app)
+
+    def test_challenge_issues_safeword(self, test_settings, storage):
+        user = _make_user(user_id="deact-challenge-1", email="deact-challenge@example.com")
+        asyncio_run(storage.create_user(user))
+        client = self._client(test_settings, user)
+
+        resp = client.post("/api/profile/me/deactivate/challenge")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["challenge_id"]
+        assert body["word"]
+        assert body["expires_at"]
+
+    def test_deactivate_with_valid_safeword_logs_out(self, test_settings, storage):
+        user = _make_user(user_id="deact-logout-1", email="deact-logout@example.com")
+        asyncio_run(storage.create_user(user))
+        client = self._client(test_settings, user)
+
+        challenge = client.post("/api/profile/me/deactivate/challenge").json()
+        resp = client.post(
+            "/api/profile/me/deactivate",
+            json={"challenge_id": challenge["challenge_id"], "word": challenge["word"]},
+        )
+        assert resp.status_code == 200, resp.text
+
+        # User is inactive in storage.
+        refreshed = asyncio_run(storage.get_user(user.id))
+        assert refreshed is not None
+        assert refreshed.is_active is False
+
+        # Auth cookies are cleared so the browser session ends.
+        set_cookie = resp.headers.get("set-cookie", "")
+        assert test_settings.auth_cookie_access_name in set_cookie
+
+    def test_deactivate_with_wrong_word_rejected(self, test_settings, storage):
+        user = _make_user(user_id="deact-wrongword-1", email="deact-wrongword@example.com")
+        asyncio_run(storage.create_user(user))
+        client = self._client(test_settings, user)
+
+        challenge = client.post("/api/profile/me/deactivate/challenge").json()
+        resp = client.post(
+            "/api/profile/me/deactivate",
+            json={"challenge_id": challenge["challenge_id"], "word": "wrong-word"},
+        )
+        assert resp.status_code == 400, resp.text
+        refreshed = asyncio_run(storage.get_user(user.id))
+        assert refreshed is not None
+        assert refreshed.is_active is True
+
+    def test_deactivate_without_challenge_rejected(self, test_settings, storage):
+        user = _make_user(user_id="deact-nochallenge-1", email="deact-nochallenge@example.com")
+        asyncio_run(storage.create_user(user))
+        client = self._client(test_settings, user)
+
+        resp = client.post("/api/profile/me/deactivate", json={})
+        # Missing challenge fields fail validation before any logic runs.
+        assert resp.status_code == 422, resp.text
+
+    def test_deactivate_bootstrap_rejected(self, test_settings, storage):
+        user = _make_user(user_id="deact-bootstrap-1", email="deact-bootstrap@example.com")
+        user.is_bootstrap = True
+        asyncio_run(storage.create_user(user))
+        client = self._client(test_settings, user)
+
+        challenge = client.post("/api/profile/me/deactivate/challenge").json()
+        resp = client.post(
+            "/api/profile/me/deactivate",
+            json={"challenge_id": challenge["challenge_id"], "word": challenge["word"]},
+        )
+        assert resp.status_code == 400, resp.text
+        assert "bootstrap" in resp.json()["detail"].lower()

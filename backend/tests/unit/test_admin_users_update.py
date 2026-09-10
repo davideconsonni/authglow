@@ -11,7 +11,7 @@ def _make_admin_user():
         email="admin@authglow.io",
         hashed_password="not-used-in-test",
         is_active=True,
-        scopes=["admin"],
+        scopes=["read", "write"],
     )
 
 
@@ -123,7 +123,7 @@ class TestUpdateUserFields:
         from authglow.models.admin import UserUpdate
 
         existing = _make_existing_user()
-        existing.scopes = ["read", "write", "admin"]
+        existing.scopes = ["read", "write", "export"]
         mock_storage = AsyncMock()
         mock_storage.get_user = AsyncMock(return_value=existing)
         mock_storage.update_user = AsyncMock(return_value=existing)
@@ -144,7 +144,7 @@ class TestUpdateUserFields:
         assert result.first_name == "OnlyFirst"
         assert result.last_name == "OldLast"
         assert result.is_active is True
-        assert result.scopes == ["read", "write", "admin"]
+        assert result.scopes == ["read", "write", "export"]
 
     def test_update_all_fields_at_once(self):
         import asyncio
@@ -161,7 +161,7 @@ class TestUpdateUserFields:
             first_name="NewFirst",
             last_name="NewLast",
             email_verified=True,
-            scopes=["admin"],
+            scopes=["export"],
             is_active=False,
         )
 
@@ -179,7 +179,7 @@ class TestUpdateUserFields:
         assert result.last_name == "NewLast"
         assert result.email_verified is True
         assert result.is_active is False
-        assert result.scopes == ["admin"]
+        assert result.scopes == ["export"]
 
     def test_update_nonexistent_user_returns_404(self):
         import asyncio
@@ -276,7 +276,7 @@ class TestUpdateUserScopes:
         mock_storage.update_user = AsyncMock(return_value=existing)
         mock_audit = AsyncMock()
 
-        update_data = UserUpdate(scopes=["admin", "read"])
+        update_data = UserUpdate(scopes=["export", "read"])
 
         result = asyncio.get_event_loop().run_until_complete(
             update_user(
@@ -288,7 +288,7 @@ class TestUpdateUserScopes:
             )
         )
 
-        assert result.scopes == ["admin", "read"]
+        assert result.scopes == ["export", "read"]
 
     def test_empty_scopes_clears_list(self):
         import asyncio

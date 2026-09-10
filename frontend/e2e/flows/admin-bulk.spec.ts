@@ -11,7 +11,9 @@ test.describe('Admin — Bulk select → Deactivate → Verify', () => {
 
     if (rowCount > 0) {
       const firstCheckbox = rows.first().locator('[data-testid="user-select-checkbox"]')
-      if (await firstCheckbox.isVisible()) {
+      // The bootstrap admin's checkbox is intentionally disabled — skip
+      // when there is nothing selectable.
+      if (await firstCheckbox.isVisible() && (await firstCheckbox.isEnabled())) {
         await firstCheckbox.click()
         await expect(page.locator('[data-testid="bulk-action-bar"]')).toBeVisible()
 

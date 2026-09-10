@@ -33,7 +33,7 @@ def _user(user_id="user-1", email="user@test.com", scopes=None):
 
 
 def _admin_user():
-    return _user(user_id="admin-1", email="admin@test.com", scopes=["read", "admin"])
+    return _user(user_id="admin-1", email="admin@test.com", scopes=["read", "write"])
 
 
 @pytest.fixture
@@ -47,10 +47,24 @@ def user_client():
 
 @pytest.fixture
 def admin_client():
-    """TestClient wired to an admin user."""
+    """TestClient wired to an admin user (Administrator RBAC role)."""
+    import asyncio
+
+    from authglow.services.rbac import RBACService
+
     app = FastAPI()
     app.include_router(api_key_router)
-    app.dependency_overrides[get_current_user] = lambda: _admin_user()
+    admin = _admin_user()
+    # The rotate/delete endpoints gate on the Authglow Administrator
+    # role (RBAC-driven), not on OAuth scopes.
+    rbac = RBACService()
+    role_id = asyncio.run(rbac.ensure_admin_role())
+    asyncio.run(
+        rbac.assign_role_to_user_idempotent(
+            user_id=admin.id, role_id=role_id, actor_id=admin.id
+        )
+    )
+    app.dependency_overrides[get_current_user] = lambda: admin
     return TestClient(app)
 
 

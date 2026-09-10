@@ -124,11 +124,14 @@ behaviours on top:
 1. **Seeded demo admin** — on startup the lifespan (`backend/main.py`) calls
    `seed_demo_user()` (`backend/authglow/services/demo.py`), which creates (or
    refreshes) the well-known demo user (`demo_user_email`, default
-   `admin@example.com`) with `read/write/admin` scope. The password is generated
+   `admin@example.com`) with OAuth scopes `read/write` **and the
+   "Authglow Administrator" RBAC role** (admin authority is RBAC-driven — see
+   Authorization below). The password is generated
    at boot with `secrets.token_urlsafe(16)` and rotates on every restart; it is
    **never logged or persisted**. The seed is idempotent: on a stateless demo
    instance (no disk, e.g. Render free tier) the user is recreated after every
-   reset without needing the setup token.
+   reset without needing the setup token, and the role assignment is
+   re-granted idempotently on the existing-user path too.
 2. **Warning banner + demo credentials** — `GET /api/meta`
    (`backend/authglow/api/meta.py`, public, rate-limited `20/minute`) returns
    `demo_mode`, `demo_banner_text`, and — only when `demo_mode=true` — the demo
@@ -141,6 +144,64 @@ every boot (self-expiring), demo mode is off by default, and the intended
 deployment has no persistent storage — a compromised demo admin cannot cause
 lasting damage because all state is wiped on the next restart. Enable with
 `demo_mode=true` (plus optional `demo_banner_text` / `demo_user_email`).
+
+## Authorization (RBAC-driven)
+
+Admin authority is **role-based, not scope-based**. The system role
+"Authglow Administrator" (`models/rbac.py:ADMIN_ROLE_NAME`) is seeded at
+startup (`RBACService.initialize_defaults`, called from the lifespan in
+`backend/main.py`). The first user created by
+`POST /api/setup/create-admin` is assigned the role automatically; in
+demo mode the seeded demo admin gets it idempotently on every boot.
+
+**Permission vocabulary** (UX-driven, one entry per admin section —
+every permission is enforced route-by-route, see
+`tests/integration/test_permission_enforcement.py` for the allow/deny
+matrix):
+
+| Permission | Admin sections |
+|---|---|
+| `users.manage` | Users page (CRUD, MFA, passwords, suspend, bulk, invite) |
+| `sessions.manage` | Sessions, Consents, Device Auths, Password Resets |
+| `clients.manage` | OAuth Clients + claim policies, Playground, Federation, Webhooks |
+| `keys.manage` | API Keys admin, JWK rotation/revocation |
+| `system.manage` | Settings, Rate Limits |
+| `roles.manage` | RBAC role/permission/assignment writes |
+| `admin.read` | view-only pass for every admin page (auditor/support) |
+| `roles.read` | (legacy) RBAC read endpoints |
+
+**Rules**: mutations require the area's `.manage` (`require_permission`
+exact); reads accept `any(area.manage, admin.read)`; RBAC reads also
+accept legacy `roles.read`. The Administrator role holds the whole
+vocabulary. There are deliberately **no bypasses**: `PermissionChecker`
+passes a caller only through explicitly held permissions/roles, so the
+Administrator passes everywhere *by holding, not by skipping* (proven
+by the full backend suite running green with the bypass removed).
+
+- **Guard**: legacy `require_administrator` (role check) survives only
+  where a full-User gate without a permission fits; new code uses
+  permission dependencies. The OAuth ``admin`` scope is ignored — it
+  does not grant admin access (and is rejected at ingestion, see
+  ``core.scopes.RESERVED_SCOPE_TOKENS``).
+- **API keys**: a key is never admin by itself. The BOPLA guard in
+  `services/api_key.py` resolves `is_admin` from the *owner's*
+  `keys.manage` (subset bypass) while creating keys *for others*
+  requires `users.manage`.
+- **Anti-lockout**: `DELETE /api/rbac/user-roles/{user}/{role}`
+  refuses (409) to remove the Administrator role from the caller
+  themselves or from the last holder.
+- **Users API**: `GET /api/users/me` returns `roles`, aggregated
+  `permissions` and `is_admin`; the frontend gates the admin nav
+  per-section (`admin.read` or the area permission) and action
+  buttons on the area `.manage`.
+- **Fresh start**: deployments from before the migration must recreate
+  their admin via setup (users that held the `admin` *scope* get no
+  admin authority from it). `initialize_defaults` backfills missing
+  default permissions into an existing Administrator role so upgrades
+  never lock the admin out.
+
+Persisted state: roles in `<storage>/rbac/roles/`, permissions in
+`rbac/permissions/`, assignments in `rbac/user_roles/`.
 
 ## Data Flow
 

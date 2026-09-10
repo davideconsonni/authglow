@@ -29,8 +29,10 @@ from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import (
+    AdminRoleMetadata,
     APIKeyUsedMetadata,
     AuthorizationCodeMetadata,
+    ClientCredentialsMetadata,
     LoginSuccessMetadata,
     LogoutMetadata,
     TokenIssuedMetadata,
@@ -39,6 +41,7 @@ from authglow.models.audit_metadata import (
 )
 from authglow.models.claim_policy import ClaimTarget
 from authglow.models.oauth_client import OAuth2Client
+from authglow.models.rbac import ADMIN_ROLE_NAME
 from authglow.models.token import Token
 from authglow.models.user import (
     InviteUser,
@@ -64,6 +67,7 @@ from authglow.services.password import (
     hash_password_async,
 )
 from authglow.services.password_reset import PasswordResetService
+from authglow.services.rbac import RBACService
 from authglow.services.refresh_token import RefreshTokenService
 from authglow.services.session import SessionService
 from authglow.services.user import UserService
@@ -616,7 +620,7 @@ async def csrf_token_endpoint(request: Request):
 
 
 @router.post("/api/oauth2/authorize")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def authorize_post(
     request: Request,
     email: Optional[str] = Form(None),
@@ -1151,7 +1155,7 @@ async def list_available_scopes():
 
 
 @router.post("/oauth2/token", response_model=Token)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def token_endpoint(
     request: Request,
     response: Response,
@@ -1649,6 +1653,18 @@ async def token_endpoint(
         # Audit: client credentials token issued
         cc_token_data = jwt_service.decode_token(cc_token_response.access_token)
         cc_token_id = cc_token_data.jti if cc_token_data and cc_token_data.jti else "unknown"
+        if client_assertion:
+            # JWT-bearer auth: the registered auth method tells us which
+            # assertion flavour the client is provisioned for.
+            cc_auth_method = (
+                getattr(oauth_client, "token_endpoint_auth_method", None)
+                or "client_secret_jwt"
+            )
+        else:
+            # Secret came from the Basic header or from the form body.
+            cc_auth_method = (
+                "client_secret_basic" if (not client_secret and basic_client_secret) else "client_secret_post"
+            )
         await audit_service.log_event(
             event_type=AuditEventType.CLIENT_CREDENTIALS_TOKEN_ISSUED,
             user_id=resolved_client_id,
@@ -1656,15 +1672,16 @@ async def token_endpoint(
             client_id=resolved_client_id,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            metadata=TokenIssuedMetadata(
-                token_id=cc_token_id,
+            metadata=ClientCredentialsMetadata(
                 client_id=resolved_client_id,
                 grant_type="client_credentials",
                 scopes=validated_scopes,
+                token_id=cc_token_id,
+                token_type="access",
                 expires_in=settings.access_token_expire_minutes * 60,
                 dpop_bound=bool(cc_dpop_cnf),
                 dpop_jkt=cc_dpop_cnf.get("jkt") if cc_dpop_cnf else None,
-                token_type="access",
+                client_auth_method=cc_auth_method,
             ),
         )
 
@@ -1957,7 +1974,7 @@ async def token_endpoint(
 
 
 @router.post("/api/token/api-key")
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def exchange_api_key_for_token(
     request: Request,
     api_key_service: APIKeyService = Depends(get_api_key_service),
@@ -2066,7 +2083,7 @@ async def exchange_api_key_for_token(
 
 
 @router.post("/api/auth/refresh")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def cookie_refresh(
     request: Request,
     response: Response,
@@ -2252,11 +2269,13 @@ async def invite_user(
     password_validator: PasswordValidator = Depends(get_password_validator),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Invite a new user (admin only - requires 'admin' scope)."""
+    """Invite a new user (requires the users.manage permission)."""
     settings = get_settings()
 
-    if "admin" not in current_user.scopes:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Permission check inline (not the api.admin dependency): api.admin
+    # imports this module, so a module-level import would be circular.
+    if not await RBACService().user_has_permission(current_user.id, "users.manage"):
+        raise HTTPException(status_code=403, detail="Requires the users.manage permission")
 
     # Check if user already exists
     existing_user = await storage.get_user_by_email(invite.email)
@@ -2280,6 +2299,28 @@ async def invite_user(
     )
 
     user = await storage.create_user(user)
+
+    # Optional RBAC role assignment (D9 UX). Unknown role names → 400.
+    if invite.roles:
+        try:
+            assigned_roles = await RBACService().assign_role_names_to_user(
+                user_id=user.id, role_names=invite.roles, actor_id=current_user.id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        for role_name in assigned_roles:
+            await audit_service.log_event(
+                event_type=AuditEventType.ADMIN_ROLE_ASSIGNED,
+                user_id=current_user.id,
+                email=current_user.email,
+                metadata=AdminRoleMetadata(
+                    target_user_id=user.id,
+                    target_user_email_hash=user.email,
+                    admin_user_id=current_user.id,
+                    admin_user_email_hash=current_user.email,
+                    role=role_name,
+                ),
+            )
 
     # Create verification token
     verification_service = EmailVerificationService()
@@ -2343,7 +2384,7 @@ async def invite_user(
 
 
 @router.post("/oauth2/mfa-verify")
-@limiter.limit("3/minute")
+@limiter.limit("10/minute")
 async def oauth2_mfa_verify(
     request: Request,
     session_token: str = Form(...),
@@ -2432,8 +2473,20 @@ async def oauth2_mfa_verify(
 
 @router.get("/api/users/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
-    """Get current user info."""
-    return UserResponse(**current_user.model_dump())
+    """Get current user info (with RBAC roles, permissions and the admin flag)."""
+    rbac = RBACService()
+    user_roles = await rbac.get_user_roles(current_user.id)
+    role_names: list[str] = []
+    for ur in user_roles:
+        role = await rbac.get_role(ur.role_id)
+        if role:
+            role_names.append(role.name)
+    return UserResponse(
+        **current_user.model_dump(),
+        roles=role_names,
+        permissions=sorted(await rbac.get_user_permissions(current_user.id)),
+        is_admin=ADMIN_ROLE_NAME in role_names,
+    )
 
 
 @router.get("/api/auth/my-token")
@@ -2445,7 +2498,7 @@ async def get_my_token(request: Request, current_user: User = Depends(get_curren
 
 
 @router.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def register_user(
     request: Request,
     user_data: RegisterUser,

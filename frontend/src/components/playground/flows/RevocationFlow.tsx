@@ -43,6 +43,11 @@ export function RevocationFlow() {
     try {
       const formBody: Record<string, string> = { token: localToken }
       if (localHint) formBody.token_type_hint = localHint
+      // RFC 7009 §2.1: the revocation endpoint requires client
+      // authentication — reuse the credentials configured in the
+      // Authorization Code flow (playground store).
+      if (store.clientId) formBody.client_id = store.clientId
+      if (store.clientSecret) formBody.client_secret = store.clientSecret
 
       await api.postForm('/oauth2/revoke', formBody)
       setHttpStatus(200)

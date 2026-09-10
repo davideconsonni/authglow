@@ -225,7 +225,7 @@ class EmailRequest(BaseModel):
 
 
 @router.post("/auth/begin")
-@limiter.limit("10/minute")  # Max 10 passkey auth attempts per minute per IP
+@limiter.limit("30/minute")  # Max 10 passkey auth attempts per minute per IP
 async def begin_authentication(
     request: Request,
     email_request: EmailRequest,
@@ -269,7 +269,7 @@ async def begin_authentication(
 
 
 @router.post("/auth/complete")
-@limiter.limit("10/minute")  # Max 10 passkey verification attempts per minute per IP
+@limiter.limit("30/minute")  # Max 10 passkey verification attempts per minute per IP
 async def complete_authentication(
     request: Request,
     response: Response,

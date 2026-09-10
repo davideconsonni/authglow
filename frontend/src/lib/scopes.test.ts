@@ -11,8 +11,8 @@ describe('parseScopeInput', () => {
   })
 
   it('collapses multiple spaces / tabs / newlines', () => {
-    expect(parseScopeInput('  read\t write\n admin  ')).toEqual({
-      tokens: ['read', 'write', 'admin'],
+    expect(parseScopeInput('  read\t write\n export  ')).toEqual({
+      tokens: ['read', 'write', 'export'],
       invalid: [],
     })
   })

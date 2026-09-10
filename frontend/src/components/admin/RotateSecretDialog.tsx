@@ -13,6 +13,7 @@ import { cn } from '../../lib/utils'
  * - ``api_key_delete`` permanently delete an API key
  * - ``api_key_rotate`` regenerate the plaintext secret for an API key
  * - ``jwk_rotate``     rotate the global JWT signing keyring
+ * - ``account_deactivate`` deactivate the caller's own account
  */
 export type RotateSecretPurpose =
   | 'secret'
@@ -20,6 +21,7 @@ export type RotateSecretPurpose =
   | 'api_key_delete'
   | 'api_key_rotate'
   | 'jwk_rotate'
+  | 'account_deactivate'
 
 interface RotateSecretDialogProps {
   open: boolean
@@ -162,6 +164,25 @@ const COPY: Record<RotateSecretPurpose, PurposeCopy> = {
     actionPath: () => `/api/admin/jwk-keys/rotate`,
     actionMethod: 'POST',
     successField: 'new_kid',
+  },
+  account_deactivate: {
+    title: 'Deactivate your account?',
+    confirmMessage:
+      'Your account will be disabled immediately and you will be signed out on all devices. You can reactivate it later by signing in again — an administrator can also reactivate it for you.',
+    safewordTitle: 'Type the safeword to confirm',
+    safewordHelper:
+      'Copy the safeword below and type it back exactly to authorize the deactivation. The challenge expires in 60 seconds.',
+    rotateLabel: 'Deactivate account',
+    generateLabel: 'Generate safeword',
+    rotatingLabel: 'Deactivating…',
+    Icon: RefreshCw,
+    // Self-deactivation is bound to the caller: there is no per-id
+    // target. The component still passes a non-null targetId so the
+    // URL template works uniformly.
+    challengePath: () => `/api/profile/me/deactivate/challenge`,
+    actionPath: () => `/api/profile/me/deactivate`,
+    actionMethod: 'POST',
+    successField: null,
   },
 }
 

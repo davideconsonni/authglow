@@ -10,8 +10,13 @@ from pydantic import BaseModel, EmailStr
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
+from authglow.models.audit_events import AuditEventType
+from authglow.models.audit_metadata import AdminRoleMetadata
+from authglow.models.rbac import ADMIN_ROLE_NAME
 from authglow.models.user import User
+from authglow.services.audit import AuditService
 from authglow.services.password import PasswordValidator, hash_password_async
+from authglow.services.rbac import RBACService
 from authglow.services.user import UserService
 
 # Back-compat alias for Fase 21 transition window
@@ -114,7 +119,9 @@ async def create_admin_user(
             hashed_password=await hash_password_async(admin_request.password),
             first_name=admin_request.first_name,
             last_name=admin_request.last_name,
-            scopes=["read", "write", "admin"],
+            # OAuth scopes stay OAuth-only (D4). Admin authority is
+            # RBAC-driven: the role is assigned right below.
+            scopes=["read", "write"],
             is_active=True,
             email_verified=True,
             is_invited=False,
@@ -122,6 +129,28 @@ async def create_admin_user(
         )
 
         await storage.create_user(admin_user)
+
+        # Assign the Authglow Administrator role (idempotent) so the
+        # first user is born as platform administrator.
+        rbac = RBACService()
+        admin_role_id = await rbac.ensure_admin_role()
+        await rbac.assign_role_to_user_idempotent(
+            user_id=admin_user.id,
+            role_id=admin_role_id,
+            actor_id=admin_user.id,
+        )
+        await AuditService().log_event(
+            event_type=AuditEventType.ADMIN_ROLE_ASSIGNED,
+            user_id=admin_user.id,
+            email=admin_user.email,
+            metadata=AdminRoleMetadata(
+                target_user_id=admin_user.id,
+                target_user_email_hash=admin_user.email,
+                admin_user_id=admin_user.id,
+                admin_user_email_hash=admin_user.email,
+                role=ADMIN_ROLE_NAME,
+            ),
+        )
 
         return {
             "message": "Administrator account created successfully",

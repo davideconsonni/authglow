@@ -65,6 +65,8 @@ def _build_authorize_app_with_mocks(test_settings):
     storage.record_failed_login = AsyncMock()
     storage.update_last_login = AsyncMock()
     storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, None))
+    # Concurrent-session enforcement (authorize flow) must be awaitable.
+    storage.check_and_enforce_concurrent_sessions = AsyncMock()
 
     app = FastAPI()
     app.include_router(router)

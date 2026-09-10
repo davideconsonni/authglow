@@ -16,6 +16,8 @@ export interface AuthUser {
   roles: string[]
   scopes: string[]
   permissions: string[]
+  /** Holds the "Authglow Administrator" role (RBAC-driven admin gate). */
+  is_admin?: boolean
   is_federated: boolean
 }
 

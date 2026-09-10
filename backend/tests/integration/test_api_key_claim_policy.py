@@ -14,7 +14,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from authglow.api.claim_policy import router as claim_policy_router
-from authglow.api.claim_policy import require_admin as _claim_admin
 from authglow.models.api_key import APIKey
 from authglow.models.claim_policy import (
     BUILTIN_TEMPLATES,
@@ -25,16 +24,6 @@ from authglow.models.claim_policy import (
 )
 from authglow.models.user import User
 from authglow.services.password import hash_password
-
-
-def _make_admin_user():
-    return User(
-        id="admin-1",
-        email="admin@test.com",
-        hashed_password=hash_password("TestP@ss123!"),
-        is_active=True,
-        scopes=["admin"],
-    )
 
 
 def _make_oauth_client(client_id: str = "test-client-1"):
@@ -67,11 +56,12 @@ def _make_api_key(key_id: str = "test-key-1") -> APIKey:
 
 
 @pytest.fixture
-def admin_client(test_settings):
-    """A FastAPI ``TestClient`` with ``require_admin`` bypassed."""
+def admin_client(admin_user_with_role, admin_auth_headers):
+    """A FastAPI ``TestClient`` authenticated as the persisted RBAC
+    admin (real JWT)."""
     app = FastAPI()
     app.include_router(claim_policy_router)
-    app.dependency_overrides[_claim_admin] = _make_admin_user
+    return TestClient(app, headers=admin_auth_headers)
     return TestClient(app)
 
 

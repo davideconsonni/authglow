@@ -50,9 +50,15 @@ describe('AdminOAuthClientsPage — T.3 DPoP toggle', () => {
 
   it('renders the DPoP toggle inside the form', async () => {
     render(<Wrapper><AdminOAuthClientsPage /></Wrapper>)
-    // Open the create form
+    // Open the create form — wizard step 1: pick a template
     const createBtn = screen.getByTestId('create-oauth-client-btn')
     fireEvent.click(createBtn)
+    fireEvent.click(screen.getByTestId('template-web'))
+    // Step 2: name, then Next → step 3 (Security, where the toggle lives)
+    fireEvent.change(screen.getByTestId('client-name-input'), {
+      target: { value: 'DPoP Test Client' },
+    })
+    fireEvent.click(screen.getByText('Next'))
     // The toggle is inside the security panel
     const toggle = await screen.findByTestId('dpop-bound-toggle')
     expect(toggle).toBeInTheDocument()
@@ -64,18 +70,18 @@ describe('AdminOAuthClientsPage — T.3 DPoP toggle', () => {
     render(<Wrapper><AdminOAuthClientsPage /></Wrapper>)
     const createBtn = screen.getByTestId('create-oauth-client-btn')
     fireEvent.click(createBtn)
-    await screen.findByTestId('dpop-bound-toggle')
-
-    // Fill the required fields and submit
+    fireEvent.click(screen.getByTestId('template-web'))
+    // The web template already grants authorization_code — fill the name
+    // and walk to step 4 (review) before submitting.
     fireEvent.change(screen.getByTestId('client-name-input'), {
       target: { value: 'DPoP Test Client' },
     })
-    // The grant_type authorization_code checkbox is required for PKCE.
-    fireEvent.click(screen.getByTestId('grant-authorization_code'))
+    fireEvent.click(screen.getByText('Next'))
     // authorization_code also requires at least one redirect URI
     fireEvent.change(screen.getByTestId('client-uri-input-0'), {
       target: { value: 'https://example.com/cb' },
     })
+    fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByTestId('create-client-submit'))
 
     await waitFor(() => expect(mockApi.post).toHaveBeenCalled())
@@ -87,20 +93,21 @@ describe('AdminOAuthClientsPage — T.3 DPoP toggle', () => {
     render(<Wrapper><AdminOAuthClientsPage /></Wrapper>)
     const createBtn = screen.getByTestId('create-oauth-client-btn')
     fireEvent.click(createBtn)
+    fireEvent.click(screen.getByTestId('template-web'))
+    fireEvent.change(screen.getByTestId('client-name-input'), {
+      target: { value: 'DPoP-Required Client' },
+    })
+    fireEvent.click(screen.getByText('Next'))
     const toggle = await screen.findByTestId('dpop-bound-toggle')
 
     // Flip the toggle
     fireEvent.click(toggle)
     expect((toggle as HTMLInputElement).checked).toBe(true)
 
-    // Fill required fields
-    fireEvent.change(screen.getByTestId('client-name-input'), {
-      target: { value: 'DPoP-Required Client' },
-    })
-    fireEvent.click(screen.getByTestId('grant-authorization_code'))
     fireEvent.change(screen.getByTestId('client-uri-input-0'), {
       target: { value: 'https://example.com/cb' },
     })
+    fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByTestId('create-client-submit'))
 
     await waitFor(() => expect(mockApi.post).toHaveBeenCalled())

@@ -324,6 +324,13 @@ class ClientCredentialsMetadata(OAuth2BaseMetadata):
     """Metadata for client credentials grant."""
 
     client_auth_method: str  # client_secret_basic, client_secret_post, private_key_jwt, client_secret_jwt
+    # Issuance details (same as TokenIssuedMetadata — the validator
+    # dispatches this event to this schema, so the fields live here).
+    token_id: Optional[str] = None
+    token_type: str = "access"
+    expires_in: Optional[int] = None
+    dpop_bound: bool = False
+    dpop_jkt: Optional[str] = None
 
 
 # ============================================================

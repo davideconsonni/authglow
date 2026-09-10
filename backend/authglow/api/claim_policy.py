@@ -16,7 +16,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from authglow.api.auth import get_current_user
+from authglow.api.admin import require_user_with_permission
 from authglow.core.config import get_settings
 from authglow.core.rate_limit import limiter
 from authglow.models.claim_policy import (
@@ -62,15 +62,6 @@ def get_api_key_service() -> APIKeyService:
 def get_audit_service() -> AuditService:
     """FastAPI factory for the audit service."""
     return AuditService()
-
-
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Gate the endpoints on the ``admin`` scope."""
-    if "admin" not in current_user.scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
-    return current_user
 
 
 # ---------------------------------------------------------------------------
@@ -221,11 +212,11 @@ def _to_default_payload(client_id: str) -> ClaimPolicyResponse:
     "/api/admin/oauth-clients/{client_id}/claim-policy",
     response_model=ClaimPolicyResponse,
 )
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def get_claim_policy(
     request: Request,
     client_id: str,
-    _: User = Depends(require_admin),
+    _: User = require_user_with_permission(["clients.manage", "admin.read"]),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
 ):
@@ -252,12 +243,12 @@ async def get_claim_policy(
     "/api/admin/oauth-clients/{client_id}/claim-policy",
     response_model=ClaimPolicyResponse,
 )
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def put_claim_policy(
     request: Request,
     client_id: str,
     payload: ClaimPolicyUpdateRequest = Body(...),
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
@@ -325,11 +316,11 @@ async def put_claim_policy(
     "/api/admin/oauth-clients/{client_id}/claim-policy",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def delete_claim_policy(
     request: Request,
     client_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     storage: OAuth2ClientStorage = Depends(get_client_storage),
     audit_service: AuditService = Depends(get_audit_service),
@@ -357,10 +348,10 @@ async def delete_claim_policy(
 
 
 @router.get("/api/admin/claim-templates", response_model=List[ClaimTemplateResponse])
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def list_claim_templates(
     request: Request,
-    _: User = Depends(require_admin),
+    _: User = require_user_with_permission(["clients.manage", "admin.read"]),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
 ):
     """List the built-in claim rule templates. The admin UI
@@ -454,11 +445,11 @@ def _to_api_key_default_payload(api_key_id: str) -> ClaimPolicyResponse:
     "/api/admin/api-keys/{key_id}/claim-policy",
     response_model=ClaimPolicyResponse,
 )
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def get_api_key_claim_policy(
     request: Request,
     key_id: str,
-    _: User = Depends(require_admin),
+    _: User = require_user_with_permission(["clients.manage", "admin.read"]),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     api_key_service: APIKeyService = Depends(get_api_key_service),
 ):
@@ -485,12 +476,12 @@ async def get_api_key_claim_policy(
     "/api/admin/api-keys/{key_id}/claim-policy",
     response_model=ClaimPolicyResponse,
 )
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def put_api_key_claim_policy(
     request: Request,
     key_id: str,
     body: ClaimPolicyUpdateRequest,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),
@@ -549,11 +540,11 @@ async def put_api_key_claim_policy(
     "/api/admin/api-keys/{key_id}/claim-policy",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def delete_api_key_claim_policy(
     request: Request,
     key_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = require_user_with_permission("clients.manage"),
     policy_service: ClaimPolicyService = Depends(get_claim_policy_service),
     api_key_service: APIKeyService = Depends(get_api_key_service),
     audit_service: AuditService = Depends(get_audit_service),

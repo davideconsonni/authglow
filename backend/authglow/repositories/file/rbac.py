@@ -244,6 +244,31 @@ class FileUserRoleRepository(BaseFileRepository, UserRoleRepository):
             assignments.append(ur)
         return assignments
 
+    async def list_all(self) -> List[UserRole]:
+        """Return every non-expired assignment (any user).
+
+        NOT part of the ``UserRoleRepository`` Protocol — used by the
+        service-layer anti-lockout check (``count_role_holders``) to
+        enumerate the holders of a role. Expired assignments are
+        auto-deleted on read, consistent with ``list_for_user``.
+        """
+        files = await self._glob(f"{self._storage_path}/*.json")
+        assignments: List[UserRole] = []
+        now = utcnow()
+        for file_path in files:
+            data = await self._read_json(file_path)
+            if data is None:
+                continue
+            try:
+                ur = UserRole(**data)
+            except (ValueError, TypeError):
+                continue
+            if ur.expires_at and ur.expires_at < now:
+                await self._delete(file_path)
+                continue
+            assignments.append(ur)
+        return assignments
+
     async def find_assignment(self, user_id: str, role_id: str) -> Optional[UserRole]:
         """Return the first assignment matching ``(user_id, role_id)``,
         or ``None``. Used by ``remove_role_from_user`` to find the
