@@ -80,7 +80,7 @@ export function MFAVerifyForm() {
         setSubmitting(false)
       }
     },
-    [sessionToken, attemptsLeft],
+    [sessionToken, attemptsLeft, isOAuthFlow, navigate, setAuthenticated, fetchCurrentUser],
   )
 
   useEffect(() => {

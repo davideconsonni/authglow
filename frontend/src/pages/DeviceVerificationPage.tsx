@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, XCircle, Smartphone } from 'lucide-react'
 import { SealStamp } from '../components/shared/SealStamp'
@@ -15,6 +15,10 @@ interface DeviceInfo {
 
 type Step = 'input' | 'review' | 'result'
 
+function cleanCode(raw: string) {
+  return raw.trim().toUpperCase().replace(/\s/g, '')
+}
+
 export function DeviceVerificationPage() {
   useDocumentTitle('Device Verification')
   const { isAuthenticated, isLoading } = useAuth()
@@ -28,13 +32,39 @@ export function DeviceVerificationPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const prefilledCode = searchParams.get('user_code') ?? ''
+  const lookedUpRef = useRef(false)
+
+  const handleLookup = useCallback(
+    async (code?: string) => {
+      const lookupCode = cleanCode(code || userCode)
+      if (!lookupCode) {
+        setError('Enter a code')
+        return
+      }
+      setError('')
+      setSubmitting(true)
+      try {
+        const data = await api.post<DeviceInfo>('/api/oauth2/device/verify', {
+          user_code: lookupCode,
+        })
+        setDeviceInfo(data)
+        setStep('review')
+      } catch {
+        setError('Invalid or expired code')
+      } finally {
+        setSubmitting(false)
+      }
+    },
+    [userCode],
+  )
 
   useEffect(() => {
-    if (prefilledCode) {
+    if (prefilledCode && !lookedUpRef.current) {
+      lookedUpRef.current = true
       setUserCode(prefilledCode)
       handleLookup(prefilledCode)
     }
-  }, [])
+  }, [prefilledCode, handleLookup])
 
   if (isLoading) {
     return (
@@ -63,31 +93,6 @@ export function DeviceVerificationPage() {
         </div>
       </div>
     )
-  }
-
-  function cleanCode(raw: string) {
-    return raw.trim().toUpperCase().replace(/\s/g, '')
-  }
-
-  async function handleLookup(code?: string) {
-    const lookupCode = cleanCode(code || userCode)
-    if (!lookupCode) {
-      setError('Enter a code')
-      return
-    }
-    setError('')
-    setSubmitting(true)
-    try {
-      const data = await api.post<DeviceInfo>('/api/oauth2/device/verify', {
-        user_code: lookupCode,
-      })
-      setDeviceInfo(data)
-      setStep('review')
-    } catch {
-      setError('Invalid or expired code')
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   async function handleApprove() {

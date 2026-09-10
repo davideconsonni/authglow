@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom'
+import '@testing-library/jest-dom/vitest'
 
 // jsdom does not implement window.matchMedia (useTheme relies on it).
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {

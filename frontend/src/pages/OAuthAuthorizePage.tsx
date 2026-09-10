@@ -305,7 +305,7 @@ export function OAuthAuthorizePage() {
     }
     fetchClientInfo()
     return () => { cancelled = true }
-  }, [clientId, redirectUri, responseType, mfaSessionToken])
+  }, [clientId, redirectUri, responseType, mfaSessionToken, searchParams])
 
   useEffect(() => {
     if (phase !== 'login') return
@@ -368,7 +368,17 @@ export function OAuthAuthorizePage() {
     }
     completeAfterPasskey()
     return () => { cancelled = true }
-  }, [isAuthenticated, phase, clientId, redirectUri])
+  }, [
+    isAuthenticated,
+    phase,
+    clientId,
+    redirectUri,
+    scope,
+    state,
+    codeChallenge,
+    codeChallengeMethod,
+    nonce,
+  ])
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()

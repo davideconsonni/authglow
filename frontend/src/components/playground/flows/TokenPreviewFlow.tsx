@@ -176,7 +176,7 @@ export function TokenPreviewFlow() {
     isLoading: policyLoading,
   } = useApiQuery<ClaimPolicyResponse | null>(
     ['claim-policy-preview', tokenKind, tokenKind === 'client' ? selectedClientId : selectedKeyId],
-    policyEndpoint,
+    policyEndpoint ?? '',
     { enabled: !!policyEndpoint },
   )
 
