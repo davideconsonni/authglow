@@ -45,7 +45,11 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import time
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+import structlog
 
 from authglow.core.config import Settings, get_settings
 from authglow.core.datetime import utcnow
@@ -86,6 +90,82 @@ RESERVED_CLAIMS: frozenset[str] = frozenset(
     }
 )
 
+logger = structlog.get_logger("authglow.audit")
+
+# Elapsed time above which a CUSTOM resolver emission is logged
+# as ``claim_resolver_slow`` (structured, dashboard-friendly).
+# Per-rule override via ``source_config.custom_config["warn_after_s"]``.
+SLOW_RESOLVER_WARN_SECONDS: float = 1.0
+
+
+@dataclass(frozen=True)
+class ClaimResolveContext:
+    """Everything a custom claim resolver may need, in one object.
+
+    Frozen so resolvers cannot mutate shared per-request state.
+    New fields can be added without breaking existing resolvers.
+    """
+
+    user: Optional[User] = None
+    api_key: Optional[APIKey] = None
+    rbac_roles: List[str] = field(default_factory=list)
+    rbac_permissions: List[str] = field(default_factory=list)
+    client_id: Optional[str] = None
+    api_key_id: Optional[str] = None
+    scopes: List[str] = field(default_factory=list)
+    target: ClaimTarget = ClaimTarget.ACCESS_TOKEN
+
+
+# A claim resolver takes the rule plus the frozen per-request
+# context and returns the claim value (or ``None`` to skip).
+# Must be async — resolvers typically call out to external
+# systems (CRM, feature flags). Keep them fast: slow resolvers
+# are logged as ``claim_resolver_slow`` and failures never
+# break token issuance (the claim is skipped).
+ClaimResolver = Callable[[ClaimRule, ClaimResolveContext], Awaitable[Any]]
+
+_RESOLVERS: Dict[str, ClaimResolver] = {}
+
+
+def register_claim_resolver(name: str, resolver: ClaimResolver) -> None:
+    """Register (or replace) a named custom claim resolver.
+
+    A resolver backs rules with ``source=CUSTOM`` and
+    ``source_config.custom_resolver == name``::
+
+        async def crm_tier(rule, ctx):
+            field = (rule.source_config.custom_config or {}).get("crm_field")
+            ...
+
+        register_claim_resolver("crm_tier", crm_tier)
+
+    Registration must run before the rules are saved (unknown
+    names are rejected with 422) and before tokens are issued
+    (import the plugin module at app startup).
+    """
+    _RESOLVERS[name] = resolver
+
+
+def _check_custom_resolvers_registered(rules: List[ClaimRule]) -> None:
+    """Fail fast on CUSTOM rules pointing at unknown resolvers.
+
+    Called by the save paths so the admin API surfaces a 422
+    instead of persisting an unresolvable policy.
+    """
+    unknown = sorted(
+        {
+            str(rule.source_config.custom_resolver)
+            for rule in rules
+            if rule.source == ClaimSource.CUSTOM
+            and (rule.source_config.custom_resolver or "") not in _RESOLVERS
+        }
+    )
+    if unknown:
+        registered = ", ".join(sorted(_RESOLVERS)) or "none"
+        raise ValueError(
+            f"Unknown custom claim resolver(s): {', '.join(unknown)}. Registered: {registered}."
+        )
+
 
 class ClaimPolicyService:
     """Build the claim dict the JWT service merges into a token.
@@ -114,9 +194,7 @@ class ClaimPolicyService:
 
             self._repository = get_claim_policy_repository(settings=self.settings)
         if api_key_repository is not None:
-            self._api_key_repository: APIKeyClaimPolicyRepository = (
-                api_key_repository
-            )
+            self._api_key_repository: APIKeyClaimPolicyRepository = api_key_repository
         else:
             from authglow.repositories.dependencies import (
                 get_api_key_claim_policy_repository,
@@ -134,9 +212,7 @@ class ClaimPolicyService:
         """Return the saved policy for *client_id*, or ``None``."""
         return await self._repository.get_by_client(client_id)
 
-    async def get_api_key_policy(
-        self, api_key_id: str
-    ) -> Optional[APIKeyClaimPolicy]:
+    async def get_api_key_policy(self, api_key_id: str) -> Optional[APIKeyClaimPolicy]:
         """Return the saved policy for *api_key_id*, or ``None``."""
         return await self._api_key_repository.get_by_api_key(api_key_id)
 
@@ -206,9 +282,7 @@ class ClaimPolicyService:
             # Programming error — the two issuer paths are
             # mutually exclusive. The JWT layer treats this as
             # a bug.
-            raise ValueError(
-                "build_claims accepts at most one of client_id / api_key_id"
-            )
+            raise ValueError("build_claims accepts at most one of client_id / api_key_id")
 
         scope_set = set(scopes or [])
 
@@ -238,6 +312,16 @@ class ClaimPolicyService:
             rbac_roles, rbac_permissions = [], []
 
         claims: Dict[str, Any] = {}
+        ctx = ClaimResolveContext(
+            user=user,
+            api_key=api_key,
+            rbac_roles=list(rbac_roles),
+            rbac_permissions=list(rbac_permissions),
+            client_id=client_id,
+            api_key_id=api_key_id,
+            scopes=sorted(scope_set),
+            target=target,
+        )
         for rule in active_rules:
             if target not in rule.include_in:
                 continue
@@ -245,9 +329,7 @@ class ClaimPolicyService:
                 continue
             if rule.claim_name in RESERVED_CLAIMS:
                 continue
-            value = self._resolve_source(
-                rule, user, api_key, rbac_roles, rbac_permissions
-            )
+            value = await self._resolve_source(rule, ctx)
             if value is None:
                 continue
             # Last-wins semantics — saved rules (evaluated
@@ -274,6 +356,7 @@ class ClaimPolicyService:
         point of view.
         """
         if rules:
+            _check_custom_resolvers_registered(rules)
             existing = await self._repository.get_by_client(client_id)
             policy = ClientClaimPolicy(
                 client_id=client_id,
@@ -317,6 +400,7 @@ class ClaimPolicyService:
         admin opts back in by saving explicit rules.
         """
         if rules:
+            _check_custom_resolvers_registered(rules)
             existing = await self._api_key_repository.get_by_api_key(api_key_id)
             policy = APIKeyClaimPolicy(
                 api_key_id=api_key_id,
@@ -373,9 +457,7 @@ class ClaimPolicyService:
             source_config=template.source_config.model_copy(deep=True),
             include_in=include_in if include_in is not None else list(template.include_in),
             required_scope=(
-                required_scope
-                if required_scope is not None
-                else template.required_scope
+                required_scope if required_scope is not None else template.required_scope
             ),
             description=template.description,
         )
@@ -443,37 +525,33 @@ class ClaimPolicyService:
             return [], []
 
     @staticmethod
-    def _resolve_source(
-        rule: ClaimRule,
-        user: Optional[User],
-        api_key: Optional[APIKey],
-        rbac_roles: List[str],
-        rbac_permissions: List[str],
-    ) -> Any:
+    async def _resolve_source(rule: ClaimRule, ctx: ClaimResolveContext) -> Any:
         """Read the value for a single rule from its declared
         source. ``None`` means "skip — do not emit this claim"
         (used by :class:`USER_FIELD` when the user / attribute
         is absent, by :class:`API_KEY_FIELD` when the API key
-        / attribute is absent, and by :class:`STATIC` when
-        the literal is ``None``).
+        / attribute is absent, by :class:`STATIC` when
+        the literal is ``None``, and by :class:`CUSTOM` when
+        the resolver is missing, failing, or returns ``None``
+        — a custom resolver never breaks token issuance).
         """
         cfg: ClaimSourceConfig = rule.source_config
         if rule.source == ClaimSource.USER_FIELD:
-            if user is None:
+            if ctx.user is None:
                 return None
             assert cfg.user_field is not None  # guaranteed by validator
-            return getattr(user, cfg.user_field, None)
+            return getattr(ctx.user, cfg.user_field, None)
         if rule.source == ClaimSource.RBAC_ROLES:
-            return list(rbac_roles)
+            return list(ctx.rbac_roles)
         if rule.source == ClaimSource.RBAC_PERMISSIONS:
-            return list(rbac_permissions)
+            return list(ctx.rbac_permissions)
         if rule.source == ClaimSource.STATIC:
             return cfg.value
         if rule.source == ClaimSource.API_KEY_FIELD:
-            if api_key is None:
+            if ctx.api_key is None:
                 return None
             assert cfg.api_key_field is not None  # guaranteed by validator
-            return getattr(api_key, cfg.api_key_field, None)
+            return getattr(ctx.api_key, cfg.api_key_field, None)
         if rule.source == ClaimSource.JWT_META:
             # The JWT service handles its own meta — for now we
             # do not duplicate the ``iss`` / ``aud`` / ``azp``
@@ -485,4 +563,42 @@ class ClaimPolicyService:
             # a custom claim — that needs a richer value, so
             # the service returns None for now.
             return None
+        if rule.source == ClaimSource.CUSTOM:
+            resolver = _RESOLVERS.get(cfg.custom_resolver or "")
+            if resolver is None:
+                logger.warning(
+                    "claim_resolver_missing",
+                    resolver=cfg.custom_resolver,
+                    claim_name=rule.claim_name,
+                )
+                return None
+            warn_after = SLOW_RESOLVER_WARN_SECONDS
+            if isinstance(cfg.custom_config, dict):
+                try:
+                    warn_after = float(cfg.custom_config.get("warn_after_s", warn_after))
+                except (TypeError, ValueError):
+                    warn_after = SLOW_RESOLVER_WARN_SECONDS
+            start = time.perf_counter()
+            try:
+                value = await resolver(rule, ctx)
+            except Exception as exc:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                logger.warning(
+                    "claim_resolver_failed",
+                    resolver=cfg.custom_resolver,
+                    claim_name=rule.claim_name,
+                    error_type=type(exc).__name__,
+                    elapsed_ms=round(elapsed_ms, 1),
+                )
+                return None
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            if elapsed_ms > warn_after * 1000.0:
+                logger.warning(
+                    "claim_resolver_slow",
+                    resolver=cfg.custom_resolver,
+                    claim_name=rule.claim_name,
+                    elapsed_ms=round(elapsed_ms, 1),
+                    threshold_ms=round(warn_after * 1000.0, 1),
+                )
+            return value
         return None

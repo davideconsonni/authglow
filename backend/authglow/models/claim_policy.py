@@ -36,7 +36,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -124,6 +124,10 @@ class ClaimSource(str, Enum):
       allowed attribute names are enumerated in
       :data:`APIKeyField` so the Pydantic layer rejects typos
       at the admin API boundary.
+    * ``CUSTOM`` — delegate to a registered async resolver
+      (see :func:`authglow.services.claim_policy.register_claim_resolver`).
+      The resolver name goes in ``ClaimSourceConfig.custom_resolver``;
+      ``custom_config`` carries an opaque per-rule payload for it.
     """
 
     USER_FIELD = "user_field"
@@ -132,6 +136,7 @@ class ClaimSource(str, Enum):
     STATIC = "static"
     JWT_META = "jwt_meta"
     API_KEY_FIELD = "api_key_field"
+    CUSTOM = "custom"
 
 
 # Closed list of attribute names the admin can expose from an
@@ -178,6 +183,10 @@ class ClaimSourceConfig(BaseModel):
       :data:`ApiKeyField`).
     * ``RBAC_ROLES`` / ``RBAC_PERMISSIONS`` — no config needed,
       the source is implicitly "all of them".
+    * ``CUSTOM`` — ``custom_resolver`` is required (name of a
+      resolver registered via ``register_claim_resolver``);
+      ``custom_config`` is an optional opaque dict forwarded
+      to it verbatim (e.g. ``{"crm_field": "tier"}``).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -186,6 +195,8 @@ class ClaimSourceConfig(BaseModel):
     value: Optional[Any] = None
     jwt_meta: Optional[JwtMetaField] = None
     api_key_field: Optional[ApiKeyField] = None
+    custom_resolver: Optional[str] = None
+    custom_config: Optional[Dict[str, Any]] = None
 
 
 def _validate_claim_name(name: str) -> str:
@@ -270,18 +281,38 @@ class ClaimRule(BaseModel):
                 "source=API_KEY_FIELD requires source_config.api_key_field "
                 "(one of: name, key_prefix, scopes, allowed_ips, tier)."
             )
+        if self.source == ClaimSource.CUSTOM:
+            if not cfg.custom_resolver or not cfg.custom_resolver.strip():
+                raise ValueError(
+                    "source=CUSTOM requires source_config.custom_resolver "
+                    "(name of a resolver registered via register_claim_resolver)."
+                )
+            if cfg.user_field or cfg.value is not None or cfg.jwt_meta or cfg.api_key_field:
+                raise ValueError(
+                    "source=CUSTOM takes only custom_resolver/custom_config "
+                    "(user_field, value, jwt_meta, api_key_field must all be None)."
+                )
         if self.source in (ClaimSource.RBAC_ROLES, ClaimSource.RBAC_PERMISSIONS):
             if (
                 cfg.user_field
                 or cfg.value is not None
                 or cfg.jwt_meta
                 or cfg.api_key_field
+                or cfg.custom_resolver
+                or cfg.custom_config is not None
             ):
                 raise ValueError(
                     f"source={self.source.value} takes no source_config "
-                    "fields (user_field, value, jwt_meta, api_key_field "
-                    "must all be None)."
+                    "fields (user_field, value, jwt_meta, api_key_field, "
+                    "custom_resolver, custom_config must all be None)."
                 )
+        if self.source != ClaimSource.CUSTOM and (
+            cfg.custom_resolver or cfg.custom_config is not None
+        ):
+            raise ValueError(
+                f"source={self.source.value} does not accept custom_resolver/"
+                "custom_config (only source=CUSTOM does)."
+            )
         return self
 
 
@@ -372,8 +403,7 @@ def render_template_claim_name(template_name: str, namespace: str) -> str:
         return template_name
     if not namespace:
         raise ValueError(
-            "claim_namespace must be configured when using relative "
-            "template claim names."
+            "claim_namespace must be configured when using relative template claim names."
         )
     ns = namespace.rstrip("/")
     return f"{ns}/{template_name.lstrip('/')}"

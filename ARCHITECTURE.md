@@ -23,7 +23,8 @@ For code style, naming, and test commands see `AGENTS.md`.
 | New UI primitive                       | `frontend/src/components/ui/<name>.tsx` (shadcn/ui pattern)                                            |
 | New state store                        | `frontend/src/stores/<name>Store.ts` → Zustand                                                         |
 | New API hook                           | `frontend/src/hooks/use<Name>.ts` → wraps `useApiQuery`/`useApiMutation`                               |
-| New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`)         |
+| New claim policy rule (backend)        | `backend/authglow/models/claim_policy.py` (template or `ClaimRule` + service `apply_template`) |
+| New custom claim resolver              | `register_claim_resolver("<name>", async_fn)` in `backend/authglow/services/claim_policy.py` + rule `{source: custom, custom_resolver: <name>}` (selected per-rule; slow/failing resolvers skip the claim + structured log) |
 | New API constant / route path          | `frontend/src/lib/constants.ts`                                                                        |
 | New phone verification provider        | `backend/authglow/services/phone/<name>.py` → subclass `PhoneVerificationProvider`, add case in `factory.py` |
 | New email provider                       | `backend/authglow/services/email/<name>.py` → subclass `EmailProvider`, `register_email_provider("<name>", builder)` in `factory.py` (selected by `EMAIL_BACKEND`) |
