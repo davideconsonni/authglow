@@ -1,3 +1,9 @@
+---
+type: analysis
+status: draft
+may-become-plan: true
+---
+
 # Fase 1 — AuthGlow come Service Provider SAML (login via IdP esterni)
 
 > **Scopo (IT)**: un admin configura un IdP SAML esterno (incollando il
@@ -10,7 +16,7 @@
 
 ## Handoff contract (EN)
 
-- Read `AGENTS.md`, `docs/saml/00-assessment.md` §3 (S1–S13), §4, §6, §7, §10 first.
+- Read `AGENTS.md`, `docs/analysis/saml/00-assessment.md` §3 (S1–S13), §4, §6, §7, §10 first.
 - Item IDs `F1-NN`. The validation pipeline order (F1-07) is
   **normative**: reordering steps weakens security; do not reorder.
 - The XSW corpus (F1-13) is written to be failed by wrong code. If a

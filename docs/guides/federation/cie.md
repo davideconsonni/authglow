@@ -108,7 +108,7 @@ curl https://cie-idp.production.gov.it/.well-known/openid-configuration | jq .
 
 You should see endpoints like `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`.
 
-> For local development and testing, use **Google OIDC** (see [docs/GOOGLE.md](GOOGLE.md)) — it takes 2 minutes to set up and works from any network.
+> For local development and testing, use **Google OIDC** (see [google.md](google.md)) — it takes 2 minutes to set up and works from any network.
 
 ## Security Levels (acr_values)
 
@@ -195,7 +195,7 @@ Toggle a provider from the admin UI:
 
 CIE production endpoints are only available after accreditation. For local development:
 
-1. **Use Google OIDC** ([docs/GOOGLE.md](GOOGLE.md)) to test the federation infrastructure — identical flow, 2-minute setup
+1. **Use Google OIDC** ([google.md](google.md)) to test the federation infrastructure — identical flow, 2-minute setup
 2. Once accredited with IPZS, replace the Google config with your CIE credentials
 3. The federation code is provider-agnostic — if Google works, CIE works
 

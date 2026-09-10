@@ -1,3 +1,9 @@
+---
+type: plan
+status: done
+closed: 2026-09-10
+---
+
 # Audit Logging Enhancement Plan — AuthGlow (2026-09-05)
 
 > **Scope**: migliorare l'audit logging per tracciare **cosa fanno gli utenti** dell'applicazione in modo completo, strutturato e conforme OAuth2/OIDC.
@@ -344,7 +350,7 @@ async def endpoint(
 - [x] **2.4** `api/auth.py:register_user` → `user_registered`, `email_verification_sent`
 - [x] **2.5** `services/user_profile.py` → `email_changed`, `profile_updated`, `password_changed`, `account_deleted` (+ `deactivate_account`, `reactivate_account`)
 - [x] **2.6** `services/invitation.py` → `user_invited` (già presente in `invite_user` in `api/auth.py`)
-- [ ] **2.7** Login history: integrare con `LoginHistoryService` per evitare duplicazione (delegare a quello per login success/failed) — *opzionale, architetturale*
+- **2.7** ~~Login history: integrare con `LoginHistoryService` per evitare duplicazione (delegare a quello per login success/failed)~~ — **WONTDO (2026-09-10)**: separazione confermata, `AuditService` resta write-only cross-cutting.
 
 ### Fase 3: OAuth2/OIDC Protocol Events (Critical) ⏱️ ~3 giorni ✅ COMPLETATA
 - [x] **3.1** `api/oauth2_advanced.py:revoke_token` → `access_token_revoked`, `refresh_token_revoked` (con `token_type_hint`)
@@ -365,29 +371,29 @@ async def endpoint(
 - [x] **5.2** `api/api_key.py` → `api_key_created`, `api_key_revoked` (includes rotated/deleted)
 - [x] **5.3** RBAC events: `admin_role_assigned/removed` (implementato in `api/rbac.py`)
 
-### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni ✅ COMPLETATA (parziale)
+### Fase 6: Security & Anomaly Events ⏱️ ~1-2 giorni ✅ COMPLETATA (6.4 wontdo)
 - [x] **6.1** Rate limit middleware → `rate_limit_exceeded` (su auth endpoints) — *già presente in middleware, non ha audit event esplicito*
 - [x] **6.2** Account lockout logic → `account_locked/unlocked`, `brute_force_detected` (in UserService)
 - [x] **6.3** Concurrent session limit → `concurrent_session_limit_exceeded` (in UserService + authorize_post)
-- [ ] **6.4** Suspicious activity detection (new device/geo, impossible travel) → `suspicious_activity`
+- **6.4** ~~Suspicious activity detection (new device/geo, impossible travel) → `suspicious_activity`~~ — **WONTDO (2026-09-10)**: anomaly detection fuori scopo, nessun consumer per il segnale.
 
-### Fase 7: Frontend Admin Audit UI ⏱️ ~3-4 giorni (separabile) — **NON INIZIATA**
-- [ ] **7.1** Nuovo endpoint `GET /api/admin/audit-logs` con filtri (user_id, event_type, category, severity, date range, client_id) — **richiede storage backend queryabile**
-- [ ] **7.2** Pagina Admin `AdminAuditLogsPage.tsx` con tabella filtratile, sortable, export CSV/JSON
-- [ ] **7.3** Dettaglio evento (modal) con metadata strutturato
-- [ ] **7.4** Real-time alerts: webhook per eventi `critical` + `error` severity
+### Fase 7: Frontend Admin Audit UI ⏱️ ~3-4 giorni (separabile) — **WONTDO (2026-09-10)**: richiede uno storage backend queryabile; `AuditService` resta write-only (stdout JSON).
+- **7.1** ~~Nuovo endpoint `GET /api/admin/audit-logs` con filtri (user_id, event_type, category, severity, date range, client_id)~~ — **WONTDO**
+- **7.2** ~~Pagina Admin `AdminAuditLogsPage.tsx` con tabella filtratile, sortable, export CSV/JSON~~ — **WONTDO**
+- **7.3** ~~Dettaglio evento (modal) con metadata strutturato~~ — **WONTDO**
+- **7.4** ~~Real-time alerts: webhook per eventi `critical` + `error` severity~~ — **WONTDO**
 
 **Nota**: L'attuale `AuditService` è write-only (stdout JSON). Per queryare i log serve uno storage backend (Elasticsearch, Loki, ClickHouse, Postgres). Questa fase è separabile e può essere fatta quando si aggiunge uno storage backend queryabile.
 
-### Fase 8: Testing, Hardening & Documentation ⏱️ ~2 giorni ✅ COMPLETATA (parziale)
+### Fase 8: Testing, Hardening & Documentation ⏱️ ~2 giorni ✅ COMPLETATA (8.3 wontdo)
 - [x] **8.1** Test integrazione per ogni categoria evento (flussi completi)
 - [x] **8.2** Property-based test per PII masking determinismo
-- [ ] **8.3** Load test: audit logging <10ms p99, non blocca request path
-- [x] **8.4** Documentazione: `docs/audit-logging.md` con tassonomia, esempi JSON, configurazione retention
+- **8.3** ~~Load test: audit logging <10ms p99, non blocca request path~~ — **WONTDO (2026-09-10)**: nessun harness di load dedicato, sampling configurabile già disponibile.
+- [x] **8.4** Documentazione: `docs/guides/audit-logging.md` con tassonomia, esempi JSON, configurazione retention
 - [x] **8.5** Aggiornare `ARCHITECTURE.md` con sezione Audit
 - [x] **8.6** Aggiornare `AGENTS.md` con linee guida audit logging
 - [x] **8.7** Aggiornare `README.md` se necessario (nuovi endpoint/feature) — *README ha già menzione audit log*
-- [x] **8.8** Aggiornare `docs/FEATURES.md` con feature audit logging — *già presenti riferimenti audit*
+- [x] **8.8** Aggiornare `docs/reference/features.md` con feature audit logging — *già presenti riferimenti audit*
 
 ---
 
@@ -451,13 +457,13 @@ Fase 1 (Core) ──────────┬──────────►
 
 ---
 
-## Definizione di "Done" per Ogni Fase
+## Definizione di "Done" per Ogni Fase (criteri di riferimento, non task)
 
-- [ ] Tutti gli eventi della fase implementati e testati (unit + integration)
-- [ ] Nessun test regresso rotto
-- [ ] `ruff check` + `mypy` passano
-- [ ] Documentazione aggiornata (se API pubblica cambia)
-- [ ] Code review approvato
+- Tutti gli eventi della fase implementati e testati (unit + integration)
+- Nessun test regresso rotto
+- `ruff check` + `mypy` passano
+- Documentazione aggiornata (se API pubblica cambia)
+- Code review approvato
 
 ---
 
@@ -468,7 +474,7 @@ Fase 1 (Core) ──────────┬──────────►
 3. **Testa incrementalmente** — dopo ogni endpoint modificato, run test correlati
 4. **Non duplicare** — `LoginHistoryService` esiste per login history; `AdminActionService` per admin actions. L'`AuditService` è per **eventi di sicurezza/compliance** cross-cutting
 5. **Riferimenti chiave**:
-   - `docs/plans/OAUTH2_OIDC_COMPLIANCE_PLAN.md` — per eventi OAuth2 obbligatori
+    - `docs/plans/active/vapt-fix-plan.md` (superficie OAuth2/OIDC) — per eventi OAuth2 obbligatori
    - `backend/tests/unit/test_audit.py` — pattern test esistenti
    - `backend/authglow/services/audit.py` — implementazione attuale
    - `backend/authglow/services/login_history.py` — pattern per persistence separata
@@ -477,5 +483,6 @@ Fase 1 (Core) ──────────┬──────────►
 
 ## Changelog
 
+- 2026-09-10: Piano chiuso e archiviato. Voci residue marcate **WONTDO**: 2.7 (integrazione LoginHistory), 6.4 (suspicious activity), Fase 7 intera (Admin Audit UI — richiede storage queryabile), 8.3 (load test dedicato).
 - 2026-09-06: API key rotation audit fix (added API_KEY_ROTATED event type, metadata schema, proper event in api_key.py rotate endpoint). Fase 5.3 completata (RBAC events: admin_role_assigned/removed). Fase 6.3 completata (concurrent session limit). Fase 6 parziale completata (account_locked/unlocked + concurrent sessions). Fase 5 completata. Fase 4 completata. Fase 3 completata. Fase 2 completata. Fase 1 completata.
 - 2026-09-05: Creazione piano completo (Fasi 1-8), tassonomia eventi, modello dati, fasi, testing strategy

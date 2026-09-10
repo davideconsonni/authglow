@@ -1,3 +1,9 @@
+---
+type: analysis
+status: draft
+may-become-plan: true
+---
+
 # SAML 2.0 Full Support — Assessment & Handoff Plan (2026-09-03)
 
 > **Scope**: abilitazione completa del supporto SAML 2.0 in AuthGlow, in
@@ -295,7 +301,7 @@ stop and ask the user.
 | DR-12 | Outbound attributes: extend the existing claim policy engine with a `saml_attribute` target | One auditable engine, consistent admin UX |
 | DR-13 | Docs: Italian executive summary + English technical body | Reading comfort + model-handoff precision |
 | DR-14 | NameID `persistent` default, `transient` never a linking key; auto-link only via per-provider `trust_email` (default false) | Account stability + VAPT-035 semantics |
-| DR-15 | Handoff format: `docs/saml/` with one autonomous file per phase | Each implementing session loads 1 phase file + this assessment |
+| DR-15 | Handoff format: `docs/analysis/saml/` with one autonomous file per phase | Each implementing session loads 1 phase file + this assessment |
 
 ## 7. Ratified Technical Defaults
 

@@ -1,3 +1,8 @@
+---
+type: plan
+status: done
+---
+
 # Claim Resolver Pluggable — Piano di implementazione
 
 > Workflow: plan-grill-implement. Grilling completato (5Q: strict-422, degrado, ctx, no-timeout-centrale, slow-warning).

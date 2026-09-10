@@ -40,7 +40,7 @@ GET /oauth2/userinfo   (Authorization: Bearer <access_token>)
 2. Validates the granted **scopes**: the emitted claims depend on the
    scope (`openid`, `profile`, `email`, `phone`, `address`).
    `phone_number_verified` reflects the user's OTP-verified flag
-   (see [Phone Verification](../phone-verification.md)); a changed
+   (see [Phone Verification](../guides/phone-verification.md)); a changed
    number resets the flag until proven again.
 3. Applies any **`claims` request parameter** (OIDC Core §5.5): if the
    client sent `claims` at authorization time, the response is filtered

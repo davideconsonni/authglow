@@ -273,9 +273,9 @@ describe('Fase Audit Endpoints — Cover Frontend', () => {
   })
 
   describe('CONFORMANCE U.3-U.5 — documentazione release', () => {
-    const featuresPath = resolve(ROOT, '..', 'docs', 'FEATURES.md')
+    const featuresPath = resolve(ROOT, '..', 'docs', 'reference', 'features.md')
 
-    it('docs/FEATURES.md esiste e cataloga le feature OIDC/FAPI', () => {
+    it('docs/reference/features.md esiste e cataloga le feature OIDC/FAPI', () => {
       expect(existsSync(featuresPath)).toBe(true)
       const content = readFileSync(featuresPath, 'utf-8')
       expect(content).toContain('Supported OAuth 2.0 / OIDC Standards')

@@ -1,3 +1,9 @@
+---
+type: analysis
+status: draft
+may-become-plan: true
+---
+
 # Fase 3 — SLO, assertion cifrate, hardening, interop, E2E
 
 > **Scopo (IT)**: chiudere il supporto SAML: Single Logout per-SP
@@ -10,7 +16,7 @@
 
 ## Handoff contract (EN)
 
-- Read `AGENTS.md`, `docs/saml/00-assessment.md` §3, §4, §6, §7, §10.
+- Read `AGENTS.md`, `docs/analysis/saml/00-assessment.md` §3, §4, §6, §7, §10.
 - Item IDs `F3-NN`. SLO is per-SP only (DR-11): if you find yourself
   building a session-participant registry, stop — it is a non-goal.
 - Encryption never substitutes signature validation (normative order
@@ -26,7 +32,7 @@
 - [ ] F3-06 E2E Playwright suite
 - [ ] F3-07 Interop checklist executed and documented
 - [ ] F3-08 Performance offload + benchmark
-- [ ] F3-09 Docs (FEATURES.md, user guide, ARCHITECTURE.md)
+- [ ] F3-09 Docs (reference/features.md, user guide, ARCHITECTURE.md)
 - [ ] F3-10 Verification run clean
 
 ---
@@ -198,7 +204,7 @@ Controls (minimum bar, all mandatory):
 
 ## F3-07 — Interop checklist (execute + document)
 
-Create `docs/saml/interop-checklist.md`; run each row against a real
+Create `docs/analysis/saml/interop-checklist.md`; run each row against a real
 peer, record evidence (screenshot/log excerpt) and any code fix in a
 table. Peers: SimpleSAMLphp (Docker, both roles), Okta developer org
 (IdP), Entra ID (IdP), Shibboleth SP if reachable.
@@ -231,7 +237,7 @@ extra whitespace in base64, IdP-specific RelayState casing.
 
 ## F3-09 — Docs
 
-- `docs/FEATURES.md`: SAML section (SP + IdP, endpoints table).
+- `docs/reference/features.md`: SAML section (SP + IdP, endpoints table).
 - `docs/SAML.md`: admin user guide — configure Okta/Entra
   step-by-step (paste metadata flow), SP-client registration,
   certificate rotation runbook, troubleshooting table.

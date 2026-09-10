@@ -1,3 +1,10 @@
+---
+type: analysis
+status: draft
+may-become-plan: true
+ids: F0-NN
+---
+
 # Fase 0 — Fondazioni SAML (dipendenze, settings, certificati, modelli, repository)
 
 > **Scopo (IT)**: posare le fondamenta senza toccare alcun flusso di
@@ -9,7 +16,7 @@
 
 ## Handoff contract (EN)
 
-- Read `AGENTS.md` and `docs/saml/00-assessment.md` §3, §6, §7, §10 first.
+- Read `AGENTS.md` and `docs/analysis/saml/00-assessment.md` §3, §6, §7, §10 first.
 - Item IDs are stable: `F0-NN`. Tick checkboxes as you close them.
 - Do not implement ACS/SSO endpoints (Fase 1/2), do not add login
   buttons, do not touch the OIDC federation flow.
@@ -257,7 +264,7 @@ garbage), enum-checked `name_id_format`.
 ## F0-09 — ARCHITECTURE.md
 
 Add a SAML section to the architecture notes: new modules, endpoints
-table (F0 subset), decision-record pointer to `docs/saml/00-assessment.md`.
+table (F0 subset), decision-record pointer to `docs/analysis/saml/00-assessment.md`.
 Keep the existing directory maps style.
 
 ## F0-10 — Verification commands

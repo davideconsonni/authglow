@@ -1,3 +1,9 @@
+---
+type: plan
+status: superseded
+superseded-by: ../active/rbac-administrator-migration.md
+---
+
 # Plan — RBAC-driven admin gating + system OAuth client bootstrap
 
 > **Status**: working tree is clean (rollback complete). This plan
@@ -1014,7 +1020,7 @@ the deviation and link to the phase that owns the affected code.
       role, system client, claim policy) and the operator's
       responsibility to rotate the system client secret in
       production.
-- [ ] `../FEATURES.md` — link the new "RBAC admin gate" and
+- [ ] `../../reference/features.md` — link the new "RBAC admin gate" and
       "System OAuth client" sections from the table of contents.
 
 ### [ ] 13.2 Verification

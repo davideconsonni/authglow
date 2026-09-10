@@ -72,8 +72,8 @@ describe('Fase 6 — OIDC Federation', () => {
   })
 
   describe('6.9 Documentation', () => {
-    it('docs/CIE.md esiste', () => {
-      expect(existsSync(resolve(ROOT, '..', 'docs', 'CIE.md'))).toBe(true)
+    it('docs/guides/federation/cie.md esiste', () => {
+      expect(existsSync(resolve(ROOT, '..', 'docs', 'guides', 'federation', 'cie.md'))).toBe(true)
     })
   })
 })

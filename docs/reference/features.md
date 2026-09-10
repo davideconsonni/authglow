@@ -55,7 +55,7 @@
 - Changing the number (profile or admin) resets `phone_verified` automatically
 - Feeds OIDC `phone_number_verified` claim (`phone` scope)
 - Audit log: events `phone_verification_sent`, `phone_verified`, `phone_verification_failed`
-- Full documentation: [phone-verification.md](phone-verification.md)
+- Full documentation: [phone-verification.md](../guides/phone-verification.md)
 
 ### Account Lifecycle
 - **Deactivation**: `POST /api/profile/me/deactivate` — account deactivated but recoverable (blocked for federated users)
@@ -1095,7 +1095,7 @@ Any OIDC-compliant provider works out of the box:
 - `acr_values` for security levels (L1/L2/L3)
 - Custom claims mapping: codice_fiscale, NIS, data_nascita, etc.
 - NFC-based authentication handled transparently by the CIE IdP
-- Full documentation: [CIE.md](CIE.md)
+- Full documentation: [cie.md](../guides/federation/cie.md)
 
 ### Admin Management
 - CRUD for external IdP configurations
@@ -1114,7 +1114,7 @@ Any OIDC-compliant provider works out of the box:
 - Federation flow available in the OAuth Playground for testing
 - Simulate redirect to external IdP with configurable parameters
 
-> For detailed CIE-specific setup, see [CIE.md](CIE.md).
+> For detailed CIE-specific setup, see [cie.md](../guides/federation/cie.md).
 
 ---
 

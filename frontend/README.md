@@ -1,73 +1,31 @@
-# React + TypeScript + Vite
+# AuthGlow Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + TypeScript + Vite SPA: login, OAuth2 consent, MFA/passkeys, federation buttons, admin console, OAuth Playground. Served by the backend container in production (`FRONTEND_DIST_DIR`), via `npm run dev` locally.
 
-Currently, two official plugins are available:
+## Commands (from `frontend/`)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev        # Vite dev server
+npm run build      # production bundle (dist/)
+npm run preview    # preview the built bundle
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint .
+npm test                    # vitest (all)
+npm test -- path/to/file    # single file
+npx playwright test         # E2E
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Layout (`src/`)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `pages/` — route components (`auth/`, `admin/`); admin pages lazy-loaded via `React.lazy()`
+- `components/ui/` — shadcn/ui primitives; `components/shared|auth|admin|layout/` — feature components
+- `stores/` — Zustand (`authStore`, `toastStore`, `playgroundStore`); `hooks/` — `useAuth`, `useApi`, `useTheme`, …
+- `lib/` — `api.ts` (HTTP client + `ApiError`), `constants.ts` (ROUTES, API_URL), `jwt.ts`, `utils.ts`
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Conventions
+
+- `@/` alias → `src/*`; `import type` for type-only imports; no barrel `index.ts` re-exports.
+- Forms: react-hook-form + zod; server state: TanStack Query via `useApiQuery`/`useApiMutation`.
+- Styling: Tailwind utilities + `cn()`; `data-testid` on interactive elements for Playwright.
+- Backend API base: `VITE_API_URL` (see `.env.example`); OpenAPI at `http://localhost:8000/docs`.

@@ -1,8 +1,14 @@
+---
+type: plan
+status: active
+supersedes: rbac-admin-gating-and-system-oauth-client (admin-gating parts)
+---
+
 # Plan — Eliminazione scope `admin` → ruolo RBAC "Authglow Administrator"
 
 > **Status**: approved (grill completed). This plan supersedes the
 > admin-gating portions of
-> `rbac-admin-gating-and-system-oauth-client.md` where they conflict
+> `../archive/rbac-admin-gating-and-system-oauth-client.md` where they conflict
 > (role name, permission bypass, API-key warning). The system-client
 > parts of that plan are NOT in scope here.
 >

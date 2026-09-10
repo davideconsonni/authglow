@@ -49,5 +49,5 @@ Each file uses the same structure:
 
 ---
 
-> Primary reference: [`docs/FEATURES.md`](../FEATURES.md) — the complete
+> Primary reference: [`docs/reference/features.md`](../reference/features.md) — the complete
 > endpoint + feature catalog.

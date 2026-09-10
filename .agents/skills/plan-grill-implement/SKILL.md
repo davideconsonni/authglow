@@ -49,7 +49,7 @@ Fix any failures before proceeding.
 
 Only after the user explicitly approves the work:
 
-- Update the plan document (e.g. `docs/plans/VAPT_FIX_PLAN.md`)
+- Update the plan document (e.g. `docs/plans/active/vapt-fix-plan.md`)
 - Change `[ ]` to `[x]` for the completed item
 - Append a short note with the commit SHA or a summary of what was done
 

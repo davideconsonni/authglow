@@ -1,3 +1,9 @@
+---
+type: plan
+status: active
+ids: VAPT-NNN
+---
+
 # VAPT Results — Pre-Pentest Security Audit (2026-06-04)
 
 > **Status**: pre-VAPT findings, awaiting triage and remediation.

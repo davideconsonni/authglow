@@ -66,7 +66,7 @@ Change `STORAGE_BACKEND` from `file` to `s3`, `gcs`, or `abfs` and your data —
 - Single-container `Dockerfile` (API + built SPA) or backend-only — one volume for persistence
 - Zero message queue, zero cache cluster — just files
 
-> Full catalog with every endpoint: [FEATURES.md](docs/FEATURES.md)
+> Full catalog with every endpoint: [FEATURES.md](docs/reference/features.md)
 
 ---
 
@@ -324,14 +324,14 @@ npm run test:e2e   # Playwright end-to-end
 
 ## 📖 Documentation
 
-- [FEATURES.md](docs/FEATURES.md) — complete feature catalog, endpoint by endpoint
+- [FEATURES.md](docs/reference/features.md) — complete feature catalog, endpoint by endpoint
 - [Flows](docs/flows/README.md) — per-flow guides: how each OAuth2/OIDC flow works, its standard, and what's custom
 - [ARCHITECTURE.md](ARCHITECTURE.md) — directory map, request lifecycle, where to add what
 - [DESIGN.md](DESIGN.md) — design system and visual language
 - [AGENTS.md](AGENTS.md) — developer guide for AI coding agents
-- [docs/QUICK_SETUP.md](docs/QUICK_SETUP.md) — zero-to-signed-in setup guide (local + deployed)
-- [docs/CIE.md](docs/CIE.md) — Italian Electronic Identity Card (CIE) integration guide
-- [docs/GOOGLE.md](docs/GOOGLE.md) — Google OIDC integration guide
+- [docs/getting-started/quick-setup.md](docs/getting-started/quick-setup.md) — zero-to-signed-in setup guide (local + deployed)
+- [docs/guides/federation/cie.md](docs/guides/federation/cie.md) — Italian Electronic Identity Card (CIE) integration guide
+- [docs/guides/federation/google.md](docs/guides/federation/google.md) — Google OIDC integration guide
 - [SECURITY.md](SECURITY.md) — vulnerability reporting and scope
 - [API Docs](http://localhost:8000/docs) — auto-generated OpenAPI (Swagger UI at `/docs`)
 
@@ -357,7 +357,7 @@ Found a security issue? Please follow [SECURITY.md](SECURITY.md). Found a bug, a
 
 This is `main`, moving fast — no tagged releases yet. Pin a commit if you need stability.
 
-SMTP / SendGrid / Mailgun / Resend email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](docs/FEATURES.md) reflects working code.
+SMTP / SendGrid / Mailgun / Resend email delivery is implemented behind the common `EmailProvider` interface. Everything else in [FEATURES.md](docs/reference/features.md) reflects working code.
 
 ---
 

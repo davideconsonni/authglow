@@ -1,3 +1,9 @@
+---
+type: analysis
+status: draft
+may-become-plan: true
+---
+
 # Fase 2 — AuthGlow come Identity Provider SAML (SSO outbound per SP registrati)
 
 > **Scopo (IT)**: applicazioni esterne (SP) possono registrarsi su
@@ -15,7 +21,7 @@
 
 ## Handoff contract (EN)
 
-- Read `AGENTS.md`, `docs/saml/00-assessment.md` §3, §4, §6, §7, §10.
+- Read `AGENTS.md`, `docs/analysis/saml/00-assessment.md` §3, §4, §6, §7, §10.
 - Item IDs `F2-NN`. The issuer/audience/recipient triple and the
   signing defaults (DR-06) are non-negotiable.
 - The IdP must never accept an ACS URL from the wire (T-17).

@@ -1,3 +1,8 @@
+---
+type: plan
+status: done
+---
+
 # Storage Plugin Registry — Piano di implementazione
 
 > Workflow: plan-grill-implement. Un item alla volta, ogni step richiede approvazione esplicita.

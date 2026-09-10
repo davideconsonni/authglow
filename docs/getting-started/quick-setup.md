@@ -224,4 +224,4 @@ The dashboard refreshes its httpOnly cookie session with
 - Create OAuth2 clients at `POST /api/admin/clients` for third-party integrations
 - Set up passkeys at `POST /api/passkeys/register/begin`
 - Explore every OAuth2 flow with the built-in OAuth Playground (`/admin/playground` in the frontend)
-- Full feature list: [FEATURES.md](FEATURES.md)
+- Full feature list: [features.md](../reference/features.md)

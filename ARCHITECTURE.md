@@ -40,9 +40,13 @@ authglow/
 ├── SECURITY.md                # Vulnerability reporting policy
 ├── Dockerfile                 # Single-container image: FastAPI + built SPA (one port, one process)
 ├── .dockerignore              # Build-context exclusions for the single-container image
-├── docs/                      # Integration guides, feature catalog, plans, post-mortems
-│   ├── FEATURES.md            # Complete feature catalog
+├── docs/                      # Guides, catalog, flows, analysis, plans (see docs/README.md)
+│   ├── getting-started/       # quick-setup.md — zero-to-signed-in
+│   ├── reference/             # features.md — complete feature catalog
+│   ├── guides/                # audit-logging, custom-claim-resolvers, phone-verification, federation/google, federation/cie
 │   ├── flows/                 # Per-flow guides: standard + custom behavior
+│   ├── analysis/saml/         # SAML 2.0 assessment (draft, may become a plan)
+│   └── plans/active|archive/  # Open plans vs completed/superseded (see plans/active/README.md)
 ├── backend/
 │   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts, SPA serving
 │   ├── Dockerfile             # Backend-only image (pure REST API)
