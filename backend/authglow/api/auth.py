@@ -1167,6 +1167,10 @@ async def token_endpoint(
     # ``Annotated`` form keeps the default at ``None`` for Python
     # while still being recognised as a form parameter by FastAPI.
     code: Annotated[Optional[str], Form()] = None,
+    # OA-101 (RFC 8628 §3.4): ``device_code`` is the canonical polling
+    # parameter. The legacy ``code`` alias is still accepted below (with a
+    # deprecation warning) and will be removed in a future release.
+    device_code: Annotated[Optional[str], Form()] = None,
     redirect_uri: Annotated[Optional[str], Form()] = None,
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
@@ -1826,9 +1830,21 @@ async def token_endpoint(
         # client authentication, grant registration, ownership check,
         # scope processing and opaque rotated refresh tokens now match
         # every other grant branch.
-        if not code or not client_id:
+        # OA-101: ``device_code`` is canonical (RFC 8628 §3.4). The legacy
+        # ``code`` alias is deprecated: when both are present the canonical
+        # parameter wins; any alias use is logged for migration tracking.
+        if code is not None:
+            import structlog
+
+            structlog.get_logger("authglow.audit").warning(
+                "device_code_alias_used",
+                client_id=client_id,
+                grant_type=grant_type,
+            )
+        resolved_device_code = device_code if device_code is not None else code
+        if not resolved_device_code or not client_id:
             raise OAuth2Error(INVALID_REQUEST, "Missing device_code or client_id", status_code=400)
-        device_code = code  # reuse the `code` param for device_code
+        device_code = resolved_device_code
 
         # --- Client Authentication (same contract as other grants) ---
         basic_client_id, basic_client_secret = _extract_basic_auth(request)

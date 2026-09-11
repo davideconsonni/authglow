@@ -123,7 +123,7 @@ harness, ogni fix delle Fasi 1–3 rischia regressioni silenziose e la Fase 4
 
 (conformance esterna) non ha un gate interno.
 
-- [ ] **[OA-001]** 0.1 Matrice di conformità come test.
+- [x] **[OA-001]** 0.1 Matrice di conformità come test.
   Contesto: creare `backend/tests/conformance/test_oauth2_oidc_matrix.py` che importa
   le costanti di questo piano e per ogni item ha un test dedicato — anche `pytest.mark.xfail`
   all'inizio per i gap aperti. Deve coprire almeno: PKCE S256 obbligatorio, implicit/hybrid
@@ -133,7 +133,7 @@ harness, ogni fix delle Fasi 1–3 rischia regressioni silenziose e la Fase 4
   Acceptance: `pytest backend/tests/conformance -q` eseguibile, con xfail motivati che citano
   l'item del piano (es. `xfail("OA-101 device_code param")`).
 
-- [ ] **[OA-002]** 0.2 Fixture client standard.
+- [x] **[OA-002]** 0.2 Fixture client standard.
   Contesto: oggi i test costruiscono client ad-hoc; servono 5 fixture riusabili con valori
   fissi e documentati: (a) public PKCE (`token_endpoint_auth_method=none`, `require_pkce=True`),
   (b) confidential Basic (`client_secret_basic`), (c) `private_key_jwt` con JWK di test,
@@ -152,7 +152,7 @@ harness, ogni fix delle Fasi 1–3 rischia regressioni silenziose e la Fase 4
 Perché prima: cambiano il formato sul filo o la semantica di logout; più si aspetta,
 più client si assuefanno al comportamento non-standard.
 
-- [ ] **[OA-101]** 1.1 Device grant: accettare `device_code=`.
+- [x] **[OA-101]** 1.1 Device grant: accettare `device_code=`.
   Contesto: RFC 8628 §3.4 richiede al token endpoint `grant_type=urn:ietf:params:oauth:grant-type:device_code`
   con parametro `device_code`. AuthGlow riusa invece il parametro `code`
   (`backend/authglow/api/auth.py`, ramo `grant_type == "urn:ietf:params:oauth:grant-type:device_code"`,
@@ -166,7 +166,7 @@ più client si assuefanno al comportamento non-standard.
   nessuno dei due → `invalid_request`.
   Rischi: breaking per chi usava `code=` — mitigato dall'alias.
 
-- [ ] **[OA-102]** 1.2 Logout che revoca davvero.
+- [x] **[OA-102]** 1.2 Logout che revoca davvero.
   Contesto: oggi `GET /oauth2/logout` (`backend/authglow/api/oidc.py` ~L404) fa audit +
   clear-cookie + iframe frontchannel, e `POST /oauth2/logout` (~L582) fa solo audit.
   Nessuno dei due inserisce il `jti` access in blacklist né revoca la refresh family:
@@ -404,4 +404,8 @@ stabilizzato il wire-format.
 
 | Data | Codice | Fase/Item | Commit | Note |
 |------|--------|-----------|--------|------|
+| 2026-09-11 | OA-002 | Fase 0 / 0.2 Fixture client standard | n/a (non committato) | `backend/tests/conformance/conftest.py` con 5 fixture (public PKCE, confidential Basic, private_key_jwt, dpop_bound, device); smoke 5/5 verde serial + `-n auto`, ruff pulito. |
+| 2026-09-11 | OA-001 | Fase 0 / 0.1 Matrice di conformità | n/a (non committato) | `backend/tests/conformance/test_oauth2_oidc_matrix.py`: 15 test (6 verdi + 9 xfail strict OA-101/102/201/202/203/204/205/301/302), verde-a-parte-xfail serial + `-n auto`, ruff pulito. |
+| 2026-09-11 | OA-101 | Fase 1 / 1.1 Device device_code | n/a (non committato) | `api/auth.py`: form field canonico `device_code=` + alias `code=` deprecato (precedenza canonico, warning `device_code_alias_used`); doc aggiornata; matrice 9 verdi + 8 xfail, regressione device/grant/offline verde, ruff pulito. |
+| 2026-09-11 | OA-102 | Fase 1 / 1.2 Logout revoca | n/a (non committato) | `api/oidc.py`: helper `_revoke_session_tokens` (blacklist jti + `revoke_user_tokens` scoped aud/first-party) nei 3 rami logout; doc aggiornata; matrice 10 verdi + 7 xfail, regressione revoke/oidc/logout/discovery verde, ruff pulito. |
 |      |        |           |        |      |

@@ -85,5 +85,7 @@ access-token `jti`. The event is audit-logged.
 
 > **Custom vs standard**: single difference — `id_token_hint` is required
 > when a redirect is requested (the standard recommends it). Back-channel
-> logout is not executed: the client is stateless and revocation happens
-> client-side.
+> logout is not executed: the client is stateless. Revocation is
+> server-side (OA-102): the presented access-token `jti` is blacklisted and
+> the session's refresh tokens are revoked, scoped to the token audience
+> (other clients untouched).

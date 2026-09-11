@@ -79,6 +79,10 @@ POST /oauth2/token   grant_type=urn:ietf:params:oauth:grant-type:device_code
      device_code=...
 ```
 
+> **Deprecation (OA-101):** the legacy `code=` alias is still accepted for one
+> release (use is logged as `device_code_alias_used`) but will be removed —
+> always send the canonical `device_code=` parameter.
+
 Pending responses (RFC 8628 §3.5):
 
 | Error | Meaning |

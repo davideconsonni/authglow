@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 
-from authglow.core.config import get_settings
+from authglow.core.config import Settings, get_settings
 from authglow.core.jwt_singleton import get_jwt_service
 from authglow.core.rate_limit import limiter
 from authglow.models.keystore import KeyPairMeta, KeyringInfo
@@ -401,6 +401,33 @@ async def userinfo(
     return result
 
 
+async def _revoke_session_tokens(
+    *,
+    sub: str,
+    aud: str | None,
+    jti: str | None,
+    exp: float | None,
+    settings: Settings,
+) -> None:
+    """OA-102: terminate the session behind a logout.
+
+    Blacklists the access-token ``jti`` (bearer credentials only — ID tokens
+    carry no ``jti`` and skip this step) and revokes the user's refresh tokens
+    scoped to the token audience, falling back to the first-party client for
+    legacy tokens without ``aud`` (same convention as the revoke endpoint's
+    ``_audience_allowed``). Other clients are never touched. Every step is
+    idempotent: unknown/expired JTIs and users without refresh tokens are
+    silently accepted.
+    """
+    from authglow.services.auth.token_blacklist import token_blacklist
+    from authglow.services.refresh_token import RefreshTokenService
+
+    if jti is not None and exp is not None:
+        await token_blacklist().revoke(jti, exp)
+    client_scope = aud if aud else settings.oauth2_client_id
+    await RefreshTokenService().revoke_user_tokens(user_id=sub, client_id=client_scope)
+
+
 @router.get("/oauth2/logout")
 @limiter.limit("60/minute")
 async def logout_get(
@@ -490,6 +517,16 @@ async def logout_get(
             },
         )
 
+        # OA-102: the logout terminates the session — revoke before
+        # clearing cookies / notifying front-channel clients.
+        await _revoke_session_tokens(
+            sub=token_data.sub,
+            aud=token_data.aud,
+            jti=None,  # ID tokens are not bearer credentials
+            exp=None,
+            settings=get_settings(),
+        )
+
         from authglow.api.auth import _clear_auth_cookies
 
         _clear_auth_cookies(response, get_settings())
@@ -570,6 +607,15 @@ async def logout_get(
                     "has_redirect": False,
                 },
             )
+            # OA-102: revoke the session's refresh tokens (the hint is an
+            # ID token, not a bearer credential — no blacklist step).
+            await _revoke_session_tokens(
+                sub=hint_token_data.sub,
+                aud=hint_token_data.aud,
+                jti=None,
+                exp=None,
+                settings=get_settings(),
+            )
 
     from authglow.api.auth import _clear_auth_cookies
 
@@ -602,6 +648,15 @@ async def logout_post(
     token_data = jwt_service.decode_token(token)
 
     if token_data:
+        # OA-102: the logout terminates the session — blacklist the bearer
+        # jti and revoke the session's refresh tokens before auditing.
+        await _revoke_session_tokens(
+            sub=token_data.sub,
+            aud=token_data.aud,
+            jti=token_data.jti,
+            exp=token_data.exp.timestamp(),
+            settings=get_settings(),
+        )
         await audit_service.log_event(
             event_type="oidc_logout_post",
             user_id=token_data.sub,
