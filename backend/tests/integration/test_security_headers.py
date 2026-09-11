@@ -181,6 +181,76 @@ class TestHeadersNotOverridden:
         assert response.headers["x-frame-options"] == "ALLOW-FROM https://trusted.example.com"
 
 
+class TestBuiltSpaHeaders:
+    """ZAP-004: the built SPA served by the backend carries security headers.
+
+    All ZAP header alerts target the Vite dev server (``:5173``), which
+    emits no headers by design. The production artifact is the pre-built
+    SPA served by the backend (``main.py`` root + SPA catch-all behind
+    ``SecurityHeadersMiddleware``) — this class replicates that wiring
+    with a real ``FileResponse`` so the file-serving path is covered too,
+    not just JSON responses.
+
+    ``main`` itself is deliberately not imported (import-time lifespan,
+    keyring and settings-singleton side effects); the wiring is covered
+    by inspection plus the ZAP re-scan definition of done.
+    """
+
+    @pytest.fixture
+    def spa_client(self, tmp_path):
+        from fastapi import FastAPI, HTTPException
+        from fastapi.responses import FileResponse
+        from starlette.testclient import TestClient
+
+        from authglow.middleware.security_headers import SecurityHeadersMiddleware
+
+        dist = tmp_path / "dist"
+        (dist / "assets").mkdir(parents=True)
+        (dist / "index.html").write_text("<html><body>spa</body></html>", encoding="utf-8")
+
+        settings = _make_prod_settings()
+        app = FastAPI()
+        app.add_middleware(SecurityHeadersMiddleware, settings=settings)
+
+        @app.get("/")
+        async def root():
+            return FileResponse(str(dist / "index.html"))
+
+        @app.get("/{path:path}")
+        async def spa_fallback(path: str):
+            # Mirrors ``main.py``: backend namespaces 404, client-side
+            # routes get the shell.
+            if path.split("/", 1)[0].lower() == "api":
+                raise HTTPException(status_code=404, detail="Not Found")
+            return FileResponse(str(dist / "index.html"))
+
+        return TestClient(app), settings
+
+    def test_spa_index_carries_security_headers(self, spa_client):
+        client, settings = spa_client
+        response = client.get("/")
+        assert response.headers["content-security-policy"] == settings.csp_header
+        assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+        assert "script-src 'self'" in response.headers["content-security-policy"]
+        assert response.headers["x-frame-options"] == "DENY"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_spa_client_side_route_carries_security_headers(self, spa_client):
+        client, _ = spa_client
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+        assert response.headers["x-frame-options"] == "DENY"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert "content-security-policy" in response.headers
+
+    def test_default_csp_header_is_non_empty(self, test_settings):
+        # ``test_settings`` carries the production code defaults (only
+        # test-only fields overridden in conftest), so this pins the
+        # effective CSP to non-empty for production-like settings.
+        assert test_settings.csp_header.strip()
+        assert "frame-ancestors 'none'" in test_settings.csp_header
+
+
 def _make_prod_settings():
     settings = _FakeSettings()
     settings.app_env = "production"

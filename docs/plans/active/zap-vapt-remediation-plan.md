@@ -33,7 +33,7 @@ so you don't re-triage from scratch.
 | Severity               | Count | Done | Remaining |
 |------------------------|-------|------|-----------|
 | HIGH                   | 2     | 2    | 0         |
-| MEDIUM                 | 3     | 0    | 3         |
+| MEDIUM                 | 3     | 1    | 2         |
 | LOW                    | 1     | 1    | 0         |
 | INFO                   | 1     | 0    | 1         |
 | Closed (FP / dev-only) | 6     | 6    | 0         |
@@ -141,22 +141,33 @@ so you don't re-triage from scratch.
 
 ## Workstream 2 — Security headers on the production SPA (ZAP-004)
 
-- [ ] **ZAP-004** — CSP / X-Frame-Options / X-Content-Type-Options / SRI
+- [x] **ZAP-004** — CSP / X-Frame-Options / X-Content-Type-Options / SRI
   - **Verdict**: dev-only for `:5173`; **must be verified** for the built SPA.
     `SecurityHeadersMiddleware` already sets CSP, X-Frame-Options,
     X-Content-Type-Options, Referrer-Policy, Permissions-Policy and (prod) HSTS on
     every non-docs path (`backend/authglow/middleware/security_headers.py:39-68`).
   - **Evidence**: `full.md` / `auth.md` — all header alerts are on `:5173` only.
   - **Tasks**:
-    - [ ] Add an integration test: with `FRONTEND_DIST_DIR` set, `GET /` returns
+    - [x] Add an integration test: with `FRONTEND_DIST_DIR` set, `GET /` returns
       `Content-Security-Policy`, `X-Frame-Options` and `X-Content-Type-Options`.
-    - [ ] Confirm `settings.csp_header` is non-empty for production and that dev
+    - [x] Confirm `settings.csp_header` is non-empty for production and that dev
       (`:5173`) bypassing the backend is documented as expected.
-    - [ ] SRI (`Sub Resource Integrity`): the only instance is the Google Fonts
+    - [x] SRI (`Sub Resource Integrity`): the only instance is the Google Fonts
       `<link>` (dynamic CSS → SRI impractical). Either self-host the fonts or
       record a documented risk-acceptance.
   - **Acceptance**: test green; a one-line note in the VAPT README / plan records
     the dev-only rationale for `:5173`.
+  - **Done (uncommitted working tree)**: `TestBuiltSpaHeaders` in
+    `tests/integration/test_security_headers.py` (3 tests: `GET /` + `/dashboard`
+    via real `FileResponse` behind the middleware with dynamic CSP assert +
+    spot-check, default `csp_header` non-empty via `test_settings`) — 20/20 green
+    in file; zero new ruff violations (7 pre-existing at HEAD unchanged);
+    dev-only + SRI risk-accept note in `docs/vapt/README.md`. No production code
+    touched. Residuals declared: the test replicates `main.py` wiring instead of
+    importing it (import side effects on the settings singleton) — true wiring
+    coverage is the ZAP re-scan; follow-up (separate item): fail-closed guard if
+    `csp_header` is ever blanked via admin runtime override (`_add_header`
+    silently skips empty values).
 
 ---
 

@@ -12,6 +12,15 @@ Results of the local ZAP scans (OWASP ZAP 2.17.0 in Docker, official
 > The Vite dev server is not the built SPA (the single-container image serves the
 > pre-built SPA from the backend). Findings located on `:5173` are dev-only unless
 > stated otherwise.
+>
+> **ZAP-004 note**: header findings (CSP, X-Frame-Options, …) on `:5173` are
+> dev-server artefacts — Vite emits no security headers by design. The production
+> SPA is served by the backend with the full header set (covered by
+> `TestBuiltSpaHeaders` in `backend/tests/integration/test_security_headers.py`).
+> SRI is a documented risk-accept for the Google Fonts stylesheet link
+> (`frontend/index.html`): vendor CSS is generated per request, so hash-based
+> integrity is inapplicable; `style-src` / `font-src` stay allow-listed to
+> `fonts.googleapis.com` / `fonts.gstatic.com`.
 
 ## Runs
 
