@@ -74,6 +74,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create .env from example
+        run: cp .env.example .env
+
       - name: Run vitest with coverage
         run: npm run test:coverage
 
@@ -106,6 +109,7 @@ jobs:
             -e BASE_URL=http://localhost:8080 \
             -e FRONTEND_BASE_URL=http://localhost:8080 \
             -e OAUTH2_FIRST_PARTY_REDIRECT_URI=http://localhost:8080/auth/callback \
+            -e ENABLE_DOCS=true \
             -e PASSKEY_RP_ID=localhost \
             -e PASSKEY_ORIGIN=http://localhost:8080 \
             -p 8080:8080 \

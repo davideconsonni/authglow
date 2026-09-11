@@ -72,6 +72,9 @@ class TestAdminSettingsEndpointStructure:
             # Internal refresher tick for admin runtime config — never
             # exposed in the admin UI (self-referential footgun).
             "admin_config_refresh_seconds",
+            # Bound at app creation from the env var, so a runtime override
+            # would be a no-op — intentionally not admin-editable.
+            "enable_docs",
         }
         unexpected = missing - acceptable_missing
         assert not unexpected, f"Fields in config.py but not in _FIELD_META: {unexpected}"
