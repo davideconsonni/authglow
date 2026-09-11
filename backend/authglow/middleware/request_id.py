@@ -47,6 +47,13 @@ _VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9_\-:.]{1,128}\Z")
 _HEADER_NAME = "x-request-id"
 _HEADER_NAME_BYTES = _HEADER_NAME.encode("latin-1")
 
+#: ASGI scope key where the correlation id is stashed for every request.
+#: The global 500 handler runs in Starlette's outermost
+#: ``ServerErrorMiddleware`` — outside this middleware — where the
+#: structlog contextvar is already unbound (see ``finally`` below) and
+#: only the shared scope dict survives (ZAP-003).
+REQUEST_ID_SCOPE_KEY = "authglow.request_id"
+
 
 def _generate_request_id() -> str:
     """Return a fresh correlation ID (UUID4 hex)."""
@@ -96,6 +103,13 @@ class RequestIDMiddleware:
         # malicious header (e.g. ``X-Request-ID: foo\nFAKE LOG
         # ENTRY {"event_type": "user_deleted"}``).
         request_id = _sanitize_inbound(inbound) or _generate_request_id()
+
+        # 2b. Stash the id on the ASGI scope as well. The global 500
+        # handler (``register_global_error_handler``) runs in Starlette's
+        # outermost ``ServerErrorMiddleware`` — outside this middleware —
+        # so by the time it runs the contextvar below is already unbound
+        # and only the shared scope dict still carries the id (ZAP-003).
+        scope[REQUEST_ID_SCOPE_KEY] = request_id
 
         # 3. Bind to structlog contextvars. ``bind_contextvars``
         # accepts kwargs and merges them into the current

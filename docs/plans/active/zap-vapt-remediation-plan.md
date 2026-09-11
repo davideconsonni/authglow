@@ -34,7 +34,7 @@ so you don't re-triage from scratch.
 |------------------------|-------|------|-----------|
 | HIGH                   | 2     | 2    | 0         |
 | MEDIUM                 | 3     | 0    | 3         |
-| LOW                    | 1     | 0    | 1         |
+| LOW                    | 1     | 1    | 0         |
 | INFO                   | 1     | 0    | 1         |
 | Closed (FP / dev-only) | 6     | 6    | 0         |
 
@@ -114,15 +114,28 @@ so you don't re-triage from scratch.
   - **Verification**: 63 passed; `mypy` clean. Pre-existing `I001`/`F401` in
     `test_audit.py` are untouched (present at HEAD).
 
-- [ ] **ZAP-003** — Generic 500 envelope leaks debug text
+- [x] **ZAP-003** — Generic 500 envelope leaks debug text
   - **Verdict**: real, minor. Same root as ZAP-002; also a systemic guarantee.
   - **Task**: verify `register_global_error_handler` (and
     `register_oauth2_error_handler`) return a stable JSON error with a
     correlation id, and that `APP_ENV=production` never includes debug detail.
-  - **Location**: `backend/authglow/api/oauth_errors.py:90`,
-    `backend/main.py` (global handler registration).
+  - **Location**: `backend/authglow/api/error_handlers.py`
+    (`register_global_error_handler`), `backend/authglow/middleware/request_id.py`
+    (`REQUEST_ID_SCOPE_KEY`), `backend/main.py` (registration). Note: the plan's
+    old pointer to `oauth_errors.py:90` covers only the OAuth2 protocol envelope
+    (already RFC 6749-shaped, untouched) — the generic 500 lives in
+    `error_handlers.py`.
   - **Acceptance**: an unexpected exception produces a generic body with a
     request id; the real cause is only in the server log/audit.
+  - **Done (uncommitted working tree)**: `unhandled_exception_handler` echoes
+    `request_id` in body + `X-Request-ID` header and passes it explicitly to the
+    audit event; `RequestIDMiddleware` stashes the id on the ASGI scope.
+    Key discovery: Starlette installs an `Exception` handler on the outermost
+    `ServerErrorMiddleware`, so by handler time the contextvar is unbound and
+    only the scope survives — without the stash, prod 500s had no header and
+    `request_id: null` in audit. Tests: `test_global_error_handler.py` (4 passed:
+    body↔header↔audit correlation, inbound echo, no-leak); `test_vapt042` +
+    `test_audit` green (87 total); `ruff`/`mypy` clean.
 
 ---
 
