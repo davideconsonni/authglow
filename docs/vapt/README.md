@@ -28,6 +28,16 @@ Results of the local ZAP scans (OWASP ZAP 2.17.0 in Docker, official
 > HTTPS before routing, `enforce_https`) and HSTS is emitted (`enforce_hsts`);
 > both defaults are pinned by `TestTlsDefaultsForBasicAuth`. Correct TLS
 > termination at the deploy edge is a prerequisite.
+>
+> **ZAP-006 note**: bearer tokens no longer travel in URLs on the consent
+> path — `POST /api/oauth2/consent/check` takes `session_token` in the
+> Form body (the legacy GET query transport returns 405). Kept as-is by
+> design: email magic-link `?token=` (must be a GET link), OIDC
+> `id_token_hint` on logout (standard params, POST alternative exists),
+> admin `?email=` filters (RBAC-gated server-to-server, PII hashed in
+> audit). Page-navigation tokens (`mfa_session_token`, MFA `session_token`)
+> stay in URLs for now — the structural fix is cookie transport on the
+> federated-flow model, tracked as follow-up.
 
 ## Runs
 

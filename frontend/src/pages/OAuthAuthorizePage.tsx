@@ -255,8 +255,9 @@ export function OAuthAuthorizePage() {
       let cancelled = false
       const loadConsentAfterMfa = async () => {
         try {
-          const data = await api.get<AuthorizeResponse & { consent_required?: boolean }>(
-            `/api/oauth2/consent/check?session_token=${encodeURIComponent(mfaSessionToken)}`,
+          const data = await api.postForm<AuthorizeResponse & { consent_required?: boolean }>(
+            '/api/oauth2/consent/check',
+            { session_token: mfaSessionToken },
           )
           if (cancelled) return
           if (data.redirect_url) {

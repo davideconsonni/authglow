@@ -52,15 +52,22 @@ async def get_authorize_info(
     }
 
 
-@router.get("/api/oauth2/consent/check")
+@router.post("/api/oauth2/consent/check")
+@limiter.limit("30/minute")
 async def check_consent_auto(
-    session_token: str,
+    request: Request,
+    session_token: str = Form(...),
     session_service: SessionService = Depends(lambda: SessionService()),
     consent_service: OAuth2ConsentService = Depends(lambda: OAuth2ConsentService()),
     user_storage: UserStorage = Depends(lambda: UserStorage()),
     client_storage: OAuth2ClientStorage = Depends(lambda: OAuth2ClientStorage()),
 ):
-    """Check if user has already consented and auto-create auth code if so."""
+    """Check if user has already consented and auto-create auth code if so.
+
+    ZAP-006: the session token travels in the POST body, never in the
+    URL — query strings leak into browser history, server access logs
+    and Referer headers. Same transport as ``process_consent`` below.
+    """
     session = await session_service.get_consent_session(session_token)
     if not session:
         raise HTTPException(status_code=400, detail="Invalid or expired session")

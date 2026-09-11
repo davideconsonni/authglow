@@ -1,12 +1,14 @@
 ---
 type: plan
-status: active
+status: done
 ids: ZAP-NNN
 ---
 
 # ZAP VAPT Remediation Plan — Local Dev Scan (2026-09-11)
 
-> **Status**: active. Findings from the OWASP ZAP scans of the local dev stack.
+> **Status**: done (all actionable items closed; FPs already closed). Changes in
+> working tree, uncommitted; authenticated re-scan pending backend restart —
+> see "Re-scan" section. Findings from the OWASP ZAP scans of the local dev stack.
 > **Source**: ZAP 2.17.0 (`zaproxy/zap-stable` Docker image), 3 runs (baseline / full / authenticated).
 > **Reports**: [`docs/vapt/`](../vapt/README.md) — `20260911-001810-baseline`, `20260911-001909-full`, `20260911-004542-auth`.
 > **Runner**: `security/zap/run-zap.ps1` (+ `zap-*.yaml`). See `security/zap/README.md`.
@@ -35,7 +37,7 @@ so you don't re-triage from scratch.
 | HIGH                   | 2     | 2    | 0         |
 | MEDIUM                 | 3     | 2    | 1         |
 | LOW                    | 1     | 1    | 0         |
-| INFO                   | 1     | 0    | 1         |
+| INFO                   | 1     | 1    | 0         |
 | Closed (FP / dev-only) | 6     | 6    | 0         |
 
 ## Triage overview
@@ -201,18 +203,31 @@ so you don't re-triage from scratch.
 
 ## Workstream 4 — Sensitive data in URLs (ZAP-006)
 
-- [ ] **ZAP-006** — review Information Disclosure — Sensitive Information in URL
+- [x] **ZAP-006** — review Information Disclosure — Sensitive Information in URL
   - **Verdict**: review. Some are OAuth-standard, some are fixable.
   - **Evidence**: `auth.md` — `/api/oauth2/consent/check?session_token=...`,
     `/?token=...`, `/oauth2/logout?id_token_hint=...`, admin list filters `?email=...`.
   - **Tasks**:
-    - [ ] `/api/oauth2/consent/check` carries `session_token` in the query —
+    - [x] `/api/oauth2/consent/check` carries `session_token` in the query —
       evaluate moving to `POST` body (avoid Referer/log leakage). Check the SPA caller.
-    - [ ] `/oauth2/logout?id_token_hint=` / `state` are OIDC RP-Initiated Logout
+    - [x] `/oauth2/logout?id_token_hint=` / `state` are OIDC RP-Initiated Logout
       parameters — keep; document as accepted.
-    - [ ] Admin list `?email=` filters are server-to-server with the email only in
+    - [x] Admin list `?email=` filters are server-to-server with the email only in
       access logs — accept; confirm PII logging policy applies.
   - **Acceptance**: decision + code change for `consent/check` if feasible.
+  - **Done (uncommitted working tree)**: `consent/check` is now POST-only
+    (`oauth_consent_handler.py`, Form body, `30/minute`, unchanged response
+    shape); the single SPA caller migrated to `api.postForm`
+    (`OAuthAuthorizePage.tsx`); legacy GET → 405. Protocol surface untouched
+    (first-party `/api` endpoint, no standard params moved). Tests: new
+    `test_consent_check_transport.py` (POST ok / GET 405 / 400 no-leak) +
+    `OAuthAuthorizePage.test.tsx` (body transport, consent UI, expired path);
+    consent-adjacent suites green (34 backend incl. authorize conformance +
+    rate-limit; 3/3 frontend); `tsc`/`eslint`/`ruff`/`mypy` clean.
+    Accepts recorded in `docs/vapt/README.md` (email `?token=`, logout hint,
+    admin `?email=`). Follow-up (separate item): cookie transport for
+    page-navigation tokens (`mfa_session_token`, MFA `session_token`) on the
+    federated-flow model.
 
 ---
 
