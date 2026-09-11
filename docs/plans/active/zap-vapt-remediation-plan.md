@@ -40,16 +40,16 @@ so you don't re-triage from scratch.
 
 ## Triage overview
 
-| ID      | Finding                                                     | ZAP            | Verdict                   | Action                                   |
-|---------|-------------------------------------------------------------|----------------|---------------------------|------------------------------------------|
-| ZAP-001 | 500 on `/api/federation/login/{provider_id}` (malformed id) | High / SQLi    | **Real bug** (not SQLi)   | Fixed in tree — commit + harden base     |
-| ZAP-002 | 500 on `/api/passkey/auth/complete` (malformed body) | High-Ind / Low | **Real bug** | ✅ Fixed — failure event + non-raising `validate_metadata` |
-| ZAP-003 | Generic 500 body leaks "Internal server error"              | Low            | **Real (minor)**          | Stable error envelope + correlation id   |
-| ZAP-004 | CSP / X-Frame-Options / XCTO / SRI missing                  | Medium         | Dev-only, but verify prod | Integration test on built SPA + docs     |
-| ZAP-005 | `WWW-Authenticate: Basic` on `/oauth2/register/*`           | Medium         | Likely risk-accept        | Confirm TLS/HSTS, document               |
-| ZAP-006 | Sensitive data in URL (`session_token`, `token`)            | Info-Med       | Review                    | Move consent check off query if feasible |
-| ZAP-900 | Path Traversal / SQLi / Format String on Vite/federation    | High           | **False positive**        | Closed                                   |
-| ZAP-901 | Timestamp / Suspicious Comments / Modern Web App            | Info           | **Dev-only / info**       | Closed                                   |
+| ID      | Finding                                                     | ZAP            | Verdict                   | Action                                                     |
+|---------|-------------------------------------------------------------|----------------|---------------------------|------------------------------------------------------------|
+| ZAP-001 | 500 on `/api/federation/login/{provider_id}` (malformed id) | High / SQLi    | **Real bug** (not SQLi)   | Fixed in tree — commit + harden base                       |
+| ZAP-002 | 500 on `/api/passkey/auth/complete` (malformed body)        | High-Ind / Low | **Real bug**              | ✅ Fixed — failure event + non-raising `validate_metadata` |
+| ZAP-003 | Generic 500 body leaks "Internal server error"              | Low            | **Real (minor)**          | Stable error envelope + correlation id                     |
+| ZAP-004 | CSP / X-Frame-Options / XCTO / SRI missing                  | Medium         | Dev-only, but verify prod | Integration test on built SPA + docs                       |
+| ZAP-005 | `WWW-Authenticate: Basic` on `/oauth2/register/*`           | Medium         | Likely risk-accept        | Confirm TLS/HSTS, document                                 |
+| ZAP-006 | Sensitive data in URL (`session_token`, `token`)            | Info-Med       | Review                    | Move consent check off query if feasible                   |
+| ZAP-900 | Path Traversal / SQLi / Format String on Vite/federation    | High           | **False positive**        | Closed                                                     |
+| ZAP-901 | Timestamp / Suspicious Comments / Modern Web App            | Info           | **Dev-only / info**       | Closed                                                     |
 
 ---
 
@@ -64,7 +64,7 @@ so you don't re-triage from scratch.
     - **Evidence**: `full.md` → SQL Injection (High/Low), attack `"`, `HTTP/1.1 500`.
   - **Location**: `backend/authglow/repositories/file/federation.py`
     (`_provider_path`, `get_by_id`, `delete`).
-  - **Fix (applied in working tree, uncommitted)**: provider ids are validated
+  - **Fix (committed — bundled into `f67f3d7`)**: provider ids are validated
     against `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` and `..` is rejected. Reads →
     `None` (→ route 404), `delete` → no-op, `create` → `ValueError` (fail closed).
     This also closes a latent path-traversal via `provider_id`.
@@ -72,12 +72,21 @@ so you don't re-triage from scratch.
     (`test_unsafe_provider_id_is_treated_as_missing`, `test_create_rejects_unsafe_id`).
   - **Verification**: temporary backend on `:8002` → `/api/federation/login/%22` = **404** (was 500).
   - **Remaining**:
-    - [ ] Commit the change.
+    - [x] Commit the change — landed in `f67f3d7` (bundled with the ZAP-002 commit).
     - [ ] Restart the running `:8001` backend so the fix is live.
-    - [ ] Defense-in-depth: audit other file repositories that interpolate a
-      user-supplied id into a filename and decide whether
-      `BaseFileRepository._read_json` should also swallow `OSError`
-      (`backend/authglow/repositories/file/base.py:207`).
+    - [x] Defense-in-depth — implemented:
+      - shared `repositories/file/_ids.py` (`is_safe_entity_id` +
+        `is_safe_base64url_id`); `federation.py` refactored to use it;
+      - `BaseFileRepository._read_json` / `_read_json_versioned` / `_delete`
+        treat a *path-shape* `OSError` (`EINVAL` / `ENAMETOOLONG` / `ENOTDIR` /
+        `ENOENT`) as "not found" (never 500); `PermissionError` and other
+        operational `OSError` still propagate;
+      - passkey `credential_id` / `challenge` (base64url) and `user_id` validated
+        at the repo boundary: reads → "not found", writes → `ValueError` (fail
+        closed).
+      - **Tests**: `tests/unit/repositories/file/test_base.py`,
+        `tests/unit/repositories/file/test_passkey.py` (+ federation regression).
+        Full suite **2775 passed**; `mypy` / `ruff` clean on changed files.
 
 - [x] **ZAP-002** — 500 on `POST /api/passkey/auth/complete` with a fuzzed body
   - **Verdict**: real bug. **Root cause** (confirmed in `backend.out.log`): the
@@ -200,13 +209,13 @@ Read this before starting a session — it saves re-discovering the setup.
 
 ## Suggested session order
 
-| Session | Scope | Outcome |
-|---|---|---|
-| A | ~~ZAP-002~~ ✅ + ZAP-003 | Failed passkey auth fixed (400, not 500); verify unexpected-error envelope (ZAP-003) |
-| A (finish) | ZAP-001 remaining | Commit + restart backend; base-repo OSError hardening decision |
-| B | ZAP-004 | Header integration test on built SPA + SRI decision |
-| C | ZAP-005 | DCR auth-method decision recorded |
-| D | ZAP-006 | `consent/check` off the query string + decisions |
+| Session    | Scope                    | Outcome                                                                              |
+|------------|--------------------------|--------------------------------------------------------------------------------------|
+| A          | ~~ZAP-002~~ ✅ + ZAP-003 | Failed passkey auth fixed (400, not 500); verify unexpected-error envelope (ZAP-003) |
+| A (finish) | ZAP-001 remaining        | Commit + restart backend; base-repo OSError hardening decision                       |
+| B          | ZAP-004                  | Header integration test on built SPA + SRI decision                                  |
+| C          | ZAP-005                  | DCR auth-method decision recorded                                                    |
+| D          | ZAP-006                  | `consent/check` off the query string + decisions                                     |
 
 ## Re-scan (definition of done)
 

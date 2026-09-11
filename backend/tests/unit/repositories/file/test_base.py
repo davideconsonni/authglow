@@ -7,7 +7,9 @@ JSON read/write (CAS), file existence, deletion, and glob. The
 entity-specific subclasses add their own tests on top.
 """
 
+import errno
 import os
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -227,6 +229,65 @@ class TestFilesystemHelpers:
         files = await repo._glob(f"{repo._storage_path}/*.json")
         assert len(files) == 2
         assert all(f.endswith(".json") for f in files)
+
+
+# ---------------------------------------------------------------------------
+# Invalid-path tolerance (VAPT / ZAP-001)
+# ---------------------------------------------------------------------------
+
+
+# Windows-illegal filename characters plus an embedded NUL byte. On POSIX
+# these are legal names that simply do not exist, so every assertion below
+# holds on both platforms.
+_INVALID_PATH_IDS = ['"', "*", "<", ">", "|", "?", "a\x00b"]
+
+
+class TestInvalidPathTolerance:
+    """A caller-supplied id that is not a legal filename must be treated
+    as "not found" (never an unhandled 500), while genuine operational
+    I/O errors still propagate.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_id", _INVALID_PATH_IDS)
+    async def test_read_json_treats_invalid_path_as_missing(self, repo, bad_id):
+        assert await repo._read_json(repo._path(f"{bad_id}.json")) is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_id", _INVALID_PATH_IDS)
+    async def test_read_json_versioned_treats_invalid_path_as_missing(self, repo, bad_id):
+        assert await repo._read_json_versioned(repo._path(f"{bad_id}.json")) == (None, 0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_id", _INVALID_PATH_IDS)
+    async def test_delete_treats_invalid_path_as_missing(self, repo, bad_id):
+        assert await repo._delete(repo._path(f"{bad_id}.json")) is False
+
+    @pytest.mark.asyncio
+    async def test_read_json_reraises_permission_error(self, repo):
+        repo._afs.read_json = AsyncMock(side_effect=PermissionError(errno.EACCES, "denied"))
+        with pytest.raises(PermissionError):
+            await repo._read_json(repo._path("x.json"))
+
+    @pytest.mark.asyncio
+    async def test_read_json_versioned_reraises_permission_error(self, repo):
+        repo._afs.read_json_versioned = AsyncMock(
+            side_effect=PermissionError(errno.EACCES, "denied")
+        )
+        with pytest.raises(PermissionError):
+            await repo._read_json_versioned(repo._path("x.json"))
+
+    @pytest.mark.asyncio
+    async def test_read_json_reraises_operational_oserror(self, repo):
+        repo._afs.read_json = AsyncMock(side_effect=OSError(errno.EIO, "io error"))
+        with pytest.raises(OSError):
+            await repo._read_json(repo._path("x.json"))
+
+    @pytest.mark.asyncio
+    async def test_delete_reraises_operational_oserror(self, repo):
+        repo._afs.rm = AsyncMock(side_effect=OSError(errno.EIO, "io error"))
+        with pytest.raises(OSError):
+            await repo._delete(repo._path("x.json"))
 
 
 # ---------------------------------------------------------------------------

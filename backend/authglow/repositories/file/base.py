@@ -30,6 +30,8 @@ expected to be used by subclasses that need CAS protection
 (refresh-token rotation, authorization-code redemption, etc.).
 """
 
+import errno
+import logging
 from typing import Any, List, Optional, Tuple
 
 import fsspec
@@ -37,6 +39,34 @@ import fsspec
 from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import named_lock
 from authglow.core.config import Settings, get_settings
+
+logger = logging.getLogger("authglow.repositories")
+
+# ``OSError`` values that mean "the path itself cannot name a file in this
+# repository" (illegal filename characters on Windows, over-long names, a
+# non-directory component, or a missing file). They are treated as
+# "not found" so a caller-supplied id can never turn a read / delete into
+# an unhandled 500. Operational errors (``PermissionError``, ``EIO``, ...)
+# are deliberately **not** listed and still propagate.
+_PATH_SHAPE_ERRNOS = frozenset(
+    {
+        errno.EINVAL,
+        errno.ENAMETOOLONG,
+        errno.ENOTDIR,
+        errno.ENOENT,
+    }
+)
+
+
+def _is_path_shape_error(exc: OSError) -> bool:
+    """Return ``True`` when *exc* is caused by a malformed path.
+
+    Such an error is input-shape, not operational: the caller supplied an
+    id that can never name a file in the repository, so read / delete
+    callers should treat it as "not found".
+    """
+    return exc.errno in _PATH_SHAPE_ERRNOS
+
 
 
 class BaseFileRepository:
@@ -209,15 +239,22 @@ class BaseFileRepository:
 
         Subclasses should translate ``None`` into domain semantics
         (``get_by_id`` → ``None`` to caller, ``_write_json`` → ignore
-        the read). We swallow ``FileNotFoundError`` and
-        ``json.JSONDecodeError`` because the on-disk state is
-        inherently racy in a file-based system.
+        the read). We swallow ``FileNotFoundError``, JSON decoding
+        errors (a ``ValueError``) and path-shape ``OSError`` because the
+        on-disk state is inherently racy in a file-based system and a
+        caller-supplied id may not even be a legal filename. Operational
+        I/O errors (``PermissionError``, ...) still propagate.
         """
         try:
             return await self._afs.read_json(path)
         except FileNotFoundError:
             return None
         except (ValueError, TypeError):
+            return None
+        except OSError as exc:
+            if not _is_path_shape_error(exc):
+                raise
+            logger.debug("read_json_invalid_path", extra={"errno": exc.errno})
             return None
 
     async def _write_json(
@@ -280,12 +317,21 @@ class BaseFileRepository:
     async def _read_json_versioned(self, path: str) -> Tuple[Optional[Any], int]:
         """Read a JSON file and return ``(data, version)``.
 
-        Returns ``(None, 0)`` if the file is missing.
+        Returns ``(None, 0)`` if the file is missing, corrupt, or the
+        path cannot name a legal file (same tolerance as
+        ``_read_json``). Operational I/O errors still propagate.
         """
         try:
             data, version = await self._afs.read_json_versioned(path)
             return data, version
         except FileNotFoundError:
+            return None, 0
+        except (ValueError, TypeError):
+            return None, 0
+        except OSError as exc:
+            if not _is_path_shape_error(exc):
+                raise
+            logger.debug("read_json_versioned_invalid_path", extra={"errno": exc.errno})
             return None, 0
 
     async def _write_json_versioned(
@@ -332,11 +378,24 @@ class BaseFileRepository:
         return await self._afs.exists(path)
 
     async def _delete(self, path: str) -> bool:
-        """Delete *path*. Returns ``True`` on success, ``False`` if missing."""
+        """Delete *path*. Returns ``True`` on success, ``False`` if missing.
+
+        A path-shape error (malformed filename, traversal through a
+        non-directory) is treated as "nothing to delete" (``False``);
+        operational I/O errors still propagate.
+        """
         try:
             await self._afs.rm(path)
             return True
         except FileNotFoundError:
+            return False
+        except (ValueError, TypeError):
+            logger.debug("delete_invalid_path", extra={"reason": "invalid_path"})
+            return False
+        except OSError as exc:
+            if not _is_path_shape_error(exc):
+                raise
+            logger.debug("delete_invalid_path", extra={"errno": exc.errno})
             return False
 
     async def _glob(self, pattern: str) -> List[str]:

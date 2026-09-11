@@ -27,6 +27,7 @@ from typing import List, Optional
 
 from authglow.core.datetime import utcnow
 from authglow.models.passkey import Passkey, PasskeyChallenge
+from authglow.repositories.file._ids import is_safe_base64url_id, is_safe_entity_id
 from authglow.repositories.file.base import BaseFileRepository
 from authglow.repositories.protocols import (
     PasskeyRepository,
@@ -49,7 +50,15 @@ class FilePasskeyRepository(BaseFileRepository, PasskeyRepository):
 
     def _path_for(self, user_id: str, credential_id: str) -> str:
         """Return the on-disk path for the ``(user_id, credential_id)``
-        passkey document."""
+        passkey document.
+
+        Raises :class:`ValueError` for an unsafe id so write paths fail
+        closed; read paths validate first and return "not found".
+        """
+        if not is_safe_entity_id(user_id) or not is_safe_base64url_id(credential_id):
+            raise ValueError(
+                f"Unsafe passkey id: user_id={user_id!r} credential_id={credential_id!r}"
+            )
         return self._path(f"{user_id}_{credential_id}.json")
 
     async def save(self, passkey: Passkey) -> None:
@@ -59,7 +68,13 @@ class FilePasskeyRepository(BaseFileRepository, PasskeyRepository):
         await self._write_json(path, passkey.model_dump(mode="json"))
 
     async def get(self, user_id: str, credential_id: str) -> Optional[Passkey]:
-        """Return the passkey, or ``None``."""
+        """Return the passkey, or ``None``.
+
+        An unsafe id can never name a document in this repository, so it
+        is treated as "not found" rather than reaching the filesystem.
+        """
+        if not is_safe_entity_id(user_id) or not is_safe_base64url_id(credential_id):
+            return None
         path = self._path_for(user_id, credential_id)
         data = await self._read_json(path)
         if data is None:
@@ -92,12 +107,16 @@ class FilePasskeyRepository(BaseFileRepository, PasskeyRepository):
 
     async def delete(self, user_id: str, credential_id: str) -> bool:
         """Remove the passkey. Returns ``True`` if it existed."""
+        if not is_safe_entity_id(user_id) or not is_safe_base64url_id(credential_id):
+            return False
         path = self._path_for(user_id, credential_id)
         return await self._delete(path)
 
     async def list_for_user(self, user_id: str) -> List[Passkey]:
         """Return every passkey for a user, sorted by
         ``created_at`` desc."""
+        if not is_safe_entity_id(user_id):
+            return []
         pattern = f"{self._storage_path}/{user_id}_*.json"
         files = await self._glob(pattern)
         passkeys: List[Passkey] = []
@@ -126,7 +145,13 @@ class FileWebAuthnChallengeRepository(BaseFileRepository, WebAuthnChallengeRepos
     _subdir = "challenges"
 
     def _path_for(self, challenge: str) -> str:
-        """Return the on-disk path for *challenge*'s document."""
+        """Return the on-disk path for *challenge*'s document.
+
+        Raises :class:`ValueError` for an unsafe id so write paths fail
+        closed; read paths validate first and return "not found".
+        """
+        if not is_safe_base64url_id(challenge):
+            raise ValueError(f"Unsafe challenge: {challenge!r}")
         return self._path(f"{challenge}.json")
 
     async def save(self, challenge: PasskeyChallenge) -> None:
@@ -136,6 +161,8 @@ class FileWebAuthnChallengeRepository(BaseFileRepository, WebAuthnChallengeRepos
 
     async def get(self, challenge: str) -> Optional[PasskeyChallenge]:
         """Return the challenge, or ``None`` (auto-deletes expired)."""
+        if not is_safe_base64url_id(challenge):
+            return None
         path = self._path_for(challenge)
         data = await self._read_json(path)
         if data is None:
@@ -151,5 +178,7 @@ class FileWebAuthnChallengeRepository(BaseFileRepository, WebAuthnChallengeRepos
 
     async def delete(self, challenge: str) -> None:
         """Remove the challenge. No-op if absent."""
+        if not is_safe_base64url_id(challenge):
+            return
         path = self._path_for(challenge)
         await self._delete(path)

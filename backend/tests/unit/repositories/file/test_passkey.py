@@ -227,6 +227,74 @@ class TestFileWebAuthnChallengeRepository:
 
 
 # ---------------------------------------------------------------------------
+# Unsafe-id hardening (VAPT / ZAP-001)
+# ---------------------------------------------------------------------------
+
+
+# Not base64url and/or not filename-safe. ``save``/``update`` must fail
+# closed with ``ValueError``; ``get``/``delete`` must behave as "not found"
+# (never reach the filesystem with an illegal name).
+_UNSAFE_IDS = ['"', "a/b", "../escape", "a\\b", "a b", ""]
+
+
+class TestPasskeyUnsafeIdHardening:
+    def _make_repo(self, test_settings) -> FilePasskeyRepository:
+        return FilePasskeyRepository(settings=test_settings)
+
+    async def test_get_and_delete_reject_unsafe_credential_id(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for bad in _UNSAFE_IDS:
+            assert await repo.get("user-1", bad) is None
+            assert await repo.delete("user-1", bad) is False
+
+    async def test_get_and_delete_reject_unsafe_user_id(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for bad in _UNSAFE_IDS:
+            assert await repo.get(bad, "cred-1") is None
+            assert await repo.delete(bad, "cred-1") is False
+
+    async def test_save_rejects_unsafe_credential_id(self, test_settings):
+        repo = self._make_repo(test_settings)
+        with pytest.raises(ValueError):
+            await repo.save(_make_passkey(user_id="user-1", credential_id='"'))
+
+    async def test_list_for_user_rejects_unsafe_user_id(self, test_settings):
+        repo = self._make_repo(test_settings)
+        assert await repo.list_for_user("../escape") == []
+
+    async def test_accepts_base64url_id_leading_dash_or_underscore(self, test_settings):
+        """WebAuthn ids are base64url and may start with ``-`` / ``_`` —
+        the allowlist must not reject a legitimate credential.
+        """
+        repo = self._make_repo(test_settings)
+        for cid in ("-abc_123", "_zyx-987"):
+            await repo.save(_make_passkey(user_id="user-1", credential_id=cid))
+            assert await repo.get("user-1", cid) is not None
+
+
+class TestChallengeUnsafeIdHardening:
+    def _make_repo(self, test_settings) -> FileWebAuthnChallengeRepository:
+        return FileWebAuthnChallengeRepository(settings=test_settings)
+
+    async def test_get_and_delete_reject_unsafe_challenge(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for bad in _UNSAFE_IDS:
+            assert await repo.get(bad) is None
+            await repo.delete(bad)
+
+    async def test_save_rejects_unsafe_challenge(self, test_settings):
+        repo = self._make_repo(test_settings)
+        with pytest.raises(ValueError):
+            await repo.save(_make_challenge(challenge='"', user_id="user-1"))
+
+    async def test_accepts_base64url_challenge_leading_dash_or_underscore(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for ch in ("-challenge_1", "_challenge-2"):
+            await repo.save(_make_challenge(challenge=ch, user_id="user-1"))
+            assert await repo.get(ch) is not None
+
+
+# ---------------------------------------------------------------------------
 # Patched-settings construction smoke test
 # ---------------------------------------------------------------------------
 
