@@ -201,7 +201,7 @@ class Settings(BaseSettings):
     app_name: str = "AuthGlow"
     app_env: str = "development"
     debug: bool = False
-    enable_docs: bool = True
+    enable_docs: bool = False
     secret_key: str = Field(
         ...,
         min_length=32,
@@ -622,27 +622,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _apply_enable_docs_production_default(cls, data: Any) -> Any:
-        """VAPT-070: default the docs endpoints to off in production.
+    def _warn_enable_docs_in_production(cls, data: Any) -> Any:
+        """VAPT-070: docs are off by default (opt-in via ``ENABLE_DOCS=true``).
 
         ``/docs``, ``/redoc`` and ``/openapi.json`` expose the full API
         surface — including destructive admin endpoints — without
-        authentication, so an enabled-by-default ``ENABLE_DOCS`` means
-        an operator who forgets the variable ships them open to the
-        world. When ``app_env`` is ``production`` and the operator did
-        not set ``ENABLE_DOCS``, the default flips to ``False``. An
-        explicit opt-in is still honored (e.g. an internal IdP behind a
-        VPN) but surfaced as a warning so the deviation from the safe
-        default is visible in the boot logs.
+        authentication. Enabling them in production is honored but
+        surfaced as a warning so the deviation from the safe default is
+        visible in the boot logs.
         """
         if not isinstance(data, dict):
             return data
         app_env = str(data.get("app_env") or "development").lower()
-        if app_env != "production":
-            return data
-        if data.get("enable_docs") is None:
-            data["enable_docs"] = False
-        elif data.get("enable_docs"):
+        if app_env == "production" and data.get("enable_docs"):
             warnings.warn(
                 "ENABLE_DOCS is explicitly enabled while app_env is "
                 "'production'. /docs, /redoc and /openapi.json expose the "

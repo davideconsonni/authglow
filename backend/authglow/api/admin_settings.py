@@ -65,7 +65,10 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
     "app_name": {"category": "general", "label": "Application name", "restart_required": False},
     "app_env": {"category": "general", "label": "Environment", "restart_required": True},
     "debug": {"category": "general", "label": "Debug mode", "restart_required": True},
-    "enable_docs": {"category": "general", "label": "Enable API docs", "restart_required": True},
+    # ``enable_docs`` is intentionally NOT admin-editable: the docs routes
+    # (``/docs``, ``/redoc``, ``/openapi.json``) are bound at app creation
+    # from the ``ENABLE_DOCS`` environment variable, so a runtime override
+    # would be a no-op. Configure it in ``.env`` only.
     "company_name": {"category": "general", "label": "Company name", "restart_required": False},
     "base_url": {"category": "general", "label": "Base server URL", "restart_required": True},
     "frontend_base_url": {

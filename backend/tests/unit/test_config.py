@@ -392,9 +392,10 @@ class TestCorsWildcardCredentialsGuardrail:
 
 
 class TestEnableDocsProductionDefault:
-    """VAPT-070: /docs, /redoc and /openapi.json must default to off in
-    production. An explicit ENABLE_DOCS=true opt-in is honored but warns,
-    so the deviation from the safe default shows up in the boot logs."""
+    """VAPT-070: /docs, /redoc and /openapi.json are off by default. The
+    operator opts in with ENABLE_DOCS=true; in production an explicit opt-in
+    is honored but warns, so the deviation from the safe default shows up in
+    the boot logs."""
 
     def test_production_default_disables_docs(self, tmp_path):
         settings = _make_settings_with(tmp_path, secret_key="k" * 64, app_env="production")
@@ -426,7 +427,7 @@ class TestEnableDocsProductionDefault:
         assert settings.enable_docs is False
         assert not any("ENABLE_DOCS" in str(x.message) for x in caught)
 
-    def test_development_default_keeps_docs_enabled(self, tmp_path):
+    def test_development_default_disables_docs(self, tmp_path):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             settings = _make_settings_with(
@@ -434,7 +435,7 @@ class TestEnableDocsProductionDefault:
                 secret_key="k" * 64,
                 app_env="development",
             )
-        assert settings.enable_docs is True
+        assert settings.enable_docs is False
         assert not any("ENABLE_DOCS" in str(x.message) for x in caught)
 
 
