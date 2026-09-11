@@ -21,6 +21,13 @@ Results of the local ZAP scans (OWASP ZAP 2.17.0 in Docker, official
 > (`frontend/index.html`): vendor CSS is generated per request, so hash-based
 > integrity is inapplicable; `style-src` / `font-src` stay allow-listed to
 > `fonts.googleapis.com` / `fonts.gstatic.com`.
+>
+> **ZAP-005 note**: the `WWW-Authenticate: Basic` challenge on the DCR
+> management endpoints is a legitimate RFC 7591/7592 method, exploitable only
+> over cleartext HTTP. In production HTTP never reaches the handler (301 to
+> HTTPS before routing, `enforce_https`) and HSTS is emitted (`enforce_hsts`);
+> both defaults are pinned by `TestTlsDefaultsForBasicAuth`. Correct TLS
+> termination at the deploy edge is a prerequisite.
 
 ## Runs
 

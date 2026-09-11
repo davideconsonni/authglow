@@ -33,7 +33,7 @@ so you don't re-triage from scratch.
 | Severity               | Count | Done | Remaining |
 |------------------------|-------|------|-----------|
 | HIGH                   | 2     | 2    | 0         |
-| MEDIUM                 | 3     | 1    | 2         |
+| MEDIUM                 | 3     | 2    | 1         |
 | LOW                    | 1     | 1    | 0         |
 | INFO                   | 1     | 0    | 1         |
 | Closed (FP / dev-only) | 6     | 6    | 0         |
@@ -173,18 +173,29 @@ so you don't re-triage from scratch.
 
 ## Workstream 3 — OAuth2 DCR auth method (ZAP-005)
 
-- [ ] **ZAP-005** — `WWW-Authenticate: Basic realm="OAuth2"` on `/oauth2/register/{client_id}`
+- [x] **ZAP-005** — `WWW-Authenticate: Basic realm="OAuth2"` on `/oauth2/register/{client_id}`
   - **Verdict**: likely risk-accept. `client_secret_basic` is a valid DCR client
     authentication method (RFC 7591/7592); the alert is about Basic over **cleartext HTTP**.
   - **Evidence**: `full.md` / `auth.md` — DELETE + GET `/oauth2/register/client_id`,
     header `Basic realm="OAuth2", Bearer realm="OAuth2"`.
   - **Location**: `backend/authglow/api/oidc.py:873-925`, `:962`.
   - **Tasks**:
-    - [ ] Confirm production runs behind TLS with HSTS (`enforce_hsts` /
+    - [x] Confirm production runs behind TLS with HSTS (`enforce_hsts` /
       `APP_ENV=production`), so Basic is never sent in cleartext.
-    - [ ] Decide: accept (documented) or drop the Basic challenge for DCR in
+    - [x] Decide: accept (documented) or drop the Basic challenge for DCR in
       favour of `private_key_jwt`.
   - **Acceptance**: decision recorded with rationale.
+  - **Decision (uncommitted working tree): RISK-ACCEPT, no code change.**
+    Production 301-redirects HTTP→HTTPS before routing (`HttpsEnforcementMiddleware`,
+    `enforce_https` default true) so credentials are never processed in cleartext,
+    and emits HSTS (`enforce_hsts` default true) — both defaults pinned by the new
+    `TestTlsDefaultsForBasicAuth` in `tests/integration/test_security_headers.py`
+    (22 passed). Dropping Basic on DCR alone was rejected:
+    incoherent (token endpoint + client defaults stay Basic-first) and breaking
+    (forces asymmetric crypto on every DCR client) with no real-vector gain on TLS;
+    the 401 already advertises Bearer-JWT alongside Basic for capable clients.
+    Note in `docs/vapt/README.md`. Follow-up (separate ops item): HSTS `preload`
+    directive + preload-list submission for the first-visit downgrade gap.
 
 ---
 

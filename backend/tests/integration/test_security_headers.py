@@ -251,6 +251,22 @@ class TestBuiltSpaHeaders:
         assert "frame-ancestors 'none'" in test_settings.csp_header
 
 
+class TestTlsDefaultsForBasicAuth:
+    """ZAP-005: the Basic-auth risk-accept rests on TLS enforcement defaults.
+
+    The DCR ``WWW-Authenticate: Basic`` challenge is only safe because
+    production redirects HTTP→HTTPS before routing (``enforce_https``) and
+    emits HSTS (``enforce_hsts``). Pin both defaults: flipping either one
+    silently voids the risk-accept.
+    """
+
+    def test_https_enforcement_on_by_default(self, test_settings):
+        assert test_settings.enforce_https is True
+
+    def test_hsts_enforcement_on_by_default(self, test_settings):
+        assert test_settings.enforce_hsts is True
+
+
 def _make_prod_settings():
     settings = _FakeSettings()
     settings.app_env = "production"
