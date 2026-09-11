@@ -59,6 +59,8 @@ colorama==0.4.6
     # via
     #   pytest
     #   qrcode
+coverage==7.16.0
+    # via pytest-cov
 cryptography==50.0.1
     # via
     #   -r requirements.in
@@ -189,7 +191,9 @@ packaging==26.3
 pillow==12.3.0
     # via qrcode
 pluggy==1.6.0
-    # via pytest
+    # via
+    #   pytest
+    #   pytest-cov
 propcache==0.5.2
     # via
     #   aiohttp
@@ -239,8 +243,11 @@ pytest==9.1.1
     # via
     #   -r requirements.in
     #   pytest-asyncio
+    #   pytest-cov
     #   pytest-xdist
 pytest-asyncio==1.4.0
+    # via -r requirements.in
+pytest-cov==7.1.0
     # via -r requirements.in
 pytest-xdist==3.8.0
     # via -r requirements.in

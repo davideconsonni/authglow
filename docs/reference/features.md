@@ -1011,7 +1011,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 
 ### Framework
 - **FastAPI** with `uvicorn`
-- OpenAPI docs (`/docs`, `/redoc`) disableable via env `ENABLE_DOCS=false`
+- OpenAPI docs (`/docs`, `/redoc`, `/openapi.json`) are **off by default**; enable via env `ENABLE_DOCS=true`
 - Health check: `GET /health`
 
 ### Configuration

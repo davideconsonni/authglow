@@ -45,3 +45,4 @@ redis
 pytest
 pytest-asyncio
 pytest-xdist
+pytest-cov

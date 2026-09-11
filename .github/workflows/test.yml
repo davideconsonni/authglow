@@ -27,7 +27,16 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run pytest
-        run: pytest -q --tb=line -n auto
+        run: pytest -q --tb=line -n auto --cov=authglow --cov-report=xml --cov-report=term
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          name: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Run ruff lint
         continue-on-error: true
@@ -46,6 +55,36 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt
+
+  frontend-tests:
+    name: Frontend (Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run vitest with coverage
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   container-smoke:
     name: Container smoke test (single-container image)

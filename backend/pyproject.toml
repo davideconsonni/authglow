@@ -70,3 +70,11 @@ known-first-party = ["authglow"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.coverage.run]
+branch = true
+source = ["authglow"]
+
+[tool.coverage.report]
+show_missing = true
+

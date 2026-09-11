@@ -34,5 +34,17 @@ export default defineConfig({
     // Some phase tests dynamic-import the whole App graph; under full-suite
     // parallel load the default 5s is flaky on slower machines.
     testTimeout: 15000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/**/*.d.ts',
+        'src/main.tsx',
+      ],
+    },
   },
 })

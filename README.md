@@ -6,6 +6,7 @@
   <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg">
 <a href="https://github.com/davideconsonni/authglow/actions/workflows/test.yml"><img alt="Test Suite" src="https://github.com/davideconsonni/authglow/actions/workflows/test.yml/badge.svg"></a>
+<a href="https://codecov.io/gh/davideconsonni/authglow"><img alt="Coverage" src="https://codecov.io/gh/davideconsonni/authglow/branch/main/graph/badge.svg"></a>
   <img alt="AI Generated" src="https://img.shields.io/badge/AI%20Generated-100%25-blueviolet.svg">
   <br>
 </p>
