@@ -75,7 +75,7 @@ so you don't re-triage from scratch.
   - **Verification**: temporary backend on `:8002` → `/api/federation/login/%22` = **404** (was 500).
   - **Remaining**:
     - [x] Commit the change — landed in `f67f3d7` (bundled with the ZAP-002 commit).
-    - [ ] Restart the running `:8001` backend so the fix is live.
+    - [x] Restart the running `:8001` backend so the fix is live — done 2026-09-11 (restarted; live check: `/api/federation/login/%22` → 404, `GET /api/oauth2/consent/check` → 405).
     - [x] Defense-in-depth — implemented:
       - shared `repositories/file/_ids.py` (`is_safe_entity_id` +
         `is_safe_base64url_id`); `federation.py` refactored to use it;
