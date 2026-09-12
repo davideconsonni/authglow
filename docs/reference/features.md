@@ -539,6 +539,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 | `/oauth2/jwks/status` | GET | — | Keyring status (active / verifying / revoked keys) |
 | `/oauth2/register` | POST | 7591 | Dynamic Client Registration |
 | `/oauth2/register/{client_id}` | GET, PUT, DELETE | 7592 | DCR management (read / update / delete a registered client) |
+| `/oauth2/par` | POST | 9126 | Pushed Authorization Requests (OA-501) |
 
 ---
 
@@ -1127,6 +1128,7 @@ Any OIDC-compliant provider works out of the box:
 | OIDC Core 1.0                               | Spec 1.0 | Compliant               |
 | OIDC Discovery 1.0                          | Spec 1.0 | Compliant            |
 | OIDC Dynamic Client Registration            | RFC 7591 | Compliant, except `software_statement` (rejected: no trust anchor, OA-205) |
+| Pushed Authorization Requests               | RFC 9126 | Compliant (`require_par` opt-in, OA-501) |
 | OIDC DCR Management                          | RFC 7592 | Compliant            |
 | PKCE                                        | RFC 7636 | Mandatory, S256 only    |
 | Token Revocation                            | RFC 7009 | Compliant               |

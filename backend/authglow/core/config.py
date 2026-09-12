@@ -303,6 +303,9 @@ class Settings(BaseSettings):
     device_code_expire_seconds: int = 600  # 10 minutes
     device_poll_interval_seconds: int = 5
 
+    # Pushed Authorization Requests (RFC 9126, OA-501)
+    par_request_uri_ttl_seconds: int = 90
+
     # CORS Security Settings
     cors_allowed_origins: str = (
         "http://localhost:3000,http://localhost:5173,http://localhost:6060,http://localhost:8080"

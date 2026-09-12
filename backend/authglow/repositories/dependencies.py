@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         PasswordResetRepository,
         PermissionRepository,
         PhoneVerificationRepository,
+        PushedAuthorizationRequestRepository,
         RateLimitConfigRepository,
         RefreshTokenRepository,
         RoleRepository,
@@ -213,6 +214,10 @@ _FILE_BACKEND: _BackendMap = {
         "authglow.repositories.file.device_authorization",
         "FileDeviceAuthorizationRepository",
     ),
+    "pushed_authorization_request": _file_factory(
+        "authglow.repositories.file.par",
+        "FilePushedAuthorizationRequestRepository",
+    ),
     "claim_policy": _file_factory(
         "authglow.repositories.file.claim_policy", "FileClientClaimPolicyRepository"
     ),
@@ -267,6 +272,7 @@ __all__ = [
     "get_federation_provider_repository",
     "get_keystore_repository",
     "get_device_authorization_repository",
+    "get_pushed_authorization_request_repository",
     "get_claim_policy_repository",
     "get_api_key_claim_policy_repository",
     "get_webhook_repository",
@@ -486,6 +492,13 @@ def get_device_authorization_repository(
 ) -> "DeviceAuthorizationRepository":
     """FastAPI factory for the device-authorization repository."""
     return _resolve("device_authorization", settings)
+
+
+def get_pushed_authorization_request_repository(
+    settings: "Settings | None" = None,
+) -> "PushedAuthorizationRequestRepository":
+    """FastAPI factory for the PAR repository (RFC 9126, OA-501)."""
+    return _resolve("pushed_authorization_request", settings)
 
 
 def get_claim_policy_repository(

@@ -353,7 +353,7 @@ Contesto: oggi AuthGlow è "BCP-oriented" (PKCE-only, no implicit, client JWT au
 sender-constraining di default. Sono feature nuove, non fix — farle DOPO che le Fasi 1–3 hanno
 stabilizzato il wire-format.
 
-- [ ] **[OA-501]** 5.1 PAR (RFC 9126): `POST /oauth2/par` che emette `request_uri` + il token endpoint / authorize
+- [x] **[OA-501]** 5.1 PAR (RFC 9126): `POST /oauth2/par` che emette `request_uri` + il token endpoint / authorize
   lo richiede per i client FAPI; discovery con `pushed_authorization_request_endpoint`.
   Handoff: definire TTL `request_uri` (consigliato 60–90s), single-use, binding client; riusare il
   repository pattern (`repositories/file/` + `protocols.py` + conformance test come per gli altri repo).
@@ -427,4 +427,4 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-401 | Fase 4 / 4.1 Profilo OIDC Basic esterno | 911b9d3 | Nuovo `scripts/oidc_basic_rp_check.py` (RP black-box: solo superficie pubblica, 35 check, CSRF da browser, report UTF-8); report `oidc-basic-rp-report.md`: **35/35 PASS**, zero MUST falliti → niente nuovi item. Backend demo 8001; ruff pulito. |
 | 2026-09-12 | OA-402 | Fase 4 / 4.2 MUST rimasti | e2481b7 | Solo test: `nonce` echo/assente (decisione: resta facoltativo nel code flow), `auth_time` dopo login vero + claim presente/assente, `prompt=none` senza consenso → 302 `consent_required`. Retrattazione: 3 righe sync `last_login` tolte (i token escono uguali: il server rilegge da disco; resta micro-residuo ora vuota nei log per mai-loggati). Test ballerino stabilizzato (stesso database per tutto il test). Area 93 passed; ruff/mypy puliti. |
 | 2026-09-12 | OA-403 | Fase 4 / 4.3 Snapshot discovery/JWKS/userinfo | 43a2aaa | Solo test + micro-refactor (filtro kid in `_publishable_kids`): foto esatta 32 campi discovery, revocate escluse dalla JWKS, userinfo senza `aud` → 401. Già coperti citati (ETag/304, rotazione, openid, DPoP). Area 48 passed + matrice 35/35; ruff/mypy puliti. |
-| 2026-09-12 | OA-404 | Fase 4 / 4.4 Done fase | OA-404 (questo commit) | Verdetto: backend `475+2318+34=2827 passed, 0 failed, 0 xfail` (3 parti) + frontend 543 passed; probe 35/35; zero MUST falliti, 2 deroghe scritte (nonce facoltativo, micro-ora nei log). Fase 4 chiusa. |
+| 2026-09-12 | OA-404 | Fase 4 / 4.4 Done fase | daf59c5 | Verdetto: backend `475+2318+34=2827 passed, 0 failed, 0 xfail` (3 parti) + frontend 543 passed; probe 35/35; zero MUST falliti, 2 deroghe scritte (nonce facoltativo, micro-ora nei log). Fase 4 chiusa. |

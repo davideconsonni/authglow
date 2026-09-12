@@ -102,6 +102,8 @@ class OpenIDConfiguration(BaseModel):
     revocation_endpoint: Optional[str] = None
     introspection_endpoint: Optional[str] = None
     end_session_endpoint: Optional[str] = None
+    # RFC 9126 (OA-501): where clients push authorization requests.
+    pushed_authorization_request_endpoint: Optional[str] = None
 
     # Optional provider metadata URIs
     service_documentation: Optional[str] = None

@@ -152,6 +152,8 @@ async def openid_configuration(request: Request, response: Response):
         revocation_endpoint=f"{base_url}/oauth2/revoke",
         introspection_endpoint=f"{base_url}/oauth2/introspect",
         end_session_endpoint=f"{base_url}/oauth2/logout",
+        # RFC 9126 (OA-501).
+        pushed_authorization_request_endpoint=f"{base_url}/oauth2/par",
         service_documentation=settings.oidc_service_documentation or None,
         op_policy_uri=settings.oidc_op_policy_uri or None,
         op_tos_uri=settings.oidc_op_tos_uri or None,
@@ -761,6 +763,9 @@ class ClientRegistrationRequest(BaseModel):
     response_types: Optional[List[str]] = None
     token_endpoint_auth_method: Optional[str] = "client_secret_basic"
     software_statement: Optional[str] = None
+    # OA-501: opt-in PAR requirement (RFC 9126 / FAPI). Tightening-only,
+    # so safe to accept via DCR.
+    require_par: Optional[bool] = None
     # T.2: public JWK for ``private_key_jwt`` clients. The server
     # validates shape (kty, n/e or crv/x) — full cryptographic
     # verification happens at the first ``client_assertion`` request.
@@ -923,6 +928,7 @@ async def register_oauth_client(
         homepage_uri=payload.client_uri,
         token_endpoint_auth_method=payload.token_endpoint_auth_method or "client_secret_basic",
         public_jwk=payload.public_jwk,
+        require_par=payload.require_par or False,
         client_secret_jwt_key=(
             encrypt_client_jwt_key_value(plaintext_jwt_key)
             if plaintext_jwt_key is not None
@@ -943,7 +949,8 @@ async def register_oauth_client(
                 "client_id": client.client_id,
                 "client_name": client.client_name,
                 "grant_types": allowed_grant_types,
-                "token_endpoint_auth_method": client.token_endpoint_auth_method,
+        "token_endpoint_auth_method": client.token_endpoint_auth_method,
+        "require_par": client.require_par,
             },
             ip_address=request.client.host if request.client else None,
         )

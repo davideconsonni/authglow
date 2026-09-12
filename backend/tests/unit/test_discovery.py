@@ -159,6 +159,7 @@ class TestDiscoveryMetadataHonesty:
 
         Adding or removing a field (even an honest one) must update
         this list consciously — silent discovery drift breaks RPs.
+        OA-501 added ``pushed_authorization_request_endpoint`` (RFC 9126).
         """
         body = self._get(test_settings)
         assert set(body.keys()) == {
@@ -183,6 +184,7 @@ class TestDiscoveryMetadataHonesty:
             "revocation_endpoint",
             "introspection_endpoint",
             "end_session_endpoint",
+            "pushed_authorization_request_endpoint",
             "service_documentation",
             "op_policy_uri",
             "op_tos_uri",

@@ -43,6 +43,7 @@ from authglow.models.federation import ExternalIdpConfig
 from authglow.models.mfa import BackupCodeAttempt, BackupCodes, TrustedDevice
 from authglow.models.oauth_client import OAuth2Client
 from authglow.models.oauth_consent import OAuth2Consent
+from authglow.models.par import PushedAuthorizationRequest
 from authglow.models.passkey import Passkey, PasskeyChallenge
 from authglow.models.password_reset import PasswordResetToken
 from authglow.models.phone_verification import PhoneVerificationToken
@@ -355,6 +356,27 @@ class DeviceAuthorizationRepository(Protocol):
 
     async def delete(self, device_code: str) -> None:
         """Delete a single device authorization. No-op if absent."""
+
+
+@runtime_checkable
+class PushedAuthorizationRequestRepository(Protocol):
+    """Persistence for Pushed Authorization Requests (RFC 9126, OA-501).
+
+    Requests are short-lived (TTL) and single-use; lookups are by the
+    opaque ``request_id`` (the tail of the ``request_uri`` URN).
+    """
+
+    async def create(self, request: PushedAuthorizationRequest) -> None:
+        """Persist a new pushed request."""
+
+    async def get_by_request_id(self, request_id: str) -> Optional[PushedAuthorizationRequest]:
+        """Return the request, or ``None`` if absent / expired / already used."""
+
+    async def mark_used(self, request_id: str) -> bool:
+        """Atomically mark the request as used. ``True`` on first use."""
+
+    async def delete(self, request_id: str) -> None:
+        """Delete the request regardless of state. No-op if absent."""
 
 
 @runtime_checkable

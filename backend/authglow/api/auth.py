@@ -63,6 +63,7 @@ from authglow.services.oidc_claims import (
     ClaimsParameterError,
     parse_claims_parameter,
 )
+from authglow.services.par import PushedAuthorizationService
 from authglow.services.password import (
     PasswordValidator,
     hash_password_async,
@@ -503,6 +504,11 @@ def get_session_service():
     return SessionService()
 
 
+def get_par_service():
+    """Get PAR service instance (RFC 9126, OA-501)."""
+    return PushedAuthorizationService()
+
+
 def get_audit_service():
     """Get audit service instance."""
     return AuditService()
@@ -681,11 +687,15 @@ async def authorize_post(
     # UserInfo endpoint applies the ``userinfo`` sub-dict to
     # filter the UserInfo response.
     claims: Optional[str] = Form(None),
+    # OA-501 (RFC 9126): pushed request identifier — replaces the
+    # individual parameters below when present.
+    request_uri: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
     session_service: SessionService = Depends(get_session_service),
     audit_service: AuditService = Depends(get_audit_service),
+    par_service: PushedAuthorizationService = Depends(get_par_service),
 ):
     """Process login and create authorization code (or MFA challenge).
 
@@ -699,6 +709,48 @@ async def authorize_post(
     if not client:
         raise HTTPException(status_code=400, detail="Invalid client_id")
 
+    if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
+    # OA-501 (RFC 9126): a pushed ``request_uri`` replaces the
+    # individual front-channel parameters with the stored ones. It
+    # resolves here — before the PKCE gates — so the gates evaluate
+    # the pushed values, not the (absent) form ones. The stored
+    # ``redirect_uri`` was validated at push time against the same
+    # client; the presented ``client_id`` must own the request
+    # (binding), and consumption is single-use.
+    if request_uri is not None:
+        par = await par_service.consume_request(client_id, request_uri)
+        if par is None:
+            return _oauth_error_redirect(
+                redirect_uri,
+                error="invalid_request",
+                description=(
+                    "Unknown, expired, already-used, or foreign "
+                    "request_uri (RFC 9126). Push a fresh request."
+                ),
+                state=_validate_state(state),
+            )
+        response_type = par.response_type
+        scope = par.scope
+        state = par.state
+        code_challenge = par.code_challenge
+        code_challenge_method = par.code_challenge_method
+        nonce = par.nonce
+        prompt = par.prompt
+        max_age = par.max_age
+        claims = par.claims
+    elif getattr(client, "require_par", False):
+        return _oauth_error_redirect(
+            redirect_uri,
+            error="invalid_request",
+            description=(
+                "This client requires a pushed request_uri "
+                "(RFC 9126, FAPI). Push the request first."
+            ),
+            state=_validate_state(state),
+        )
+
     if settings.enforce_pkce and not code_challenge:
         raise HTTPException(
             status_code=400,
@@ -709,9 +761,6 @@ async def authorize_post(
             status_code=400,
             detail="PKCE is required for this client, but code_challenge was not provided.",
         )
-
-    if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
-        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
     # OA-201: ``state`` is RECOMMENDED, not required (RFC 6749
     # §4.1.2.1). A valid state is echoed back verbatim everywhere

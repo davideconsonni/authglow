@@ -198,6 +198,11 @@ class OAuth2Client(BaseModel):
     # binding it to the client's public key. Default ``False`` for
     # backward compatibility.
     dpop_bound: bool = False
+    # OA-501: opt-in PAR-required clients (RFC 9126 / FAPI 2.0). When
+    # ``True``, authorize refuses requests without a ``request_uri``
+    # pushed to ``POST /oauth2/par``. Default ``False`` — tightening
+    # only, so safe to set via DCR as well.
+    require_par: bool = False
 
     @field_validator("grant_types")
     @classmethod
@@ -355,6 +360,9 @@ class OAuth2ClientUpdate(BaseModel):
     # creation. Toggling off does NOT invalidate already-issued
     # tokens; they remain valid until expiry.
     dpop_bound: Optional[bool] = None
+    # OA-501: opt-in PAR requirement (FAPI). Same flip semantics as
+    # ``dpop_bound``.
+    require_par: Optional[bool] = None
     # Optional explicit ``None`` to clear the public JWK. Pydantic does
     # not distinguish ``None`` from "field not sent" for ``Optional``;
     # admins can clear the JWK via the admin endpoint with
@@ -456,6 +464,8 @@ class OAuth2ClientResponse(BaseModel):
     public_jwk: Optional[Dict[str, Any]] = None
     # T.3: DPoP binding flag.
     dpop_bound: bool = False
+    # OA-501: PAR requirement flag (FAPI).
+    require_par: bool = False
 
 
 def _client_response_from_model(client: "OAuth2Client") -> "OAuth2ClientResponse":
@@ -492,6 +502,7 @@ def _client_response_from_model(client: "OAuth2Client") -> "OAuth2ClientResponse
         has_client_secret_jwt_key=bool(client.client_secret_jwt_key),
         public_jwk=client.public_jwk,
         dpop_bound=client.dpop_bound,
+        require_par=client.require_par,
     )
 
 

@@ -65,6 +65,9 @@ from authglow.repositories.file.oauth_client import (
 from authglow.repositories.file.oauth_consent import (
     FileOAuth2ConsentRepository,
 )
+from authglow.repositories.file.par import (
+    FilePushedAuthorizationRequestRepository,
+)
 from authglow.repositories.file.password_reset import (
     FilePasswordResetRepository,
 )
@@ -112,6 +115,7 @@ from authglow.repositories.protocols import (
     PasswordResetRepository,
     PermissionRepository,
     PhoneVerificationRepository,
+    PushedAuthorizationRequestRepository,
     RateLimitConfigRepository,
     RefreshTokenRepository,
     RoleRepository,
@@ -160,6 +164,11 @@ _IMPL_TABLE = [
         FileAuthorizationCodeRepository,
         AuthorizationCodeRepository,
         "AuthorizationCode",
+    ),
+    (
+        FilePushedAuthorizationRequestRepository,
+        PushedAuthorizationRequestRepository,
+        "PushedAuthorizationRequest",
     ),
     (
         FileClientClaimPolicyRepository,

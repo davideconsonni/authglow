@@ -29,6 +29,7 @@ from authglow.api.oauth_client import router as oauth_client_router
 from authglow.api.oauth_consent_handler import router as consent_router
 from authglow.api.oauth_errors import register_oauth2_error_handler
 from authglow.api.oidc import router as oidc_router
+from authglow.api.par import router as par_router
 from authglow.api.passkey import router as passkey_router
 from authglow.api.password_reset import router as password_reset_router
 from authglow.api.phone_verification import router as phone_verification_router
@@ -248,6 +249,7 @@ app.include_router(rbac_router, tags=["RBAC"])
 app.include_router(user_profile_router, tags=["User Profile"])
 app.include_router(webhooks_router, tags=["Webhooks"])
 app.include_router(oidc_router, tags=["OpenID Connect"])
+app.include_router(par_router, tags=["Pushed Authorization"])
 app.include_router(oauth2_advanced_router, tags=["OAuth2 Advanced"])
 app.include_router(federation_router, tags=["Federation"])
 app.include_router(device_auth_router, tags=["Device Authorization"])
