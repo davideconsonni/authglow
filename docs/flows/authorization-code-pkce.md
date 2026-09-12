@@ -137,6 +137,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 | Refresh token | Only with scope `offline_access` (OIDC Core §11, OA-206): without it the token response is access-token-only (`id_token` still included for `openid`), no error. Ask `offline_access` up front if you need long-lived sessions. |
 | ACR | Values `0/1/2/3` (password, MFA, passkey) exposed in the ID token. |
 | Error codes (OA-302) | `invalid_grant`/400: bad/expired code, wrong verifier, redirect mismatch, code issued to another client. `invalid_client`/401: confidential client auth failed only. |
+| Token hashes | `at_hash` always in the ID token; `c_hash` bound to the redeemed code (OA-303, OIDC Core §3.3.2.11). |
 
 ---
 

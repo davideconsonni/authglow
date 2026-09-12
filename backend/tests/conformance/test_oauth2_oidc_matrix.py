@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-303": "c_hash bound to the authorization code",
     "OA-305": "client_auth_method in audit on every grant",
 }
 
@@ -1040,7 +1039,6 @@ class TestOIDC:
         assert body.get("id_token"), body
         assert body.get("refresh_token") is None, body
 
-    @pytest.mark.xfail(strict=True, reason="OA-303: c_hash bound to the authorization code")
     def test_oidc_c_hash_bound(
         self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
     ):

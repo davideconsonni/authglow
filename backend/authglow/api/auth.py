@@ -1556,6 +1556,9 @@ async def token_endpoint(
                 )
 
             # Create ID token
+            # OA-303: bind it to the redeemed code via ``c_hash``
+            # (OIDC Core §3.3.2.11, optional in the code flow — the
+            # plaintext never persists, only its hash lands in claims).
             id_token = jwt_service.create_id_token(
                 user_id=user.id,
                 client_id=auth_code.client_id,
@@ -1566,6 +1569,7 @@ async def token_endpoint(
                 acr=auth_code.acr,
                 amr=auth_code.amr,
                 access_token=access_token_response.access_token,
+                authorization_code=code,
                 extra_claims=id_extra_claims,
             )
 
