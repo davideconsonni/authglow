@@ -835,18 +835,19 @@ async def register_oauth_client(
                     detail=f"{field_name}: {exc}",
                 )
 
-    # P.3: software_statement must be a valid JWT if provided.
+    # P.3 (OA-205): this server has no trust anchor for DCR software
+    # statements, so none can be verified — and an unverified statement
+    # must never pass as trust. Reject explicitly (RFC 7591 §3.2.2
+    # ``unapproved_software_statement``) instead of format-checking it
+    # into a fake trust signal. Omit the field to register.
     if payload.software_statement:
-        try:
-            jwt.decode(
-                payload.software_statement,
-                options={"verify_signature": False},
-            )
-        except jwt.PyJWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"software_statement is not a valid JWT: {exc}",
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="software_statement: unapproved_software_statement — "
+            "this server has no trust anchor configured for DCR software "
+            "statements (OA-205), so none can be verified; omit the field "
+            "to register.",
+        )
 
     allowed_grant_types = (
         payload.grant_types

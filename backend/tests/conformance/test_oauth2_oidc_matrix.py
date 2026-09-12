@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-205": "software_statement trust anchor",
     "OA-301": "standard Token response for first-party",
     "OA-302": "conforming error codes",
     "OA-303": "c_hash bound to the authorization code",
@@ -1052,9 +1051,8 @@ class TestOIDC:
 
 
 class TestRFC7591DCR:
-    @pytest.mark.xfail(strict=True, reason="OA-205: software_statement trust anchor")
     def test_rfc7591_software_statement(self, matrix_app):
-        """A self-signed `software_statement` is rejected; absent one registers fine."""
+        """OA-205: a self-signed `software_statement` is rejected; absent one registers fine."""
         import jwt as pyjwt
 
         junk = pyjwt.encode(

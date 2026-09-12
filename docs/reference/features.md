@@ -1126,7 +1126,7 @@ Any OIDC-compliant provider works out of the box:
 | OAuth 2.0 Authorization Server Metadata      | RFC 8414 | Compliant               |
 | OIDC Core 1.0                               | Spec 1.0 | Compliant               |
 | OIDC Discovery 1.0                          | Spec 1.0 | Compliant            |
-| OIDC Dynamic Client Registration            | RFC 7591 | Compliant            |
+| OIDC Dynamic Client Registration            | RFC 7591 | Compliant, except `software_statement` (rejected: no trust anchor, OA-205) |
 | OIDC DCR Management                          | RFC 7592 | Compliant            |
 | PKCE                                        | RFC 7636 | Mandatory, S256 only    |
 | Token Revocation                            | RFC 7009 | Compliant               |
