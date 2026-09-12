@@ -2,30 +2,30 @@
   "cookies": [
     {
       "name": "access_token",
-      "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsyMDI2MDkwOTAwMjEzNTczYTMiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwMDEiLCJqdGkiOiJjMjZjZTI1Mi1jNWI1LTQ0ZTUtYjMzMy1mOGQ0NjBiYjJmZmQiLCJzdWIiOiI0NjMyNDY3My01ZDhiLTQ1MmEtOTg1ZS1mYzcwZDhjNTFmOWYiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCByZWFkIHdyaXRlIG9mZmxpbmVfYWNjZXNzIiwiZXhwIjoxNzg4OTU5OTQ5LCJpYXQiOjE3ODg5NTgxNDksInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJhdWQiOiJkZWZhdWx0LWNsaWVudC1pZCIsImF6cCI6ImRlZmF1bHQtY2xpZW50LWlkIiwiaHR0cHM6Ly9hdXRoZ2xvdy5leGFtcGxlLmNvbS9jbGFpbXMvcm9sZXMiOlsiQXV0aGdsb3cgQWRtaW5pc3RyYXRvciIsImRldmVsb3BlciIsInVzZXIiXSwiaHR0cHM6Ly9hdXRoZ2xvdy5leGFtcGxlLmNvbS9jbGFpbXMvcGVybWlzc2lvbnMiOlsiYWRtaW4ucmVhZCIsImFwaV9rZXlzLmRlbGV0ZSIsImFwaV9rZXlzLnJlYWQiLCJhcGlfa2V5cy53cml0ZSIsImF1ZGl0LnJlYWQiLCJjbGllbnRzLm1hbmFnZSIsImtleXMubWFuYWdlIiwib2F1dGhfY2xpZW50cy5yZWFkIiwib2F1dGhfY2xpZW50cy53cml0ZSIsInJvbGVzLm1hbmFnZSIsInJvbGVzLnJlYWQiLCJyb2xlcy53cml0ZSIsInNlc3Npb25zLm1hbmFnZSIsInN5c3RlbS5tYW5hZ2UiLCJ1c2Vycy5kZWxldGUiLCJ1c2Vycy5tYW5hZ2UiLCJ1c2Vycy5yZWFkIiwidXNlcnMud3JpdGUiXX0.YabArqmiyevon6hqzhaXBnZsV_u7OifE-yxlDlXDdgYHUkno5r-b6MGiFDDnhkSZak-zr7Ovhl6otBeO1qnIi3_HRbTDwwU_KZOkmiIEfbDG6SvpWaM6y8oweUcyzEBxV-5Zjs0A0VPxhRl59odLY8044QA6mOAZYDKLeKPaoaqzbX0ofpEtgmdMHB7JBD2Smc-z8e1msP7v7_S8b1qH1c9i9JE_rZXZtU8vlNQd9_HcNrgQ9y6PULnq2Ktm8IB9o3UEPsZCMiHE1-Hg9qYgrSmh7smvJ600jlBLFKXzIOEtjSmKKucO9ukzK4z3IO4VD3_ORnlB39FU8rUrhYtgDA",
+      "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsyMDI2MDkxMDIzNTY0OGY0YmUiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwMDEiLCJqdGkiOiI5NmFiMDkxNy0yNmE1LTQ4ZTEtYTNlNS1iMmQ2YTM1MDgxZGYiLCJzdWIiOiIzNjlhMWRlMy1iZmQxLTQ1MzItYjNmYS0yMTY4MjU4ZDU0ZGEiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCByZWFkIHdyaXRlIG9mZmxpbmVfYWNjZXNzIiwiZXhwIjoxNzg5MjE4NjQwLCJpYXQiOjE3ODkyMTY4NDAsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJhdWQiOiJkZWZhdWx0LWNsaWVudC1pZCIsImF6cCI6ImRlZmF1bHQtY2xpZW50LWlkIiwiaHR0cHM6Ly9hdXRoZ2xvdy5leGFtcGxlLmNvbS9jbGFpbXMvcm9sZXMiOlsiQXV0aGdsb3cgQWRtaW5pc3RyYXRvciJdLCJodHRwczovL2F1dGhnbG93LmV4YW1wbGUuY29tL2NsYWltcy9wZXJtaXNzaW9ucyI6WyJhZG1pbi5yZWFkIiwiY2xpZW50cy5tYW5hZ2UiLCJrZXlzLm1hbmFnZSIsInJvbGVzLm1hbmFnZSIsInJvbGVzLnJlYWQiLCJzZXNzaW9ucy5tYW5hZ2UiLCJzeXN0ZW0ubWFuYWdlIiwidXNlcnMubWFuYWdlIl19.QVggREVFl2gM6i3ljN1jX5Yg2ekXYLon6QkBZeJyIvbybOE9sgauG46oL0xfJuIWtDCaXAAigZwnBzxzYZI0lefgwGN1us7Gd_Msu-n_ldjq8RZNMfuOsBYIdy4HAN3nQnjAKZmEX-AdJUy-ffmxRZ_AgpNiBPVKEf7ZE04sKqcPIE3kkPDZuWTZD26dOywcIg-3nRnp68tOrRKe_wWIJhR4vlfQC7zf4it8YDRCVh1zrz3R2-S9EQUm5HFsulPTGrEcn2OiojKHN9qtkUb46NLdIYz4GvKzgHdTFARXVDpiG-2RfYN42ifzfQDfJ0gUzawwrfqZ_am2NqqYQGFLwA",
       "domain": "localhost",
       "path": "/api",
-      "expires": 1788959949.767396,
+      "expires": 1789218640.784766,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "refresh_token",
-      "value": "2d4TIEdR3XTpi2d77twPRqSqGvFd0gfmdUiA2rvKIr8",
+      "value": "JBD0kDPPgL2MizU_cHpSYtJWGMR4vr5QdKvSrZyQpqA",
       "domain": "localhost",
       "path": "/api",
-      "expires": 1789562949.767498,
+      "expires": 1789821640.784852,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "csrf_session_id",
-      "value": "gSGSstJ1BdpIfyfBQwIbD3wOt7gwfevIM92sni7_VZI",
+      "value": "9XT5hRAiwtcOX4rKPy_eixggWNl6KcJKK1Uy5p7J9go",
       "domain": "localhost",
       "path": "/",
-      "expires": 1788959949.406267,
+      "expires": 1789218640.464756,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -37,7 +37,7 @@
       "localStorage": [
         {
           "name": "auth-storage",
-          "value": "{\"state\":{\"user\":{\"id\":\"46324673-5d8b-452a-985e-fc70d8c51f9f\",\"email\":\"admin@example.com\",\"is_active\":true,\"created_at\":\"2026-09-09T00:21:38.178454Z\",\"first_name\":\"Demo\",\"last_name\":\"Admin\",\"phone\":null,\"avatar_url\":null,\"scopes\":[\"openid\",\"profile\",\"email\",\"read\",\"write\",\"offline_access\"],\"roles\":[\"developer\",\"Authglow Administrator\",\"user\"],\"permissions\":[\"admin.read\",\"api_keys.delete\",\"api_keys.read\",\"api_keys.write\",\"audit.read\",\"clients.manage\",\"keys.manage\",\"oauth_clients.read\",\"oauth_clients.write\",\"roles.manage\",\"roles.read\",\"roles.write\",\"sessions.manage\",\"system.manage\",\"users.delete\",\"users.manage\",\"users.read\",\"users.write\"],\"is_admin\":true,\"mfa_enabled\":false,\"mfa_verified\":false,\"email_verified\":true,\"is_federated\":false,\"is_bootstrap\":true},\"isAuthenticated\":true},\"version\":0}"
+          "value": "{\"state\":{\"user\":{\"id\":\"369a1de3-bfd1-4532-b3fa-2168258d54da\",\"email\":\"admin@example.com\",\"is_active\":true,\"created_at\":\"2026-09-10T23:56:50.358954Z\",\"first_name\":\"Demo\",\"last_name\":\"Admin\",\"phone\":null,\"avatar_url\":null,\"scopes\":[\"openid\",\"profile\",\"email\",\"read\",\"write\",\"offline_access\"],\"roles\":[\"Authglow Administrator\"],\"permissions\":[\"admin.read\",\"clients.manage\",\"keys.manage\",\"roles.manage\",\"roles.read\",\"sessions.manage\",\"system.manage\",\"users.manage\"],\"is_admin\":true,\"mfa_enabled\":false,\"mfa_verified\":false,\"email_verified\":true,\"phone_verified\":false,\"is_federated\":false,\"is_bootstrap\":true},\"isAuthenticated\":true},\"version\":0}"
         }
       ]
     }
