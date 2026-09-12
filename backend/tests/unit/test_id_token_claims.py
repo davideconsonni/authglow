@@ -122,6 +122,54 @@ class TestCreateIdTokenAcrAmr:
 
 
 # ---------------------------------------------------------------------------
+# create_id_token — auth_time propagation (OA-402)
+# ---------------------------------------------------------------------------
+
+
+class TestCreateIdTokenAuthTime:
+    def test_id_token_includes_auth_time_when_provided(self, test_settings):
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+        from authglow.services.jwt import JWTService
+
+        auth_time = utcnow() - timedelta(minutes=5)
+        jwt_svc = asyncio.run(JWTService.new())
+        token = jwt_svc.create_id_token(
+            user_id="user-1",
+            client_id="client-abc",
+            scopes=["openid"],
+            user_claims={},
+            auth_time=auth_time,
+        )
+
+        import jwt
+
+        payload = jwt.decode(
+            token, options={"verify_signature": False, "verify_aud": False, "verify_exp": False}
+        )
+        assert payload.get("auth_time") == int(auth_time.replace(tzinfo=timezone.utc).timestamp())
+
+    def test_id_token_omits_auth_time_when_none(self, test_settings):
+        from authglow.services.jwt import JWTService
+
+        jwt_svc = asyncio.run(JWTService.new())
+        token = jwt_svc.create_id_token(
+            user_id="user-1",
+            client_id="client-abc",
+            scopes=["openid"],
+            user_claims={},
+        )
+
+        import jwt
+
+        payload = jwt.decode(
+            token, options={"verify_signature": False, "verify_aud": False, "verify_exp": False}
+        )
+        assert "auth_time" not in payload
+
+
+# ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
 

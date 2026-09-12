@@ -203,7 +203,7 @@ def _cookie_headers(test_settings, token, dpop_proof=None) -> dict:
 
 
 def _mint_code(
-    oauth2_service, *, client_id, user_id, redirect_uri, scope, challenge=None
+    oauth2_service, *, client_id, user_id, redirect_uri, scope, challenge=None, nonce=None
 ) -> object:
     """Create a real authorization code via the service (skips login/consent)."""
     verifier, computed = _pkce_pair()
@@ -216,6 +216,7 @@ def _mint_code(
             scope=scope,
             code_challenge=challenge,
             code_challenge_method="S256",
+            nonce=nonce,
         )
     )
     return code, verifier
@@ -933,6 +934,170 @@ class TestOIDC:
         assert _sid(client_id, t1) == _sid(client_id, t1)
         assert _sid(client_id, t2) != _sid(client_id, t1)
         assert _sid("other-client", t1) != _sid(client_id, t1)
+
+    def test_oidc_nonce_echoed(self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client):
+        """OA-402: a requested nonce is echoed verbatim in the ID token."""
+        import jwt as pyjwt
+
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        nonce = secrets.token_urlsafe(32)
+        code, verifier = _mint_code(
+            oauth2_service,
+            client_id=bundle["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="openid read",
+            nonce=nonce,
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": verifier,
+            },
+        )
+        assert res.status_code == 200, res.text
+        payload = pyjwt.decode(res.json()["id_token"], options={"verify_signature": False})
+        assert payload.get("nonce") == nonce
+
+    def test_oidc_nonce_absent_ok(self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client):
+        """OA-402: no nonce → flow completes, ID token carries no nonce claim.
+
+        `nonce` is REQUIRED only for implicit/hybrid (OIDC Core §3.1.2.1);
+        in the code flow it stays optional — documented decision, not a gap.
+        """
+        import jwt as pyjwt
+
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        code, verifier = _mint_code(
+            oauth2_service,
+            client_id=bundle["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="openid read",
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": verifier,
+            },
+        )
+        assert res.status_code == 200, res.text
+        payload = pyjwt.decode(res.json()["id_token"], options={"verify_signature": False})
+        assert "nonce" not in payload
+
+    def test_oidc_auth_time_after_password_login(
+        self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
+    ):
+        """OA-402: fresh password login (+max_age) → ID token carries `auth_time`.
+
+        `update_last_login` must be visible to the in-request mint, not
+        just storage — otherwise a just-authenticated user gets no
+        `auth_time` (REQUIRED with `max_age`, OIDC Core §2).
+        """
+        import time
+
+        import jwt as pyjwt
+
+        bundle = conf_confidential_basic_client
+        user, email = _make_user(test_settings, storage, ["openid", "read", "offline_access"])
+        # Pre-covering consent (the consent router is not mounted in
+        # matrix_app): the authorize call then mints a code directly.
+        # The patch covers the whole flow so creation and lookup use
+        # the same per-test store (never the prod one).
+        from contextlib import ExitStack
+
+        from authglow.services.oauth_consent import OAuth2ConsentService
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch("authglow.services.oauth_consent.get_settings", return_value=test_settings)
+            )
+            asyncio.run(
+                OAuth2ConsentService().create_consent(
+                    user_id=user.id,
+                    client_id=bundle["client"].client_id,
+                    scopes=["openid", "read", "offline_access"],
+                    expires_at=None,
+                )
+            )
+            verifier, challenge = _pkce_pair()
+            state = secrets.token_urlsafe(32)
+            res = matrix_app.post(
+                "/api/oauth2/authorize",
+                data={
+                    "client_id": bundle["client"].client_id,
+                    "redirect_uri": "https://example.com/cb",
+                    "scope": "openid read offline_access",
+                    "state": state,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                    "max_age": 3600,
+                    "email": email,
+                    "password": PASSWORD,
+                },
+            )
+            assert res.status_code == 200, res.text
+            params = parse_qs(urlparse(res.json()["redirect_url"]).query)
+            assert params.get("state") == [state], params
+            tok = matrix_app.post(
+                "/oauth2/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": params["code"][0],
+                    "redirect_uri": "https://example.com/cb",
+                    "client_id": bundle["client"].client_id,
+                    "client_secret": bundle["secret"],
+                    "code_verifier": verifier,
+                },
+            )
+        assert tok.status_code == 200, tok.text
+        payload = pyjwt.decode(tok.json()["id_token"], options={"verify_signature": False})
+        assert "auth_time" in payload, payload
+        assert abs(payload["auth_time"] - int(time.time())) < 120, payload
+
+    def test_prompt_none_consent_required_redirect(
+        self, matrix_app, test_settings, storage, jwt_service, conf_confidential_basic_client
+    ):
+        """OA-402: prompt=none + session but no consent → 302 `consent_required`.
+
+        Never a screen, never bare JSON — OIDC Core §3.1.2.1 via redirect.
+        """
+        bundle = conf_confidential_basic_client
+        user, email = _make_user(test_settings, storage, ["openid", "read"])
+        token = jwt_service.create_access_token(
+            user.id, email, ["openid", "read"], audience=bundle["client"].client_id
+        )
+        _verifier, challenge = _pkce_pair()
+        state = secrets.token_urlsafe(32)
+        res = matrix_app.post(
+            "/api/oauth2/authorize",
+            data={
+                "client_id": bundle["client"].client_id,
+                "redirect_uri": "https://example.com/cb",
+                "scope": "openid read",
+                "state": state,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "prompt": "none",
+            },
+            headers={"Cookie": f"{test_settings.auth_cookie_access_name}={token}"},
+        )
+        assert res.status_code == 302, res.text
+        query = parse_qs(urlparse(res.headers["location"]).query)
+        assert query.get("error") == ["consent_required"], query
+        assert query.get("state") == [state], query
 
     def test_oidc_logout_notifies_session_clients_only(
         self, matrix_app, test_settings, storage, jwt_service
