@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-203": "explicit invalid_scope, no silent downgrade",
     "OA-204": "stable sid per session",
     "OA-205": "software_statement trust anchor",
     "OA-301": "standard Token response for first-party",
@@ -434,9 +433,8 @@ class TestRFC6749AuthorizationCode:
         assert "FAKE" not in location
         assert "state" not in parse_qs(urlparse(location).query)
 
-    @pytest.mark.xfail(strict=True, reason="OA-203: explicit invalid_scope, no silent downgrade")
     def test_rfc6749_scope_explicit(self, matrix_app, test_settings, storage, oauth2_service):
-        """A granted-but-not-user scope → 400 `invalid_scope`, never a reduced token."""
+        """OA-203: a granted-but-not-user scope → 400 `invalid_scope`, never a reduced token."""
         bundle = _make_client_with_scopes(test_settings, ["read", "write"])
         user, _email = _make_user(test_settings, storage, ["read"])
         code, verifier = _mint_code(

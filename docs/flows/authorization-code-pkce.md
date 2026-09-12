@@ -129,6 +129,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 | PKCE | **Stricter than the standard**. MANDATORY for all clients (not just public), `S256` only. RFC 7636 + Security BCP require PKCE for **public** clients; here it is required **also for confidential** ones. |
 | Redirect URI | Exact match; dynamic registration. |
 | State | **Conformant**: RECOMMENDED, echoed verbatim when valid (16–512 chars, safe charset), omitted when absent; weak values → `invalid_request` redirect without echo. |
+| Scope | **Conformant** (OA-203, RFC 6749 §5.2): scope beyond user grant → `400 invalid_scope`, never a silently reduced token. Client-level unknown scopes still filtered per `oauth2_reject_unknown_scopes` (known residual). |
 | Consent flow | **Custom UX**: login, MFA and consent all on the **same page** (`/oauth2/authorize`, no inter-phase redirect). |
 | Consent memory | "remember" consent → `consent/check` auto-creates the code without re-prompting. |
 | Response type | `code` only. **Implicit flow rejected** (at the client model level). |

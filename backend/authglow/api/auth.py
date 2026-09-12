@@ -1335,13 +1335,23 @@ async def token_endpoint(
         except ValueError:
             raise OAuth2Error(INVALID_SCOPE, "Invalid scope", status_code=400)
 
-        # Final check: ensure the user has the scopes that were approved and are valid for the client
-        # OIDC standard scopes (openid, profile, email, phone, address,
-        # offline_access) are always allowed — ``offline_access`` must
-        # survive this filter so the §11 refresh-token gate downstream
+        # Final check: the approved scopes must not exceed what the user
+        # holds. OIDC standard scopes (openid, profile, email, phone,
+        # address, offline_access) are always allowed — ``offline_access``
+        # must survive this check so the §11 refresh-token gate downstream
         # can see it (it mirrors ``process_scopes``' OIDC standard set).
+        # OA-203 (RFC 6749 §5.2): anything beyond that is an explicit
+        # ``invalid_scope`` error — never a silently reduced token.
         oidc_standard_scopes = {"openid", "profile", "email", "phone", "address", "offline_access"}
-        scopes = [s for s in processed_scopes if s in user.scopes or s in oidc_standard_scopes]
+        granted_scopes = set(user.scopes) | oidc_standard_scopes
+        excess_scopes = [s for s in processed_scopes if s not in granted_scopes]
+        if excess_scopes:
+            raise OAuth2Error(
+                INVALID_SCOPE,
+                "Scope exceeds what was granted: " + ", ".join(sorted(set(excess_scopes))),
+                status_code=400,
+            )
+        scopes = list(processed_scopes)
 
         # Generate JWT access token. The claim policy for this
         # client (or the default first-party policy if the
