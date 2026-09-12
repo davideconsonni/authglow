@@ -429,6 +429,59 @@ async def _revoke_session_tokens(
     await RefreshTokenService().revoke_user_tokens(user_id=sub, client_id=client_scope)
 
 
+async def _logout_session_targets(
+    *,
+    sub: str,
+    hint_aud: str,
+    hint_sid: str,
+    jwt_service,
+    oauth2_service,
+) -> list[tuple[str, str]]:
+    """OA-204: ``(frontchannel_logout_uri, sid)`` pairs for session clients only.
+
+    The hint client comes first with its own true ``sid``; then every
+    other client holding an ACTIVE refresh token for the user, each
+    with its OWN pairwise ``sid`` recomputed from the user's
+    ``last_login`` — never the hint's ``sid`` spread to others.
+
+    Must run BEFORE :func:`_revoke_session_tokens` (revocation empties
+    the active-token list). Any lookup failure degrades to hint-only,
+    never back to fan-out-to-everyone.
+    """
+    from authglow.services.refresh_token import RefreshTokenService
+    from authglow.services.user import UserService
+
+    targets: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    async def _push(client_id: str, sid: str) -> None:
+        if client_id in seen:
+            return
+        seen.add(client_id)
+        client = await oauth2_service.client_storage.get_client(client_id)
+        if client is None or not client.is_active:
+            return
+        if not client.frontchannel_logout_uri:
+            return
+        targets.append((client.frontchannel_logout_uri, sid))
+
+    await _push(hint_aud, hint_sid)
+
+    try:
+        user = await UserService().get_user(sub)
+        tokens, _total = await RefreshTokenService().list_all_tokens(
+            active_only=True, user_id=sub, limit=200
+        )
+    except Exception:
+        return targets
+    auth_time = user.last_login if user is not None else None
+    for rt in tokens:
+        if rt.client_id in seen:
+            continue
+        await _push(rt.client_id, jwt_service.session_sid(sub, rt.client_id, auth_time))
+    return targets
+
+
 @router.get("/oauth2/logout")
 @limiter.limit("60/minute")
 async def logout_get(
@@ -518,6 +571,17 @@ async def logout_get(
             },
         )
 
+        # OA-204: resolve the front-channel targets BEFORE revoking —
+        # revocation empties the active-token list the targets are
+        # derived from. Each target carries its OWN pairwise sid.
+        targets = await _logout_session_targets(
+            sub=token_data.sub,
+            hint_aud=token_data.aud,
+            hint_sid=token_data.sid or "",
+            jwt_service=jwt_service,
+            oauth2_service=oauth2_service,
+        )
+
         # OA-102: the logout terminates the session — revoke before
         # clearing cookies / notifying front-channel clients.
         await _revoke_session_tokens(
@@ -533,11 +597,7 @@ async def logout_get(
         _clear_auth_cookies(response, get_settings())
 
         # --- Front-Channel Logout (OIDC Front-Channel Logout 1.0) ---
-        sid = token_data.sid or ""
-        all_clients = await oauth2_service.client_storage.list_clients(limit=200, active_only=True)
-        frontchannel_clients = [c for c in all_clients if c.frontchannel_logout_uri]
-
-        if frontchannel_clients:
+        if targets:
             from fastapi.responses import HTMLResponse
 
             issuer = get_settings().issuer
@@ -546,11 +606,10 @@ async def logout_get(
             # values that are exact-match validated at registration but
             # must never be able to break out of their context here.
             iframes = "\n".join(
-                f'<iframe src="{_html_escape(c.frontchannel_logout_uri, quote=True)}'
+                f'<iframe src="{_html_escape(uri, quote=True)}'
                 f'?{urlencode({"iss": issuer, "sid": sid})}" '
                 f'style="display:none"></iframe>'
-                for c in frontchannel_clients
-                if c.frontchannel_logout_uri is not None
+                for uri, sid in targets
             )
             redirect_url = post_logout_redirect_uri
             if state:

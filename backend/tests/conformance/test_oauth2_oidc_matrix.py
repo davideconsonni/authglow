@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-204": "stable sid per session",
     "OA-205": "software_statement trust anchor",
     "OA-301": "standard Token response for first-party",
     "OA-302": "conforming error codes",
@@ -131,6 +130,14 @@ def matrix_app(test_settings, storage, jwt_service, oauth2_service, mfa_service,
         stack.enter_context(
             patch("authglow.api.oidc.OAuth2ClientStorage", return_value=client_storage)
         )
+        # OA-204: `logout_get` builds `OAuth2Service()` / `UserService()`
+        # directly (local imports, not Depends) — rebind the definition
+        # sites to the test-bound instances so GET-logout resolves
+        # clients/users from the per-test store, never prod data.
+        stack.enter_context(
+            patch("authglow.services.oauth2.OAuth2Service", return_value=oauth2_service)
+        )
+        stack.enter_context(patch("authglow.services.user.UserService", return_value=storage))
         stack.enter_context(patch("authglow.api.oidc.AuditService", return_value=mock_audit))
         stack.enter_context(patch("authglow.api.auth.AuditService", return_value=mock_audit))
         stack.enter_context(
@@ -875,15 +882,104 @@ class TestOIDC:
         assert res.status_code == 401, res.text
         assert res.json()["error"] == "invalid_grant"
 
-    @pytest.mark.xfail(strict=True, reason="OA-204: stable sid per session")
     def test_oidc_sid_stable(self, jwt_service, conf_confidential_basic_client):
-        """Two ID tokens of one session share the same `sid`."""
+        """OA-204: two ID tokens of one session share the same `sid`."""
         client_id = conf_confidential_basic_client["client"].client_id
         first = jwt_service.create_id_token("user-1", client_id, ["openid"], {})
         second = jwt_service.create_id_token("user-1", client_id, ["openid"], {})
         first_sid = jwt_service.decode_id_token(first, expected_aud=client_id).sid
         second_sid = jwt_service.decode_id_token(second, expected_aud=client_id).sid
         assert first_sid == second_sid
+
+    def test_oidc_sid_rotates_on_new_login(self, jwt_service, conf_confidential_basic_client):
+        """OA-204: a new login (`auth_time`) gets a new `sid`; another client
+        gets a pairwise-different `sid` (no cross-client correlation)."""
+        from datetime import datetime, timedelta, timezone
+
+        client_id = conf_confidential_basic_client["client"].client_id
+        t1 = datetime.now(timezone.utc)
+        t2 = t1 + timedelta(hours=1)
+
+        def _sid(cid, at):
+            token = jwt_service.create_id_token("user-1", cid, ["openid"], {}, auth_time=at)
+            return jwt_service.decode_id_token(token, expected_aud=cid).sid
+
+        assert _sid(client_id, t1) == _sid(client_id, t1)
+        assert _sid(client_id, t2) != _sid(client_id, t1)
+        assert _sid("other-client", t1) != _sid(client_id, t1)
+
+    def test_oidc_logout_notifies_session_clients_only(
+        self, matrix_app, test_settings, storage, jwt_service
+    ):
+        """OA-204: logout iframes go to the hint client + live-RT holders only.
+
+        A third client with a `frontchannel_logout_uri` but no session for
+        the user gets no iframe — and nobody receives another client's `sid`.
+        """
+        from authglow.models.oauth_client import OAuth2Client
+        from authglow.repositories.file.oauth_client import FileOAuth2ClientRepository
+        from authglow.repositories.file.refresh_token import FileRefreshTokenRepository
+        from authglow.services.oauth_client import OAuth2ClientStorage
+        from authglow.services.refresh_token import RefreshTokenService
+
+        def _make_logout_client(name, logout_uri, post_logout_uri):
+            secret = secrets.token_urlsafe(32)
+            from authglow.core.cache import _reset_cache_registry
+
+            _reset_cache_registry()
+            repo = FileOAuth2ClientRepository(settings=test_settings)
+            client_storage = OAuth2ClientStorage(repository=repo, settings=test_settings)
+            client = OAuth2Client(
+                client_secret="placeholder",
+                client_name=name,
+                redirect_uris=["https://example.com/cb"],
+                allowed_scopes=["openid", "read"],
+                grant_types=["authorization_code", "refresh_token"],
+                is_confidential=True,
+                require_pkce=True,
+                require_consent=False,
+                token_endpoint_auth_method="client_secret_basic",
+                frontchannel_logout_uri=logout_uri,
+                allowed_post_logout_redirect_uris=[post_logout_uri],
+            )
+            with patch("authglow.services.password.get_settings", return_value=test_settings):
+                created = asyncio.run(client_storage.create_client(client, secret))
+            return created
+
+        client_a = _make_logout_client(
+            "Logout Hint", "https://a.example.com/logout", "https://a.example.com/bye"
+        )
+        _make_logout_client(
+            "Logout Stranger", "https://b.example.com/logout", "https://b.example.com/bye"
+        )
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
+            refresh_svc = RefreshTokenService(
+                repository=FileRefreshTokenRepository(settings=test_settings)
+            )
+            asyncio.run(
+                refresh_svc.create_refresh_token(
+                    user_id=user.id,
+                    client_id=client_a.client_id,
+                    scopes=["openid", "read"],
+                )
+            )
+        id_token = jwt_service.create_id_token(user.id, client_a.client_id, ["openid"], {})
+        hint_sid = jwt_service.decode_id_token(
+            id_token, expected_aud=client_a.client_id
+        ).sid
+        res = matrix_app.get(
+            "/oauth2/logout",
+            params={
+                "id_token_hint": id_token,
+                "post_logout_redirect_uri": "https://a.example.com/bye",
+            },
+        )
+        assert res.status_code == 200, res.text
+        body = res.text
+        assert "https://a.example.com/logout" in body
+        assert "https://b.example.com/logout" not in body
+        assert hint_sid in body
 
     def test_oidc_offline_access_gate(
         self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client

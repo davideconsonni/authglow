@@ -51,9 +51,16 @@ Logic:
 3. Verifies `post_logout_redirect_uri` is in the client
    `allowed_post_logout_redirect_uris`; otherwise 400.
 4. Redirects to `post_logout_redirect_uri` with the `state` echoed back.
-5. **Front-Channel Logout**: if some clients have `frontchannel_logout_uri`,
-   the response is an HTML page with one `<iframe>` per client
-   (`?iss=...&sid=...`), then redirects after ~2s.
+5. **Front-Channel Logout** (OA-204): iframes go only to the session's
+   clients — the hint client plus clients holding an ACTIVE refresh token
+   for the user. Each iframe carries that client's OWN pairwise `sid`
+   (`HMAC(secret, user | client | auth_time)`, 32 hex): stable within a
+   login, fresh on the next login, different per client (no cross-client
+   correlation). A client with a logout URI but no session for the user
+   gets no iframe. Known limits: two logins within the same second share
+   the `sid`; `auth_time=None` (legacy) never rotates; parallel logins
+   may notify with the latest login's `sid` (fail-safe: missed
+   notification, never a leak).
 
 AuthGlow is **stateless**: no server-side session. The user/client delete
 their own tokens; the server revokes the refresh token and blacklists the
@@ -68,7 +75,8 @@ access-token `jti`. The event is audit-logged.
 | RP-Initiated Logout 1.0 | **Conformant**. |
 | `post_logout_redirect_uri` | Exact match against `allowed_post_logout_redirect_uris`. |
 | `id_token_hint` + redirect | **Custom, stricter**: required when asking for a redirect. |
-| Front-Channel Logout | Supported (iframe `iss` + `sid`). |
+| Front-Channel Logout | Supported (iframe `iss` + `sid`), session-targeted (OA-204). |
+| `sid` | Derived pairwise `HMAC(user\|client\|auth_time)` (OA-204) — stable per login, rotated per login, never random-fresh. |
 | Back-Channel Logout | `backchannel_logout_uri` is stored on the client but **not** executed (stateless). |
 | `state` | Re-appended to the redirect URL. |
 

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import secrets
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
 from uuid import uuid4
@@ -503,6 +503,32 @@ class JWTService:
 
         return token_data
 
+    def session_sid(
+        self,
+        user_id: str,
+        client_id: str,
+        auth_time: Optional[datetime] = None,
+    ) -> str:
+        """OA-204: derive the OIDC ``sid`` (session ID) deterministically.
+
+        ``sid = HMAC-SHA256(secret_key, user_id | client_id | auth_time)``
+        truncated to 32 hex chars (same shape as the old random value, so
+        the claim stays opaque to RPs).
+
+        Properties: stable within a login (same ``auth_time`` → same
+        ``sid``, so front/back-channel logout can correlate the
+        session's tokens); fresh across logins (``auth_time`` is the
+        user's ``last_login``); pairwise per client (no cross-client
+        correlation). ``auth_time=None`` (legacy users) degrades to a
+        per-user+client stable value with no rotation.
+        """
+        auth_ts = ""
+        if auth_time is not None:
+            auth_ts = str(int(auth_time.replace(tzinfo=timezone.utc).timestamp()))
+        msg = f"{user_id}\n{client_id}\n{auth_ts}".encode("utf-8")
+        digest = hmac.new(self.settings.secret_key.encode(), msg, hashlib.sha256)
+        return digest.hexdigest()[:32]
+
     def create_id_token(
         self,
         user_id: str,
@@ -548,7 +574,7 @@ class JWTService:
             "azp": client_id,
             "exp": int(expire.timestamp()),
             "iat": int(iat.timestamp()),
-            "sid": secrets.token_hex(16),
+            "sid": self.session_sid(user_id, client_id, auth_time),
             "token_version": "3.0-fix-timestamp",
         }
         if nonce:
