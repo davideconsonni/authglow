@@ -134,6 +134,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 | Consent memory | "remember" consent → `consent/check` auto-creates the code without re-prompting. |
 | Response type | `code` only. **Implicit flow rejected** (at the client model level). |
 | Response mode | `query` only (OA-202). `fragment`/`form_post` neither emitted nor advertised. |
+| Refresh token | Only with scope `offline_access` (OIDC Core §11, OA-206): without it the token response is access-token-only (`id_token` still included for `openid`), no error. Ask `offline_access` up front if you need long-lived sessions. |
 | ACR | Values `0/1/2/3` (password, MFA, passkey) exposed in the ID token. |
 
 ---

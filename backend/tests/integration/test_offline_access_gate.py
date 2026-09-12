@@ -55,6 +55,9 @@ def _build_code_app(code_scope: str):
 
     user = MagicMock(id="user-1", email="u@x.com", is_active=True)
     user.last_login = None
+    # OA-203: the token endpoint rejects granted-but-not-held scopes with
+    # ``invalid_scope`` — the mocked user must actually hold ``read``.
+    user.scopes = ["read"]
 
     oauth2_service = MagicMock()
     oauth2_service.verify_grant_type = AsyncMock(return_value=True)
