@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-302": "conforming error codes",
     "OA-303": "c_hash bound to the authorization code",
     "OA-305": "client_auth_method in audit on every grant",
 }
@@ -463,11 +462,10 @@ class TestRFC6749AuthorizationCode:
         assert res.status_code == 400, res.text
         assert res.json()["error"] == "invalid_scope"
 
-    @pytest.mark.xfail(strict=True, reason="OA-302: conforming error codes")
     def test_rfc6749_error_codes(
         self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
     ):
-        """Wrong verifier → 400 `invalid_grant`; code/client mismatch → 401 `invalid_client`."""
+        """OA-302: wrong verifier → 400 `invalid_grant`; code/client mismatch → 400 `invalid_grant`."""
         bundle = conf_confidential_basic_client
         user, _email = _make_user(test_settings, storage, ["read"])
         code, _verifier = _mint_code(
@@ -486,6 +484,30 @@ class TestRFC6749AuthorizationCode:
                 "client_id": bundle["client"].client_id,
                 "client_secret": bundle["secret"],
                 "code_verifier": "wrong-verifier",
+            },
+        )
+        assert res.status_code == 400, res.text
+        assert res.json()["error"] == "invalid_grant"
+
+        # OA-302: a code issued to another client is `invalid_grant`/400
+        # (RFC 6749 §5.2 "or was issued to another client") — never 401.
+        other = _make_client_with_scopes(test_settings, ["read"])
+        other_code, other_verifier = _mint_code(
+            oauth2_service,
+            client_id=other["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="read",
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": other_code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": other_verifier,
             },
         )
         assert res.status_code == 400, res.text

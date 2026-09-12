@@ -1235,6 +1235,9 @@ async def token_endpoint(
         if not resolved_client_id:
             raise OAuth2Error(INVALID_REQUEST, "Missing client_id", status_code=400)
 
+        # OA-302: a code redeemed by another client is ``invalid_grant``
+        # with status 400 (RFC 6749 §5.2: "or was issued to another
+        # client") — never 401, client authentication did not fail.
         if resolved_client_id != auth_code.client_id:
             raise OAuth2Error(INVALID_GRANT, "Client ID mismatch", status_code=400)
 
@@ -1308,7 +1311,10 @@ async def token_endpoint(
                 )
 
             if recreated_challenge != auth_code.code_challenge:
-                raise OAuth2Error(INVALID_GRANT, "Invalid code_verifier", status_code=401)
+                # OA-302 (RFC 6749 §5.2): a wrong verifier is an
+                # ``invalid_grant`` with status 400, not 401 — no
+                # client authentication failed here.
+                raise OAuth2Error(INVALID_GRANT, "Invalid code_verifier", status_code=400)
         else:
             raise OAuth2Error(
                 INVALID_REQUEST,
