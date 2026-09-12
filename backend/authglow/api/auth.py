@@ -1723,12 +1723,14 @@ async def token_endpoint(
         # OA-305: same helper as every other token-endpoint branch.
         # Identical outputs when a secret/assertion is present; a
         # secret-less public client now logs "none" instead of the
-        # misleading "client_secret_post".
+        # misleading "client_secret_post". NOTE: this branch never
+        # binds ``oauth_client`` (boolean ``verify_client`` only), so
+        # reuse the client already loaded for the DPoP check.
         cc_auth_method = _token_client_auth_method(
             client_secret=client_secret,
             basic_client_secret=basic_client_secret,
             client_assertion=client_assertion,
-            oauth_client=oauth_client,
+            oauth_client=dpop_bound_client,
         )
         await audit_service.log_event(
             event_type=AuditEventType.CLIENT_CREDENTIALS_TOKEN_ISSUED,

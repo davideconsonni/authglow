@@ -3,7 +3,7 @@
 Validates that:
 - ``token_endpoint_auth_method=none`` is rejected with ``client_credentials``
 - Metadata URIs must be HTTPS (or http localhost)
-- ``software_statement`` must be a valid JWT
+- ``software_statement`` is rejected (no trust anchor, OA-205)
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
