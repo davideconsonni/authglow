@@ -9,7 +9,16 @@ Execute the following workflow for the plan item the user selects. Do NOT skip s
 
 ### Step 1 — Plan
 
-Read the plan item the user indicated. Produce a detailed implementation plan covering:
+Read the plan item the user indicated. Produce a detailed implementation plan,
+starting with a short header:
+
+- **Problema e soluzione (in alto, prima dei dettagli)**: a complete but
+  concise and understandable explanation of the problem and the proposed
+  solution — a few lines in plain language, so the user grasps the
+  what and the why without reading the details below (those stay
+  available underneath for depth).
+
+Then the detailed plan covering:
 
 - What the finding/issue requires (current state vs desired state)
 - Files to create or modify (with line references)
@@ -52,6 +61,11 @@ Only after the user explicitly approves the work:
 - Update the plan document (e.g. `docs/plans/active/vapt-fix-plan.md`)
 - Change `[ ]` to `[x]` for the completed item
 - Append a short note with the commit SHA or a summary of what was done
+- Propose the commit: prepare the commit message and ASK the user
+  whether to commit. NEVER commit automatically — commit ONLY on
+  explicit user approval. This is non-negotiable. The commit is
+  ALWAYS without push (`git commit` only, never `git push`);
+  push only if the user explicitly requests it.
 
 Do NOT mark items done without user confirmation.
 
@@ -62,4 +76,6 @@ Do NOT mark items done without user confirmation.
 - **One item at a time.** Do not batch multiple plan items.
 - **No assumptions.** If a step is unclear, ask before proceeding.
 - **Respect the gates.** Each step requires explicit approval before moving to the next.
+- **Never auto-commit.** A commit happens only on explicit user approval,
+  always without push. Prepare the message, ask, then act.
 - **Follow project conventions.** Read `AGENTS.md` for coding standards, test patterns, and commit guidelines.
