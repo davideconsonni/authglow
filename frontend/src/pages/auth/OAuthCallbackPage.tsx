@@ -35,11 +35,15 @@ export function OAuthCallbackPage() {
           redirect_uri: transaction.redirectUri,
           code_verifier: transaction.codeVerifier,
         })
-        if (result.ok !== true) {
-          const idToken = typeof result.id_token === 'string' ? result.id_token : ''
-          if (readJwtClaim<string>(idToken, 'nonce') !== transaction.nonce) {
-            throw new Error('OIDC nonce validation failed')
-          }
+        // OA-301: `/oauth2/token` always returns a standard `Token`
+        // (cookies ride along for first-party) — validate the nonce
+        // whenever one was requested.
+        const idToken = typeof result.id_token === 'string' ? result.id_token : ''
+        if (!idToken) {
+          throw new Error('Sign-in failed: no ID token returned')
+        }
+        if (transaction.nonce && readJwtClaim<string>(idToken, 'nonce') !== transaction.nonce) {
+          throw new Error('OIDC nonce validation failed')
         }
         sessionStorage.removeItem(PLAYGROUND_TRANSACTION_KEY)
         await fetchCurrentUser()

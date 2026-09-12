@@ -1472,10 +1472,10 @@ async def token_endpoint(
             )
 
         # The dashboard is a public OAuth client. Set the browser session
-        # cookies as a same-origin convenience; the OAuth response remains
-        # standards-compatible JSON for every other client. Its authorize
-        # request carries ``offline_access``, so the session cookies are
-        # backed by the rotated refresh token.
+        # cookies as a same-origin convenience on top of the standard
+        # ``Token`` response (OA-301) — one wire format for every client.
+        # Its authorize request carries ``offline_access``, so the session
+        # cookies are backed by the rotated refresh token.
         if (
             resolved_client_id == settings.oauth2_client_id
             and redirect_uri == settings.oauth2_first_party_redirect_uri
@@ -1590,21 +1590,6 @@ async def token_endpoint(
             # Add to response
             access_token_response.id_token = id_token
 
-        if (
-            resolved_client_id == settings.oauth2_client_id
-            and redirect_uri == settings.oauth2_first_party_redirect_uri
-            and rt is not None
-        ):
-            from fastapi.responses import JSONResponse
-
-            first_party_response = JSONResponse(content={"ok": True})
-            _set_auth_cookies(
-                first_party_response,
-                access_token_response.access_token,
-                rt.token,
-                settings,
-            )
-            return first_party_response
         return access_token_response
 
     elif grant_type == "client_credentials":

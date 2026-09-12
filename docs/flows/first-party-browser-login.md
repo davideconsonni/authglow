@@ -2,7 +2,8 @@
 
 The AuthGlow dashboard is an OAuth2/OIDC public client. It uses the same
 Authorization Code + PKCE flow available to other public applications and
-receives only httpOnly browser session cookies after the callback.
+receives a standard OAuth token response plus httpOnly browser session
+cookies after the callback (OA-301: one wire format for every client).
 
 ## Configuration
 

@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-301": "standard Token response for first-party",
     "OA-302": "conforming error codes",
     "OA-303": "c_hash bound to the authorization code",
     "OA-305": "client_auth_method in audit on every grant",
@@ -492,11 +491,10 @@ class TestRFC6749AuthorizationCode:
         assert res.status_code == 400, res.text
         assert res.json()["error"] == "invalid_grant"
 
-    @pytest.mark.xfail(strict=True, reason="OA-301: standard Token response for first-party")
     def test_rfc6749_token_response_standard(
         self, matrix_app, test_settings, storage, oauth2_service
     ):
-        """First-party redeem returns a `Token` (access/refresh/id_token), not `{'ok': True}`."""
+        """OA-301: first-party redeem returns a standard `Token` + cookies, not `{'ok': True}`."""
         from authglow.api.auth import _first_party_oauth_client
         from authglow.repositories.file.oauth_client import FileOAuth2ClientRepository
         from authglow.services.oauth_client import OAuth2ClientStorage
@@ -530,6 +528,12 @@ class TestRFC6749AuthorizationCode:
         assert res.status_code == 200, res.text
         body = res.json()
         assert body.get("access_token"), body
+        assert body.get("refresh_token"), body
+        assert body.get("id_token"), body
+        assert body.get("token_type") == "Bearer", body
+        # Same-origin session cookies ride along on the Token response.
+        assert res.cookies.get(test_settings.auth_cookie_access_name), res.cookies
+        assert res.cookies.get(test_settings.auth_cookie_refresh_name), res.cookies
 
     @pytest.mark.xfail(strict=True, reason="OA-305: client_auth_method in audit on every grant")
     def test_rfc6749_client_auth_method_audited(
