@@ -154,6 +154,71 @@ class TestDiscoveryMetadataHonesty:
         algs = body["token_endpoint_auth_signing_alg_values_supported"]
         assert "HS256" in algs and "RS256" in algs
 
+    def test_discovery_key_set_snapshot(self, test_settings):
+        """OA-403: the document has exactly these top-level keys.
+
+        Adding or removing a field (even an honest one) must update
+        this list consciously — silent discovery drift breaks RPs.
+        """
+        body = self._get(test_settings)
+        assert set(body.keys()) == {
+            "issuer",
+            "authorization_endpoint",
+            "token_endpoint",
+            "userinfo_endpoint",
+            "jwks_uri",
+            "registration_endpoint",
+            "scopes_supported",
+            "response_types_supported",
+            "response_modes_supported",
+            "grant_types_supported",
+            "subject_types_supported",
+            "id_token_signing_alg_values_supported",
+            "token_endpoint_auth_methods_supported",
+            "claims_supported",
+            "code_challenge_methods_supported",
+            "dpop_signing_alg_values_supported",
+            "authorization_response_iss_parameter_supported",
+            "device_authorization_endpoint",
+            "revocation_endpoint",
+            "introspection_endpoint",
+            "end_session_endpoint",
+            "service_documentation",
+            "op_policy_uri",
+            "op_tos_uri",
+            "frontchannel_logout_supported",
+            "frontchannel_logout_session_supported",
+            "backchannel_logout_supported",
+            "claims_parameter_supported",
+            "request_parameter_supported",
+            "request_uri_parameter_supported",
+            "require_request_uri_registration",
+            "token_endpoint_auth_signing_alg_values_supported",
+        }
+
+
+class TestPublishableKids:
+    """OA-403: revoked (and unknown-status) kids never reach the public JWKS."""
+
+    def test_only_active_and_verifying(self, test_settings):
+        from authglow.api.oidc import _publishable_kids
+
+        keyring = {
+            "keys": {
+                "k-active": {"status": "active"},
+                "k-verifying": {"status": "verifying"},
+                "k-revoked": {"status": "revoked"},
+                "k-legacy": {},
+            }
+        }
+        assert sorted(_publishable_kids(keyring)) == ["k-active", "k-verifying"]
+
+    def test_empty_keyring(self, test_settings):
+        from authglow.api.oidc import _publishable_kids
+
+        assert _publishable_kids({}) == []
+        assert _publishable_kids({"keys": {}}) == []
+
 
 # ---------------------------------------------------------------------------
 # Dynamic Client Registration — reject the implicit grant

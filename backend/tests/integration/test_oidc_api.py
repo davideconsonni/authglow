@@ -76,6 +76,41 @@ class TestUserInfoEndpoint:
         assert response.status_code == 403
         assert "openid" in response.json()["detail"].lower()
 
+    def test_userinfo_rejects_token_without_audience(self, _userinfo_app, test_settings):
+        """OA-403: legacy tokens without `aud` → 401, never userinfo."""
+        from datetime import timedelta
+
+        import jwt as pyjwt
+
+        from authglow.core.crypto import decrypt_private_key
+        from authglow.core.datetime import utcnow
+
+        with open(test_settings.private_key_path, "rb") as fh:
+            private_key = decrypt_private_key(fh.read(), secret_key=test_settings.secret_key)
+        now = utcnow()
+        token = pyjwt.encode(
+            {
+                "iss": test_settings.issuer,
+                "sub": "userinfo-test-003",
+                "email": "userinfo-test-003@example.com",
+                "scope": "openid read",
+                "exp": now + timedelta(minutes=30),
+                "iat": now,
+                "jti": "audless-jti",
+                "token_type": "access",
+            },
+            private_key,
+            algorithm="RS256",
+        )
+
+        response = _userinfo_app.get(
+            "/oauth2/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 401, response.text
+        assert "audience" in response.json()["detail"].lower()
+
     def test_userinfo_invalid_token(self, _userinfo_app):
         response = _userinfo_app.get(
             "/oauth2/userinfo",

@@ -158,6 +158,20 @@ async def openid_configuration(request: Request, response: Response):
     )
 
 
+def _publishable_kids(keyring_info: dict) -> list:
+    """OA-403: kids the public JWKS may advertise.
+
+    Only ``active`` and ``verifying`` (rotation overlap) keys are
+    published — ``revoked`` (and unknown-status) kids stay out so
+    clients never pin a dead key. Single choke point for the rule.
+    """
+    return [
+        kid
+        for kid, meta in keyring_info.get("keys", {}).items()
+        if isinstance(meta, dict) and meta.get("status", "") in ("active", "verifying")
+    ]
+
+
 @router.get("/.well-known/jwks.json", response_model=JWKSResponse)
 @limiter.limit("120/minute")
 async def jwks(request: Request, response: Response):
@@ -208,10 +222,7 @@ async def jwks(request: Request, response: Response):
     # loop for the full fsspec I/O latency on every kid.
     keystore = get_keystore_repository(settings=settings)
     keys = []
-    for kid, meta in keyring_info["keys"].items():
-        kid_status = meta.get("status", "")
-        if kid_status not in ("active", "verifying"):
-            continue
+    for kid in _publishable_kids(keyring_info):
 
         pub_pem = await keystore.read_public_key(kid)
         if pub_pem is None:
