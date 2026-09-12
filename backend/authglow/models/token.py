@@ -10,12 +10,17 @@ from authglow.core.datetime import utcnow
 
 
 class Token(BaseModel):
-    """OAuth2 token response."""
+    """OAuth2 token response.
+
+    ``refresh_token`` is present only when the ``offline_access`` scope
+    was granted (OIDC Core §11, OA-304) — without it the response is
+    access-token-only (plus ``id_token`` for ``openid``), with no error.
+    """
 
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
-    refresh_token: Optional[str] = None
+    refresh_token: Optional[str] = None  # Only with granted ``offline_access``.
     scope: Optional[str] = None
     id_token: Optional[str] = None  # OpenID Connect ID token
     password_expired: bool = False

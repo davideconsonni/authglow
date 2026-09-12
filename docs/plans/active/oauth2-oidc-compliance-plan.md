@@ -308,7 +308,7 @@ come convenienza same-origin.
   Comportamento atteso: O passare il code e testare `c_hash` verificabile, O rimuovere il parametro.
   Acceptance: test che verifica `c_hash` (se tenuto) o assenza del parametro (se rimosso).
 
-- [ ] **[OA-304]** 3.4 Gate `offline_access` documentato.
+- [x] **[OA-304]** 3.4 Gate `offline_access` documentato.
   Contesto: refresh emesso solo con scope `offline_access` (OIDC Core §11) — corretto, ma chi si aspetta
   refresh dal grant `refresh_token` senza aver chiesto `offline_access` non riceve refresh senza spiegazione
   (rami `authorization_code` ~L1347, device ~L1943).
@@ -420,4 +420,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-206 | Fase 2 / 2.6 Done fase | 9547fb7 | Docs gate `offline_access` in `authorization-code-pkce.md` (warning audit resta OA-304); matrice 27 passed + 4 xfail tutti Fase 3 (zero gap Fase 2); full suite `2813 passed, 4 xfailed, 0 failed` (`-n auto`, 25.6s); 1 regressione Fase 2 trovata/fixata (`test_offline_access_gate.py`: mock user senza `scopes` → `scopes=["read"]`); zero pre-esistenti manifestati. Fase 2 chiusa. |
 | 2026-09-12 | OA-301 | Fase 3 / 3.1 Token first-party standard | 4471ad2 | `api/auth.py`: cancellato ramo `{"ok": True}` (cookie già su risposta a L1484) → sempre `Token` + cookie; `OAuthCallbackPage.tsx`: parsing Token-unico + nonce se richiesto; gate rafforzato (access/refresh/id_token + 2 cookie); cookie-flow `/api/auth/refresh` invariato. Matrice 28 passed + area 73 passed; tsc/eslint + unit frontend verdi; E2E login-dashboard 4 passed con backend su 8001 (il fallimento iniziale era backend spento, non regressione). |
 | 2026-09-12 | OA-302 | Fase 3 / 3.2 Codici errore conformi | e63bba8 | `api/auth.py`: verifier errato `401`→`400 invalid_grant` (RFC 6749 §5.2); mismatch pinnato come corretto (`issued to another client` → `invalid_grant`/400, contro-correzione al piano); gate esteso a 2 casi; L1267 invariato (residuo annotato). Matrice + area PKCE/auth 37 passed; docs errori; ruff/mypy puliti. |
-| 2026-09-12 | OA-303 | Fase 3 / 3.3 c_hash legato al code | OA-303 (questo commit) | `api/auth.py`: `authorization_code=code` al mint (plaintext mai persistito, solo hash); xfail rimosso (matrice 30 passed + 1 xfail OA-305); area jwt/id_token 64 passed; docs hashes; ruff/mypy puliti. |
+| 2026-09-12 | OA-303 | Fase 3 / 3.3 c_hash legato al code | 5ad5e22 | `api/auth.py`: `authorization_code=code` al mint (plaintext mai persistito, solo hash); xfail rimosso (matrice 30 passed + 1 xfail OA-305); area jwt/id_token 64 passed; docs hashes; ruff/mypy puliti. |
+| 2026-09-12 | OA-304 | Fase 3 / 3.4 Gate offline_access documentato | OA-304 (questo commit) | Acceptance già verde (pin + docs OA-206 + playground); docstring `Token.refresh_token` (solo con `offline_access`, OIDC Core §11); waiver warning audit (rumore sul caso normale + dato ricostruibile da eventi esistenti); area offline_access/device 14 passed; ruff pulito. |
