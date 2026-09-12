@@ -80,7 +80,7 @@ class OpenIDConfiguration(BaseModel):
     registration_endpoint: Optional[str] = None
     scopes_supported: List[str]
     response_types_supported: List[str]
-    response_modes_supported: List[str] = ["query", "fragment"]
+    response_modes_supported: List[str] = ["query"]
     grant_types_supported: List[str]
     subject_types_supported: List[str] = ["public"]
     id_token_signing_alg_values_supported: List[str]

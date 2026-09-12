@@ -124,6 +124,16 @@ class TestDiscoveryMetadataHonesty:
         body = self._get(test_settings)
         assert "form_post" not in body["response_modes_supported"]
 
+    def test_fragment_not_advertised(self, test_settings):
+        """OA-202: only ``query`` is emitted — snapshot guard.
+
+        Fails if anyone re-adds ``fragment`` (or any other mode)
+        without implementing it. Re-adding a mode requires updating
+        this test consciously, together with the emitter.
+        """
+        body = self._get(test_settings)
+        assert body["response_modes_supported"] == ["query"]
+
     def test_parameter_support_flags(self, test_settings):
         body = self._get(test_settings)
         # The ``claims`` request parameter IS implemented (§5.5).

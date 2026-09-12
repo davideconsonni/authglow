@@ -53,6 +53,16 @@ Two main steps: the **authorization request** (browser → AuthGlow) and the
 POST /api/oauth2/authorize                (form URL-encoded)
 ```
 
+> **Come chiamare authorize, per RP diretti (OA-202).** Il
+> `authorization_endpoint` in discovery (`{issuer}/oauth2/authorize`) è un
+> entry point **front-channel via browser**: l'RP redirige il browser con
+> `GET .../oauth2/authorize?response_type=code&client_id=...&...`, la SPA
+> (`OAuthAuthorizePage`) guida login+MFA+consenso e poi invia
+> `POST /api/oauth2/authorize` internamente. Non chiamare
+> `POST /api/oauth2/authorize` server-to-server al posto del browser.
+> `response_mode` supportato: solo `query` (default); `fragment` non è
+> implementato e non è pubblicizzato (code flow non ne ha bisogno).
+
 Parameters (form):
 
 | Parameter              | Required | Notes |
@@ -122,6 +132,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 | Consent flow | **Custom UX**: login, MFA and consent all on the **same page** (`/oauth2/authorize`, no inter-phase redirect). |
 | Consent memory | "remember" consent → `consent/check` auto-creates the code without re-prompting. |
 | Response type | `code` only. **Implicit flow rejected** (at the client model level). |
+| Response mode | `query` only (OA-202). `fragment`/`form_post` neither emitted nor advertised. |
 | ACR | Values `0/1/2/3` (password, MFA, passkey) exposed in the ID token. |
 
 ---

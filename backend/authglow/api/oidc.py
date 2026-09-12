@@ -120,9 +120,10 @@ async def openid_configuration(request: Request, response: Response):
         registration_endpoint=f"{base_url}/oauth2/register",
         scopes_supported=scopes_supported,
         response_types_supported=response_types_supported,
-        # A8: ``form_post`` was advertised but never implemented —
-        # advertise only what is shipped.
-        response_modes_supported=["query", "fragment"],
+        # OA-202 (ex A8): ``fragment``/``form_post`` were advertised but never
+        # emitted (only ``query`` via ``_build_oauth_redirect``) — advertise
+        # only what is shipped.
+        response_modes_supported=["query"],
         grant_types_supported=grant_types_supported,
         subject_types_supported=["public"],
         id_token_signing_alg_values_supported=[settings.jwt_algorithm],

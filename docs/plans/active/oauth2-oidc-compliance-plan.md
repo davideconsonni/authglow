@@ -231,7 +231,7 @@ Niente deviazioni silenziose.
   viene echoato intatto.
   Rischi: abbassa una hardening VAPT-044 — compensato dal redirect-error (niente oracle) + docs.
 
-- [ ] **[OA-202]** 2.2 Discovery veritiera.
+- [x] **[OA-202]** 2.2 Discovery veritiera.
   Contesto: `openid_configuration` (`backend/authglow/api/oidc.py` ~L114-157) pubblicizza
   `response_modes_supported=["query","fragment"]` ma `fragment` non è mai emesso (solo `query`
   via `_build_oauth_redirect`); `form_post` è già stato rimosso correttamente (commento A8).
@@ -413,4 +413,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-103 | Fase 1 / 1.3 Cookie-flow allineato | n/a (non committato) | `api/auth.py`: owner risolto dal RT (`_resolve_cookie_refresh_owner`) + gate grant/DPoP + first-party-only esplicito + audit condiviso (`_audit_refresh_rotation`, con family); `expected_htu` parametrizzato; minting invariato (OA-301/504). Test `TestOAuth2CookieFlow` 5/5 (no-proof → 400 `missing_dpop_proof`, deviazione concordata dai 401 dell'acceptance); fix pin OA-003 vacui (header Cookie espliciti); docs aggiornate; area 98 verdi + mypy/ruff puliti. |
 | 2026-09-12 | OA-105 | Fase 1 / 1.5 Done fase | n/a (non committato) | Full suite `2802 passed, 9 xfailed, 0 failed` (`-n auto`); docs breaking complete (`refresh-token-rotation.md` per OA-103, resto già coperto in OA-101/102); niente CHANGELOG nel repo → il Registro funge da changelog; frontend invariato (`DeviceCodeFlow` già canonico). Fase 1 chiusa. |
 | 2026-09-12 | OA-201 | Fase 2 / 2.1 Policy state | n/a (non committato) | `api/auth.py`: S2 — assente completa senza echo, debole → 302 `invalid_request` senza echo; choke point `valid_state` su tutti gli echo/storage + hardening in `_oauth_error_redirect`; helper/charset invariati. Matrice 21 verdi + 8 xfail (xfail OA-201 rimosso, 3 nuovi test); `test_state_param.py` riscritto, `test_vapt044.py` verde; sistemati 3 test che passavano vacuamente sul vecchio gate (csrf, hint); restano solo 2 expired pre-esistenti (provati via stash); docs `authorization-code-pkce.md`; mypy/ruff puliti. |
+| 2026-09-12 | OA-202 | Fase 2 / 2.2 Discovery veritiera | OA-202 (questo commit) | `api/oidc.py` + `models/oidc.py` → `response_modes_supported=["query"]`; xfail OA-202 rimosso (TestOIDC verde); nuovo guard `test_fragment_not_advertised` in `test_discovery.py`; docs `authorization-code-pkce.md` (come chiamare authorize + response mode); `authorization_endpoint` invariato (front-channel via SPA, docs-only come da grill G1). Test area 14 passed + regressione oidc 5 passed, ruff/mypy puliti. |
 |      |        |           |        |      |

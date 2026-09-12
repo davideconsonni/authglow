@@ -24,7 +24,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-202": "discovery must not advertise fragment",
     "OA-203": "explicit invalid_scope, no silent downgrade",
     "OA-204": "stable sid per session",
     "OA-205": "software_statement trust anchor",
@@ -830,9 +829,8 @@ class TestRFC7009Revocation:
 
 
 class TestOIDC:
-    @pytest.mark.xfail(strict=True, reason="OA-202: discovery must not advertise fragment")
     def test_oidc_discovery_no_fragment(self, matrix_app):
-        """`response_modes_supported` contains only modes the server emits."""
+        """OA-202: `response_modes_supported` contains only modes the server emits."""
         res = matrix_app.get("/.well-known/openid-configuration")
         assert res.status_code == 200, res.text
         assert "fragment" not in res.json()["response_modes_supported"]
