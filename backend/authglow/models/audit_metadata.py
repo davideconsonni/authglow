@@ -285,6 +285,10 @@ class TokenIssuedMetadata(OAuth2BaseMetadata):
     auth_code_id: Optional[str] = None  # Correlation to auth code
     auth_time: Optional[datetime] = None
     amr: List[str] = Field(default_factory=list)
+    # OA-305: how the client authenticated at the token endpoint
+    # (client_secret_basic, client_secret_post, client_secret_jwt,
+    # private_key_jwt, or "none" when no client auth was performed).
+    client_auth_method: Optional[str] = None
 
 
 class TokenRefreshedMetadata(OAuth2BaseMetadata):
@@ -295,6 +299,8 @@ class TokenRefreshedMetadata(OAuth2BaseMetadata):
     refresh_token_family_id: Optional[str] = None
     rotation: bool = True
     reused: bool = False  # True if reuse detected (security event)
+    # OA-305: same vocabulary as TokenIssuedMetadata.client_auth_method.
+    client_auth_method: Optional[str] = None
 
 
 class TokenRevokedMetadata(OAuth2BaseMetadata):

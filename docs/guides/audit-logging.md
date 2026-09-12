@@ -183,6 +183,10 @@ async def my_endpoint(
             expires_in=1800,
             dpop_bound=bool(dpop_proof),
             token_type="access",
+            # OA-305: how the client authenticated at the token endpoint
+            # (client_secret_basic, client_secret_post, client_secret_jwt,
+            # private_key_jwt, or "none" when no client auth was performed).
+            client_auth_method="client_secret_basic",
         ),
     )
 ```

@@ -450,6 +450,33 @@ async def _authenticate_client_at_token_endpoint(
     return client
 
 
+def _token_client_auth_method(
+    *,
+    client_secret: Optional[str],
+    basic_client_secret: Optional[str],
+    client_assertion: Optional[str],
+    oauth_client,
+) -> str:
+    """OA-305: how the client authenticated at the token endpoint.
+
+    Vocabulary: ``client_secret_basic`` (secret only in the Basic
+    header), ``client_secret_post`` (secret in the form body),
+    the registered ``token_endpoint_auth_method`` for JWT-bearer
+    assertions (``client_secret_jwt`` fallback), or ``"none"`` when
+    no client authentication was performed at all (public PKCE
+    clients, first-party cookie flow). ``"none"`` means "no auth",
+    never "unknown" — it is only returned when no credential was
+    presented.
+    """
+    if client_assertion:
+        return getattr(oauth_client, "token_endpoint_auth_method", None) or "client_secret_jwt"
+    if basic_client_secret and not client_secret:
+        return "client_secret_basic"
+    if client_secret:
+        return "client_secret_post"
+    return "none"
+
+
 # Dependency injection
 def get_user_storage():
     """Get user storage instance."""
@@ -1428,6 +1455,15 @@ async def token_endpoint(
         at_data = jwt_service.decode_token(access_token_response.access_token)
         access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
 
+        # OA-305: record how the client authenticated (same vocabulary
+        # as the client_credentials branch) on every issuance event below.
+        token_auth_method = _token_client_auth_method(
+            client_secret=client_secret,
+            basic_client_secret=basic_client_secret,
+            client_assertion=client_assertion,
+            oauth_client=oauth_client,
+        )
+
         # Audit: access token issued
         await audit_service.log_event(
             event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
@@ -1449,6 +1485,7 @@ async def token_endpoint(
                 auth_code_id=auth_code.code,
                 auth_time=user.last_login,
                 amr=auth_code.amr or [],
+                client_auth_method=token_auth_method,
             ),
         )
 
@@ -1474,6 +1511,7 @@ async def token_endpoint(
                     auth_code_id=auth_code.code,
                     auth_time=user.last_login,
                     amr=auth_code.amr or [],
+                    client_auth_method=token_auth_method,
                 ),
             )
 
@@ -1594,6 +1632,7 @@ async def token_endpoint(
                     auth_code_id=auth_code.code,
                     auth_time=user.last_login,
                     amr=auth_code.amr or [],
+                    client_auth_method=token_auth_method,
                 ),
             )
 
@@ -1681,18 +1720,16 @@ async def token_endpoint(
         # Audit: client credentials token issued
         cc_token_data = jwt_service.decode_token(cc_token_response.access_token)
         cc_token_id = cc_token_data.jti if cc_token_data and cc_token_data.jti else "unknown"
-        if client_assertion:
-            # JWT-bearer auth: the registered auth method tells us which
-            # assertion flavour the client is provisioned for.
-            cc_auth_method = (
-                getattr(oauth_client, "token_endpoint_auth_method", None)
-                or "client_secret_jwt"
-            )
-        else:
-            # Secret came from the Basic header or from the form body.
-            cc_auth_method = (
-                "client_secret_basic" if (not client_secret and basic_client_secret) else "client_secret_post"
-            )
+        # OA-305: same helper as every other token-endpoint branch.
+        # Identical outputs when a secret/assertion is present; a
+        # secret-less public client now logs "none" instead of the
+        # misleading "client_secret_post".
+        cc_auth_method = _token_client_auth_method(
+            client_secret=client_secret,
+            basic_client_secret=basic_client_secret,
+            client_assertion=client_assertion,
+            oauth_client=oauth_client,
+        )
         await audit_service.log_event(
             event_type=AuditEventType.CLIENT_CREDENTIALS_TOKEN_ISSUED,
             user_id=resolved_client_id,
@@ -1820,6 +1857,13 @@ async def token_endpoint(
             access_token_id=rotated_access_token_id,
             refresh_token_id=rotated_refresh_token_id,
             refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
+            # OA-305: same vocabulary as every other token-endpoint branch.
+            client_auth_method=_token_client_auth_method(
+                client_secret=client_secret,
+                basic_client_secret=basic_client_secret,
+                client_assertion=client_assertion,
+                oauth_client=oauth_client,
+            ),
         )
 
         # Set httpOnly auth cookies
@@ -2133,6 +2177,7 @@ async def _audit_refresh_rotation(
     access_token_id: str,
     refresh_token_id: Optional[str],
     refresh_token_family_id: Optional[str],
+    client_auth_method: Optional[str] = None,
 ) -> None:
     """OA-103: single audit shape for rotation on both refresh paths.
 
@@ -2142,6 +2187,8 @@ async def _audit_refresh_rotation(
     response sees one rotation semantic regardless of entry point.
     ``refresh_token_id=None`` skips the rotation event (defensive —
     mirrors the ``if new_rt.token`` guard at both call sites).
+    OA-305: ``client_auth_method`` records how the client
+    authenticated (``"none"`` for the credential-less cookie flow).
     """
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
@@ -2159,6 +2206,7 @@ async def _audit_refresh_rotation(
             refresh_token_family_id=refresh_token_family_id,
             rotation=True,
             reused=False,
+            client_auth_method=client_auth_method,
         ),
     )
     if refresh_token_id is not None:
@@ -2176,6 +2224,7 @@ async def _audit_refresh_rotation(
                 refresh_token_family_id=refresh_token_family_id,
                 rotation=True,
                 reused=False,
+                client_auth_method=client_auth_method,
             ),
         )
 
@@ -2293,6 +2342,9 @@ async def cookie_refresh(
         access_token_id=access_token_id,
         refresh_token_id=refresh_token_id,
         refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
+        # OA-305: the cookie carries no token-endpoint client
+        # credentials — "none" (no auth), never "unknown".
+        client_auth_method="none",
     )
 
     return {"ok": True}

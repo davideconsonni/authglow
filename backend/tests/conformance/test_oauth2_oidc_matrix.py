@@ -23,9 +23,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi.testclient import TestClient
 
-OA_GAP = {
-    "OA-305": "client_auth_method in audit on every grant",
-}
+OA_GAP = {}
 
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 PASSWORD = "MatrixP@ss123!"
@@ -556,7 +554,6 @@ class TestRFC6749AuthorizationCode:
         assert res.cookies.get(test_settings.auth_cookie_access_name), res.cookies
         assert res.cookies.get(test_settings.auth_cookie_refresh_name), res.cookies
 
-    @pytest.mark.xfail(strict=True, reason="OA-305: client_auth_method in audit on every grant")
     def test_rfc6749_client_auth_method_audited(
         self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
     ):
@@ -599,6 +596,8 @@ class TestRFC6749AuthorizationCode:
             metadata = call.kwargs.get("metadata")
             assert metadata is not None
             assert "client_auth_method" in metadata.model_dump(), metadata
+            # Basic secret in the form body → the exact method, not just presence.
+            assert metadata.model_dump()["client_auth_method"] == "client_secret_post", metadata
 
 
 class TestRFC8628Device:
@@ -812,6 +811,9 @@ class TestOAuth2CookieFlow:
             if call.kwargs.get("event_type") == AuditEventType.ACCESS_TOKEN_REFRESHED
         ]
         assert refreshed, "no ACCESS_TOKEN_REFRESHED audit event logged"
+        # OA-305: the credential-less cookie flow logs "none" (no auth), never "unknown".
+        for call in refreshed:
+            assert call.kwargs["metadata"].model_dump()["client_auth_method"] == "none"
         metadata = refreshed[0].kwargs["metadata"]
         assert metadata.client_id == test_settings.oauth2_client_id
         assert metadata.refresh_token_family_id == getattr(rt, "family_id", None)

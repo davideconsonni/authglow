@@ -316,7 +316,7 @@ come convenienza same-origin.
   offline_access"); valutare warning audit quando il grant lo permetterebbe ma lo scope manca.
   Acceptance: test senza `offline_access` → solo access, e docs che lo dicono.
 
-- [ ] **[OA-305]** 3.5 `client_auth_method` in audit su tutti i grant.
+- [x] **[OA-305]** 3.5 `client_auth_method` in audit su tutti i grant.
   Contesto: solo `client_credentials` logga il metodo (`basic/post/assertion`) in
   `ClientCredentialsMetadata`; gli altri grant no — in incident response non si sa come si è autenticato il client.
   Istruzioni: estendere il pattern `cc_auth_method` agli altri rami del token endpoint.
@@ -421,4 +421,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-301 | Fase 3 / 3.1 Token first-party standard | 4471ad2 | `api/auth.py`: cancellato ramo `{"ok": True}` (cookie già su risposta a L1484) → sempre `Token` + cookie; `OAuthCallbackPage.tsx`: parsing Token-unico + nonce se richiesto; gate rafforzato (access/refresh/id_token + 2 cookie); cookie-flow `/api/auth/refresh` invariato. Matrice 28 passed + area 73 passed; tsc/eslint + unit frontend verdi; E2E login-dashboard 4 passed con backend su 8001 (il fallimento iniziale era backend spento, non regressione). |
 | 2026-09-12 | OA-302 | Fase 3 / 3.2 Codici errore conformi | e63bba8 | `api/auth.py`: verifier errato `401`→`400 invalid_grant` (RFC 6749 §5.2); mismatch pinnato come corretto (`issued to another client` → `invalid_grant`/400, contro-correzione al piano); gate esteso a 2 casi; L1267 invariato (residuo annotato). Matrice + area PKCE/auth 37 passed; docs errori; ruff/mypy puliti. |
 | 2026-09-12 | OA-303 | Fase 3 / 3.3 c_hash legato al code | 5ad5e22 | `api/auth.py`: `authorization_code=code` al mint (plaintext mai persistito, solo hash); xfail rimosso (matrice 30 passed + 1 xfail OA-305); area jwt/id_token 64 passed; docs hashes; ruff/mypy puliti. |
-| 2026-09-12 | OA-304 | Fase 3 / 3.4 Gate offline_access documentato | OA-304 (questo commit) | Acceptance già verde (pin + docs OA-206 + playground); docstring `Token.refresh_token` (solo con `offline_access`, OIDC Core §11); waiver warning audit (rumore sul caso normale + dato ricostruibile da eventi esistenti); area offline_access/device 14 passed; ruff pulito. |
+| 2026-09-12 | OA-304 | Fase 3 / 3.4 Gate offline_access documentato | b1daf89 | Acceptance già verde (pin + docs OA-206 + playground); docstring `Token.refresh_token` (solo con `offline_access`, OIDC Core §11); waiver warning audit (rumore sul caso normale + dato ricostruibile da eventi esistenti); area offline_access/device 14 passed; ruff pulito. |
+| 2026-09-12 | OA-305 | Fase 3 / 3.5 client_auth_method in audit | OA-305 (questo commit) | Helper `_token_client_auth_method()` (assertion→registrato, basic/post, `"none"`); campo su `TokenIssuedMetadata`+`TokenRefreshedMetadata`; popolato in code (3 eventi), refresh e cookie (`"none"`); cc unificato; device redeem residuo (nessun evento). Matrice 31 passed + 0 xfail (`OA_GAP` vuoto); area audit/auth 101 passed; docs audit-logging; ruff/mypy puliti. |
