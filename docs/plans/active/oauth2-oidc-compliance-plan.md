@@ -328,7 +328,7 @@ come convenienza same-origin.
 
 ## Fase 4 — OIDC conformance suite (test-only, poi fix)
 
-- [ ] **[OA-401]** 4.1 Eseguire un profilo OIDC Basic (RP/OP) o tool esterno di conformance contro env di test.
+- [x] **[OA-401]** 4.1 Eseguire un profilo OIDC Basic (RP/OP) o tool esterno di conformance contro env di test.
   Contesto: la Fase 0 dà il gate interno, ma solo una suite esterna certifica. Allegare il report
   (pass/fail per profilo) in `docs/plans/active/` accanto a questo file.
   Acceptance: report allegato + ogni MUST fallito mappato a un item (esistente o nuovo) di questo piano.
@@ -423,4 +423,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-303 | Fase 3 / 3.3 c_hash legato al code | 5ad5e22 | `api/auth.py`: `authorization_code=code` al mint (plaintext mai persistito, solo hash); xfail rimosso (matrice 30 passed + 1 xfail OA-305); area jwt/id_token 64 passed; docs hashes; ruff/mypy puliti. |
 | 2026-09-12 | OA-304 | Fase 3 / 3.4 Gate offline_access documentato | b1daf89 | Acceptance già verde (pin + docs OA-206 + playground); docstring `Token.refresh_token` (solo con `offline_access`, OIDC Core §11); waiver warning audit (rumore sul caso normale + dato ricostruibile da eventi esistenti); area offline_access/device 14 passed; ruff pulito. |
 | 2026-09-12 | OA-305 | Fase 3 / 3.5 client_auth_method in audit | 6beba1f | Helper `_token_client_auth_method()` (assertion→registrato, basic/post, `"none"`); campo su `TokenIssuedMetadata`+`TokenRefreshedMetadata`; popolato in code (3 eventi), refresh e cookie (`"none"`); cc unificato; device redeem residuo (nessun evento). Matrice 31 passed + 0 xfail (`OA_GAP` vuoto); area audit/auth 101 passed; docs audit-logging; ruff/mypy puliti. |
-| 2026-09-12 | OA-306 | Fase 3 / 3.6 Done fase | OA-306 (questo commit) | Docstring DCR stantia fixata; ARCHITECTURE.md invariata (zero nuovi moduli); residui first-party/`INTERNAL_AUDIENCE`/device-audit dichiarati Fase 5. Backend `470+2313+34=2817 passed, 0 failed, 0 xfail` (3 parti; run interi con scheduling-xdist patologico in sessione); frontend 543 passed. 1 regressione OA-305 trovata/fixata (`oauth_client` non bound nel ramo cc → riuso client DPoP). Fase 3 chiusa. |
+| 2026-09-12 | OA-306 | Fase 3 / 3.6 Done fase | 07fd85a | Docstring DCR stantia fixata; ARCHITECTURE.md invariata (zero nuovi moduli); residui first-party/`INTERNAL_AUDIENCE`/device-audit dichiarati Fase 5. Backend `470+2313+34=2817 passed, 0 failed, 0 xfail` (3 parti; run interi con scheduling-xdist patologico in sessione); frontend 543 passed. 1 regressione OA-305 trovata/fixata (`oauth_client` non bound nel ramo cc → riuso client DPoP). Fase 3 chiusa. |
+| 2026-09-12 | OA-401 | Fase 4 / 4.1 Profilo OIDC Basic esterno | OA-401 (questo commit) | Nuovo `scripts/oidc_basic_rp_check.py` (RP black-box: solo superficie pubblica, 35 check, CSRF da browser, report UTF-8); report `oidc-basic-rp-report.md`: **35/35 PASS**, zero MUST falliti → niente nuovi item. Backend demo 8001; ruff pulito. |
