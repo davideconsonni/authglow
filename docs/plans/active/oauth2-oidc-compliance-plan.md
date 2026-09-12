@@ -143,7 +143,7 @@ harness, ogni fix delle Fasi 1–3 rischia regressioni silenziose e la Fase 4
   (vedi AGENTS.md "Secret Management"); i secret di test via `secrets.token_urlsafe`.
   Acceptance: ogni fixture crea client via API/storage e lo pulisce; i test 0.1 le usano tutte.
 
-- [ ] **[OA-003]** 0.3 Done fase: `pytest tests/conformance -q` verde-a-parte-xfail + lista xfail == gap aperti delle Fasi 1–3.
+- [x] **[OA-003]** 0.3 Done fase: `pytest tests/conformance -q` verde-a-parte-xfail + lista xfail == gap aperti delle Fasi 1–3.
 
 ---
 
@@ -183,7 +183,7 @@ più client si assuefanno al comportamento non-standard.
   refresh dopo logout dà `invalid_grant`.
   Rischi: double-logout deve restare idempotente; non rompere il fan-out frontchannel (vedi OA-204).
 
-- [ ] **[OA-103]** 1.3 Cookie-flow `/api/auth/refresh` allineato al branch refresh standard.
+- [x] **[OA-103]** 1.3 Cookie-flow `/api/auth/refresh` allineato al branch refresh standard.
   Contesto: `POST /api/auth/refresh` (`backend/authglow/api/auth.py` ~L2085) legge il cookie
   refresh e ruota con `client_id=settings.oauth2_client_id` hardcodato, senza client-auth né
   enforcement DPoP esplicito come nel ramo `grant_type=refresh_token` del token endpoint
@@ -197,7 +197,7 @@ più client si assuefanno al comportamento non-standard.
   Acceptance: cookie di altro client → 403/401 (non ruotato); client `dpop_bound` senza proof → 401;
   audit `ACCESS_TOKEN_REFRESHED` equivalente nei due percorsi.
 
-- [ ] **[OA-104]** 1.4 Revoca access-token: verificare + testare il ramo JWT.
+- [x] **[OA-104]** 1.4 Revoca access-token: verificare + testare il ramo JWT.
   Contesto: `/oauth2/revoke` (`backend/authglow/api/oauth2_advanced.py` ~L67) — il ramo refresh è
   verificato (revoca + audit), il ramo access-token era troncato in lettura durante l'assessment:
   va confermato che inserisca il `jti` in blacklist (coerente con il check in
@@ -207,7 +207,7 @@ più client si assuefanno al comportamento non-standard.
   Istruzioni: leggere per intero `revoke_token` oltre L120; aggiungere test di regressione.
   Acceptance: i tre assert sopra in un unico test.
 
-- [ ] **[OA-105]** 1.5 Done fase: 1.1–1.4 verdi + CHANGELOG/docs aggiornati per i breaking (device param, logout-revoca, cookie-flow).
+- [x] **[OA-105]** 1.5 Done fase: 1.1–1.4 verdi + CHANGELOG/docs aggiornati per i breaking (device param, logout-revoca, cookie-flow).
 
 ---
 
@@ -216,7 +216,7 @@ più client si assuefanno al comportamento non-standard.
 Principio: o si rimuove la deviazione, o la si dichiara in discovery/docs con test che la fissa.
 Niente deviazioni silenziose.
 
-- [ ] **[OA-201]** 2.1 Policy `state` unificata.
+- [x] **[OA-201]** 2.1 Policy `state` unificata.
   Contesto: RFC 6749 rende `state` RECOMMENDED ma opzionale; AuthGlow lo rende obbligatorio
   (`_validate_state`, `_MIN_STATE_LEN=16`, regex charset in `backend/authglow/api/auth.py` ~L198-221,
   enforcement ~L701) con 400 JSON diretto. Client conformi senza state si rompono; inoltre gli errori
@@ -408,4 +408,9 @@ stabilizzato il wire-format.
 | 2026-09-11 | OA-001 | Fase 0 / 0.1 Matrice di conformità | n/a (non committato) | `backend/tests/conformance/test_oauth2_oidc_matrix.py`: 15 test (6 verdi + 9 xfail strict OA-101/102/201/202/203/204/205/301/302), verde-a-parte-xfail serial + `-n auto`, ruff pulito. |
 | 2026-09-11 | OA-101 | Fase 1 / 1.1 Device device_code | n/a (non committato) | `api/auth.py`: form field canonico `device_code=` + alias `code=` deprecato (precedenza canonico, warning `device_code_alias_used`); doc aggiornata; matrice 9 verdi + 8 xfail, regressione device/grant/offline verde, ruff pulito. |
 | 2026-09-11 | OA-102 | Fase 1 / 1.2 Logout revoca | n/a (non committato) | `api/oidc.py`: helper `_revoke_session_tokens` (blacklist jti + `revoke_user_tokens` scoped aud/first-party) nei 3 rami logout; doc aggiornata; matrice 10 verdi + 7 xfail, regressione revoke/oidc/logout/discovery verde, ruff pulito. |
+| 2026-09-12 | OA-104 | Fase 1 / 1.4 Revoca access-token | n/a (non committato) | Ramo JWT già conforme (blacklist jti + audience binding + 200 non-oracle): nuovo `TestRFC7009Revocation::test_rfc7009_revoke_access_token` verde (revoke → userinfo 401 + introspect inactive + unknown → 200 `{}`); harness esteso con `oauth2_advanced.router`. |
+| 2026-09-12 | OA-003 | Fase 0 / 0.3 Done fase | n/a (non committato) | Matrice 14 verdi + 9 xfail strict (201/202/203/204/205/301/302/303/305) serial + `-n auto`, ruff pulito; nuovi pin verdi OA-103a/b (cookie first-party-only), OA-104 (revoca), OA-304 (gate offline_access); OA-103/OA-304 restano aperti solo per lavoro docs/strutturale (OA-103 chiuso il 2026-09-12, vedi riga sotto). |
+| 2026-09-12 | OA-103 | Fase 1 / 1.3 Cookie-flow allineato | n/a (non committato) | `api/auth.py`: owner risolto dal RT (`_resolve_cookie_refresh_owner`) + gate grant/DPoP + first-party-only esplicito + audit condiviso (`_audit_refresh_rotation`, con family); `expected_htu` parametrizzato; minting invariato (OA-301/504). Test `TestOAuth2CookieFlow` 5/5 (no-proof → 400 `missing_dpop_proof`, deviazione concordata dai 401 dell'acceptance); fix pin OA-003 vacui (header Cookie espliciti); docs aggiornate; area 98 verdi + mypy/ruff puliti. |
+| 2026-09-12 | OA-105 | Fase 1 / 1.5 Done fase | n/a (non committato) | Full suite `2802 passed, 9 xfailed, 0 failed` (`-n auto`); docs breaking complete (`refresh-token-rotation.md` per OA-103, resto già coperto in OA-101/102); niente CHANGELOG nel repo → il Registro funge da changelog; frontend invariato (`DeviceCodeFlow` già canonico). Fase 1 chiusa. |
+| 2026-09-12 | OA-201 | Fase 2 / 2.1 Policy state | n/a (non committato) | `api/auth.py`: S2 — assente completa senza echo, debole → 302 `invalid_request` senza echo; choke point `valid_state` su tutti gli echo/storage + hardening in `_oauth_error_redirect`; helper/charset invariati. Matrice 21 verdi + 8 xfail (xfail OA-201 rimosso, 3 nuovi test); `test_state_param.py` riscritto, `test_vapt044.py` verde; sistemati 3 test che passavano vacuamente sul vecchio gate (csrf, hint); restano solo 2 expired pre-esistenti (provati via stash); docs `authorization-code-pkce.md`; mypy/ruff puliti. |
 |      |        |           |        |      |

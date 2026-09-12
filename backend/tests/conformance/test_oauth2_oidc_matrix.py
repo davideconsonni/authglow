@@ -24,13 +24,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 OA_GAP = {
-    "OA-201": "state optional (RFC 6749 RECOMMENDED)",
     "OA-202": "discovery must not advertise fragment",
     "OA-203": "explicit invalid_scope, no silent downgrade",
     "OA-204": "stable sid per session",
     "OA-205": "software_statement trust anchor",
     "OA-301": "standard Token response for first-party",
     "OA-302": "conforming error codes",
+    "OA-303": "c_hash bound to the authorization code",
+    "OA-305": "client_auth_method in audit on every grant",
 }
 
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
@@ -53,6 +54,7 @@ def matrix_app(test_settings, storage, jwt_service, oauth2_service, mfa_service,
     from fastapi import FastAPI
 
     from authglow.api import auth as auth_mod
+    from authglow.api import oauth2_advanced as adv_mod
     from authglow.api import oidc as oidc_mod
     from authglow.api.oauth_errors import register_oauth2_error_handler
     from authglow.repositories.file.oauth_client import FileOAuth2ClientRepository
@@ -85,6 +87,9 @@ def matrix_app(test_settings, storage, jwt_service, oauth2_service, mfa_service,
     register_oauth2_error_handler(app)
     app.include_router(auth_mod.router)
     app.include_router(oidc_mod.router)
+    # OA-104: revocation + introspection (RFC 7009 / RFC 7662) are part of
+    # the protocol surface the matrix pins — mount the advanced router too.
+    app.include_router(adv_mod.router)
 
     app.dependency_overrides[auth_mod.get_user_storage] = lambda: storage
     app.dependency_overrides[auth_mod.get_oauth2_service] = lambda: oauth2_service
@@ -92,10 +97,20 @@ def matrix_app(test_settings, storage, jwt_service, oauth2_service, mfa_service,
     app.dependency_overrides[auth_mod.get_mfa_service] = lambda: mfa_service
     app.dependency_overrides[auth_mod.get_session_service] = lambda: session_service
     app.dependency_overrides[auth_mod.get_audit_service] = lambda: mock_audit
+    # OA-104: the advanced router has its own factories — rebind them to
+    # the same test-bound instances (never the process-global singletons).
+    app.dependency_overrides[adv_mod.get_refresh_token_service] = lambda: refresh_svc
+    app.dependency_overrides[adv_mod.get_jwt_service] = lambda: jwt_service
+    app.dependency_overrides[adv_mod.get_oauth2_service] = lambda: oauth2_service
+    app.dependency_overrides[adv_mod.get_audit_service] = lambda: mock_audit
+    app.dependency_overrides[adv_mod.get_user_storage] = lambda: storage
 
     with ExitStack() as stack:
         stack.enter_context(patch("authglow.api.auth.get_settings", return_value=test_settings))
         stack.enter_context(patch("authglow.api.oidc.get_settings", return_value=test_settings))
+        stack.enter_context(
+            patch("authglow.api.oauth2_advanced.get_settings", return_value=test_settings)
+        )
         stack.enter_context(
             patch("authglow.services.device_auth.get_settings", return_value=test_settings)
         )
@@ -154,6 +169,40 @@ def _pkce_pair() -> tuple:
     return verifier, challenge
 
 
+def _dpop_proof_for(*, private_key, htu: str, htm: str = "POST") -> str:
+    """Mint a DPoP proof JWT (ES256, embedded JWK) for the given target."""
+    import json
+    import time
+
+    import jwt
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    if private_key is None:
+        private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    public_jwk = json.loads(jwt.algorithms.ECAlgorithm.to_jwk(private_key.public_key()))
+    now = int(time.time())
+    return jwt.encode(
+        {"htm": htm, "htu": htu, "iat": now, "jti": f"dpop-{time.time_ns()}"},
+        private_key,
+        algorithm="ES256",
+        headers={"alg": "ES256", "typ": "dpop+jwt", "jwk": public_jwk},
+    )
+
+
+def _cookie_htu(test_settings) -> str:
+    """Absolute URL of the cookie refresh endpoint (DPoP ``htu``)."""
+    return f"{test_settings.issuer.rstrip('/')}/api/auth/refresh"
+
+
+def _cookie_headers(test_settings, token, dpop_proof=None) -> dict:
+    """Per-request ``Cookie`` header (explicit — avoids TestClient jar quirks)."""
+    headers = {"Cookie": f"{test_settings.auth_cookie_refresh_name}={token}"}
+    if dpop_proof is not None:
+        headers["DPoP"] = dpop_proof
+    return headers
+
+
 def _mint_code(
     oauth2_service, *, client_id, user_id, redirect_uri, scope, challenge=None
 ) -> object:
@@ -171,6 +220,63 @@ def _mint_code(
         )
     )
     return code, verifier
+
+
+def _make_refresh_token(test_settings, *, user_id, client_id, scopes) -> object:
+    """Create a real refresh token via the service (test-bound repo)."""
+    from unittest.mock import patch
+
+    from authglow.repositories.file.refresh_token import FileRefreshTokenRepository
+    from authglow.services.refresh_token import RefreshTokenService
+
+    with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
+        svc = RefreshTokenService(repository=FileRefreshTokenRepository(settings=test_settings))
+        return asyncio.run(
+            svc.create_refresh_token(user_id=user_id, client_id=client_id, scopes=list(scopes))
+        )
+
+
+def _get_refresh_token(test_settings, plaintext) -> object:
+    """Fetch a refresh token by plaintext (None when unknown)."""
+    from unittest.mock import patch
+
+    from authglow.repositories.file.refresh_token import FileRefreshTokenRepository
+    from authglow.services.refresh_token import RefreshTokenService
+
+    with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
+        svc = RefreshTokenService(repository=FileRefreshTokenRepository(settings=test_settings))
+        return asyncio.run(svc.get_refresh_token(plaintext))
+
+
+def _make_no_consent_client(test_settings) -> dict:
+    """Bespoke confidential client with ``require_consent=False`` (for OA-201).
+
+    Lets a credential login complete straight to an authorization code
+    (no consent screen), so the stateless completion path is pinnable.
+    """
+    from authglow.core.cache import _reset_cache_registry
+    from authglow.models.oauth_client import OAuth2Client
+    from authglow.repositories.file.oauth_client import FileOAuth2ClientRepository
+    from authglow.services.oauth_client import OAuth2ClientStorage
+
+    secret = secrets.token_urlsafe(32)
+    _reset_cache_registry()
+    repo = FileOAuth2ClientRepository(settings=test_settings)
+    storage = OAuth2ClientStorage(repository=repo, settings=test_settings)
+    client = OAuth2Client(
+        client_secret="placeholder",
+        client_name="Conformance No Consent",
+        redirect_uris=["https://example.com/cb"],
+        allowed_scopes=["openid", "read"],
+        grant_types=["authorization_code", "refresh_token"],
+        is_confidential=True,
+        require_pkce=True,
+        require_consent=False,
+        token_endpoint_auth_method="client_secret_basic",
+    )
+    with patch("authglow.services.password.get_settings", return_value=test_settings):
+        created = asyncio.run(storage.create_client(client, secret))
+    return {"client": created, "secret": secret}
 
 
 def _make_client_with_scopes(test_settings, allowed_scopes) -> dict:
@@ -278,13 +384,56 @@ class TestRFC6749AuthorizationCode:
         query = parse_qs(urlparse(res.headers["location"]).query)
         assert query["state"] == [state]
 
-    @pytest.mark.xfail(strict=True, reason="OA-201: state optional (RFC 6749 RECOMMENDED)")
     def test_rfc6749_state_optional(self, matrix_app, conf_public_pkce_client):
-        """Authorize without `state` must not fail on the state gate."""
+        """OA-201: authorize without `state` must not fail on the state gate."""
         form = _authorize_form(conf_public_pkce_client)
         del form["state"]
         res = matrix_app.post("/api/oauth2/authorize", data=form)
         assert "state parameter is required" not in res.text
+
+    def test_rfc6749_state_absent_completes(
+        self, matrix_app, test_settings, storage, oauth2_service
+    ):
+        """OA-201: a stateless request with credentials completes (code, no state echo)."""
+        bundle = _make_no_consent_client(test_settings)
+        user, email = _make_user(test_settings, storage, ["openid", "read"])
+        verifier, challenge = _pkce_pair()
+        res = matrix_app.post(
+            "/api/oauth2/authorize",
+            data={
+                "email": email,
+                "password": PASSWORD,
+                "client_id": bundle["client"].client_id,
+                "redirect_uri": "https://example.com/cb",
+                "scope": "openid read",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        assert res.status_code == 200, res.text
+        redirect_url = res.json()["redirect_url"]
+        query = parse_qs(urlparse(redirect_url).query)
+        assert "code" in query
+        assert "state" not in query
+
+    def test_rfc6749_state_weak_redirects_without_echo(self, matrix_app, conf_public_pkce_client):
+        """OA-201: a present-but-weak state → 302 `invalid_request`, never echoed."""
+        form = _authorize_form(conf_public_pkce_client, state="short")
+        res = matrix_app.post("/api/oauth2/authorize", data=form)
+        assert res.status_code == 302, res.text
+        query = parse_qs(urlparse(res.headers["location"]).query)
+        assert query.get("error") == ["invalid_request"]
+        assert "state" not in query
+
+    def test_rfc6749_state_tainted_never_echoed(self, matrix_app, conf_public_pkce_client):
+        """OA-201: a tainted state (log-injection chars) is dropped, not reflected."""
+        form = _authorize_form(conf_public_pkce_client, state="goodstate-good\nFAKE")
+        res = matrix_app.post("/api/oauth2/authorize", data=form)
+        assert res.status_code == 302, res.text
+        location = res.headers["location"]
+        assert "\n" not in location
+        assert "FAKE" not in location
+        assert "state" not in parse_qs(urlparse(location).query)
 
     @pytest.mark.xfail(strict=True, reason="OA-203: explicit invalid_scope, no silent downgrade")
     def test_rfc6749_scope_explicit(self, matrix_app, test_settings, storage, oauth2_service):
@@ -379,9 +528,55 @@ class TestRFC6749AuthorizationCode:
         body = res.json()
         assert body.get("access_token"), body
 
+    @pytest.mark.xfail(strict=True, reason="OA-305: client_auth_method in audit on every grant")
+    def test_rfc6749_client_auth_method_audited(
+        self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
+    ):
+        """OA-305: every ACCESS_TOKEN_ISSUED carries `client_auth_method`."""
+        from authglow.api import auth as auth_mod
+        from authglow.models.audit_events import AuditEventType
+
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+        matrix_app.app.dependency_overrides[auth_mod.get_audit_service] = lambda: mock_audit
+
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read", "offline_access"])
+        code, verifier = _mint_code(
+            oauth2_service,
+            client_id=bundle["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="openid read offline_access",
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": verifier,
+            },
+        )
+        assert res.status_code == 200, res.text
+        issued = [
+            call
+            for call in mock_audit.log_event.await_args_list
+            if call.kwargs.get("event_type") == AuditEventType.ACCESS_TOKEN_ISSUED
+        ]
+        assert issued, "no ACCESS_TOKEN_ISSUED audit event logged"
+        for call in issued:
+            metadata = call.kwargs.get("metadata")
+            assert metadata is not None
+            assert "client_auth_method" in metadata.model_dump(), metadata
+
 
 class TestRFC8628Device:
-    def test_rfc8628_device_code_param(self, matrix_app, test_settings, storage, conf_device_client):
+    def test_rfc8628_device_code_param(
+        self, matrix_app, test_settings, storage, conf_device_client
+    ):
         """OA-101: the canonical `device_code=` parameter redeems an approved authorization."""
         from authglow.services.device_auth import DeviceAuthorizationService
 
@@ -448,6 +643,192 @@ class TestRFC8628Device:
         assert res.json()["error"] == "invalid_request"
 
 
+class TestOAuth2CookieFlow:
+    def test_oauth2_cookie_flow_rejects_foreign_client(
+        self, matrix_app, test_settings, storage, conf_confidential_basic_client
+    ):
+        """OA-103a: a cookie minted for another client → 401, never rotated.
+
+        The cookie flow is explicitly first-party-only (option B binding
+        with option A policy gates): foreign cookies are rejected even
+        though the owner resolves fine.
+        """
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        rt = _make_refresh_token(
+            test_settings,
+            user_id=user.id,
+            client_id=bundle["client"].client_id,
+            scopes=["openid", "read"],
+        )
+        res = matrix_app.post("/api/auth/refresh", headers=_cookie_headers(test_settings, rt.token))
+        assert res.status_code == 401, res.text
+        assert "first-party" in res.text
+        # The foreign token must not have been consumed by the attempt.
+        rt_check = _get_refresh_token(test_settings, rt.token)
+        assert rt_check is not None and not rt_check.used and not rt_check.revoked
+
+    def test_oauth2_cookie_flow_requires_dpop_for_bound_client(
+        self, matrix_app, test_settings, storage, conf_dpop_bound_client
+    ):
+        """OA-103b: a dpop-bound cookie without proof → 400 `missing_dpop_proof`.
+
+        The cookie flow enforces the same DPoP gate as the standard
+        refresh branch (RFC 9449 §5) — resolved on the owning client,
+        not on the hardcoded first-party id.
+        """
+        bundle = conf_dpop_bound_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        rt = _make_refresh_token(
+            test_settings,
+            user_id=user.id,
+            client_id=bundle["client"].client_id,
+            scopes=["openid", "read"],
+        )
+        res = matrix_app.post("/api/auth/refresh", headers=_cookie_headers(test_settings, rt.token))
+        assert res.status_code == 400, res.text
+        assert res.json()["error"] == "invalid_request"
+        assert res.json().get("error_code") == "missing_dpop_proof"
+        rt_check = _get_refresh_token(test_settings, rt.token)
+        assert rt_check is not None and not rt_check.used and not rt_check.revoked
+
+    def test_oauth2_cookie_flow_rejects_verified_dpop_foreign(
+        self, matrix_app, test_settings, storage, conf_dpop_bound_client
+    ):
+        """OA-103b: a *valid* proof for a foreign dpop cookie still → 401.
+
+        The DPoP gate runs before the first-party check: verification
+        succeeds, then the foreign session is rejected — and the token
+        is not consumed.
+        """
+        bundle = conf_dpop_bound_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        rt = _make_refresh_token(
+            test_settings,
+            user_id=user.id,
+            client_id=bundle["client"].client_id,
+            scopes=["openid", "read"],
+        )
+        proof = _dpop_proof_for(private_key=None, htu=_cookie_htu(test_settings))
+        res = matrix_app.post(
+            "/api/auth/refresh",
+            headers=_cookie_headers(test_settings, rt.token, dpop_proof=proof),
+        )
+        assert res.status_code == 401, res.text
+        assert "first-party" in res.text
+        rt_check = _get_refresh_token(test_settings, rt.token)
+        assert rt_check is not None and not rt_check.used and not rt_check.revoked
+
+    def test_oauth2_cookie_flow_rejects_invalid_dpop_proof(
+        self, matrix_app, test_settings, storage, conf_dpop_bound_client
+    ):
+        """OA-103b: a proof for the wrong target → 401 with a DPoP `error_code`.
+
+        Proves the cookie flow *verifies* the proof (htu-bound) instead
+        of merely checking presence: a token-endpoint proof is rejected
+        here with a DPoP error, not the first-party rejection.
+        """
+        bundle = conf_dpop_bound_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        rt = _make_refresh_token(
+            test_settings,
+            user_id=user.id,
+            client_id=bundle["client"].client_id,
+            scopes=["openid", "read"],
+        )
+        wrong_htu = f"{test_settings.issuer.rstrip('/')}/oauth2/token"
+        proof = _dpop_proof_for(private_key=None, htu=wrong_htu)
+        res = matrix_app.post(
+            "/api/auth/refresh",
+            headers=_cookie_headers(test_settings, rt.token, dpop_proof=proof),
+        )
+        assert res.status_code == 401, res.text
+        assert res.json().get("error_code") is not None, res.text
+        rt_check = _get_refresh_token(test_settings, rt.token)
+        assert rt_check is not None and not rt_check.used and not rt_check.revoked
+
+    def test_oauth2_cookie_flow_first_party_rotates(self, matrix_app, test_settings, storage):
+        """OA-103: the dashboard flow still works — first-party cookie → 200 + rotation + audit.
+
+        Regression guard for the OA-103 rewire: the first-party owner
+        passes the grant gate, needs no DPoP proof (not bound), rotates,
+        and logs the shared `ACCESS_TOKEN_REFRESHED` shape with family.
+        """
+        from authglow.api import auth as auth_mod
+        from authglow.models.audit_events import AuditEventType
+
+        mock_audit = MagicMock()
+        mock_audit.log_event = AsyncMock()
+        matrix_app.app.dependency_overrides[auth_mod.get_audit_service] = lambda: mock_audit
+
+        user, _email = _make_user(test_settings, storage, ["openid", "read", "offline_access"])
+        rt = _make_refresh_token(
+            test_settings,
+            user_id=user.id,
+            client_id=test_settings.oauth2_client_id,
+            scopes=["openid", "read", "offline_access"],
+        )
+        res = matrix_app.post("/api/auth/refresh", headers=_cookie_headers(test_settings, rt.token))
+        assert res.status_code == 200, res.text
+        assert res.json() == {"ok": True}
+        # The presented token was consumed by rotation...
+        rt_check = _get_refresh_token(test_settings, rt.token)
+        assert rt_check is not None and rt_check.used
+        # ...a fresh refresh cookie was issued...
+        new_cookie = res.cookies.get(test_settings.auth_cookie_refresh_name)
+        assert new_cookie and new_cookie != rt.token
+        # ...and the rotation was audited in the shared shape.
+        refreshed = [
+            call
+            for call in mock_audit.log_event.await_args_list
+            if call.kwargs.get("event_type") == AuditEventType.ACCESS_TOKEN_REFRESHED
+        ]
+        assert refreshed, "no ACCESS_TOKEN_REFRESHED audit event logged"
+        metadata = refreshed[0].kwargs["metadata"]
+        assert metadata.client_id == test_settings.oauth2_client_id
+        assert metadata.refresh_token_family_id == getattr(rt, "family_id", None)
+
+
+class TestRFC7009Revocation:
+    def test_rfc7009_revoke_access_token(
+        self, matrix_app, test_settings, storage, jwt_service, conf_confidential_basic_client
+    ):
+        """OA-104: revoke access → userinfo 401 + introspect inactive; unknown → 200 {}.
+
+        This is the acceptance test from the plan (revoke branch was
+        unread during the assessment). It passes: the JWT branch in
+        ``oauth2_advanced.revoke_token`` blacklists the jti with audience
+        binding and answers non-oracle 200s.
+        """
+        bundle = conf_confidential_basic_client
+        user, email = _make_user(test_settings, storage, ["openid", "read"])
+        token = jwt_service.create_access_token(
+            user.id, email, ["openid", "read"], audience=bundle["client"].client_id
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        creds = {
+            "client_id": bundle["client"].client_id,
+            "client_secret": bundle["secret"],
+        }
+        assert matrix_app.get("/oauth2/userinfo", headers=headers).status_code == 200
+        res = matrix_app.post(
+            "/oauth2/revoke",
+            data={"token": token, "token_type_hint": "access_token", **creds},
+        )
+        assert res.status_code == 200, res.text
+        assert res.json() == {}
+        assert matrix_app.get("/oauth2/userinfo", headers=headers).status_code == 401
+        res = matrix_app.post(
+            "/oauth2/introspect",
+            data={"token": token, "token_type_hint": "access_token", **creds},
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["active"] is False
+        res = matrix_app.post("/oauth2/revoke", data={"token": "no-such-token", **creds})
+        assert res.status_code == 200, res.text
+        assert res.json() == {}
+
+
 class TestOIDC:
     @pytest.mark.xfail(strict=True, reason="OA-202: discovery must not advertise fragment")
     def test_oidc_discovery_no_fragment(self, matrix_app):
@@ -468,9 +849,7 @@ class TestOIDC:
         token = jwt_service.create_access_token(
             user.id, email, ["openid", "read"], audience=bundle["client"].client_id
         )
-        with patch(
-            "authglow.services.refresh_token.get_settings", return_value=test_settings
-        ):
+        with patch("authglow.services.refresh_token.get_settings", return_value=test_settings):
             refresh_svc = RefreshTokenService(
                 repository=FileRefreshTokenRepository(settings=test_settings)
             )
@@ -509,6 +888,75 @@ class TestOIDC:
         first_sid = jwt_service.decode_id_token(first, expected_aud=client_id).sid
         second_sid = jwt_service.decode_id_token(second, expected_aud=client_id).sid
         assert first_sid == second_sid
+
+    def test_oidc_offline_access_gate(
+        self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
+    ):
+        """OA-304: without `offline_access` the exchange is access-only.
+
+        Green pin for the OIDC Core §11 gate. Docs + audit warning for
+        the missing refresh remain OA-304 work.
+        """
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        code, verifier = _mint_code(
+            oauth2_service,
+            client_id=bundle["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="openid read",
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": verifier,
+            },
+        )
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body.get("access_token"), body
+        assert body.get("id_token"), body
+        assert body.get("refresh_token") is None, body
+
+    @pytest.mark.xfail(strict=True, reason="OA-303: c_hash bound to the authorization code")
+    def test_oidc_c_hash_bound(
+        self, matrix_app, test_settings, storage, oauth2_service, conf_confidential_basic_client
+    ):
+        """OA-303: the ID token from a code flow carries a verifiable `c_hash`."""
+        import jwt as pyjwt
+
+        bundle = conf_confidential_basic_client
+        user, _email = _make_user(test_settings, storage, ["openid", "read"])
+        code, verifier = _mint_code(
+            oauth2_service,
+            client_id=bundle["client"].client_id,
+            user_id=user.id,
+            redirect_uri="https://example.com/cb",
+            scope="openid read",
+        )
+        res = matrix_app.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code.code,
+                "redirect_uri": "https://example.com/cb",
+                "client_id": bundle["client"].client_id,
+                "client_secret": bundle["secret"],
+                "code_verifier": verifier,
+            },
+        )
+        assert res.status_code == 200, res.text
+        id_token = res.json().get("id_token")
+        assert id_token, res.text
+        payload = pyjwt.decode(id_token, options={"verify_signature": False})
+        digest = hashlib.sha256(code.code.encode()).digest()
+        expected = base64.urlsafe_b64encode(digest[:16]).rstrip(b"=").decode()
+        assert payload.get("c_hash") == expected, payload
 
 
 class TestRFC7591DCR:

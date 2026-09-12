@@ -2,8 +2,9 @@
 guards the OAuth 2.0 authorization endpoint.
 
 These tests target the regex / length checks in isolation;
-the integration-level behaviour (HTTP 400 from the endpoint)
-is covered in ``tests/integration/test_state_param.py``.
+the integration-level behaviour (OA-201: missing completes,
+weak redirects without echo) is covered in
+``tests/integration/test_state_param.py``.
 """
 
 import secrets

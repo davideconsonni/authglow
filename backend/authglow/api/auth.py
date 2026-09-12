@@ -42,6 +42,7 @@ from authglow.models.audit_metadata import (
 from authglow.models.claim_policy import ClaimTarget
 from authglow.models.oauth_client import OAuth2Client
 from authglow.models.rbac import ADMIN_ROLE_NAME
+from authglow.models.refresh_token import RefreshToken
 from authglow.models.token import Token
 from authglow.models.user import (
     InviteUser,
@@ -201,7 +202,7 @@ _STATE_OK = re.compile(r"^[A-Za-z0-9_\-.:~+/=]{16,512}\Z")
 
 
 def _validate_state(state: Optional[str]) -> Optional[str]:
-    """VAPT-044: enforce minimum length + character set on ``state``.
+    """OA-201 (ex VAPT-044): echo-safety check for ``state``.
 
     Returns the state unchanged when it is a valid opaque nonce
     (16-512 chars, safe character set). Returns ``None`` when
@@ -209,10 +210,11 @@ def _validate_state(state: Optional[str]) -> Optional[str]:
     characters that could break the redirect URL or the audit
     log (whitespace, control chars, shell metacharacters).
 
-    The function never raises — callers are expected to map
-    ``None`` to a 400 response with a clear error message
-    (the redirect-URL echo path is the public surface, so
-    refusing to echo a tainted state is the secure default).
+    The function never raises. Callers echo the return value
+    (``None`` simply omits the parameter) and — for a PRESENT
+    but invalid state — refuse via redirect without echoing.
+    An absent state is not an error (RFC 6749 §4.1.2.1:
+    RECOMMENDED, not required).
     """
     if not state:
         return None
@@ -245,6 +247,9 @@ def _oauth_error_redirect(
     """
     from fastapi.responses import RedirectResponse
 
+    # Defense in depth: never echo a tainted state even if a caller
+    # passes one raw — the redirect URL is a reflection sink.
+    state = _validate_state(state)
     return RedirectResponse(
         url=_build_oauth_redirect(
             redirect_uri,
@@ -297,6 +302,7 @@ async def _require_dpop_proof_if_bound(
     request: Request,
     client: OAuth2Client,
     expected_htm: str,
+    expected_htu: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Return a ``cnf`` claim if the client is DPoP-bound, else ``None``.
 
@@ -331,9 +337,12 @@ async def _require_dpop_proof_if_bound(
         )
 
     # The token endpoint URL is the target the proof declares
-    # — RFC 9449 §4.2 htu claim.
+    # — RFC 9449 §4.2 htu claim. Callers on another endpoint (the
+    # first-party cookie flow, OA-103) pass their own URL explicitly;
+    # the default preserves the token-endpoint contract.
     settings_ = get_settings()
-    expected_htu = f"{settings_.issuer.rstrip('/')}/oauth2/token"
+    if expected_htu is None:
+        expected_htu = f"{settings_.issuer.rstrip('/')}/oauth2/token"
 
     claims = await verify_dpop_proof(
         proof,
@@ -677,6 +686,14 @@ async def authorize_post(
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
+    # OA-201: ``state`` is RECOMMENDED, not required (RFC 6749
+    # §4.1.2.1). A valid state is echoed back verbatim everywhere
+    # below; a missing state simply completes without echo, while a
+    # present-but-weak state is rejected via redirect (never echoed,
+    # never a bare JSON oracle). Single choke point — every ``state=``
+    # below takes ``valid_state``.
+    valid_state = _validate_state(state)
+
     # A5 / RFC 6749 §4.1.2.1 + OIDC Core §3.1.2.1: with client_id and
     # redirect_uri validated, further request errors are reported by
     # redirecting back with ``error``/``error_description``.
@@ -688,25 +705,28 @@ async def authorize_post(
             redirect_uri,
             error="unsupported_response_type",
             description=("Only the 'code' response_type is supported (implicit flow disabled)."),
-            state=_validate_state(state),
+            state=valid_state,
         )
 
-    # VAPT-044: validate the ``state`` parameter. A short or
-    # predictable state loses CSRF protection on the
-    # authorization-code flow (RFC 6819 §4.4.1.8, RFC 9700
-    # OAuth 2.0 Security BCP). The check happens after the
-    # client_id + redirect_uri + PKCE validation so the error
-    # goes back to the legitimate caller (rather than a
-    # crafted redirect).
-    if _validate_state(state) is None:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "state parameter is required and must be an opaque nonce of "
-                f"at least {_MIN_STATE_LEN} characters (RFC 6819 §4.4.1.8, "
-                "RFC 9700 OAuth 2.0 Security BCP). Generate a fresh value "
-                "with secrets.token_urlsafe(32) and retry."
+    # OA-201 (ex VAPT-044 hard gate): a PRESENT but weak state
+    # (too short/long, unsafe charset) loses CSRF protection and
+    # risks redirect/audit injection (RFC 6819 §4.4.1.8, RFC 9700).
+    # It is refused via redirect — never echoed, never a JSON 400.
+    # Clients should send ``secrets.token_urlsafe(32)``; an absent
+    # state completes normally (the client simply forgoes CSRF
+    # binding — its choice, per RFC 6749). An empty string counts
+    # as absent (the first-party SPA always sends the field).
+    if state and valid_state is None:
+        return _oauth_error_redirect(
+            redirect_uri,
+            error="invalid_request",
+            description=(
+                "The state parameter must be an opaque nonce of at least "
+                f"{_MIN_STATE_LEN} characters (RFC 6819 §4.4.1.8, RFC 9700 "
+                "OAuth 2.0 Security BCP). Generate a fresh value with "
+                "secrets.token_urlsafe(32) and retry."
             ),
+            state=None,
         )
 
     requested_scopes = scope.split() if scope else []
@@ -761,12 +781,11 @@ async def authorize_post(
             detail=str(exc),
         ) from exc
 
-    # --- Security: state parameter validation (VAPT-044) ---
-    # The earlier ``_validate_state`` call rejects weak or
-    # absent state outright (RFC 6819 §4.4.1.8, RFC 9700 OAuth
-    # 2.0 Security BCP). The legacy "warn and continue" path
-    # was removed because it left the deployment exposed to
-    # CSRF on the authorization-code flow.
+    # --- Security: state parameter handling (OA-201, ex VAPT-044) ---
+    # ``valid_state`` above already dropped a missing state (flow
+    # completes without echo) and rejected a weak one via redirect.
+    # Everything stored or echoed from here on is either a valid
+    # opaque nonce or ``None`` — never tainted input.
 
     # --- Authentication (cookie-first, then email/password) ---
     user = None
@@ -789,7 +808,7 @@ async def authorize_post(
             redirect_uri,
             error="login_required",
             error_description="User is not authenticated",
-            state=state,
+            state=valid_state,
             iss=settings.issuer,
         )
         from fastapi.responses import RedirectResponse
@@ -822,7 +841,7 @@ async def authorize_post(
                     redirect_uri,
                     error="consent_required",
                     description="Consent has not been granted for this client and scope",
-                    state=state,
+                    state=valid_state,
                 )
         auth_code = await oauth2_service.create_authorization_code(
             client_id=client_id,
@@ -832,11 +851,11 @@ async def authorize_post(
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             nonce=nonce,
-            state=state,
+            state=valid_state,
             requested_claims=parsed_claims,
         )
         redirect_url = _build_oauth_redirect(
-            redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+            redirect_uri, code=auth_code.code, state=valid_state, iss=settings.issuer
         )
         from fastapi.responses import RedirectResponse
 
@@ -971,11 +990,11 @@ async def authorize_post(
             if not is_trusted:
                 mfa_session = await session_service.create_mfa_session(
                     user_id=user.id,
-                    client_id=client_id,
-                    redirect_uri=redirect_uri,
-                    scope=validated_scope,
-                    state=state,
-                    code_challenge=code_challenge,
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                scope=validated_scope,
+                state=valid_state,
+                code_challenge=code_challenge,
                     code_challenge_method=code_challenge_method,
                     nonce=nonce,
                 )
@@ -1009,7 +1028,7 @@ async def authorize_post(
                 nonce=nonce,
                 acr=auth_acr,
                 amr=auth_amr or [],
-                state=state,
+                state=valid_state,
                 requested_claims=parsed_claims,
             )
 
@@ -1035,7 +1054,7 @@ async def authorize_post(
             )
 
             redirect_url = _build_oauth_redirect(
-                redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+                redirect_uri, code=auth_code.code, state=valid_state, iss=settings.issuer
             )
             return {"redirect_url": redirect_url}
 
@@ -1059,7 +1078,7 @@ async def authorize_post(
                 nonce=nonce,
                 acr=auth_acr,
                 amr=auth_amr or [],
-                state=state,
+                state=valid_state,
                 requested_claims=parsed_claims,
             )
 
@@ -1085,7 +1104,7 @@ async def authorize_post(
             )
 
             redirect_url = _build_oauth_redirect(
-                redirect_uri, code=auth_code.code, state=state, iss=settings.issuer
+                redirect_uri, code=auth_code.code, state=valid_state, iss=settings.issuer
             )
             return {"redirect_url": redirect_url}
 
@@ -1095,7 +1114,7 @@ async def authorize_post(
         client_id=client_id,
         redirect_uri=redirect_uri,
         scope=validated_scope,
-        state=state,
+        state=valid_state,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
         nonce=nonce,
@@ -1777,48 +1796,26 @@ async def token_endpoint(
         # Add new refresh token to response
         access_token_response.refresh_token = new_rt.token
 
-        # Audit: access token refreshed
+        # Audit: access token refreshed + refresh token rotated (OA-103:
+        # same shape as the cookie flow).
         at_data = jwt_service.decode_token(access_token_response.access_token)
-        access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
-        await audit_service.log_event(
-            event_type=AuditEventType.ACCESS_TOKEN_REFRESHED,
-            user_id=user.id,
-            email=user.email,
-            client_id=resolved_client_id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            metadata=TokenRefreshedMetadata(
-                client_id=resolved_client_id,
-                old_token_id=refresh_token[:32] + "...",  # Truncated for privacy
-                new_token_id=access_token_id,
-                refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
-                rotation=True,
-                reused=False,
-            ),
-        )
-
-        # Audit: refresh token rotated
+        rotated_access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
+        rotated_refresh_token_id: Optional[str] = None
         if new_rt.token:
             rt_data = jwt_service.decode_token(new_rt.token)
-            refresh_token_id = rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
-            await audit_service.log_event(
-                event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
-                user_id=user.id,
-                email=user.email,
-                client_id=resolved_client_id,
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent"),
-                metadata=TokenRefreshedMetadata(
-                    client_id=resolved_client_id,
-                    old_token_id=refresh_token[:32] + "...",
-                    new_token_id=refresh_token_id,
-                    refresh_token_family_id=new_rt.family_id
-                    if hasattr(new_rt, "family_id")
-                    else None,
-                    rotation=True,
-                    reused=False,
-                ),
+            rotated_refresh_token_id = (
+                rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
             )
+        await _audit_refresh_rotation(
+            audit_service=audit_service,
+            request=request,
+            user=user,
+            client_id=resolved_client_id,
+            old_token_truncated=refresh_token[:32] + "...",
+            access_token_id=rotated_access_token_id,
+            refresh_token_id=rotated_refresh_token_id,
+            refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
+        )
 
         # Set httpOnly auth cookies
         _set_auth_cookies(response, access_token_response.access_token, new_rt.token, settings)
@@ -2098,6 +2095,86 @@ async def exchange_api_key_for_token(
 # Cookie-based auth endpoints for browser clients
 
 
+async def _resolve_cookie_refresh_owner(
+    oauth2_service: OAuth2Service,
+    refresh_token_service: RefreshTokenService,
+    rt_cookie: str,
+    settings: Settings,
+) -> Tuple[Optional[RefreshToken], Optional[OAuth2Client]]:
+    """OA-103: resolve the OAuth client owning a cookie refresh token.
+
+    The cookie flow carries no client credentials, so the owner is
+    derived from the token itself (single source of truth — the same
+    ownership ``validate_and_rotate`` enforces). Unregistered ids fall
+    back to the settings-derived first-party client, mirroring
+    ``_authenticate_client_at_token_endpoint``.
+    """
+    rt_seen = await refresh_token_service.get_refresh_token(rt_cookie)
+    if not rt_seen:
+        return None, None
+    owner = await oauth2_service.client_storage.get_client(rt_seen.client_id)
+    if owner is None and rt_seen.client_id == settings.oauth2_client_id:
+        owner = _first_party_oauth_client(settings)
+    return rt_seen, owner
+
+
+async def _audit_refresh_rotation(
+    *,
+    audit_service: AuditService,
+    request: Request,
+    user: User,
+    client_id: str,
+    old_token_truncated: str,
+    access_token_id: str,
+    refresh_token_id: Optional[str],
+    refresh_token_family_id: Optional[str],
+) -> None:
+    """OA-103: single audit shape for rotation on both refresh paths.
+
+    The standard ``grant_type=refresh_token`` branch and the
+    first-party cookie flow log the same ``ACCESS_TOKEN_REFRESHED`` +
+    ``REFRESH_TOKEN_ROTATED`` pair (family included), so incident
+    response sees one rotation semantic regardless of entry point.
+    ``refresh_token_id=None`` skips the rotation event (defensive —
+    mirrors the ``if new_rt.token`` guard at both call sites).
+    """
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await audit_service.log_event(
+        event_type=AuditEventType.ACCESS_TOKEN_REFRESHED,
+        user_id=user.id,
+        email=user.email,
+        client_id=client_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        metadata=TokenRefreshedMetadata(
+            client_id=client_id,
+            old_token_id=old_token_truncated,
+            new_token_id=access_token_id,
+            refresh_token_family_id=refresh_token_family_id,
+            rotation=True,
+            reused=False,
+        ),
+    )
+    if refresh_token_id is not None:
+        await audit_service.log_event(
+            event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
+            user_id=user.id,
+            email=user.email,
+            client_id=client_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata=TokenRefreshedMetadata(
+                client_id=client_id,
+                old_token_id=old_token_truncated,
+                new_token_id=refresh_token_id,
+                refresh_token_family_id=refresh_token_family_id,
+                rotation=True,
+                reused=False,
+            ),
+        )
+
+
 @router.post("/api/auth/refresh")
 @limiter.limit("30/minute")
 async def cookie_refresh(
@@ -2106,21 +2183,58 @@ async def cookie_refresh(
     storage: UserStorage = Depends(get_user_storage),
     jwt_service: JWTService = Depends(get_jwt_service),
     refresh_token_service: RefreshTokenService = Depends(lambda: RefreshTokenService()),
+    oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Refresh tokens using httpOnly cookie (no request body needed).
 
     Reads the refresh_token cookie, rotates it, and sets new cookies.
     The client must send `credentials: include` so the cookie is sent.
+
+    OA-103: the cookie carries no client credentials, so the owning
+    client is resolved from the token itself and the SAME policy gates
+    as the standard refresh branch apply (DPoP proof when the owner is
+    bound, first-party-only binding, grant registration). The DPoP gate
+    runs before the first-party check so bound owners are held to key
+    possession regardless of which session endpoint they hit. Token
+    minting stays first-party session semantics (``INTERNAL`` audience,
+    ``{"ok": True}``) — the response shape belongs to OA-301, the
+    audience to OA-504.
     """
     settings = get_settings()
     rt_cookie = request.cookies.get(settings.auth_cookie_refresh_name)
     if not rt_cookie:
         raise HTTPException(status_code=401, detail="No refresh token cookie")
 
+    _rt_seen, owner = await _resolve_cookie_refresh_owner(
+        oauth2_service, refresh_token_service, rt_cookie, settings
+    )
+    if _rt_seen is None:
+        _clear_auth_cookies(response, settings)
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    if owner is None or not owner.is_active:
+        _clear_auth_cookies(response, settings)
+        raise OAuth2Error(INVALID_CLIENT, "Invalid OAuth client for this session", status_code=401)
+    await _require_dpop_proof_if_bound(
+        request,
+        owner,
+        "POST",
+        expected_htu=f"{settings.issuer.rstrip('/')}/api/auth/refresh",
+    )
+    if owner.client_id != settings.oauth2_client_id:
+        _clear_auth_cookies(response, settings)
+        raise OAuth2Error(
+            INVALID_CLIENT,
+            "Refresh cookies are limited to first-party sessions",
+            status_code=401,
+        )
+    await _enforce_grant_allowed(
+        oauth2_service, client_id=owner.client_id, grant_type="refresh_token"
+    )
+
     new_rt, error = await refresh_token_service.validate_and_rotate(
         token=rt_cookie,
-        client_id=settings.oauth2_client_id,
+        client_id=owner.client_id,
         ip_address=request.client.host if request.client else None,
     )
 
@@ -2157,44 +2271,24 @@ async def cookie_refresh(
     )
     _set_auth_cookies(response, access_token, new_rt.token, settings)
 
-    # Audit: access token refreshed (cookie-based)
+    # Audit: access token refreshed + refresh token rotated (OA-103:
+    # same shape as the standard refresh branch).
     at_data = jwt_service.decode_token(access_token)
     access_token_id = at_data.jti if at_data and at_data.jti else "unknown"
-    await audit_service.log_event(
-        event_type=AuditEventType.ACCESS_TOKEN_REFRESHED,
-        user_id=user.id,
-        email=user.email,
-        client_id=settings.oauth2_client_id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        metadata=TokenRefreshedMetadata(
-            client_id=settings.oauth2_client_id,
-            old_token_id=rt_cookie[:32] + "...",
-            new_token_id=access_token_id,
-            rotation=True,
-            reused=False,
-        ),
-    )
-
-    # Audit: refresh token rotated (cookie-based)
+    refresh_token_id: Optional[str] = None
     if new_rt.token:
         rt_data = jwt_service.decode_token(new_rt.token)
         refresh_token_id = rt_data.jti if rt_data and rt_data.jti else new_rt.token_id
-        await audit_service.log_event(
-            event_type=AuditEventType.REFRESH_TOKEN_ROTATED,
-            user_id=user.id,
-            email=user.email,
-            client_id=settings.oauth2_client_id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            metadata=TokenRefreshedMetadata(
-                client_id=settings.oauth2_client_id,
-                old_token_id=rt_cookie[:32] + "...",
-                new_token_id=refresh_token_id,
-                rotation=True,
-                reused=False,
-            ),
-        )
+    await _audit_refresh_rotation(
+        audit_service=audit_service,
+        request=request,
+        user=user,
+        client_id=owner.client_id,
+        old_token_truncated=rt_cookie[:32] + "...",
+        access_token_id=access_token_id,
+        refresh_token_id=refresh_token_id,
+        refresh_token_family_id=new_rt.family_id if hasattr(new_rt, "family_id") else None,
+    )
 
     return {"ok": True}
 

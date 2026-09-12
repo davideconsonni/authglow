@@ -152,8 +152,20 @@ class TestAuthorizePostCsrfEnforcement:
         storage.is_account_locked.return_value = False
         storage.reset_failed_login_attempts = AsyncMock()
         storage.record_failed_login = AsyncMock()
+        # OA-201: no state gate stops the request early anymore — the
+        # credential path runs, so its collaborators must be async.
+        import secrets
 
-        with patch("authglow.api.auth.get_settings", return_value=test_settings):
+        storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, None))
+        storage.check_and_enforce_concurrent_sessions = AsyncMock()
+
+        with (
+            patch("authglow.api.auth.get_settings", return_value=test_settings),
+            patch(
+                "authglow.services.login_history.LoginHistoryService",
+                return_value=AsyncMock(),
+            ),
+        ):
             http_client = TestClient(app)
             response = http_client.post(
                 "/api/oauth2/authorize",
@@ -163,6 +175,7 @@ class TestAuthorizePostCsrfEnforcement:
                     "scope": "read",
                     "code_challenge": "test-challenge-abc",
                     "code_challenge_method": "S256",
+                    "state": secrets.token_urlsafe(32),
                     "email": "test@example.com",
                     "password": "GoodP@ss1!",
                 },

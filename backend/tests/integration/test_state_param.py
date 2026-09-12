@@ -1,11 +1,12 @@
-"""OAuth 2.0 state parameter validation tests — VAPT-044.
+"""OAuth 2.0 state parameter validation tests — OA-201 (ex VAPT-044).
 
-RFC 6819 §4.4.1.8 and RFC 9700 (OAuth 2.0 Security BCP, July 2025)
-require the server to validate ``state`` is a high-entropy opaque
-nonce. The pre-VAPT-044 implementation only logged a warning when
-state was absent and accepted any value. After the fix, the
-endpoint rejects requests with missing / short / tainted ``state``
-with HTTP 400 before any session is created.
+RFC 6749 §4.1.2.1 makes ``state`` RECOMMENDED, not required:
+a missing state completes the flow (no echo), while a
+PRESENT-but-weak state (too short/long, unsafe charset —
+RFC 6819 §4.4.1.8, RFC 9700) is refused via redirect
+(``error=invalid_request``), never echoed and never a bare
+JSON oracle. The pre-OA-201 implementation rejected missing
+state with HTTP 400; that broke conformant clients.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -57,7 +58,25 @@ class TestStateStoredInAuthorizationCode:
 
 
 class TestVapt044StateValidation:
-    """VAPT-044: state is mandatory and must be a high-entropy nonce."""
+    """OA-201: state is optional; weak state redirects without echo."""
+
+    def _post(self, app, data, follow_redirects=False):
+        from fastapi.testclient import TestClient
+
+        return TestClient(app, follow_redirects=follow_redirects).post(
+            "/api/oauth2/authorize", data=data
+        )
+
+    def _base_form(self, **extra):
+        form = {
+            "client_id": "c-abc",
+            "redirect_uri": "https://e.com/cb",
+            "scope": "read",
+            "code_challenge": "ch123",
+            "code_challenge_method": "S256",
+        }
+        form.update(extra)
+        return form
 
     def _build_client_app(self, test_settings):
         from fastapi import FastAPI
@@ -102,99 +121,71 @@ class TestVapt044StateValidation:
 
         return FastAPI, app
 
-    def test_missing_state_is_rejected_with_400(self, test_settings):
-        from fastapi.testclient import TestClient
-
+    def test_missing_state_completes_past_gate(self, test_settings):
+        """OA-201: no state → the flow proceeds (fails later on credentials, not state)."""
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
-            )
+            response = self._post(app, self._base_form())
 
-        # VAPT-044: a missing state is now a hard error,
-        # not a warning.
+        # Past the state gate: 400 comes from the auth path
+        # ("Credentials required"), never from the state validator.
         assert response.status_code == 400, response.text
-        body = response.json()
-        assert "state" in body["detail"].lower()
-        assert "16" in body["detail"] or "at least" in body["detail"].lower()
+        assert "state" not in response.json()["detail"].lower()
 
-    def test_short_state_is_rejected_with_400(self, test_settings):
-        from fastapi.testclient import TestClient
+    def test_short_state_redirects_without_echo(self, test_settings):
+        """OA-201: a present-but-short state → 302 `invalid_request`, no echo."""
+        from urllib.parse import parse_qs, urlparse
 
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "state": "short",  # 5 chars — well below the 16-char floor
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
+            response = self._post(
+                app,
+                self._base_form(state="short"),  # 5 chars — below the 16-char floor
             )
 
-        assert response.status_code == 400, response.text
-        assert "state" in response.json()["detail"].lower()
+        assert response.status_code == 302, response.text
+        query = parse_qs(urlparse(response.headers["location"]).query)
+        assert query.get("error") == ["invalid_request"]
+        assert "state" not in query
 
-    def test_state_with_log_injection_chars_is_rejected(self, test_settings):
+    def test_state_with_log_injection_chars_redirects_without_echo(self, test_settings):
         """A state with a newline would let a malicious client
-        inject extra redirect parameters or log entries. The
-        validator must reject it."""
-        from fastapi.testclient import TestClient
+        inject extra redirect parameters or log entries. It is
+        refused via redirect and never reflected."""
+        from urllib.parse import parse_qs, urlparse
 
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
+            response = self._post(
+                app,
+                self._base_form(
                     # 16 chars (passes the length check) but contains
                     # whitespace — a classic log-injection vector.
-                    "state": "goodstate-good\nFAKE",
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
+                    state="goodstate-good\nFAKE"
+                ),
             )
 
-        assert response.status_code == 400, response.text
+        assert response.status_code == 302, response.text
+        location = response.headers["location"]
+        assert "\n" not in location
+        assert "FAKE" not in location
+        assert "state" not in parse_qs(urlparse(location).query)
 
-    def test_state_with_shell_metachars_is_rejected(self, test_settings):
-        from fastapi.testclient import TestClient
+    def test_state_with_shell_metachars_redirects(self, test_settings):
+        from urllib.parse import parse_qs, urlparse
 
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "state": "good|rm -rf /etc/",
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
-            )
+            response = self._post(app, self._base_form(state="good|rm -rf /etc/"))
 
-        assert response.status_code == 400, response.text
+        assert response.status_code == 302, response.text
+        query = parse_qs(urlparse(response.headers["location"]).query)
+        assert query.get("error") == ["invalid_request"]
+        assert "state" not in query
 
     def test_valid_uuid4_style_state_is_accepted(self, test_settings):
         """A 32-hex-char UUID4 (typical legitimate value) is
@@ -202,22 +193,14 @@ class TestVapt044StateValidation:
         credentials) — a 400/401 from the auth path is the
         right outcome, the key is that the state validator
         does NOT reject it upfront."""
-        from fastapi.testclient import TestClient
-
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "state": "abc123def456789012345678901234ab",  # 32 hex
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
+            response = self._post(
+                app,
+                self._base_form(
+                    state="abc123def456789012345678901234ab"  # 32 hex
+                ),
             )
 
         # Not 400 from the state validator (the response may
@@ -233,54 +216,37 @@ class TestVapt044StateValidation:
         """``secrets.token_urlsafe(32)`` produces a 43-char
         base64url nonce — the canonical recommendation in the
         OAuth 2.0 Security BCP."""
-        from fastapi.testclient import TestClient
-
-        _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
-
         # secrets.token_urlsafe(32) → 43 base64url chars
         import secrets
 
         valid_state = secrets.token_urlsafe(32)
         assert len(valid_state) == 43
 
+        _, app = self._build_client_app(test_settings)
+
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "state": valid_state,
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
-            )
+            response = self._post(app, self._base_form(state=valid_state))
 
         if response.status_code == 400:
             assert "state" not in response.json()["detail"].lower()
 
-    def test_oversized_state_is_rejected(self, test_settings):
+    def test_oversized_state_redirects(self, test_settings):
         """Defensive cap: a 1 MB state would make the redirect
         URL huge. The 512-char cap keeps the response line
-        within HTTP reasonable limits."""
-        from fastapi.testclient import TestClient
+        within HTTP reasonable limits — refused via redirect."""
+        from urllib.parse import parse_qs, urlparse
 
         _, app = self._build_client_app(test_settings)
-        http_client = TestClient(app)
 
         with patch("authglow.api.auth.get_settings", return_value=test_settings):
-            response = http_client.post(
-                "/api/oauth2/authorize",
-                data={
-                    "client_id": "c-abc",
-                    "redirect_uri": "https://e.com/cb",
-                    "scope": "read",
-                    "state": "a" * 513,  # 1 over the 512 cap
-                    "code_challenge": "ch123",
-                    "code_challenge_method": "S256",
-                },
+            response = self._post(
+                app,
+                self._base_form(
+                    state="a" * 513,  # 1 over the 512 cap
+                ),
             )
 
-        assert response.status_code == 400, response.text
-        assert "state" in response.json()["detail"].lower()
+        assert response.status_code == 302, response.text
+        query = parse_qs(urlparse(response.headers["location"]).query)
+        assert query.get("error") == ["invalid_request"]
+        assert "state" not in query

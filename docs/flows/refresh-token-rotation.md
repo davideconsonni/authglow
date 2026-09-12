@@ -85,6 +85,7 @@ Protected by a `named_lock` on the lookup key plus optimistic-concurrency
 | Reuse detection | **Custom, stricter than the standard**: a reused refresh token revokes the entire family (RFC 9700 BCP recommends this). |
 | Cookie fallback | The refresh token may arrive via httpOnly cookie (front-end first-party flow). |
 | Replay | Fresh `jti` per refresh; reuse of the old token revokes the family. |
+| Cookie flow policy (OA-103) | `POST /api/auth/refresh` is first-party-only and enforces the same gates: owner resolved from the cookie, grant registration, DPoP proof when bound (`400 missing_dpop_proof`), shared rotation audit with family. |
 | Session management | `GET /api/tokens/refresh/list`, single revoke, or revoke-all ("log out from all devices"). |
 
 ---
@@ -94,6 +95,7 @@ Protected by a `named_lock` on the lookup key plus optimistic-concurrency
 | Method | Path | Role |
 |--------|------|------|
 | POST | `/oauth2/token` | Renew access + refresh (rotation) |
+| POST | `/api/auth/refresh` | First-party cookie session rotation (same gates, `{"ok": True}` response) |
 | GET | `/api/tokens/refresh/list` | List the user's active refresh tokens |
 | POST | `/api/tokens/refresh/revoke-all` | Revoke all of the user's refresh tokens |
 | DELETE | `/api/tokens/refresh/{token_id}` | Revoke a single refresh token |

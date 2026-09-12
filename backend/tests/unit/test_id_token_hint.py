@@ -29,6 +29,9 @@ def _build_app(test_settings):
         client_name="Test Client",
         redirect_uris=["https://example.com/callback"],
     )
+    # Consent is orthogonal to hint pre-population — skip the screen
+    # so these tests exercise the authentication path directly.
+    client.require_consent = False
 
     oauth2_client_storage = MagicMock()
     oauth2_client_storage.get_client = AsyncMock(return_value=client)
@@ -38,7 +41,11 @@ def _build_app(test_settings):
     oauth2_svc.client_storage = oauth2_client_storage
     oauth2_svc.verify_redirect_uri = AsyncMock(return_value=True)
     oauth2_svc.process_scopes = AsyncMock(return_value=["read"])
-    oauth2_svc.create_authorization_code = AsyncMock()
+    from types import SimpleNamespace
+
+    oauth2_svc.create_authorization_code = AsyncMock(
+        return_value=SimpleNamespace(code="hint-unit-code")
+    )
 
     session_svc = MagicMock()
     session_svc.create_consent_session = AsyncMock()
@@ -56,6 +63,10 @@ def _build_app(test_settings):
     storage.reset_failed_login_attempts = AsyncMock()
     storage.record_failed_login = AsyncMock()
     storage.update_last_login = AsyncMock()
+    # OA-201: no state gate stops the request early anymore — the
+    # credential path runs, so its collaborators must be async.
+    storage.verify_and_maybe_rehash_password = AsyncMock(return_value=(True, None))
+    storage.check_and_enforce_concurrent_sessions = AsyncMock()
 
     app = FastAPI()
     app.include_router(router)
@@ -102,10 +113,18 @@ class TestIdTokenHintPrePopulation:
         # Patch the singleton ``get_jwt_service`` so the route handler
         # resolves to the pre-built ``jwt_svc`` instead of constructing
         # a real ``JWTService.new()`` against the keyring.
-        with patch(
-            "authglow.api.auth.get_jwt_service",
-            new_callable=AsyncMock,
-            return_value=jwt_svc,
+        import secrets
+
+        with (
+            patch(
+                "authglow.api.auth.get_jwt_service",
+                new_callable=AsyncMock,
+                return_value=jwt_svc,
+            ),
+            patch(
+                "authglow.services.login_history.LoginHistoryService",
+                return_value=AsyncMock(),
+            ),
         ):
             http_client = TestClient(app)
             response = http_client.post(
@@ -116,6 +135,7 @@ class TestIdTokenHintPrePopulation:
                     "scope": "read",
                     "code_challenge": "test123",
                     "code_challenge_method": "S256",
+                    "state": secrets.token_urlsafe(32),
                     "id_token_hint": id_token,
                     "password": "GoodP@ss1!",
                 },
@@ -145,10 +165,18 @@ class TestIdTokenHintPrePopulation:
 
         jwt_svc = asyncio.run(JWTService.new())
 
-        with patch(
-            "authglow.api.auth.get_jwt_service",
-            new_callable=AsyncMock,
-            return_value=jwt_svc,
+        import secrets
+
+        with (
+            patch(
+                "authglow.api.auth.get_jwt_service",
+                new_callable=AsyncMock,
+                return_value=jwt_svc,
+            ),
+            patch(
+                "authglow.services.login_history.LoginHistoryService",
+                return_value=AsyncMock(),
+            ),
         ):
             http_client = TestClient(app)
             response = http_client.post(
@@ -159,6 +187,7 @@ class TestIdTokenHintPrePopulation:
                     "scope": "read",
                     "code_challenge": "test123",
                     "code_challenge_method": "S256",
+                    "state": secrets.token_urlsafe(32),
                     "id_token_hint": "not-a-valid-jwt",
                     "email": "actual@example.com",
                     "password": "GoodP@ss1!",

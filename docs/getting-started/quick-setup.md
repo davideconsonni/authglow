@@ -196,7 +196,8 @@ Access tokens expire after 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MIN
 To refresh without re-entering credentials:
 
 The dashboard refreshes its httpOnly cookie session with
-`POST /api/auth/refresh`. External OAuth2 clients rotate refresh tokens using
+`POST /api/auth/refresh` (first-party cookies only — foreign refresh
+cookies are rejected). External OAuth2 clients rotate refresh tokens using
 `POST /oauth2/token` with `grant_type=refresh_token`.
 
 ---

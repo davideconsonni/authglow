@@ -68,3 +68,8 @@ application-specific authentication protocol.
 - Access and refresh tokens are not persisted in browser storage.
 - The browser receives httpOnly cookies for its local session.
 - Third-party applications must register their own client and use discovery.
+- `POST /api/auth/refresh` is first-party-only: it resolves the owning
+  client from the cookie and applies the same policy gates as the
+  standard refresh branch (grant registration + DPoP proof when the
+  owner is bound, shared rotation audit). Foreign cookies are rejected
+  (401); bound owners without proof get `400 missing_dpop_proof`.

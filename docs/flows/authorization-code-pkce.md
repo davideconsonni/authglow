@@ -60,7 +60,7 @@ Parameters (form):
 | `client_id`            | YES | Must exist and be active. |
 | `redirect_uri`         | YES | **Exact** match against registered `redirect_uris`. |
 | `scope`                | yes (default `read`) | Validated against the client scopes. |
-| `state`                | **YES** | Opaque nonce ≥ 32 chars (RFC 6819 §4.4.1.8) — custom, see below. |
+| `state`                | no (RECOMMENDED) | Opaque nonce, `secrets.token_urlsafe(32)`; echoed verbatim when valid, omitted when absent. Present-but-weak → `302 error=invalid_request` without echo (OA-201). |
 | `code_challenge`       | YES | PKCE mandatory. |
 | `code_challenge_method`| `S256` | Only `S256`; `plain` rejected. |
 | `nonce`                | no | Echoed in the ID token. |
@@ -72,7 +72,7 @@ Parameters (form):
 
 The endpoint:
 
-1. Verifies client, PKCE, `redirect_uri`, `state` (VAPT-044).
+1. Verifies client, PKCE, `redirect_uri`; validates `state` for echo-safety (OA-201, ex VAPT-044).
 2. Authenticates the user (cookie-first, then `email`+`password`).
 3. Runs MFA if required, then a single-page (login → MFA → consent).
 4. Issues an **authorization code** (single-use, short-lived) and redirects:
@@ -118,7 +118,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 |--------|--------|
 | PKCE | **Stricter than the standard**. MANDATORY for all clients (not just public), `S256` only. RFC 7636 + Security BCP require PKCE for **public** clients; here it is required **also for confidential** ones. |
 | Redirect URI | Exact match; dynamic registration. |
-| State | **Custom, stricter**: **required** and validated as an opaque nonce (VAPT-044). The standard treats it as recommended, not mandatory. |
+| State | **Conformant**: RECOMMENDED, echoed verbatim when valid (16–512 chars, safe charset), omitted when absent; weak values → `invalid_request` redirect without echo. |
 | Consent flow | **Custom UX**: login, MFA and consent all on the **same page** (`/oauth2/authorize`, no inter-phase redirect). |
 | Consent memory | "remember" consent → `consent/check` auto-creates the code without re-prompting. |
 | Response type | `code` only. **Implicit flow rejected** (at the client model level). |
@@ -140,6 +140,7 @@ POST /oauth2/token   (form URL-encoded)   grant_type=authorization_code
 ---
 
 > **Custom vs standard**: while staying within the standard, this flow adds
-> (1) mandatory PKCE everywhere, (2) required-and-validated `state`, (3) a
+> (1) mandatory PKCE everywhere, (2) validated `state` with redirect-error
+> on weak values (never echoed), (3) a
 > single-page UI, (4) refresh-token rotation, (5) explicit rejection of
 > `implicit` and `password`. Everything else follows RFC 6749 / RFC 7636.
