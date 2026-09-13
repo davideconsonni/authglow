@@ -94,6 +94,13 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
+    # OA-504: aud presence required (same rule as userinfo + core/permissions).
+    if not token_data.aud:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token is not bound to an audience",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = await storage.get_user(token_data.sub)
     if not user:

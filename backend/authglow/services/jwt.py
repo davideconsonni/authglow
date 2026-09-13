@@ -257,8 +257,11 @@ class JWTService:
             audience: When provided, PyJWT enforces ``aud == audience`` and
                 the ``aud`` claim is added to the required claims list.
                 When ``None`` the ``aud`` claim is not validated,
-                preserving back-compat with legacy cookie/MFA tokens
-                that may not carry an audience.
+                preserving back-compat for already-issued legacy
+                tokens and non-user flows (revocation/introspection
+                accept both worlds by design). Note: user-resolving
+                resource-server dependencies additionally require aud
+                presence (OA-504) — mint paths must always bind.
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -381,6 +384,12 @@ class JWTService:
             "iat": datetime.now(timezone.utc),
             "token_type": "access",
         }
+        if audience is None:
+            # OA-504: honor the documented contract — internal flows
+            # without a per-client audience fall back to
+            # INTERNAL_AUDIENCE, so every access token is aud-bound
+            # (resource-server choke points require aud presence).
+            audience = INTERNAL_AUDIENCE
         if audience is not None:
             token_data["aud"] = audience
             token_data["azp"] = azp if azp is not None else audience

@@ -66,12 +66,10 @@ class TestVapt046CreateAccessTokenAudience:
         assert data.aud == "client-abc"
         assert data.azp == "client-xyz"
 
-    def test_audience_none_omits_aud_claim(self, jwt_service):
-        """VAPT-046 pre-fix behaviour: ``aud`` was absent on
-        internal-flow tokens. After the fix every internal
-        call site passes ``audience=INTERNAL_AUDIENCE``; this
-        test guards the helper itself against accidental
-        regression to the no-aud path."""
+    def test_audience_none_falls_back_to_internal(self, jwt_service):
+        """OA-504: omitted ``audience`` falls back to INTERNAL_AUDIENCE —
+        no aud-less access tokens (resource-server choke points
+        require aud presence)."""
         token = jwt_service.create_access_token(
             user_id="u-1",
             email="user@example.com",
@@ -79,8 +77,8 @@ class TestVapt046CreateAccessTokenAudience:
         )
         data = jwt_service.decode_token(token)
         assert data is not None
-        assert data.aud is None
-        assert data.azp is None
+        assert data.aud == INTERNAL_AUDIENCE
+        assert data.azp == INTERNAL_AUDIENCE
 
     def test_internal_audience_round_trip(self, jwt_service):
         token = jwt_service.create_access_token(

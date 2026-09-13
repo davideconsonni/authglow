@@ -590,6 +590,9 @@ async def get_current_user(
     token_data = jwt_service.decode_token(token)
     if token_data is None or token_data.token_type != "access":
         raise credentials_exception
+    # OA-504: aud presence required (same rule as userinfo + core/permissions).
+    if not token_data.aud:
+        raise credentials_exception
 
     user = await storage.get_user(token_data.sub)
     if user is None:

@@ -27,6 +27,24 @@ def _extract_token(request: Request, credentials: Optional[HTTPAuthorizationCred
     )
 
 
+def _require_audience(token_data) -> None:
+    """OA-504: resource-server choke points require aud presence.
+
+    Every access token minted today is aud-bound (``aud=client_id``
+    for federated flows, ``aud=authglow-internal`` otherwise —
+    see ``JWTService.create_access_token``). A verifiable token
+    without ``aud`` is legacy (or a JWT refresh token misused as
+    an access token) and must not authorize API access. Value-based
+    routing (which aud where) is deferred to OA-505.
+    """
+    if not token_data.aud:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token is not bound to an audience",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 class PermissionChecker:
     """Dependency for checking user permissions."""
 
@@ -78,6 +96,7 @@ class PermissionChecker:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token",
             )
+        _require_audience(token_data)
 
         user_id = token_data.sub
         if not user_id:
@@ -193,6 +212,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
         )
+    _require_audience(token_data)
 
     user_id = token_data.sub
     if not user_id:

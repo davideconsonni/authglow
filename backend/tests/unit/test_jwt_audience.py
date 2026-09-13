@@ -6,11 +6,15 @@ Covers Workstream A of the OAuth2/OIDC conformance plan:
   - A.4:    _decode_token respects an optional ``audience`` argument
   - A.5:    decode_token accepts ``expected_aud`` and enforces it
   - A.6:    decode_id_token requires ``expected_aud`` and rejects mismatches
+  - OA-504: omitted audience falls back to INTERNAL_AUDIENCE (no aud-less
+    access tokens); decode with expected_aud=None still accepts legacy
+    no-aud tokens (revocation/introspection accept both worlds by design).
 """
 
 import jwt as pyjwt
 
 from authglow.core.config import get_settings
+from authglow.services.jwt import INTERNAL_AUDIENCE
 
 CLIENT_A = "client-aaa"
 CLIENT_B = "client-bbb"
@@ -21,6 +25,33 @@ def _unverified_payload(token: str) -> dict:
     return pyjwt.decode(
         token,
         options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
+    )
+
+
+def _raw_token_without_aud(jwt_service) -> str:
+    """Mint a legacy-style access token with NO aud claim (raw encode).
+
+    ``create_access_token`` always binds aud since OA-504, so the
+    no-aud case (already-issued legacy tokens) is crafted directly.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "iss": jwt_service.settings.issuer,
+        "jti": "legacy-no-aud",
+        "sub": "u-legacy",
+        "email": "legacy@example.com",
+        "scope": "read",
+        "exp": int((now + timedelta(minutes=30)).timestamp()),
+        "iat": int(now.timestamp()),
+        "token_type": "access",
+    }
+    return pyjwt.encode(
+        payload,
+        jwt_service._private_key,
+        algorithm=jwt_service.settings.jwt_algorithm,
+        headers={"kid": jwt_service._active_kid},
     )
 
 
@@ -50,13 +81,14 @@ class TestAccessTokenAudience:
         assert payload["aud"] == "audience-x"
         assert payload["azp"] == "azp-y"
 
-    def test_no_aud_claim_when_audience_omitted(self, jwt_service):
+    def test_omitted_audience_falls_back_to_internal(self, jwt_service):
+        """OA-504: no aud-less access tokens — omitted audience binds internal."""
         token = jwt_service.create_access_token(
             user_id="u-1", email="u1@example.com", scopes=["read"]
         )
         payload = _unverified_payload(token)
-        assert "aud" not in payload
-        assert "azp" not in payload
+        assert payload["aud"] == INTERNAL_AUDIENCE
+        assert payload["azp"] == INTERNAL_AUDIENCE
 
 
 class TestDecodeTokenAudience:
@@ -84,17 +116,13 @@ class TestDecodeTokenAudience:
         assert decoded is None
 
     def test_expected_aud_none_accepts_token_without_aud(self, jwt_service):
-        token = jwt_service.create_access_token(
-            user_id="u-2", email="u2@example.com", scopes=["read"]
-        )
+        token = _raw_token_without_aud(jwt_service)
         decoded = jwt_service.decode_token(token, expected_aud=None)
         assert decoded is not None
         assert decoded.aud is None
 
     def test_expected_aud_required_rejects_token_without_aud(self, jwt_service):
-        token = jwt_service.create_access_token(
-            user_id="u-2", email="u2@example.com", scopes=["read"]
-        )
+        token = _raw_token_without_aud(jwt_service)
         decoded = jwt_service.decode_token(token, expected_aud=CLIENT_A)
         assert decoded is None
 

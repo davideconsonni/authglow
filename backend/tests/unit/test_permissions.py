@@ -56,7 +56,7 @@ class TestLazyJWTServiceInit:
 
 
 class TestPermissionChecker:
-    def _make_token_data(self, sub="user-1", email="test@example.com", scopes=None):
+    def _make_token_data(self, sub="user-1", email="test@example.com", scopes=None, aud="authglow-internal"):
         from datetime import datetime, timedelta, timezone
 
         from authglow.models.token import TokenData
@@ -68,6 +68,7 @@ class TestPermissionChecker:
             token_type="access",
             exp=datetime.now(timezone.utc) + timedelta(hours=1),
             iat=datetime.now(timezone.utc),
+            aud=aud,
         )
 
     def test_admin_scope_does_not_grant_admin(self, test_settings):
@@ -257,6 +258,7 @@ class TestGetCurrentUser:
                 token_type="access",
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc),
+                aud="authglow-internal",
             )
             fake_svc = MagicMock()
             fake_svc.decode_token = MagicMock(return_value=token_data)
@@ -284,6 +286,168 @@ class TestGetCurrentUser:
             with pytest.raises(HTTPException) as exc_info:
                 asyncio_run(get_current_user(mock_request, creds))
             assert exc_info.value.status_code == 401
+
+
+class TestOA504AudPresence:
+    """OA-504: user-resolving choke points require aud presence (any value)."""
+
+    def _svc(self, token_data):
+        from unittest.mock import MagicMock
+
+        fake_svc = MagicMock()
+        fake_svc.decode_token = MagicMock(return_value=token_data)
+        return fake_svc
+
+    def _creds(self):
+        return HTTPAuthorizationCredentials(scheme="Bearer", credentials="tok")
+
+    def _request(self):
+        mock_request = MagicMock(spec=Request)
+        mock_request.cookies = {}
+        return mock_request
+
+    def _token_data(self, aud):
+        from datetime import datetime, timedelta, timezone
+
+        from authglow.models.token import TokenData
+
+        return TokenData(
+            sub="user-1",
+            email="test@example.com",
+            scopes=["read"],
+            token_type="access",
+            exp=datetime.now(timezone.utc) + timedelta(hours=1),
+            iat=datetime.now(timezone.utc),
+            aud=aud,
+        )
+
+    def test_checker_rejects_token_without_aud(self, test_settings):
+        from authglow.core.permissions import PermissionChecker
+        from authglow.services.rbac import RBACService
+
+        with patch(
+            "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
+        ) as mock_jwt:
+            mock_jwt.return_value = self._svc(self._token_data(aud=None))
+            with patch.object(
+                RBACService, "get_user_permissions", new_callable=AsyncMock
+            ) as mock_perms:
+                checker = PermissionChecker(required_permissions=["users.read"])
+                with pytest.raises(HTTPException) as exc_info:
+                    asyncio_run(checker(self._request(), self._creds()))
+                assert exc_info.value.status_code == 401
+                mock_perms.assert_not_awaited()
+
+    def test_checker_accepts_any_aud_value(self, test_settings):
+        from authglow.core.permissions import PermissionChecker
+        from authglow.services.rbac import RBACService
+
+        with patch(
+            "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
+        ) as mock_jwt:
+            mock_jwt.return_value = self._svc(self._token_data(aud="some-client"))
+            with patch.object(
+                RBACService, "get_user_permissions", new_callable=AsyncMock
+            ) as mock_perms:
+                mock_perms.return_value = {"users.read"}
+                checker = PermissionChecker(required_permissions=["users.read"])
+                assert asyncio_run(checker(self._request(), self._creds())) == "user-1"
+
+    def test_core_get_current_user_rejects_token_without_aud(self, test_settings):
+        from authglow.core.permissions import get_current_user
+
+        with patch(
+            "authglow.core.permissions.get_jwt_service", new_callable=AsyncMock
+        ) as mock_jwt:
+            mock_jwt.return_value = self._svc(self._token_data(aud=None))
+            with pytest.raises(HTTPException) as exc_info:
+                asyncio_run(get_current_user(self._request(), self._creds()))
+            assert exc_info.value.status_code == 401
+
+    def test_api_auth_get_current_user_rejects_token_without_aud(self, test_settings):
+        from unittest.mock import MagicMock
+
+        from authglow.api.auth import get_current_user
+
+        request = MagicMock(spec=Request)
+        request.headers.get.side_effect = (
+            lambda k: "Bearer tok" if k == "Authorization" else None
+        )
+        request.cookies = {}
+        request.client = None
+        storage = MagicMock()
+        jwt_svc = MagicMock()
+        jwt_svc.decode_token = MagicMock(return_value=self._token_data(aud=None))
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio_run(
+                get_current_user(
+                    request,
+                    token="tok",
+                    storage=storage,
+                    jwt_service=jwt_svc,
+                    api_key_service=MagicMock(),
+                    audit_service=MagicMock(),
+                    oauth2_service=MagicMock(),
+                )
+            )
+        assert exc_info.value.status_code == 401
+
+    def test_api_auth_get_current_user_accepts_bound_token(self, test_settings):
+        from unittest.mock import MagicMock
+
+        from authglow.api.auth import get_current_user
+        from authglow.models.user import User
+
+        request = MagicMock(spec=Request)
+        request.headers.get.side_effect = (
+            lambda k: "Bearer tok" if k == "Authorization" else None
+        )
+        request.cookies = {}
+        request.client = None
+        user = User(
+            id="user-1",
+            email="test@example.com",
+            hashed_password="x",
+            is_active=True,
+            scopes=["read"],
+        )
+        storage = MagicMock()
+        storage.get_user = AsyncMock(return_value=user)
+        jwt_svc = MagicMock()
+        jwt_svc.decode_token = MagicMock(
+            return_value=self._token_data(aud="authglow-internal")
+        )
+        result = asyncio_run(
+            get_current_user(
+                request,
+                token="tok",
+                storage=storage,
+                jwt_service=jwt_svc,
+                api_key_service=MagicMock(),
+                audit_service=MagicMock(),
+                oauth2_service=MagicMock(),
+            )
+        )
+        assert result.id == "user-1"
+
+    def test_passkey_get_current_user_rejects_token_without_aud(self, test_settings):
+        from unittest.mock import MagicMock
+
+        from authglow.api.passkey import get_current_user
+
+        request = MagicMock(spec=Request)
+        request.cookies = {}
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="tok")
+        storage = MagicMock()
+        jwt_svc = MagicMock()
+        jwt_svc.decode_token = MagicMock(return_value=self._token_data(aud=None))
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio_run(
+                get_current_user(
+                    request, creds, storage=storage, jwt_service=jwt_svc
+                )
+            )
+        assert exc_info.value.status_code == 401
 
 
 class TestRequireAdministrator:

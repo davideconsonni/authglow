@@ -41,6 +41,8 @@ def _mock_rbac_admin():
         token_type="access",
         exp=datetime.now(timezone.utc) + timedelta(hours=1),
         iat=datetime.now(timezone.utc),
+        # OA-504: PermissionChecker requires aud presence.
+        aud="authglow-internal",
     )
     fake_svc = MagicMock()
     fake_svc.decode_token = MagicMock(return_value=token_data)
