@@ -309,3 +309,69 @@ class TestPARFlow:
         res = par_app.get("/.well-known/openid-configuration")
         assert res.status_code == 200, res.text
         assert res.json()["pushed_authorization_request_endpoint"].endswith("/oauth2/par")
+
+
+class TestOA502JarNotSupported:
+    """OA-502: JAR ``request=`` / ``form_post`` explicitly rejected, never ignored."""
+
+    def _classic_form(self, bundle, email, challenge, extra=None) -> dict:
+        form = {
+            "client_id": bundle["client"].client_id,
+            "redirect_uri": "https://example.com/cb",
+            "response_type": "code",
+            "scope": "openid read offline_access",
+            "state": secrets.token_urlsafe(32),
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "email": email,
+            "password": PASSWORD,
+        }
+        form.update(extra or {})
+        return form
+
+    def test_request_object_rejected(self, par_app, test_settings, storage):
+        """OA-502: ``request=`` → 302 invalid_request (not silently ignored)."""
+        bundle = _make_par_client(test_settings, ["openid", "read", "offline_access"])
+        _user, email = _make_user(test_settings, storage, ["openid", "read", "offline_access"])
+        _verifier, challenge = _pkce_pair()
+        res = par_app.post(
+            "/api/oauth2/authorize",
+            data=self._classic_form(
+                bundle,
+                email,
+                challenge,
+                {"request": "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ4In0.c2ln"},
+            ),
+        )
+        assert res.status_code == 302, res.text
+        assert "invalid_request" in res.headers["location"], res.headers["location"]
+
+    def test_form_post_rejected_query_explicit_passes(self, par_app, test_settings, storage):
+        """OA-502: ``form_post`` → 302; explicit ``query`` still completes."""
+        bundle = _make_par_client(test_settings, ["openid", "read", "offline_access"])
+        _user, email = _make_user(test_settings, storage, ["openid", "read", "offline_access"])
+        _verifier, challenge = _pkce_pair()
+        rejected = par_app.post(
+            "/api/oauth2/authorize",
+            data=self._classic_form(bundle, email, challenge, {"response_mode": "form_post"}),
+        )
+        assert rejected.status_code == 302, rejected.text
+        assert "invalid_request" in rejected.headers["location"], rejected.headers["location"]
+
+        ok = par_app.post(
+            "/api/oauth2/authorize",
+            data=self._classic_form(bundle, email, challenge, {"response_mode": "query"}),
+        )
+        assert ok.status_code == 200, ok.text
+        params = parse_qs(urlparse(ok.json()["redirect_url"]).query)
+        assert "code" in params, params
+
+    def test_discovery_pins_no_jar_no_form_post(self, par_app):
+        """OA-502: discovery keeps JAR off and ``query``-only modes (OA-202 guard)."""
+        res = par_app.get("/.well-known/openid-configuration")
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["request_parameter_supported"] is False
+        assert body["request_uri_parameter_supported"] is False
+        assert body["response_modes_supported"] == ["query"]
+        assert body["pushed_authorization_request_endpoint"].endswith("/oauth2/par")

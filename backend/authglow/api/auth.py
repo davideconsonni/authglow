@@ -690,6 +690,14 @@ async def authorize_post(
     # OA-501 (RFC 9126): pushed request identifier — replaces the
     # individual parameters below when present.
     request_uri: Optional[str] = Form(None),
+    # OA-502: JAR request objects (``request=``) are NOT supported — PAR
+    # is the only integrity-protected path. Accepted here only to be
+    # rejected explicitly, never silently ignored. ``request`` collides
+    # with the Starlette ``request: Request`` arg, hence the alias.
+    jar_request: Optional[str] = Form(None, alias="request"),
+    # OA-502: only ``query`` is ever emitted (``_build_oauth_redirect``);
+    # ``form_post`` stays unadvertised (OA-202) and rejected here.
+    response_mode: Optional[str] = Form(None),
     storage: UserStorage = Depends(get_user_storage),
     oauth2_service: OAuth2Service = Depends(get_oauth2_service),
     mfa_service: MFAService = Depends(get_mfa_service),
@@ -711,6 +719,29 @@ async def authorize_post(
 
     if not await oauth2_service.verify_redirect_uri(client_id, redirect_uri):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+
+    # OA-502: JAR (``request=``) is not supported — PAR is the only
+    # integrity-protected path (FAPI 2.0 direction). Reject explicitly
+    # via redirect, never silently ignore. ``response_mode``: only
+    # ``query`` is emitted; anything else (e.g. ``form_post``) is
+    # rejected — advertised modes stay exactly what is shipped (OA-202).
+    if jar_request is not None:
+        return _oauth_error_redirect(
+            redirect_uri,
+            error="invalid_request",
+            description=(
+                "JWT-secured request objects ('request=') are not supported. "
+                "Push the request via POST /oauth2/par (RFC 9126) instead."
+            ),
+            state=_validate_state(state),
+        )
+    if response_mode is not None and response_mode != "query":
+        return _oauth_error_redirect(
+            redirect_uri,
+            error="invalid_request",
+            description="Unsupported response_mode. Only 'query' is supported.",
+            state=_validate_state(state),
+        )
 
     # OA-501 (RFC 9126): a pushed ``request_uri`` replaces the
     # individual front-channel parameters with the stored ones. It

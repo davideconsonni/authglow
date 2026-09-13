@@ -116,7 +116,11 @@ class OpenIDConfiguration(BaseModel):
     backchannel_logout_supported: bool = False
 
     # Parameter support declarations (A8 — advertise exactly what is
-    # implemented; OIDC Discovery RECOMMENDED fields)
+    # implemented; OIDC Discovery RECOMMENDED fields).
+    # OA-502: the ``request*`` flags refer to pre-registered JAR URIs
+    # (OIDC Core §6), which are not supported — PAR ``request_uri``
+    # values (RFC 9126) are covered by
+    # ``pushed_authorization_request_endpoint`` instead.
     claims_parameter_supported: bool = True
     request_parameter_supported: bool = False
     request_uri_parameter_supported: bool = False

@@ -95,3 +95,13 @@ without `request_uri` → 302 `error=invalid_request`.
 > **Custom vs standard**: `require_par` is our FAPI opt-in flag;
 > everything else follows RFC 9126. The token endpoint never sees
 > `request_uri` — it only ever redeems `code` as before.
+
+---
+
+## Non-supportato: JAR `request=` e `response_mode=form_post` (OA-502)
+
+JWT-secured request objects (`request=`, OIDC Core §6) e `request_uri`
+pre-registrati **non sono supportati**: `authorize` li rifiuta con 302
+`error=invalid_request` (mai ignorati in silenzio). L'unica via con
+integrità è PAR (direzione FAPI 2.0: JAR → PAR). Anche
+`response_mode=form_post` è rifiutato — l'unico modo emesso è `query`.
