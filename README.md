@@ -13,9 +13,11 @@ Self-hosted OAuth 2.0 / OpenID Connect authorization server with file-based stor
 
 ## Overview
 
-AuthGlow is a self-hosted OAuth 2.0 / OpenID Connect authorization server, user directory, and admin console. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the same deployment runs on local disk or against S3-compatible storage, GCS, or Azure Blob.
+AuthGlow is a self-hosted OAuth 2.0 / OpenID Connect authorization server, user directory, and admin console. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the same deployment runs on local disk or against S3, GCS, or Azure Blob storage.
 
-Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the storage backend. No migrations and no code changes required.
+Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the object store. No migrations and no code changes required.
+
+> Note: `STORAGE_BACKEND` selects the fsspec object store used by the file backend. It is distinct from `REPOSITORY_BACKEND`, the entity-storage selector, for which only `file` is currently implemented.
 
 ---
 
@@ -24,9 +26,11 @@ Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the storage ba
 **Authentication and protocols**
 
 - OAuth 2.0 and OpenID Connect: Authorization Code with PKCE, Client Credentials, Refresh Token rotation with reuse detection, Token Introspection (RFC 7662), Token Revocation (RFC 7009), RP-Initiated Logout
+- Pushed Authorization Requests (PAR, RFC 9126)
 - Device Authorization Grant (RFC 8628) for input-constrained devices
 - Passkeys (WebAuthn/FIDO2) for passwordless sign-in
 - Multi-factor authentication: TOTP, backup codes, trusted devices
+- Phone verification via one-time codes (pluggable provider: development passthrough, Infobip SMS/WhatsApp)
 - DPoP (RFC 9449): sender-constrained access tokens
 - Client authentication: `client_secret_basic`, `client_secret_post`, `client_secret_jwt` (HS256), `private_key_jwt` (RS256), `none` (public clients with PKCE)
 - Scoped API keys (bcrypt-hashed, never stored in plaintext)
@@ -44,6 +48,7 @@ Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the storage ba
 - OAuth2 client management: scopes, grant types, branding, secret rotation
 - Configurable consent screen with per-client branding
 - Admin dashboard: users, OAuth2 clients, sessions, consents, API keys, roles, JWK keys, audit log
+- Webhooks for auth and lifecycle events
 - Built-in OAuth Playground covering Authorization Code, PKCE, Client Credentials, Device Code, Introspection, and Revocation flows
 
 **Security and operations**
@@ -52,13 +57,13 @@ Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the storage ba
 - Rate limiting, CSRF protection, configurable CORS, OWASP security headers, HTTPS enforcement
 - Structured audit log for authentication events and administrative actions
 - White-labeling via environment variables (logo, colors, company name, legal links), with light and dark mode
-- Optional demo mode (`demo_mode=true`) with a seeded demo account and warning banner for public evaluation
+- Optional demo mode (`DEMO_MODE=true`) with a seeded demo account and warning banner for public evaluation
 
 **Infrastructure**
 
 - No database: file-based storage by default, swappable to S3, GCS, or Azure Blob via `STORAGE_BACKEND`
 - Single-container image (API + prebuilt SPA) or backend-only image
-- No message queue or external cache required
+- No message queue or external cache required (optional Redis for shared cache via `CACHE_BACKEND=redis`)
 
 Full endpoint catalog: [FEATURES.md](docs/reference/features.md)
 
@@ -87,7 +92,7 @@ Public demo instance: [https://authglow-demo.onrender.com](https://authglow-demo
 
 Running the full application (login, MFA, passkeys, admin dashboard, OAuth Playground) requires the backend API and the frontend UI.
 
-Prerequisites: Python 3.11+, Node.js 20.19+ or 22.12+ (Node 24 not supported), Git.
+Prerequisites: Python 3.11+, Node.js 26, Git.
 
 ### Backend
 
@@ -105,14 +110,15 @@ cp .env.example .env
 python main.py
 ```
 
-The API listens on `http://localhost:8000` (OpenAPI docs at `/docs`). On startup it logs a `setup_token_generated` event; retain the token value for the initial admin setup below.
+The API listens on `http://localhost:8000`. On startup it logs a `setup_token_generated` event; retain the token value for the initial admin setup below. Interactive API docs are available at `/docs` only when `ENABLE_DOCS=true`.
 
 ### Frontend
 
 ```bash
 cd authglow/frontend
 cp .env.example .env
-# Set VITE_API_URL=http://localhost:8000
+# The shipped default targets port 8001 — set VITE_API_URL=http://localhost:8000
+# for split local development against the backend above
 
 npm install
 npm run dev
@@ -143,7 +149,7 @@ docker run -p 8080:8080 \
 ```
 
 - Single port, single process. Uvicorn serves `/api/...`, `/oauth2/...`, `/.well-known/...` and the SPA (client-side routes fall back to `index.html`).
-- All configuration is applied at runtime. The SPA uses relative, same-origin API paths (`VITE_API_URL` is not baked in at build time), so one image runs unchanged across environments.
+- All configuration is applied at runtime. The SPA uses relative, same-origin API paths when `VITE_API_URL` is unset, so one image runs unchanged across environments.
 - Persistent state (users, sessions, JWT keyring) lives under `/app/data`. On platforms with ephemeral filesystems, mount a volume at `/app/data` or set `STORAGE_BACKEND=s3` / `gcs` / `abfs`.
 
 </details>
@@ -205,6 +211,8 @@ PASSKEY_RP_ID=auth.example.com
 PASSKEY_ORIGIN=https://auth.example.com
 ```
 
+> `backend/.env.example` sets `PASSKEY_ORIGIN=http://localhost:5173` for split local development (backend on `:8000`, frontend on `:5173`), overriding the `http://localhost:8000` application default shown above. In a single-container deployment, set it to the public origin as shown here.
+
 ### Email delivery
 
 Set `EMAIL_BACKEND` to `console` or `file_storage` for local development, or to `smtp`, `sendgrid`, `mailgun`, or `resend` for production delivery. Provider credentials and examples are documented in `backend/.env.example`. Set `EMAIL_FROM_ADDRESS` to a verified sender address. SMTP uses STARTTLS when `SMTP_USE_TLS=true`. For Mailgun EU domains, set `MAILGUN_BASE_URL=https://api.eu.mailgun.net`.
@@ -217,7 +225,7 @@ Set `EMAIL_BACKEND` to `console` or `file_storage` for local development, or to 
 authglow/
 ├── backend/
 │   ├── authglow/
-│   │   ├── api/            20 FastAPI routers
+│   │   ├── api/            FastAPI routers (HTTP layer, one module per domain)
 │   │   ├── core/           config, crypto, rate limiting, concurrency
 │   │   ├── middleware/     security headers, HTTPS enforcement, body-size limits
 │   │   ├── models/         Pydantic schemas
@@ -229,8 +237,10 @@ authglow/
 │
 └── frontend/
     ├── src/
-    │   ├── components/     React components (ui, layout, oauth, playground)
-    │   ├── pages/          route pages (auth, admin, dashboard, setup)
+    │   ├── components/     feature components (auth, admin, oauth, playground, ...)
+    │   │                   plus ui/ primitives, layout/, and shared/
+    │   ├── pages/          route components (auth/, admin/, dashboard, profile,
+    │   │                   security, sessions, setup, ...)
     │   ├── stores/         Zustand state
     │   └── hooks/          custom hooks
     └── e2e/                Playwright end-to-end tests
@@ -239,6 +249,8 @@ authglow/
 Stack: Python 3.11+ / FastAPI / Pydantic v2 (backend); TypeScript / React 19 / Vite / Tailwind CSS / Zustand / TanStack Query / React Router (frontend).
 
 Persistence: files on disk or cloud object storage via fsspec. No database, migrations, or ORM.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, request lifecycle, and conventions.
 
 ---
 
@@ -275,7 +287,7 @@ These default to local-development values and must be overridden before producti
 | `PASSKEY_RP_ID` | `localhost` | Production domain |
 | `PASSKEY_ORIGIN` | `http://localhost:8000` | Public URL |
 
-Copy `backend/.env.example` as a starting point and override each value above.
+Copy `backend/.env.example` as a starting point and override each value above. Production boot validates placeholders, localhost passkey origins, and `DEBUG`/`ENABLE_DOCS` settings and refuses to start on violations.
 
 ### Multi-instance deployments
 
@@ -300,8 +312,10 @@ ruff check authglow/ && mypy authglow/
 
 ```bash
 cd frontend
-npm test           # Vitest unit tests
-npm run test:e2e   # Playwright end-to-end tests
+npm test         # Vitest unit tests
+npm run lint     # ESLint
+npm run build    # type-check + production bundle
+npm run test:e2e # Playwright end-to-end tests
 ```
 
 ---
@@ -312,18 +326,17 @@ npm run test:e2e   # Playwright end-to-end tests
 - [Flows](docs/flows/README.md) — per-flow OAuth2/OIDC guides
 - [ARCHITECTURE.md](ARCHITECTURE.md) — directory map and request lifecycle
 - [DESIGN.md](DESIGN.md) — design system
-- [AGENTS.md](AGENTS.md) — contributor guide for AI coding agents
+- [AGENTS.md](AGENTS.md) — contributor guide (code style, test policy)
 - [Quick setup](docs/getting-started/quick-setup.md) — local and deployed setup
 - [CIE integration](docs/guides/federation/cie.md) — Italian Electronic Identity Card
 - [Google OIDC integration](docs/guides/federation/google.md) — Google sign-in
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
-- [API reference](http://localhost:8000/docs) — auto-generated OpenAPI (available when the backend is running)
 
 ---
 
 ## Contributing
 
-Bug reports and pull requests are welcome. For security vulnerabilities, follow the process in [SECURITY.md](SECURITY.md) instead of opening a public issue.
+Bug reports and pull requests are welcome. Contributors should read [AGENTS.md](AGENTS.md) for code style and test conventions before submitting changes. For security vulnerabilities, follow the process in [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ---
 
