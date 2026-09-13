@@ -1279,19 +1279,21 @@ endpoints, `jwks_uri`, `registration_endpoint`, supported scopes, grant types
 |---------------------------------------------|--------|----------------------------------------------------|
 | Asymmetric client auth (`private_key_jwt`)  | ✅     | `client_jwt_auth.py` — `OAuth2Client.public_jwk`   |
 | Symmetric client auth (`client_secret_jwt`) | ✅     | `client_jwt_auth.py` — `client_secret_jwt_key`     |
-| PKCE with S256                              | ✅     | `Settings.enforce_pkce` (default True)             |
+| PKCE with S256                              | ✅ default-on | `Settings.enforce_pkce` (default True)        |
 | `state` parameter validation                | ✅     | authorization endpoint                             |
 | HTTPS-only redirect URIs                    | ✅     | `oidc.py:_validate_redirect_uri`                   |
 | `amr` / `acr` claim propagation             | ✅     | `services/acr.py`                                  |
 | `at_hash` / `c_hash` on ID token            | ✅     | `services/jwt.py`                                  |
 | Refresh-token rotation (single-use)         | ✅     | `RefreshTokenService.validate_and_rotate`          |
-| DPoP sender-constrained tokens              | ✅     | `services/dpop.py`                                 |
-| PAR (Pushed Authorization Requests)         | ❌     | Follow-up                                          |
-| JARM (JWT-secured Auth Response)            | ❌     | Follow-up                                          |
-| mTLS client authentication                  | ❌     | Follow-up                                          |
+| DPoP sender-constrained tokens              | ✅ opt-in | `services/dpop.py` — `dpop_bound` (OA-503)       |
+| PAR (Pushed Authorization Requests)         | ✅ opt-in | `api/par.py` — `require_par` (OA-501)            |
+| JAR `request=` objects                      | ❌ by decision | rejected, use PAR (OA-502)                   |
+| JARM (JWT-secured Auth Response)            | ❌ non-goal | superseded — only `code` is emitted (OA-502) |
+| mTLS client authentication                  | ❌ waived | needs TLS-infra project (OA-503)                  |
+| `aud` presence on resource servers          | ✅     | choke points require `aud` (OA-504)                |
 | Code lifetime ≤ 30s                         | 🟡     | Set `OAUTH2_AUTHORIZATION_CODE_EXPIRE_MINUTES=0.5` |
 
-See [FAPI.md](FAPI.md) for the full gap analysis and roadmap.
+See [FAPI.md](FAPI.md) for the decided profile (default vs opt-in), derogations, and follow-ups (OA-505).
 
 ---
 

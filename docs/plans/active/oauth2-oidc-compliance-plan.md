@@ -375,7 +375,12 @@ stabilizzato il wire-format.
   in `create_access_token` (la docstring lo prometteva, il codice no) — senza fallback il check
   avrebbe rotto login MFA/federato (`mfa.py:502`, `federation.py:418` mintavano senza `aud`).
   Enforcement per-valore rinviato a OA-505 (manca la mappatura del traffico).
-- [ ] **[OA-505]** 5.5 Done fase: profilo FAPI deciso e documentato (tabella default vs opt-in) in `SECURITY.md`/docs.
+- [x] **[OA-505]** 5.5 Done fase: profilo FAPI deciso e documentato (tabella default vs opt-in) in `SECURITY.md`/docs.
+  Decisione OA-505 (2026-09-13): profilo in `docs/reference/FAPI.md` (nuovo — risolve anche il link
+  rotto da `features.md` §31) + §31 aggiornata allo stato vero; `SECURITY.md` invariato (policy
+  researcher-facing, non sede per tabelle profilo). Posizione: non certificato FAPI 2.0,
+  BCP-oriented con opt-in; JARM non-obiettivo; mTLS gap condizionato all'infra; flip DPoP-default
+  e per-valore `aud` come follow-up con precondizioni scritte. Fase 5 chiusa.
 
 ---
 
@@ -441,4 +446,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-404 | Fase 4 / 4.4 Done fase | daf59c5 | Verdetto: backend `475+2318+34=2827 passed, 0 failed, 0 xfail` (3 parti) + frontend 543 passed; probe 35/35; zero MUST falliti, 2 deroghe scritte (nonce facoltativo, micro-ora nei log). Fase 4 chiusa. |
 | 2026-09-13 | OA-502 | Fase 5 / 5.2 JAR dichiarato non-supportato | 5090571 | Opzione A (JAR → PAR, direzione FAPI 2.0): `authorize_post` rifiuta `request=`/`response_mode≠query` via 302 `invalid_request`; discovery invariata + commento JAR-vs-PAR; paragrafo docs in `par.md`; 3 nuovi test in `TestOA502JarNotSupported`. Area 56 passed (conformance + state), ruff check + mypy puliti (format-drift pre-esistente non toccato). |
 | 2026-09-13 | OA-503 | Fase 5 / 5.3 DPoP via DCR + waiver mTLS | cecca4a | `ClientRegistrationRequest.dpop_bound` opt-in (default off, audit incluso); docs `dpop.md` (guidance alto-rischio + rinvio flip a OA-505); guard discovery senza `tls_client_auth`. 3 nuovi test `TestOA503DcrDpop`; area DCR/DPoP 48 passed, ruff check + mypy puliti (mie righe formattate; drift pre-esistente `oidc.py` L228/L394 non toccato). |
-| 2026-09-13 | OA-504 | Fase 5 / 5.4 aud presence-check + fallback internal | n/a (non committato) | Fallback `INTERNAL_AUDIENCE` in `create_access_token` (docstring resa vera); presence-check `aud` in 4 choke point (core/permissions ×2, api/auth, passkey); revoke/introspect/logout restano permissivi by-design. Test: `TestOA504AudPresence` (6) + contratto `test_jwt_audience`/`test_vapt046` aggiornati + fixture admin con `aud`. Full suite `2857 passed` (1 pre-esistente `test_admin_settings` provato via stash — OA-501, non toccare senza ok; 1 flaky xdist su revoke non riproducibile); ruff check + mypy puliti. |
+| 2026-09-13 | OA-504 | Fase 5 / 5.4 aud presence-check + fallback internal | 84044a4 | Fallback `INTERNAL_AUDIENCE` in `create_access_token` (docstring resa vera); presence-check `aud` in 4 choke point (core/permissions ×2, api/auth, passkey); revoke/introspect/logout restano permissivi by-design. Test: `TestOA504AudPresence` (6) + contratto `test_jwt_audience`/`test_vapt046` aggiornati + fixture admin con `aud`. Full suite `2857 passed` (1 pre-esistente `test_admin_settings` provato via stash — OA-501, non toccare senza ok; 1 flaky xdist su revoke non riproducibile); ruff check + mypy puliti. |
+| 2026-09-13 | OA-505 | Fase 5 / 5.5 Profilo FAPI deciso e documentato | n/a (non committato) | Nuovo `docs/reference/FAPI.md` (profilo, tabella default-vs-opt-in con evidenze OA, 4 deroghe, follow-up, non-obiettivi) + `features.md` §31 aggiornata (PAR/DPoP opt-in, JAR respinto, JARM non-obiettivo, mTLS waived, aud presence); `SECURITY.md` invariato (motivazione nel plan). Docs-only: nessun test codice; Fase 5 chiusa. |
