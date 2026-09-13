@@ -283,6 +283,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "Auth code expiry (min)",
         "restart_required": True,
     },
+    "par_request_uri_ttl_seconds": {
+        "category": "oauth2",
+        "label": "PAR request_uri TTL (seconds, OA-501)",
+        "restart_required": True,
+    },
     "enforce_pkce": {"category": "oauth2", "label": "Enforce PKCE", "restart_required": False},
     "oauth2_reject_unknown_scopes": {
         "category": "oauth2",
