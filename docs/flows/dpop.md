@@ -37,6 +37,11 @@ sequenceDiagram
 ## How we support it
 
 DPoP is **opt-in per client** via the `dpop_bound` flag (default `False`).
+Enable it via the admin UI toggle or via DCR (`"dpop_bound": true`, OA-503).
+High-risk clients (financial, health, admin tooling) SHOULD opt in: without a
+valid proof the token endpoint answers `400 missing_dpop_proof`, so enable it
+only once the client signs ES256 proofs. The default-on flip for new
+confidential clients is deferred to the FAPI profile decision (OA-505).
 When enabled:
 
 1. The client presents a **DPoP proof JWT** in the `DPoP:` header on every

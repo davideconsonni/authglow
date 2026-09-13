@@ -766,6 +766,10 @@ class ClientRegistrationRequest(BaseModel):
     # OA-501: opt-in PAR requirement (RFC 9126 / FAPI). Tightening-only,
     # so safe to accept via DCR.
     require_par: Optional[bool] = None
+    # OA-503: opt-in DPoP binding (RFC 9449). Tightening-only like
+    # ``require_par`` — safe to accept via DCR. Default off (the flip
+    # to default-on for new confidential clients is deferred to OA-505).
+    dpop_bound: Optional[bool] = None
     # T.2: public JWK for ``private_key_jwt`` clients. The server
     # validates shape (kty, n/e or crv/x) — full cryptographic
     # verification happens at the first ``client_assertion`` request.
@@ -929,6 +933,8 @@ async def register_oauth_client(
         token_endpoint_auth_method=payload.token_endpoint_auth_method or "client_secret_basic",
         public_jwk=payload.public_jwk,
         require_par=payload.require_par or False,
+        # OA-503: DPoP opt-in via DCR (parity with the admin UI toggle).
+        dpop_bound=payload.dpop_bound or False,
         client_secret_jwt_key=(
             encrypt_client_jwt_key_value(plaintext_jwt_key)
             if plaintext_jwt_key is not None
@@ -951,6 +957,7 @@ async def register_oauth_client(
                 "grant_types": allowed_grant_types,
         "token_endpoint_auth_method": client.token_endpoint_auth_method,
         "require_par": client.require_par,
+        "dpop_bound": client.dpop_bound,
             },
             ip_address=request.client.host if request.client else None,
         )

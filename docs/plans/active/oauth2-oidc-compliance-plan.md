@@ -359,8 +359,13 @@ stabilizzato il wire-format.
   repository pattern (`repositories/file/` + `protocols.py` + conformance test come per gli altri repo).
 - [x] **[OA-502]** 5.2 JAR (`request=` object) e/o registrazione `request_uri`; `response_mode=form_post` solo se
   implementato davvero (oggi rimosso correttamente — non ri-pubblicizzarlo senza implementazione).
-- [ ] **[OA-503]** 5.3 mTLS (`tls_client_auth`) o DPoP obbligatorio per client ad alto rischio; valutare
+- [x] **[OA-503]** 5.3 mTLS (`tls_client_auth`) o DPoP obbligatorio per client ad alto rischio; valutare
   `dpop_bound=True` di default per nuovi client confidenziali (con migration per gli esistenti).
+  Decisione OA-503 (2026-09-13): mTLS **rinviato con waiver** — l'app gira dietro reverse proxy
+  senza forwarding del client-cert (`middleware/proxy_headers.py`, `https_enforcement.py`), quindi
+  `tls_client_auth` richiederebbe progetto infra dedicato (proxy + nuovo auth method + token
+  cert-bound); DCR accetta `dpop_bound` opt-in (default off); flip di default **rinviato a OA-505**
+  perché (a) playground/snippets non mandano proof DPoP, (b) gli integratori non hanno preavviso.
 - [ ] **[OA-504]** 5.4 Sender-constrained refresh rotation + enforcement `aud` su ogni resource server interno
   (oggi `INTERNAL_AUDIENCE="authglow-internal"` esiste in `services/jwt.py` ~L74 ma l'enforcement
   è futuro).
@@ -428,4 +433,5 @@ stabilizzato il wire-format.
 | 2026-09-12 | OA-402 | Fase 4 / 4.2 MUST rimasti | e2481b7 | Solo test: `nonce` echo/assente (decisione: resta facoltativo nel code flow), `auth_time` dopo login vero + claim presente/assente, `prompt=none` senza consenso → 302 `consent_required`. Retrattazione: 3 righe sync `last_login` tolte (i token escono uguali: il server rilegge da disco; resta micro-residuo ora vuota nei log per mai-loggati). Test ballerino stabilizzato (stesso database per tutto il test). Area 93 passed; ruff/mypy puliti. |
 | 2026-09-12 | OA-403 | Fase 4 / 4.3 Snapshot discovery/JWKS/userinfo | 43a2aaa | Solo test + micro-refactor (filtro kid in `_publishable_kids`): foto esatta 32 campi discovery, revocate escluse dalla JWKS, userinfo senza `aud` → 401. Già coperti citati (ETag/304, rotazione, openid, DPoP). Area 48 passed + matrice 35/35; ruff/mypy puliti. |
 | 2026-09-12 | OA-404 | Fase 4 / 4.4 Done fase | daf59c5 | Verdetto: backend `475+2318+34=2827 passed, 0 failed, 0 xfail` (3 parti) + frontend 543 passed; probe 35/35; zero MUST falliti, 2 deroghe scritte (nonce facoltativo, micro-ora nei log). Fase 4 chiusa. |
-| 2026-09-13 | OA-502 | Fase 5 / 5.2 JAR dichiarato non-supportato | n/a (non committato) | Opzione A (JAR → PAR, direzione FAPI 2.0): `authorize_post` rifiuta `request=`/`response_mode≠query` via 302 `invalid_request`; discovery invariata + commento JAR-vs-PAR; paragrafo docs in `par.md`; 3 nuovi test in `TestOA502JarNotSupported`. Area 56 passed (conformance + state), ruff check + mypy puliti (format-drift pre-esistente non toccato). |
+| 2026-09-13 | OA-502 | Fase 5 / 5.2 JAR dichiarato non-supportato | 5090571 | Opzione A (JAR → PAR, direzione FAPI 2.0): `authorize_post` rifiuta `request=`/`response_mode≠query` via 302 `invalid_request`; discovery invariata + commento JAR-vs-PAR; paragrafo docs in `par.md`; 3 nuovi test in `TestOA502JarNotSupported`. Area 56 passed (conformance + state), ruff check + mypy puliti (format-drift pre-esistente non toccato). |
+| 2026-09-13 | OA-503 | Fase 5 / 5.3 DPoP via DCR + waiver mTLS | n/a (non committato) | `ClientRegistrationRequest.dpop_bound` opt-in (default off, audit incluso); docs `dpop.md` (guidance alto-rischio + rinvio flip a OA-505); guard discovery senza `tls_client_auth`. 3 nuovi test `TestOA503DcrDpop`; area DCR/DPoP 48 passed, ruff check + mypy puliti (mie righe formattate; drift pre-esistente `oidc.py` L228/L394 non toccato). |
