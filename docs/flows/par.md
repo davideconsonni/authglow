@@ -69,6 +69,37 @@ Unknown/expired/used/foreign `request_uri` → 302
 `error=invalid_request`. Clients flagged `require_par` that call
 without `request_uri` → 302 `error=invalid_request`.
 
+### 3. curl example (standard confidential client)
+
+Replace the `YOUR_*` placeholders with your values (`BASE` is the
+AuthGlow origin, e.g. `https://auth.example.com`).
+
+```bash
+# 1. Push (backchannel, HTTP Basic like the token endpoint)
+curl -s -X POST "$BASE/oauth2/par" \
+  -u "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" \
+  --data-urlencode "redirect_uri=https://app.example.com/cb" \
+  --data-urlencode "scope=openid read offline_access" \
+  --data-urlencode "state=YOUR_STATE" \
+  --data-urlencode "code_challenge=YOUR_CODE_CHALLENGE" \
+  --data-urlencode "code_challenge_method=S256"
+# 201 {"request_uri":"urn:ietf:params:oauth:request_uri:<opaque>","expires_in":90}
+
+# 2. Authorize with the request_uri (front channel, 90s to spend it)
+curl -s -X POST "$BASE/api/oauth2/authorize" \
+  --data-urlencode "client_id=YOUR_CLIENT_ID" \
+  --data-urlencode "redirect_uri=https://app.example.com/cb" \
+  --data-urlencode "request_uri=urn:ietf:params:oauth:request_uri:<opaque>" \
+  --data-urlencode "email=YOUR_EMAIL" \
+  --data-urlencode "password=YOUR_PASSWORD"
+# 200 {"redirect_url":"https://app.example.com/cb?code=...&state=..."}
+# (consent/MFA gates may apply first — same as the classic flow)
+```
+
+Error cases (all `302` back to `redirect_uri` with `error=invalid_request`):
+stale/reused/foreign `request_uri`, `require_par` client without
+`request_uri`, `request=` (JAR, unsupported), `response_mode=form_post`.
+
 ---
 
 ## Conformance

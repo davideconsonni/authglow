@@ -79,6 +79,9 @@ Parameters (form):
 | `id_token_hint`        | no | Pre-identifies the user. |
 | `claims`               | no | OIDC Core §5.5 — filters ID-token claims (JSON). |
 | `acr_values`           | no | Requested ACR for the ID token. |
+| `request_uri`          | no | PAR alternative (OA-501): when present, the stored pushed parameters replace all individual ones above; see `par.md` for the curl flow. |
+| `request`              | never | JAR objects unsupported — rejected, never read (OA-502). |
+| `response_mode`        | `query` only | Anything else (e.g. `form_post`) → `302 error=invalid_request` (OA-502). |
 
 The endpoint:
 

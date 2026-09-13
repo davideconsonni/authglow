@@ -563,6 +563,7 @@ The client is responsible for deleting access tokens and ID tokens on its side.
 - `public_jwk` — public JWK registered for `private_key_jwt` client auth
 - `client_secret_jwt_key` — server-minted symmetric key for HS256 `client_secret_jwt` (shown once, Fernet-encrypted at rest)
 - `dpop_bound` — if true, token endpoint requires a DPoP proof (RFC 9449) and issues sender-constrained tokens
+- `require_par` — if true, authorize requires a pushed `request_uri` (RFC 9126, OA-501)
 - `is_confidential` — if true, requires client_secret for token endpoint
 - `require_pkce` — if true, PKCE mandatory
 - `require_consent` — if true, always show consent screen; if false, skip consent and return auth code directly

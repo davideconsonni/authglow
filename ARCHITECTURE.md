@@ -305,6 +305,8 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
  | `backend/authglow/models/claim_policy.py`           | Pydantic schemas + built-in templates (rbac-roles, user-tenant, ...)                      |
  | `backend/authglow/api/device_auth.py`               | Device Authorization Grant (RFC 8628) endpoints + verification UI API                     |
  | `backend/authglow/api/par.py`                     | Pushed Authorization Requests (RFC 9126, OA-501) `POST /oauth2/par`                       |
+| `backend/authglow/models/par.py`                  | PAR request/response models (RFC 9126, OA-501): `request_uri` URN, TTL, single-use         |
+| `backend/authglow/repositories/file/par.py`       | PAR file persistence (RFC 9126, OA-501): one JSON per `request_id`                         |
  | `backend/authglow/api/claim_policy.py`              | Claim policy CRUD per client + admin templates                                            |
  | `backend/authglow/services/dpop.py`                 | DPoP proof verification (RFC 9449), `cnf`/`ath` binding                                   |
  | `backend/authglow/services/client_jwt_auth.py`      | `client_secret_jwt` / `private_key_jwt` client auth (RFC 7523)                            |

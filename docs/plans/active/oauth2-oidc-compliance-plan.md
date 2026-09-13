@@ -386,9 +386,12 @@ stabilizzato il wire-format.
 
 ## Fase 6 — Docs, audit e chiusura
 
-- [ ] **[OA-601]** 6.1 `ARCHITECTURE.md` + `docs/` per ogni endpoint toccato: parametri canonici, errori `error=`,
+- [x] **[OA-601]** 6.1 `ARCHITECTURE.md` + `docs/` per ogni endpoint toccato: parametri canonici, errori `error=`,
   esempi curl con client standard (non solo first-party). Chi tocca un endpoint aggiorna la sua doc
   nello stesso commit (regola AGENTS.md).
+  Decisione OA-601 (2026-09-13, docs-only): curl PAR con client standard in `par.md`;
+  sottosezione PAR+rifiuti in `authorization-code-pkce.md`; riga `require_par` in `features.md`;
+  righe `models/par.py` + `repositories/file/par.py` in ARCHITECTURE. OA-504 escluso (già in FAPI.md).
 - [ ] **[OA-602]** 6.2 Playground/frontend allineati: `DeviceCodeFlow` usa `device_code`, `state` non richiesto,
   risposta Token standard parsata (niente più `{"ok": True}`), `PkceFlow`/`AuthorizationCodeFlow`
   invariati se già S256.
@@ -447,4 +450,5 @@ stabilizzato il wire-format.
 | 2026-09-13 | OA-502 | Fase 5 / 5.2 JAR dichiarato non-supportato | 5090571 | Opzione A (JAR → PAR, direzione FAPI 2.0): `authorize_post` rifiuta `request=`/`response_mode≠query` via 302 `invalid_request`; discovery invariata + commento JAR-vs-PAR; paragrafo docs in `par.md`; 3 nuovi test in `TestOA502JarNotSupported`. Area 56 passed (conformance + state), ruff check + mypy puliti (format-drift pre-esistente non toccato). |
 | 2026-09-13 | OA-503 | Fase 5 / 5.3 DPoP via DCR + waiver mTLS | cecca4a | `ClientRegistrationRequest.dpop_bound` opt-in (default off, audit incluso); docs `dpop.md` (guidance alto-rischio + rinvio flip a OA-505); guard discovery senza `tls_client_auth`. 3 nuovi test `TestOA503DcrDpop`; area DCR/DPoP 48 passed, ruff check + mypy puliti (mie righe formattate; drift pre-esistente `oidc.py` L228/L394 non toccato). |
 | 2026-09-13 | OA-504 | Fase 5 / 5.4 aud presence-check + fallback internal | 84044a4 | Fallback `INTERNAL_AUDIENCE` in `create_access_token` (docstring resa vera); presence-check `aud` in 4 choke point (core/permissions ×2, api/auth, passkey); revoke/introspect/logout restano permissivi by-design. Test: `TestOA504AudPresence` (6) + contratto `test_jwt_audience`/`test_vapt046` aggiornati + fixture admin con `aud`. Full suite `2857 passed` (1 pre-esistente `test_admin_settings` provato via stash — OA-501, non toccare senza ok; 1 flaky xdist su revoke non riproducibile); ruff check + mypy puliti. |
-| 2026-09-13 | OA-505 | Fase 5 / 5.5 Profilo FAPI deciso e documentato | n/a (non committato) | Nuovo `docs/reference/FAPI.md` (profilo, tabella default-vs-opt-in con evidenze OA, 4 deroghe, follow-up, non-obiettivi) + `features.md` §31 aggiornata (PAR/DPoP opt-in, JAR respinto, JARM non-obiettivo, mTLS waived, aud presence); `SECURITY.md` invariato (motivazione nel plan). Docs-only: nessun test codice; Fase 5 chiusa. |
+| 2026-09-13 | OA-505 | Fase 5 / 5.5 Profilo FAPI deciso e documentato | aa205c9 | Nuovo `docs/reference/FAPI.md` (profilo, tabella default-vs-opt-in con evidenze OA, 4 deroghe, follow-up, non-obiettivi) + `features.md` §31 aggiornata (PAR/DPoP opt-in, JAR respinto, JARM non-obiettivo, mTLS waived, aud presence); `SECURITY.md` invariato (motivazione nel plan). Docs-only: nessun test codice; Fase 5 chiusa. |
+| 2026-09-13 | OA-601 | Fase 6 / 6.1 Docs endpoint Fase 5 | n/a (non committato) | curl PAR standard-client in `par.md` (nomi parametri verificati su `api/par.py`); tabella authorize estesa (PAR + rifiuti OA-502); riga `require_par` in `features.md`; 2 righe PAR in ARCHITECTURE. Docs-only: niente pytest. |
