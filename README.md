@@ -84,7 +84,7 @@ Full endpoint catalog: [FEATURES.md](docs/reference/features.md)
 
 ## Demo
 
-Public demo instance: [https://authglow-demo.onrender.com](https://authglow-demo.onrender.com)
+Public demo instance: authglow-demo[.]onrender[.]com
 
 ---
 
