@@ -406,23 +406,27 @@ stabilizzato il wire-format.
   (`test_admin_settings::_FIELD_META`, da OA-501, provato via stash — NON fixato senza ok);
   frontend `543 passed + 6 skipped` (come baseline OA-306). Zero regressioni. E2E non rilanciato
   (nessun flusso cross-cutting toccato in Fase 5–6, backend tutto verde).
-- [ ] **[OA-604]** 6.4 Dichiarazione finale: tabella RFC×stato firmata qui sotto (tutte `[x]` = done).
+- [x] **[OA-604]** 6.4 Dichiarazione finale: tabella RFC×stato firmata qui sotto (tutte `[x]` = done).
+  Firma OA-604 (2026-09-13): 11/11 righe done con evidenza; deroghe in FAPI.md. Piano completo.
 
-### Dichiarazione finale di compliance (compilare a fine Fase 6)
+### Dichiarazione finale di compliance (firmata 2026-09-13, OA-604)
+
+"Done" = item chiusi con evidenza; deroghe e rinvii in `docs/reference/FAPI.md` (non duplicati qui).
 
 | Codice | RFC / Profilo | Stato | Evidenza (test/report) |
 |---|---|---|---|
-| OA-701 | RFC 6749 code / client_credentials / refresh | - [ ] | |
-| OA-702 | RFC 7636 PKCE S256-only | - [ ] | |
-| OA-703 | RFC 6750 Bearer | - [ ] | |
-| OA-704 | RFC 7009 revocation | - [ ] | |
-| OA-705 | RFC 7662 introspection | - [ ] | |
-| OA-706 | RFC 8628 device | - [ ] | |
-| OA-707 | OIDC Discovery / UserInfo / Logout / DCR | - [ ] | |
-| OA-708 | RFC 7523 JWT client auth | - [ ] | |
-| OA-709 | RFC 9449 DPoP | - [ ] | |
-| OA-710 | RFC 9207 iss + BCP mix-up | - [ ] | |
-| OA-711 | PAR / FAPI 2.0 (profilo deciso) | - [ ] | |
+| OA-701 | RFC 6749 code / client_credentials / refresh | - [x] | Fasi 1–3; full suite 2858 passed |
+| OA-702 | RFC 7636 PKCE S256-only | - [x] | Matrice OA-001, mai rotto |
+| OA-703 | RFC 6750 Bearer | - [x] | `Bearer`/`DPoP` + `WWW-Authenticate`, baseline |
+| OA-704 | RFC 7009 revocation | - [x] | OA-102/104, `TestRFC7009Revocation` |
+| OA-705 | RFC 7662 introspection | - [x] | Non-oracle + audience binding, baseline |
+| OA-706 | RFC 8628 device | - [x] | OA-101, `device_code=` canonico |
+| OA-707 | OIDC Discovery / UserInfo / Logout / DCR | - [x] | OA-102/201–205; probe OA-401 35/35 |
+| OA-708 | RFC 7523 JWT client auth | - [x] | T.2 HS256/RS256 |
+| OA-709 | RFC 9449 DPoP | - [x] opt-in | OA-503, `FAPI.md` |
+| OA-710 | RFC 9207 iss + BCP mix-up | - [x] | OA-401 probe 35/35 |
+| OA-711 | PAR / FAPI 2.0 (profilo deciso) | - [x] deciso | OA-501/505, `FAPI.md` (non certificato) |
+| OA-711 | PAR / FAPI 2.0 (profilo deciso) | - [x] deciso | OA-501/505, `FAPI.md` (non certificato) |
 
 ---
 
@@ -460,4 +464,5 @@ stabilizzato il wire-format.
 | 2026-09-13 | OA-505 | Fase 5 / 5.5 Profilo FAPI deciso e documentato | aa205c9 | Nuovo `docs/reference/FAPI.md` (profilo, tabella default-vs-opt-in con evidenze OA, 4 deroghe, follow-up, non-obiettivi) + `features.md` §31 aggiornata (PAR/DPoP opt-in, JAR respinto, JARM non-obiettivo, mTLS waived, aud presence); `SECURITY.md` invariato (motivazione nel plan). Docs-only: nessun test codice; Fase 5 chiusa. |
 | 2026-09-13 | OA-601 | Fase 6 / 6.1 Docs endpoint Fase 5 | 2ebf3f1 | curl PAR standard-client in `par.md` (nomi parametri verificati su `api/par.py`); tabella authorize estesa (PAR + rifiuti OA-502); riga `require_par` in `features.md`; 2 righe PAR in ARCHITECTURE. Docs-only: niente pytest. |
 | 2026-09-13 | OA-602 | Fase 6 / 6.2 Playground allineato (verifica) | 8f9ad4a | Nessun cambio codice (già fatto in OA-101/201/301): 7 frontend-test verdi, tsc + eslint puliti. |
-| 2026-09-13 | OA-603 | Fase 6 / 6.3 Full suite finali | n/a (non committato) | Backend `2857 passed + 1 pre-esistente` (admin_settings, da OA-501, NON fixato — attende ok); frontend `543 passed + 6 skipped`; zero regressioni, E2E non necessario. |
+| 2026-09-13 | OA-603 | Fase 6 / 6.3 Full suite finali | 22e06ac | Backend `2857 passed + 1 pre-esistente` (admin_settings, da OA-501 — sistemata il 2026-09-13 in `2ee11f8`, full suite ora `2858 passed, 0 failed`); frontend `543 passed + 6 skipped`; zero regressioni, E2E non necessario. |
+| 2026-09-13 | OA-604 | Fase 6 / 6.4 Dichiarazione finale | n/a (non committato) | Tabella OA-701–711 firmata 11/11 con evidenze; deroghe in FAPI.md. Piano completo. |
