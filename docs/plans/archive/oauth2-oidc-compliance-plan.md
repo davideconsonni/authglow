@@ -1,6 +1,13 @@
+---
+type: plan
+status: done
+ids: OA-NNN
+closed: 2026-09-13
+---
+
 # Piano Compliance OAuth2 / OIDC — verso conformità ottima
 
-Stato: bozza operativa con handoff completo. Lavorazione in sessioni separate, una fase alla volta.
+Stato: completato (tutte le fasi chiuse, dichiarazione finale firmata). Lavorazione in sessioni separate, una fase alla volta.
 Legenda checkbox: `- [ ]` = da fare, `- [x]` = completato (con commit/test di riferimento).
 Ogni punto ha un codice univoco **`OA-xxx`** — citarlo sempre in commit, test, xfail e handoff
 (es. `OA-101`). Il numero di fase (`1.1`) resta solo come indicazione di posizione, non come chiave.

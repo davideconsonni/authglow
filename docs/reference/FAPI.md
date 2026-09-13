@@ -3,7 +3,7 @@
 > **AuthGlow is NOT FAPI 2.0 certified.** It is Security-BCP-oriented with
 > FAPI opt-ins per client. This page records the decided profile: what is
 > default, what is opt-in, what is out of scope, and why. Every row cites
-> the plan item (`docs/plans/active/oauth2-oidc-compliance-plan.md`) and
+> the plan item (`docs/plans/archive/oauth2-oidc-compliance-plan.md`) and
 > the evidence (test or code) behind it.
 
 ## Decided profile (default vs opt-in)

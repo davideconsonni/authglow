@@ -1,3 +1,9 @@
+---
+type: plan
+status: active
+ids: AUTH-NNN
+---
+
 # AuthGlow Security Remediation Handoff
 
 Repository: `davideconsonni/authglow`  

@@ -1,3 +1,9 @@
+---
+type: report
+status: done
+ids: OA-401
+---
+
 # OA-401 OIDC Basic RP report
 
 Self-made Basic profile probe (not an OpenID Foundation certification run): a generic third-party RP speaking only the public protocol surface. Backend demo mode, credentials read at runtime from `/api/meta`. Base: `http://127.0.0.1:8001`.
