@@ -398,10 +398,14 @@ stabilizzato il wire-format.
   Verifica OA-602 (2026-09-13, nessun cambio codice — tutto già fatto in OA-101/201/301):
   `DeviceCodeFlow.test.tsx` + `OAuthAuthorizePage.test.tsx` 7 passed, `tsc --noEmit` pulito,
   eslint pulito sui 6 file flussi/callback. Zero `{"ok": true}` nelle pages, S256 hardcodato.
-- [ ] **[OA-603]** 6.3 Test: dopo ogni item, solo i file dell'area toccata; full backend
+- [x] **[OA-603]** 6.3 Test: dopo ogni item, solo i file dell'area toccata; full backend
   (`pytest -q --tb=line -n auto`, timeout 300000) solo a fine fase. Separare failure pre-esistenti
   (noti: event loop 3.13, CSP, `setup_page` import) dalle regressioni — **chiedere prima di fixare
   le pre-esistenti** (regola AGENTS.md).
+  Verifica OA-603 (2026-09-13): backend `2857 passed + 1 pre-esistente`
+  (`test_admin_settings::_FIELD_META`, da OA-501, provato via stash — NON fixato senza ok);
+  frontend `543 passed + 6 skipped` (come baseline OA-306). Zero regressioni. E2E non rilanciato
+  (nessun flusso cross-cutting toccato in Fase 5–6, backend tutto verde).
 - [ ] **[OA-604]** 6.4 Dichiarazione finale: tabella RFC×stato firmata qui sotto (tutte `[x]` = done).
 
 ### Dichiarazione finale di compliance (compilare a fine Fase 6)
@@ -455,4 +459,5 @@ stabilizzato il wire-format.
 | 2026-09-13 | OA-504 | Fase 5 / 5.4 aud presence-check + fallback internal | 84044a4 | Fallback `INTERNAL_AUDIENCE` in `create_access_token` (docstring resa vera); presence-check `aud` in 4 choke point (core/permissions ×2, api/auth, passkey); revoke/introspect/logout restano permissivi by-design. Test: `TestOA504AudPresence` (6) + contratto `test_jwt_audience`/`test_vapt046` aggiornati + fixture admin con `aud`. Full suite `2857 passed` (1 pre-esistente `test_admin_settings` provato via stash — OA-501, non toccare senza ok; 1 flaky xdist su revoke non riproducibile); ruff check + mypy puliti. |
 | 2026-09-13 | OA-505 | Fase 5 / 5.5 Profilo FAPI deciso e documentato | aa205c9 | Nuovo `docs/reference/FAPI.md` (profilo, tabella default-vs-opt-in con evidenze OA, 4 deroghe, follow-up, non-obiettivi) + `features.md` §31 aggiornata (PAR/DPoP opt-in, JAR respinto, JARM non-obiettivo, mTLS waived, aud presence); `SECURITY.md` invariato (motivazione nel plan). Docs-only: nessun test codice; Fase 5 chiusa. |
 | 2026-09-13 | OA-601 | Fase 6 / 6.1 Docs endpoint Fase 5 | 2ebf3f1 | curl PAR standard-client in `par.md` (nomi parametri verificati su `api/par.py`); tabella authorize estesa (PAR + rifiuti OA-502); riga `require_par` in `features.md`; 2 righe PAR in ARCHITECTURE. Docs-only: niente pytest. |
-| 2026-09-13 | OA-602 | Fase 6 / 6.2 Playground allineato (verifica) | n/a (non committato) | Nessun cambio codice (già fatto in OA-101/201/301): 7 frontend-test verdi, tsc + eslint puliti. |
+| 2026-09-13 | OA-602 | Fase 6 / 6.2 Playground allineato (verifica) | 8f9ad4a | Nessun cambio codice (già fatto in OA-101/201/301): 7 frontend-test verdi, tsc + eslint puliti. |
+| 2026-09-13 | OA-603 | Fase 6 / 6.3 Full suite finali | n/a (non committato) | Backend `2857 passed + 1 pre-esistente` (admin_settings, da OA-501, NON fixato — attende ok); frontend `543 passed + 6 skipped`; zero regressioni, E2E non necessario. |
