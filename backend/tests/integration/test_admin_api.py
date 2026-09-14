@@ -417,6 +417,8 @@ class TestRevokeAllUserSessions:
 class TestDisableUserMFA:
     def test_disables_mfa_and_preserves_backup_codes(self):
         import asyncio
+        from fastapi import BackgroundTasks
+        from starlette.requests import Request
         from authglow.api.admin import disable_user_mfa
 
         mock_storage = AsyncMock()
@@ -430,14 +432,28 @@ class TestDisableUserMFA:
         audit_svc = AsyncMock()
         mfa_svc = AsyncMock()
 
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        background_tasks = BackgroundTasks()
+
         with (
             patch("authglow.api.admin.UserStorage", return_value=mock_storage),
             patch("authglow.api.admin.AuditService", return_value=audit_svc),
             patch("authglow.api.admin.MFAService", return_value=mfa_svc),
+            patch("authglow.api.admin.SecurityNotificationService"),
         ):
             result = asyncio.get_event_loop().run_until_complete(
                 disable_user_mfa(
+                    request=request,
                     user_id="mfa-target",
+                    background_tasks=background_tasks,
                     current_user=_make_admin_user(),
                     storage=mock_storage,
                     audit_service=audit_svc,
@@ -451,11 +467,12 @@ class TestDisableUserMFA:
         assert mock_user.mfa_verified is False
         mock_storage.update_user.assert_called_once_with(mock_user)
         mfa_svc.delete_backup_codes.assert_not_called()
-
+        # VAPT-056: user-facing disabled alert scheduled.
+        assert len(background_tasks.tasks) == 1
     def test_returns_404_when_user_not_found(self):
         import asyncio
         from authglow.api.admin import disable_user_mfa
-        from fastapi import HTTPException
+        from fastapi import BackgroundTasks, HTTPException
 
         mock_storage = AsyncMock()
         mock_storage.get_user = AsyncMock(return_value=None)
@@ -464,7 +481,9 @@ class TestDisableUserMFA:
             with pytest.raises(HTTPException) as exc:
                 asyncio.get_event_loop().run_until_complete(
                     disable_user_mfa(
+                        request=MagicMock(),
                         user_id="nonexistent",
+                        background_tasks=BackgroundTasks(),
                         current_user=_make_admin_user(),
                         storage=mock_storage,
                         audit_service=AsyncMock(),
@@ -477,7 +496,7 @@ class TestDisableUserMFA:
     def test_returns_400_when_mfa_not_enabled(self):
         import asyncio
         from authglow.api.admin import disable_user_mfa
-        from fastapi import HTTPException
+        from fastapi import BackgroundTasks, HTTPException
 
         mock_storage = AsyncMock()
         mock_user = _make_test_user("no-mfa", "nomfa@test.io")
@@ -488,7 +507,9 @@ class TestDisableUserMFA:
             with pytest.raises(HTTPException) as exc:
                 asyncio.get_event_loop().run_until_complete(
                     disable_user_mfa(
+                        request=MagicMock(),
                         user_id="no-mfa",
+                        background_tasks=BackgroundTasks(),
                         current_user=_make_admin_user(),
                         storage=mock_storage,
                         audit_service=AsyncMock(),
@@ -497,6 +518,82 @@ class TestDisableUserMFA:
                 )
 
         assert exc.value.status_code == 400
+
+
+class TestResetUserMFANotification:
+    """Admin MFA reset must leave the same user-facing trail as self-service."""
+
+    def test_reset_mfa_logs_audit_and_schedules_alert(self):
+        import asyncio
+        from fastapi import BackgroundTasks
+        from starlette.requests import Request
+        from authglow.api.admin import reset_user_mfa
+
+        mock_storage = AsyncMock()
+        mock_user = _make_test_user("reset-target", "reset@test.io")
+        mock_user.mfa_enabled = True
+        mock_storage.get_user = AsyncMock(return_value=mock_user)
+        mock_storage.update_user = AsyncMock(return_value=True)
+
+        audit_svc = AsyncMock()
+        mfa_svc = AsyncMock()
+        mfa_svc.delete_backup_codes = AsyncMock(return_value=None)
+
+        request = Request(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        background_tasks = BackgroundTasks()
+
+        mock_admin_action = MagicMock()
+        mock_admin_action.record_action = AsyncMock()
+        mock_security_event = MagicMock()
+        mock_security_event.record_event = AsyncMock()
+
+        with (
+            patch("authglow.api.admin.UserStorage", return_value=mock_storage),
+            patch("authglow.api.admin.AuditService", return_value=audit_svc),
+            patch("authglow.api.admin.MFAService", return_value=mfa_svc),
+            patch("authglow.api.admin.SecurityNotificationService"),
+            patch(
+                "authglow.services.admin_action.AdminActionService",
+                return_value=mock_admin_action,
+            ),
+            patch(
+                "authglow.services.security_event.SecurityEventService",
+                return_value=mock_security_event,
+            ),
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                reset_user_mfa(
+                    request=request,
+                    user_id="reset-target",
+                    background_tasks=background_tasks,
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=audit_svc,
+                    mfa_service=mfa_svc,
+                )
+            )
+
+        assert result["message"] == "MFA reset successfully"
+        assert mock_user.mfa_enabled is False
+        assert mock_user.mfa_secret is None
+
+        audit_svc.log_event.assert_awaited_once()
+        kwargs = audit_svc.log_event.await_args.kwargs
+        assert kwargs["event_type"] == "mfa_reset_by_admin"
+        assert kwargs["severity"] == "warning"
+
+        assert len(background_tasks.tasks) == 1
+        scheduled = background_tasks.tasks[0]
+        assert scheduled.args[0] is mock_user
+        assert scheduled.kwargs["ip_address"] == "127.0.0.1"
 
 
 class TestRegenerateUserBackupCodes:
@@ -1066,7 +1163,7 @@ class TestFederatedUserAdminProtection:
 
     def test_reset_mfa_blocks_federated(self):
         import asyncio
-        from fastapi import HTTPException
+        from fastapi import BackgroundTasks, HTTPException
         from starlette.requests import Request
         from authglow.api.admin import reset_user_mfa
 
@@ -1091,6 +1188,7 @@ class TestFederatedUserAdminProtection:
                     reset_user_mfa(
                         request=request,
                         user_id="federated-2",
+                        background_tasks=BackgroundTasks(),
                         current_user=_make_admin_user(),
                         storage=mock_storage,
                         audit_service=AsyncMock(),

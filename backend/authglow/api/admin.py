@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Any, List, Optional, TypedDict, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -47,6 +47,7 @@ from authglow.services.password import PasswordValidator, hash_password_async
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.rbac import RBACService
 from authglow.services.refresh_token import RefreshTokenService
+from authglow.services.security_notifications import SecurityNotificationService
 from authglow.services.user import UserService
 
 # Back-compat alias for Fase 21 transition window
@@ -644,6 +645,7 @@ async def delete_user_passkey(
 async def reset_user_mfa(
     request: Request,
     user_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
@@ -694,12 +696,22 @@ async def reset_user_mfa(
         metadata={"admin_email": current_user.email},
     )
 
+    # An admin-driven reset carries the same account-takeover risk as a
+    # self-service disable — the user gets the same disabled-alert email.
+    background_tasks.add_task(
+        SecurityNotificationService().send_mfa_disabled_alert,
+        user,
+        ip_address=request.client.host if request.client else None,
+    )
+
     return {"message": "MFA reset successfully"}
 
 
 @router.post("/api/admin/users/{user_id}/disable-mfa")
 async def disable_user_mfa(
+    request: Request,
     user_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = require_user_with_permission("users.manage"),
     storage: UserStorage = Depends(get_user_storage),
     audit_service: AuditService = Depends(get_audit_service),
@@ -749,6 +761,14 @@ async def disable_user_mfa(
         email=user.email,
         description="MFA disabled by admin",
         metadata={"admin_email": current_user.email},
+    )
+
+    # The user must know their second factor was removed — same
+    # disabled-alert email as the self-service flow.
+    background_tasks.add_task(
+        SecurityNotificationService().send_mfa_disabled_alert,
+        user,
+        ip_address=request.client.host if request.client else None,
     )
 
     return {"message": "MFA disabled successfully"}

@@ -1,9 +1,8 @@
 """MFA API endpoints."""
 
-import asyncio
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 
 from authglow.api.auth import _build_oauth_redirect, _set_auth_cookies, get_current_user
 from authglow.core.concurrency import named_lock
@@ -17,6 +16,7 @@ from authglow.models.audit_metadata import (
     BackupCodeMetadata,
     MFAEnabledMetadata,
     MFAFailedMetadata,
+    MFAMetadata,
     MFAVerifiedMetadata,
     TrustedDeviceMetadata,
 )
@@ -208,6 +208,7 @@ async def verify_mfa_enrollment(
 @router.delete("/api/mfa/disable")
 async def disable_mfa(
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     mfa_service: MFAService = Depends(get_mfa_service),
     storage: UserStorage = Depends(get_user_storage),
@@ -220,10 +221,12 @@ async def disable_mfa(
     stuck after a failed enroll can self-recover without an admin
     call.
 
-    VAPT-056: the disable event is one of the highest-signal
-    compromise indicators — it always leaves a warning-severity audit
-    trail and triggers the user-facing security email (fire-and-forget,
-    send failures are swallowed by the notification service).
+    Disabling MFA is one of the highest-signal compromise
+    indicators — it always leaves a warning-severity audit trail and
+    triggers the user-facing security email via ``BackgroundTasks``
+    (runs before the response completes, so no fire-and-forget loss
+    on shutdown; send failures are swallowed by the notification
+    service).
     """
     has_any_mfa_state = current_user.mfa_enabled or bool(current_user.mfa_secret)
     if not has_any_mfa_state:
@@ -245,12 +248,15 @@ async def disable_mfa(
         user_id=current_user.id,
         email=current_user.email,
         ip_address=client_ip,
-        metadata=MFAEnabledMetadata(method="totp"),
+        user_agent=request.headers.get("user-agent"),
+        metadata=MFAMetadata(method="totp"),
         severity="warning",
     )
 
-    asyncio.create_task(
-        SecurityNotificationService().send_mfa_disabled_alert(current_user, ip_address=client_ip)
+    background_tasks.add_task(
+        SecurityNotificationService().send_mfa_disabled_alert,
+        current_user,
+        ip_address=client_ip,
     )
 
     return {"message": "MFA disabled successfully"}

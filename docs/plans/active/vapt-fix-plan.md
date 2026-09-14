@@ -354,10 +354,11 @@ refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pend
 
 ### MFA audit / disable
 
-- [ ] **VAPT-056** — Self-service `DELETE /api/mfa/disable` performs no audit logging
+- [x] **VAPT-056** — Self-service `DELETE /api/mfa/disable` performs no audit logging
   - **Location**: `backend/authglow/api/mfa.py:123-142`
   - **Description**: The highest-risk MFA-bypass path leaves no audit trail. The admin route logs; the self-service one does not. `send_mfa_disabled_alert` exists in `security_notifications.py` but is never called.
   - **Fix**: Add `audit_service.log_event(event_type="mfa_disabled", ...)` and wire the security notification.
+  - **Done**: self-service `disable_mfa` logs `mfa_disabled` (warning) + sends the disabled alert; hardened with `user_agent`, registry-typed `MFAMetadata`, and `BackgroundTasks` instead of fire-and-forget `asyncio.create_task`. Admin `reset-mfa`/`disable-mfa` now schedule the same alert to the target user. Tests: `TestDisableMfaSecurityTrail`, `TestResetUserMFANotification`, `TestDisableUserMFA`.
 
 - [ ] **VAPT-057** — Token-reuse (replay) detection revokes the family but is not audit-logged
   - **Location**: `backend/authglow/services/refresh_token.py:271-275, 285-289`; `backend/authglow/api/auth.py:529-559`
