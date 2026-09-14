@@ -315,10 +315,11 @@ refactor (040, 103). 1 partial fix annotato (039, 086: scheduled job ancora pend
   - **Fix**: Check `is_account_locked` (or a cached `user.locked_until`) before the bcrypt comparison.
   - **Done** (2026-06-28): reordered the password path in both `authorize_post` (`/api/oauth2/authorize`) and `login_for_access_token` (`/api/token`) so the `is_account_locked` check runs *before* `verify_and_maybe_rehash_password`. Per-request cost on a locked account drops from ~100ms (bcrypt) to <1ms (single file read). Pre-fix the 423 response was only reachable *after* spending the bcrypt budget; post-fix a locked account short-circuits before any crypto. Tests: new `tests/unit/test_vapt048.py` (8 — source-order checks for both endpoints, locked→423 without bcrypt, non-existent→401 without bcrypt, unlocked+wrong-pw→401+record_failed_login, mirrored for `/api/token`); existing `tests/integration/test_auth_api.py::TestLoginLockoutOrder` inverted to assert `lockout_pos < verify_pwd_pos`.
 
-- [ ] **VAPT-049** — Locked-account error code `423` leaks "this account exists and password is correct but it's locked"
+- [x] **VAPT-049** — Locked-account error code `423` leaks "this account exists and password is correct but it's locked"
   - **Location**: `backend/authglow/api/auth.py:242-246, 630-642`; `backend/authglow/api/password_reset.py:64-95`
   - **Description**: A non-existent email returns 401 "Invalid credentials"; an existing-but-locked account returns 423 "Account is temporarily locked" (when the password is correct). The reset endpoint correctly returns a uniform success message.
   - **Fix**: Return 401 with the same generic "Invalid credentials" message for locked accounts.
+  - **Done**: `authorize_post` (`backend/authglow/api/auth.py:1021-1030`) returns generic 401 for locked accounts, same status and body as unknown-user/wrong-password. Lockout check stays before bcrypt (VAPT-048 preserved, no counter bump). Real reason logged server-side as `LOGIN_FAILED` with `failure_reason="account_locked"`. The `/api/token` password path from the original Location no longer exists (password grant rejected); `password_reset.py` was already uniform. Suspended-account 423s and timing side-channel (VAPT-050) deliberately out of scope. Tests: `tests/unit/test_vapt048.py` (locked-401, ghost-401, indistinguishability locked-vs-ghost byte-identical).
 
 - [ ] **VAPT-050** — `oauth2/authorize` and `register_user` short-circuit `verify_password` when user is None (timing side-channel)
   - **Location**: `backend/authglow/api/auth.py:236-240`

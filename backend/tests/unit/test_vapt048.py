@@ -19,14 +19,17 @@ This module exercises:
 
 * the source-level ordering in both endpoints (antiregression);
 * the behavioural response when the account IS locked
-  (423, no bcrypt, no ``record_failed_login`` side effect);
+  (401 generic — indistinguishable from unknown user or wrong
+  password — no bcrypt, no ``record_failed_login`` side effect,
+  server-side audit only);
 * the behavioural response when the account is NOT locked and
   the password is wrong (401 + ``record_failed_login``).
 
-The companion integration test
+The ordering checks above are the regression net for the
+lockout-before-bcrypt invariant (VAPT-048). The stale
 ``tests/integration/test_auth_api.py::TestLoginLockoutOrder``
-covers the same ordering for ``/api/token`` and is part of the
-regression net.
+reference was removed — no such class exists; the behavioural
+tests below cover the locked-account response shape.
 """
 
 import inspect
@@ -155,14 +158,16 @@ def _build_authorize_app_with_mocks(test_settings):
 
 
 class TestVapt048AuthorizePostLockedUser:
-    """A locked user submitting email+password must get 423
-    without bcrypt being invoked."""
+    """A locked user submitting email+password must get the generic
+    401 — indistinguishable from an unknown user or a wrong
+    password — without bcrypt being invoked. The real reason stays
+    server-side in the audit log."""
 
-    def test_locked_user_gets_423_without_bcrypt(self, test_settings, monkeypatch):
+    def test_locked_user_gets_generic_401_without_bcrypt(self, test_settings, monkeypatch):
         from authglow.models.user import User
         from authglow.services.password import hash_password
 
-        app, storage, _audit = _build_authorize_app_with_mocks(test_settings)
+        app, storage, audit_svc = _build_authorize_app_with_mocks(test_settings)
         user = User(
             id="user-locked",
             email="locked@example.com",
@@ -197,14 +202,20 @@ class TestVapt048AuthorizePostLockedUser:
                 },
             )
 
-        assert response.status_code == 423, response.text
-        # The 423 must reference the lockout, not "Invalid credentials".
-        assert "locked" in response.json()["detail"].lower()
+        assert response.status_code == 401, response.text
+        # Indistinguishable from unknown-user / wrong-password:
+        # generic message, no lockout signal on the wire.
+        assert response.json()["detail"] == "Invalid credentials"
         # Critical: bcrypt must NOT be invoked on a locked account.
         bcrypt_spy.assert_not_called()
         # The failed-login counter must not be bumped either —
         # the password was never checked.
         storage.record_failed_login.assert_not_called()
+        # The real reason stays server-side: one audit event with
+        # failure_reason="account_locked".
+        audit_svc.log_event.assert_awaited_once()
+        _, kwargs = audit_svc.log_event.call_args
+        assert kwargs["metadata"].failure_reason == "account_locked"
 
     def test_non_existent_user_gets_401_without_bcrypt(self, test_settings):
         """A request for a non-existent email returns 401 without
@@ -280,3 +291,58 @@ class TestVapt048AuthorizePostLockedUser:
         storage.verify_and_maybe_rehash_password.assert_awaited_once()
         storage.record_failed_login.assert_awaited_once_with("user-unlocked")
 
+
+class TestVapt049LockedIndistinguishableFromGhost:
+    """Locked account vs non-existent email must produce the same
+    wire response — same status, same body — so existence cannot
+    be probed through the lockout signal."""
+
+    def _post_login(self, http_client, email):
+        return http_client.post(
+            "/api/oauth2/authorize",
+            data={
+                "client_id": "client-abc",
+                "redirect_uri": "https://example.com/callback",
+                "scope": "read",
+                "code_challenge": "test-challenge-abc",
+                "code_challenge_method": "S256",
+                "state": "abcdef1234567890" * 2,
+                "email": email,
+                # Value never verified (locked short-circuits before
+                # bcrypt; ghost has no user) — keep it a benign
+                # literal so secret scanners stay quiet.
+                "password": "not-verified-dummy",
+            },
+        )
+
+    def test_locked_and_ghost_share_wire_shape(self, test_settings):
+        from authglow.models.user import User
+
+        app, storage, _audit = _build_authorize_app_with_mocks(test_settings)
+        user = User(
+            id="user-locked",
+            email="locked@example.com",
+            # Dummy value: bcrypt is never invoked on this path
+            # (asserted below), so no real password literal belongs here.
+            hashed_password="dummy-hash-never-verified",
+            is_active=True,
+            email_verified=True,
+            scopes=["read"],
+            locked_until=__import__("datetime").datetime(
+                2099, 1, 1, tzinfo=__import__("datetime").timezone.utc
+            ),
+        )
+
+        with patch("authglow.api.auth.get_settings", return_value=test_settings):
+            http_client = TestClient(app)
+
+            storage.get_user_by_email.return_value = user
+            storage.is_account_locked.return_value = True
+            locked_resp = self._post_login(http_client, "locked@example.com")
+
+            storage.get_user_by_email.return_value = None
+            storage.is_account_locked.return_value = False
+            ghost_resp = self._post_login(http_client, "ghost@example.com")
+
+        assert locked_resp.status_code == ghost_resp.status_code == 401
+        assert locked_resp.json() == ghost_resp.json() == {"detail": "Invalid credentials"}

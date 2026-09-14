@@ -33,6 +33,7 @@ from authglow.models.audit_metadata import (
     APIKeyUsedMetadata,
     AuthorizationCodeMetadata,
     ClientCredentialsMetadata,
+    LoginFailedMetadata,
     LoginSuccessMetadata,
     LogoutMetadata,
     TokenIssuedMetadata,
@@ -1013,11 +1014,20 @@ async def authorize_post(
         # the per-IP rate limiter. The lockout check is a single
         # file read with no crypto, so the per-request cost on
         # a locked account drops from ~100ms to <1ms.
+        # The client response is intentionally identical to the
+        # unknown-user and wrong-password cases below: a distinct
+        # status or message would let anyone probe which emails
+        # exist. The real reason stays server-side in the audit log.
         if await storage.is_account_locked(user.id):
-            raise HTTPException(
-                status_code=status.HTTP_423_LOCKED,
-                detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+            await audit_service.log_event(
+                event_type=AuditEventType.LOGIN_FAILED,
+                user_id=user.id,
+                email=user.email,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                metadata=LoginFailedMetadata(failure_reason="account_locked"),
             )
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
         # VAPT-038: verify_and_maybe_rehash_password transparently
         # re-hashes the stored hash to the configured bcrypt cost
