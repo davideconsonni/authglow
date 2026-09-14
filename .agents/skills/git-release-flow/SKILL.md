@@ -23,6 +23,11 @@ Change these only if the repo uses other names:
 - Never run `git commit` (or any command that creates a commit) without the user's explicit OK. Propose the message, wait for approval, then commit.
 - Never run `git push` (branches, `DEPLOY`, or tags). Push is always manual by the user: print the exact command, wait until the user confirms it was pushed, then continue.
 
+## Communication & language
+
+- When you ask the user a question, make it self-contained and immediately clear: state what you found, what you propose, and what happens after their answer. Offer concrete options with one marked recommended. Ask one decision per question, and explain any jargon term you cannot avoid.
+- Everything the skill writes defaults to English unless the user explicitly asks for another language: files (`CHANGELOG.md`), commit messages, PR titles and bodies, tag messages, and release notes.
+
 ## Hard rules
 
 - Never commit directly to `TRUNK` or `DEPLOY`. Every change goes through a branch and a PR, so CI checks it.
