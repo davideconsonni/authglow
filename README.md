@@ -44,7 +44,12 @@ A good fit for side projects, small-team apps, internal tools, and homelab setup
 
 ## Try it
 
-**Public demo:** [https://authglow-demo.onrender.com](https://authglow-demo.onrender.com)
+A public demo instance is available — to keep it out of search indexes the
+address is written out below instead of linked (copy it into your browser):
+
+```text
+https://authglow-demo [dot] onrender [dot] com
+```
 
 The demo runs in demo mode: log in with the demo admin account shown on the page and click around (admin dashboard, OAuth Playground, security settings). Data resets on restart.
 
@@ -213,6 +218,21 @@ Server-to-server without the OAuth dance: create a scoped **API key** in the adm
 Your app can discover everything automatically at `/.well-known/openid-configuration`, with public signing keys at `/.well-known/jwks.json`.
 
 Step-by-step guides per flow: [docs/flows/](docs/flows/README.md).
+
+### Integrating with an AI coding assistant
+
+This repo ships an **integration skill** that teaches an AI agent how to connect your app to AuthGlow correctly: `.agents/skills/authglow-integration/`. It picks the right flow for your app type, uses your framework's maintained OIDC library instead of hand-rolled crypto, and refuses to finish until a security checklist passes.
+
+- **OpenCode**: the skill is already in place — prompt your session with:
+  ```text
+  Integrate this application with the AuthGlow instance at <issuer>.
+  Inspect the project first, choose the correct OAuth2/OIDC flow,
+  implement it with the framework's maintained library, and complete
+  the security/compliance checklist before reporting success.
+  ```
+- **Claude Code**: copy `.agents/skills/authglow-integration/` to `.claude/skills/authglow-integration/` in your project, then use the same prompt.
+
+It also handles auditing an existing integration, migrating from another provider, and troubleshooting login failures. Details: [.agents/skills/authglow-integration/README.md](.agents/skills/authglow-integration/README.md).
 
 ---
 

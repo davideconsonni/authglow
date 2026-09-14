@@ -7,7 +7,7 @@ Mark each applicable control `[x]` only when the implementation or test provides
 - [ ] Client type is explicitly classified as public or confidential.
 - [ ] Flow matches the client type and user/service requirement.
 - [ ] Passwords are never collected by the integrating application.
-- [ ] `/api/token` is not used by an external client.
+- [ ] `/api/token` is not used by an external client; token calls go to the discovered `token_endpoint`.
 - [ ] PKCE S256 is used for public clients.
 - [ ] Client secret/private key is absent from browser/mobile bundles.
 

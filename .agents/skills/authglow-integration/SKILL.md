@@ -16,7 +16,7 @@ The skill is version-aware. AuthGlow follows trunk-based development, so do not 
 - Use Authorization Code + PKCE for browser, SPA, desktop, and mobile public clients.
 - Use Authorization Code with confidential client authentication for server-side web applications.
 - Use Client Credentials only for machine-to-machine access without a user.
-- Never use `/api/token` for integration; it is not a registered endpoint. The AuthGlow dashboard itself uses Authorization Code + PKCE.
+- Never use `/api/token` for integration; it is not a registered endpoint. Exchange codes and refresh tokens at the discovered `token_endpoint` (`/oauth2/token`). The AuthGlow dashboard itself uses Authorization Code + PKCE.
 - Never use Resource Owner Password Credentials or collect AuthGlow passwords in the client application.
 - Never store access tokens, refresh tokens, client secrets, or ID tokens in `localStorage`.
 - Generate `state`, `nonce`, and PKCE `code_verifier` with a platform CSPRNG.
@@ -27,6 +27,17 @@ The skill is version-aware. AuthGlow follows trunk-based development, so do not 
 - Do not implement OAuth2, JWT, JWK, or PKCE cryptography from scratch when a maintained library exists.
 - Do not weaken AuthGlow server policy to make an integration pass.
 - Do not claim compliance until the final checklist has evidence for every applicable control.
+
+## AuthGlow specifics
+
+Read `references/authglow-endpoints.md` before planning. The points that surprise integrators coming from other providers:
+
+- The `authorization_endpoint` is a frontend-driven page (sign-in + consent UI backed by `POST /api/oauth2/authorize`), not a server-rendered login form. Send users to the AuthGlow frontend origin's authorize page — in a single-container deployment that is the issuer origin itself. Do not POST credentials to AuthGlow from the integrating app.
+- Register clients in the admin UI (**OAuth clients**) or via Dynamic Client Registration (`POST /oauth2/register`); the client secret is returned only in the registration response.
+- For simple server-to-server calls without an OAuth flow, a scoped API key (`X-API-Key` header or `Bearer ak_...`) is the intended shortcut — not Client Credentials.
+- Token endpoint client auth: `client_secret_basic`, `client_secret_post`, `client_secret_jwt` (HS256), `private_key_jwt` (RS256), or `none` for public clients with PKCE. PKCE is S256-only; authorization responses use `query` mode only.
+- Refresh tokens rotate on every use — discard the old one. Reuse invalidates the token family and is a security event, not a retryable error.
+- Use the built-in OAuth Playground (admin UI) against the real issuer to see each flow before coding it.
 
 ## Modes
 
@@ -145,6 +156,7 @@ Read the matching reference before implementing:
 - machine-to-machine: `references/machine-to-machine.md`
 - resource server: `references/resource-server.md`
 - protocol rules: `references/protocol-contract.md`
+- AuthGlow endpoints and capabilities: `references/authglow-endpoints.md`
 - security gate: `checklists/security-compliance.md`
 
 If no framework reference exists, use the protocol contract and the host framework's official OIDC documentation. Do not invent an AuthGlow-specific abstraction just because the framework is unfamiliar.
