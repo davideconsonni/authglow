@@ -533,6 +533,10 @@ class TestDisableMfaSecurityTrail:
         assert kwargs["user_id"] == user.id
         assert kwargs["email"] == user.email
         assert kwargs["ip_address"] is not None
+        assert kwargs["user_agent"] is not None
+        # Registry-typed metadata (MFAMetadata), no enable-flow leftovers.
+        assert kwargs["metadata"].method == "totp"
+        assert not hasattr(kwargs["metadata"], "backup_codes_generated")
 
         notif_instance.send_mfa_disabled_alert.assert_called_once()
         assert notif_instance.send_mfa_disabled_alert.call_args.args[0] is user
