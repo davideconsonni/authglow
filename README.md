@@ -1,6 +1,6 @@
 # AuthGlow
 
-Self-hosted OAuth 2.0 / OpenID Connect authorization server with file-based storage. No database required.
+Self-hosted login, OAuth 2.0 / OpenID Connect, and user management for your apps. No database to manage — data lives in files.
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue.svg">
@@ -11,90 +11,121 @@ Self-hosted OAuth 2.0 / OpenID Connect authorization server with file-based stor
 
 ---
 
-## Overview
+## What is AuthGlow?
 
-AuthGlow is a self-hosted OAuth 2.0 / OpenID Connect authorization server, user directory, and admin console. Users, sessions, tokens, and OAuth2 clients are stored as files through an [fsspec](https://filesystem-spec.readthedocs.io/) abstraction, so the same deployment runs on local disk or against S3, GCS, or Azure Blob storage.
+If you're building an app and need **sign-up, login, password reset, MFA, "Sign in with Google", and OAuth2 tokens** — run AuthGlow next to your app and let it handle identity, instead of building it yourself.
 
-Set `STORAGE_BACKEND` to `file`, `s3`, `gcs`, or `abfs` to change the object store. No migrations and no code changes required.
+You get:
 
-> Note: `STORAGE_BACKEND` selects the fsspec object store used by the file backend. It is distinct from `REPOSITORY_BACKEND`, the entity-storage selector, for which only `file` is currently implemented.
+- A ready-made **login UI** (sign-in, registration, MFA, passkeys, profile, admin dashboard)
+- A standard **OAuth2 / OpenID Connect server** your app talks to (Authorization Code + PKCE, refresh tokens, introspection, logout)
+- An **admin console** to manage users, OAuth2 clients, sessions, API keys, and roles
 
----
-
-## Features
-
-**Authentication and protocols**
-
-- OAuth 2.0 and OpenID Connect: Authorization Code with PKCE, Client Credentials, Refresh Token rotation with reuse detection, Token Introspection (RFC 7662), Token Revocation (RFC 7009), RP-Initiated Logout
-- Pushed Authorization Requests (PAR, RFC 9126)
-- Device Authorization Grant (RFC 8628) for input-constrained devices
-- Passkeys (WebAuthn/FIDO2) for passwordless sign-in
-- Multi-factor authentication: TOTP, backup codes, trusted devices
-- Phone verification via one-time codes (pluggable provider: development passthrough, Infobip SMS/WhatsApp)
-- DPoP (RFC 9449): sender-constrained access tokens
-- Client authentication: `client_secret_basic`, `client_secret_post`, `client_secret_jwt` (HS256), `private_key_jwt` (RS256), `none` (public clients with PKCE)
-- Scoped API keys (bcrypt-hashed, never stored in plaintext)
-
-**Identity federation**
-
-- OIDC Relying Party support: delegate login to any OIDC-compliant provider via configuration
-- Built-in providers: CIE, SPID, Google, Microsoft Entra ID, Apple, Keycloak, Auth0, Okta, GitHub, Facebook
-- Account auto-creation and linking by email or external subject, per-provider claim mapping, federated logout
-
-**Authorization and administration**
-
-- Role-based access control with per-route enforcement
-- Per-client claim policies controlling custom claims in access and ID tokens
-- OAuth2 client management: scopes, grant types, branding, secret rotation
-- Configurable consent screen with per-client branding
-- Admin dashboard: users, OAuth2 clients, sessions, consents, API keys, roles, JWK keys, audit log
-- Webhooks for auth and lifecycle events
-- Built-in OAuth Playground covering Authorization Code, PKCE, Client Credentials, Device Code, Introspection, and Revocation flows
-
-**Security and operations**
-
-- Self-rotating RSA signing keys, encrypted at rest
-- Rate limiting, CSRF protection, configurable CORS, OWASP security headers, HTTPS enforcement
-- Structured audit log for authentication events and administrative actions
-- White-labeling via environment variables (logo, colors, company name, legal links), with light and dark mode
-- Optional demo mode (`DEMO_MODE=true`) with a seeded demo account and warning banner for public evaluation
-
-**Infrastructure**
-
-- No database: file-based storage by default, swappable to S3, GCS, or Azure Blob via `STORAGE_BACKEND`
-- Single-container image (API + prebuilt SPA) or backend-only image
-- No message queue or external cache required (optional Redis for shared cache via `CACHE_BACKEND=redis`)
-
-Full endpoint catalog: [FEATURES.md](docs/reference/features.md)
+A good fit for side projects, small-team apps, internal tools, and homelab setups. If you need multi-region scale, complex enterprise provisioning (SCIM), or a managed SLA — an hosted provider will serve you better.
 
 ---
 
 ## Screenshots
 
 <p align="center">
-  <img src="images/01-sign-in.png" alt="Sign-in screen with passkey support" width="48%">
-  <img src="images/02-security.png" alt="Security settings and MFA" width="48%">
+  <img src="images/01-sign-in.png" alt="Sign-in screen with demo credentials" width="48%">
+  <img src="images/02-dashboard.png" alt="User dashboard" width="48%">
 </p>
 <p align="center">
-  <img src="images/03-jwk-keys.png" alt="JWK key management" width="48%">
-  <img src="images/04-admin.png" alt="Admin dashboard" width="48%">
+  <img src="images/07-playground.png" alt="OAuth Playground" width="48%">
+  <img src="images/06-oauth-clients.png" alt="OAuth2 client management" width="48%">
+</p>
+<p align="center">
+  <img src="images/10-api-keys.png" alt="API key creation" width="48%">
+  <img src="images/14-register.png" alt="Account registration" width="48%">
 </p>
 
 ---
 
-## Demo
+## Try it
 
-Public demo instance: [https://authglow-demo.onrender.com](https://authglow-demo.onrender.com)
+A public demo instance is available — to keep it out of search indexes the
+address is written out below instead of linked (copy it into your browser):
+
+```text
+https://authglow-demo [dot] onrender [dot] com
+```
+
+The demo runs in demo mode: log in with the demo admin account shown on the page and click around (admin dashboard, OAuth Playground, security settings). Data resets on restart.
 
 ---
 
-## Quick Start
+## What you get
 
-Running the full application (login, MFA, passkeys, admin dashboard, OAuth Playground) requires the backend API and the frontend UI.
+**Sign-in options for your users**
 
-Prerequisites: Python 3.11+, Node.js 26, Git.
+- Email + password, with password reset and email verification
+- Passkeys (WebAuthn/FIDO2) for passwordless sign-in
+- TOTP authenticator apps, backup codes, trusted devices
+- Phone verification via one-time codes (development passthrough, or Infobip SMS/WhatsApp)
+- "Sign in with …" via any OIDC provider (Google, Microsoft Entra ID, Apple, GitHub, Keycloak, Auth0, Okta, plus Italy's CIE and SPID)
 
-### Backend
+**OAuth2 / OIDC for your apps**
+
+- Authorization Code with PKCE, Client Credentials, Refresh Token rotation with reuse detection
+- Token introspection, revocation, RP-initiated logout
+- Pushed Authorization Requests (PAR) and Device Authorization Grant (for TVs, CLIs, IoT)
+- DPoP sender-constrained tokens; `client_secret_basic/post/jwt`, `private_key_jwt`, and public clients
+- Scoped API keys (bcrypt-hashed, never stored in plaintext)
+
+**Admin and customization**
+
+- Admin dashboard: users, OAuth2 clients, sessions, consents, API keys, roles, signing keys, audit log
+- Role-based access control with per-route enforcement
+- Per-client consent screen branding and token claim policies
+- White-labeling via environment variables (logo, colors, company name, legal links), light and dark mode
+- Webhooks for auth and lifecycle events
+- Built-in OAuth Playground to try each flow against your own instance
+
+**Operations**
+
+- No database: users, sessions, tokens, and keys are stored as files (see [Where is data kept?](#where-is-data-kept) below)
+- Rate limiting, CSRF protection, security headers, HTTPS enforcement, structured audit log
+- Single-container image (API + UI on one port) or backend-only image
+
+Full endpoint catalog: [FEATURES.md](docs/reference/features.md)
+
+---
+
+## Quick start
+
+### Option A — Docker (easiest, one container)
+
+```bash
+docker build -t authglow .
+
+docker run -p 8080:8080 \
+  -e PORT=8080 \
+  -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+  -e ISSUER="http://localhost:8080" \
+  -e BASE_URL="http://localhost:8080" \
+  -e FRONTEND_BASE_URL="http://localhost:8080" \
+  -e OAUTH2_FIRST_PARTY_REDIRECT_URI="http://localhost:8080/auth/callback" \
+  -e PASSKEY_RP_ID="localhost" \
+  -e PASSKEY_ORIGIN="http://localhost:8080" \
+  -v authglow-data:/app/data \
+  authglow
+```
+
+Open `http://localhost:8080/setup`, paste the setup token printed in the container log, and create your admin account. That's it — log in and explore.
+
+<details>
+<summary><strong>Just looking around? Start in demo mode (no setup step)</strong></summary>
+
+Add `-e DEMO_MODE=true` to the `docker run` above. A demo admin account is seeded at boot and its credentials are shown right on the login page (click to copy) — no setup token, no admin creation. Data is ephemeral and resets on restart, and a banner reminds everyone it's a sandbox. Good for a first look or a public evaluation instance; don't use it for anything real.
+
+</details>
+
+### Option B — Local development (backend + frontend separately)
+
+Prerequisites: Python 3.11+, Node.js, Git.
+
+**Backend:**
 
 ```bash
 git clone https://github.com/davideconsonni/authglow.git
@@ -105,102 +136,118 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 cp .env.example .env
-# Set SECRET_KEY in .env to a random value of at least 32 characters
+# Edit .env: set SECRET_KEY to a random value of at least 32 characters
 
 python main.py
 ```
 
-The API listens on `http://localhost:8000`. On startup it logs a `setup_token_generated` event; retain the token value for the initial admin setup below. Interactive API docs are available at `/docs` only when `ENABLE_DOCS=true`.
+The API listens on `http://localhost:8000` and prints a setup token in the log — keep it for the next step. (Interactive API docs at `/docs` only when `ENABLE_DOCS=true`.)
 
-### Frontend
+**Frontend:**
 
 ```bash
 cd authglow/frontend
 cp .env.example .env
-# The shipped default targets port 8001 — set VITE_API_URL=http://localhost:8000
-# for split local development against the backend above
+# Set VITE_API_URL=http://localhost:8000
 
 npm install
 npm run dev
 ```
 
-Open `http://localhost:5173/setup`, submit the setup token from the backend log, and create the administrator account. A default OAuth2 client is provided via `OAUTH2_CLIENT_ID` / `OAUTH2_CLIENT_SECRET` in `.env.example`, so the OAuth Playground works without additional configuration.
+Open `http://localhost:5173/setup`, submit the setup token, and create the administrator account. The default OAuth2 client in `.env.example` already works with the OAuth Playground, so no extra configuration is needed to try the flows.
 
-<details>
-<summary><strong>Single-container deployment (backend + UI in one image)</strong></summary>
+---
 
-The root `Dockerfile` builds the full application: FastAPI serves the API and the prebuilt React SPA on a single port. Suitable for Cloud Run, Fly.io, Railway, Render, ECS/Fargate, or any Docker host that injects `$PORT`.
+## Using AuthGlow
 
-```bash
-cd authglow
-docker build -t authglow .
+Once the instance is running, the typical path is: **create a client → get a token → call with that token**. The easiest way to see every flow working against your own instance is the built-in **OAuth Playground** (admin UI), which walks through each step live.
 
-docker run -p 8080:8080 \
-  -e PORT=8080 \
-  -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
-  -e ISSUER="https://auth.example.com" \
-  -e BASE_URL="https://auth.example.com" \
-  -e FRONTEND_BASE_URL="https://auth.example.com" \
-  -e OAUTH2_FIRST_PARTY_REDIRECT_URI="https://auth.example.com/auth/callback" \
-  -e PASSKEY_RP_ID="auth.example.com" \
-  -e PASSKEY_ORIGIN="https://auth.example.com" \
-  -v authglow-data:/app/data \
-  authglow
-```
+### 1. Create an OAuth2 client
 
-- Single port, single process. Uvicorn serves `/api/...`, `/oauth2/...`, `/.well-known/...` and the SPA (client-side routes fall back to `index.html`).
-- All configuration is applied at runtime. The SPA uses relative, same-origin API paths when `VITE_API_URL` is unset, so one image runs unchanged across environments.
-- Persistent state (users, sessions, JWT keyring) lives under `/app/data`. On platforms with ephemeral filesystems, mount a volume at `/app/data` or set `STORAGE_BACKEND=s3` / `gcs` / `abfs`.
-
-</details>
-
-<details>
-<summary><strong>Backend-only deployment (API without UI)</strong></summary>
-
-`backend/Dockerfile` packages the API alone. Use this when integrating AuthGlow as the identity provider for an existing application.
+Via the admin UI (**OAuth clients** page), or programmatically with Dynamic Client Registration:
 
 ```bash
-cd authglow/backend
-cp .env.example .env          # set SECRET_KEY at minimum
-
-docker build -t authglow-api .
-docker run -p 8000:8000 -e PORT=8000 \
-  --env-file .env -v ./data:/app/data \
-  authglow-api
+curl -X POST http://localhost:8080/oauth2/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_name": "My app",
+    "redirect_uris": ["http://localhost:3000/callback"],
+    "grant_types": ["authorization_code", "refresh_token"]
+  }'
 ```
 
-</details>
+The response contains `client_id` and `client_secret` — the secret is shown **only here** and can't be retrieved later.
+
+### 2a. Machine-to-machine: Client Credentials
+
+For backend services with no user involved:
+
+```bash
+curl -X POST http://localhost:8080/oauth2/token \
+  -u 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
+  -d 'grant_type=client_credentials' \
+  -d 'scope=read'
+```
+
+Response: `{"access_token": "...", "token_type": "Bearer", "expires_in": 1800, ...}`.
+
+### 2b. User login: Authorization Code + PKCE
+
+For web/mobile apps: send the user to the authorize page with your `client_id`, `redirect_uri`, `code_challenge`, and `scope=openid profile email`. They sign in (password, passkey, or federated provider), approve consent, and your `redirect_uri` receives a `code` — exchange it at `POST /oauth2/token` with `grant_type=authorization_code`. Refresh tokens rotate on every use; reusing an old one invalidates the whole family.
+
+### 3. Use the token
+
+```bash
+# Who is this token for?
+curl http://localhost:8080/oauth2/userinfo \
+  -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+
+# Is this token still valid? (for resource servers)
+curl -X POST http://localhost:8080/oauth2/introspect \
+  -u 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
+  -d 'token=YOUR_ACCESS_TOKEN'
+
+# Log out / revoke
+curl -X POST http://localhost:8080/oauth2/revoke \
+  -u 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
+  -d 'token=YOUR_REFRESH_TOKEN'
+```
+
+Server-to-server without the OAuth dance: create a scoped **API key** in the admin UI (also shown once), then send it as `X-API-Key: ak_...` or `Authorization: Bearer ak_...`.
+
+Your app can discover everything automatically at `/.well-known/openid-configuration`, with public signing keys at `/.well-known/jwks.json`.
+
+Step-by-step guides per flow: [docs/flows/](docs/flows/README.md).
+
+### Integrating with an AI coding assistant
+
+This repo ships an **integration skill** that teaches an AI agent how to connect your app to AuthGlow correctly: `.agents/skills/authglow-integration/`. It picks the right flow for your app type, uses your framework's maintained OIDC library instead of hand-rolled crypto, and refuses to finish until a security checklist passes.
+
+- **OpenCode**: the skill is already in place — prompt your session with:
+  ```text
+  Integrate this application with the AuthGlow instance at <issuer>.
+  Inspect the project first, choose the correct OAuth2/OIDC flow,
+  implement it with the framework's maintained library, and complete
+  the security/compliance checklist before reporting success.
+  ```
+- **Claude Code**: copy `.agents/skills/authglow-integration/` to `.claude/skills/authglow-integration/` in your project, then use the same prompt.
+
+It also handles auditing an existing integration, migrating from another provider, and troubleshooting login failures. Details: [.agents/skills/authglow-integration/README.md](.agents/skills/authglow-integration/README.md).
 
 ---
 
 ## Configuration
 
-Minimal `.env` for local development:
+Everything is configured through environment variables — see `backend/.env.example`, which documents every setting with examples.
+
+The only strictly required variable is:
 
 ```bash
-SECRET_KEY=your-strong-secret-key-at-least-32-chars
-BASE_URL=http://localhost:8000
-STORAGE_BACKEND=file
-STORAGE_PATH=./data/users
-CORS_ALLOWED_ORIGINS=http://localhost:5173
+# Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=at-least-32-random-characters
 ```
 
-Remaining settings (password policy, passkey relying party, token lifetimes, white-labeling) default to the values in `backend/.env.example`.
-
-### URL variables
-
-The backend constructs absolute URLs from these variables (OIDC discovery, email links, OAuth redirects, passkeys). In production, all values must reference the same public origin.
-
-| Variable | Purpose | Default |
-|---|---|---|
-| `ISSUER` | OIDC discovery (`/.well-known/openid-configuration`), token `iss` claim | `http://localhost:8000` |
-| `BASE_URL` | Documentation links, federation callback URL | `http://localhost:8000` |
-| `FRONTEND_BASE_URL` | Password-reset emails, device-code verification page, post-federation redirects | `http://localhost:5173` |
-| `OAUTH2_FIRST_PARTY_REDIRECT_URI` | First-party OAuth2 redirect | `http://localhost:5173/auth/callback` |
-| `PASSKEY_RP_ID` | WebAuthn relying-party ID (bare hostname) | `localhost` |
-| `PASSKEY_ORIGIN` | WebAuthn origin (must match the browser address bar) | `http://localhost:8000` |
-
-Example for `https://auth.example.com`:
+Before exposing an instance publicly, also set the public URLs to your real origin (they default to localhost):
 
 ```bash
 ISSUER=https://auth.example.com
@@ -211,11 +258,19 @@ PASSKEY_RP_ID=auth.example.com
 PASSKEY_ORIGIN=https://auth.example.com
 ```
 
-> `backend/.env.example` sets `PASSKEY_ORIGIN=http://localhost:5173` for split local development (backend on `:8000`, frontend on `:5173`), overriding the `http://localhost:8000` application default shown above. In a single-container deployment, set it to the public origin as shown here.
+The app refuses to start in production (`APP_ENV=production`) with placeholder secrets or localhost passkey settings, so misconfiguration fails loudly instead of silently.
 
-### Email delivery
+Email delivery (`EMAIL_BACKEND`: console, SMTP, SendGrid, Mailgun, Resend) and phone OTP providers are documented with examples in `backend/.env.example`.
 
-Set `EMAIL_BACKEND` to `console` or `file_storage` for local development, or to `smtp`, `sendgrid`, `mailgun`, or `resend` for production delivery. Provider credentials and examples are documented in `backend/.env.example`. Set `EMAIL_FROM_ADDRESS` to a verified sender address. SMTP uses STARTTLS when `SMTP_USE_TLS=true`. For Mailgun EU domains, set `MAILGUN_BASE_URL=https://api.eu.mailgun.net`.
+---
+
+## Where is data kept?
+
+In files — there is no database to install, migrate, or back up separately.
+
+- By default everything (users, sessions, tokens, signing keys) lives under the data directory (`/app/data` in Docker, `./data` locally). **Back up that directory and you've backed up AuthGlow.**
+- The storage code is organized as repositories — one repository per entity (users, sessions, tokens, …), all file-based.
+- Instead of local disk, the file layer can read/write an object store: set `STORAGE_BACKEND` to `s3`, `gcs`, or `abfs` with `STORAGE_PATH` pointing at your bucket/container (examples in `backend/.env.example`). This is how you share state between multiple instances — each instance with its own local disk will generate its own signing keys and disagree about tokens.
 
 ---
 
@@ -225,80 +280,28 @@ Set `EMAIL_BACKEND` to `console` or `file_storage` for local development, or to 
 authglow/
 ├── backend/
 │   ├── authglow/
-│   │   ├── api/            FastAPI routers (HTTP layer, one module per domain)
+│   │   ├── api/            HTTP layer (FastAPI routers, one module per domain)
 │   │   ├── core/           config, crypto, rate limiting, concurrency
 │   │   ├── middleware/     security headers, HTTPS enforcement, body-size limits
-│   │   ├── models/         Pydantic schemas
-│   │   ├── repositories/   storage layer (fsspec-backed, one implementation per entity)
+│   │   ├── models/         request/response schemas (Pydantic)
+│   │   ├── repositories/   storage layer (one file-backed repository per entity)
 │   │   ├── services/       business logic: JWT, OAuth2, MFA, passkeys, RBAC, email
-│   │   └── templates/      Jinja2 email templates
-│   ├── tests/              unit and integration tests (pytest)
+│   │   └── templates/      email templates
+│   ├── tests/              pytest suite (unit + integration)
 │   └── main.py             entry point
 │
 └── frontend/
     ├── src/
-    │   ├── components/     feature components (auth, admin, oauth, playground, ...)
-    │   │                   plus ui/ primitives, layout/, and shared/
-    │   ├── pages/          route components (auth/, admin/, dashboard, profile,
-    │   │                   security, sessions, setup, ...)
-    │   ├── stores/         Zustand state
+    │   ├── components/     feature components plus ui/ primitives, layout/, shared/
+    │   ├── pages/          route components (auth, admin, dashboard, setup, …)
+    │   ├── stores/         client state (Zustand)
     │   └── hooks/          custom hooks
     └── e2e/                Playwright end-to-end tests
 ```
 
-Stack: Python 3.11+ / FastAPI / Pydantic v2 (backend); TypeScript / React 19 / Vite / Tailwind CSS / Zustand / TanStack Query / React Router (frontend).
+Stack: Python 3.11+ / FastAPI / Pydantic v2 · TypeScript / React 19 / Vite / Tailwind CSS / Zustand / TanStack Query.
 
-Persistence: files on disk or cloud object storage via fsspec. No database, migrations, or ORM.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, request lifecycle, and conventions.
-
----
-
-## Deployment
-
-### Required environment variables
-
-These have no default. The application refuses to start when they are missing.
-
-| Variable | Purpose | Minimum length |
-|---|---|---|
-| `SECRET_KEY` | Encrypts sessions, signed cookies, and the JWT keyring at rest | 32 characters |
-
-Generate a value:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-Provide it via your platform's secret management (Docker `--env-file`, Render dashboard, cloud secrets manager).
-
-### Production settings
-
-These default to local-development values and must be overridden before production use.
-
-| Variable | Default | Production value |
-|---|---|---|
-| `APP_ENV` | `development` | `production` |
-| `BASE_URL` | `http://localhost:8000` | Public URL (e.g. `https://auth.example.com`) |
-| `ISSUER` | `http://localhost:8000` | Same as `BASE_URL` |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,...` | Frontend origin(s) |
-| `OAUTH2_CLIENT_ID` | `change-me-in-production` | Unique identifier |
-| `OAUTH2_CLIENT_SECRET` | `change-me-in-production` | At least 32 random characters |
-| `PASSKEY_RP_ID` | `localhost` | Production domain |
-| `PASSKEY_ORIGIN` | `http://localhost:8000` | Public URL |
-
-Copy `backend/.env.example` as a starting point and override each value above. Production boot validates placeholders, localhost passkey origins, and `DEBUG`/`ENABLE_DOCS` settings and refuses to start on violations.
-
-### Multi-instance deployments
-
-The JWT signing keyring lives at `KEYS_DIR` (default `data/keys/`) on the same fsspec layer as users, sessions, and tokens, and honors `STORAGE_BACKEND`.
-
-| Scenario | Backend | Notes |
-|---|---|---|
-| Single instance, local disk | `file` (default) | Keep `KEYS_DIR` on the same volume as `STORAGE_PATH` |
-| Multiple instances, shared filesystem | `file` | Mount the shared filesystem at both `STORAGE_PATH` and `KEYS_DIR` |
-| Multiple instances, separate disks | `s3`, `gcs`, `abfs` | Use a backend reachable for reads and writes from every instance |
-| Multiple instances, each with local `file` storage | Not supported | Each instance generates its own keyring; tokens will not verify across instances |
+Details: [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](AGENTS.md) (contributor guide) · [DESIGN.md](DESIGN.md) (design system)
 
 ---
 
@@ -322,27 +325,24 @@ npm run test:e2e # Playwright end-to-end tests
 
 ## Documentation
 
-- [FEATURES.md](docs/reference/features.md) — complete feature catalog
-- [Flows](docs/flows/README.md) — per-flow OAuth2/OIDC guides
-- [ARCHITECTURE.md](ARCHITECTURE.md) — directory map and request lifecycle
-- [DESIGN.md](DESIGN.md) — design system
-- [AGENTS.md](AGENTS.md) — contributor guide (code style, test policy)
-- [Quick setup](docs/getting-started/quick-setup.md) — local and deployed setup
+- [Quick setup](docs/getting-started/quick-setup.md) — local and deployed setup walkthrough
+- [OAuth2/OIDC flows](docs/flows/README.md) — per-flow guides
+- [FEATURES.md](docs/reference/features.md) — complete feature and endpoint catalog
 - [CIE integration](docs/guides/federation/cie.md) — Italian Electronic Identity Card
 - [Google OIDC integration](docs/guides/federation/google.md) — Google sign-in
-- [SECURITY.md](SECURITY.md) — vulnerability reporting
+- [SECURITY.md](SECURITY.md) — how to report vulnerabilities
 
 ---
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Contributors should read [AGENTS.md](AGENTS.md) for code style and test conventions before submitting changes. For security vulnerabilities, follow the process in [SECURITY.md](SECURITY.md) instead of opening a public issue.
+Bug reports and pull requests are welcome. Please read [AGENTS.md](AGENTS.md) for code style and test conventions first. For security vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ---
 
-## Project Status
+## Project status
 
-Active development on `main`. No tagged releases yet; pin a commit hash for stable deployments.
+Active development on `main`. No tagged releases yet — pin a commit hash for deployments you care about.
 
 ---
 
