@@ -1,5 +1,8 @@
 import base64
-from unittest.mock import MagicMock, patch
+import json
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace as UserStub
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -176,4 +179,150 @@ class TestCompleteAuthenticationErrorHandling:
         )
         assert resp.status_code == 400, resp.text
         assert "Internal server error" not in resp.text
+
+
+class _StubRTService:
+    def __init__(self):
+        self.created = []
+
+    async def create_refresh_token(self, **kwargs):
+        from authglow.models.refresh_token import RefreshToken
+
+        rt = RefreshToken(
+            token="plaintext-rt-for-test",
+            token_hash="hash",
+            token_lookup="lookup",
+            user_id=kwargs["user_id"],
+            client_id=kwargs.get("client_id", "passkey_grant"),
+            scopes=kwargs.get("scopes", []),
+            created_at="2026-01-01T00:00:00",
+            expires_at="2099-01-01T00:00:00",
+        )
+        self.created.append(rt)
+        return rt
+
+
+class TestCompleteAuthenticationAccountStatus:
+    """Account-status gate on /api/passkey/auth/complete.
+
+    The WebAuthn proof is verified by the stubbed passkey service, so
+    any rejection here is a pure account-status decision: inactive
+    users get 401, actively-suspended users get 423 with the UTC
+    deadline. In both cases no access/refresh token, no auth cookies,
+    no login-history write, and the failure lands in the audit log.
+    """
+
+    def _build(self, user):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from slowapi.middleware import SlowAPIMiddleware
+
+        from authglow.api import passkey as passkey_api
+        from authglow.core.rate_limit import limiter
+
+        passkey_service = MagicMock()
+        passkey_service.verify_authentication = AsyncMock(
+            return_value=(user.id, 5)
+        )
+
+        jwt_service = MagicMock()
+        jwt_service.create_access_token = MagicMock(return_value="access-token-for-test")
+
+        storage = MagicMock()
+        storage.get_user = AsyncMock(return_value=user)
+        storage.update_last_login = AsyncMock()
+
+        audit = MagicMock()
+        audit.log_event = AsyncMock()
+
+        rt_service = _StubRTService()
+
+        app = FastAPI()
+        app.state.limiter = limiter
+        app.add_middleware(SlowAPIMiddleware)
+        app.include_router(passkey_api.router)
+        app.dependency_overrides[passkey_api.get_passkey_service] = lambda: passkey_service
+        app.dependency_overrides[passkey_api.get_jwt_service] = lambda: jwt_service
+        app.dependency_overrides[passkey_api.get_user_storage] = lambda: storage
+        app.dependency_overrides[passkey_api.get_refresh_token_service] = lambda: rt_service
+        app.dependency_overrides[passkey_api.get_audit_service] = lambda: audit
+
+        client = TestClient(app)
+        return client, {
+            "passkey_service": passkey_service,
+            "storage": storage,
+            "audit": audit,
+            "rt_service": rt_service,
+        }
+
+    def _post_complete(self, client):
+        client_data = base64.urlsafe_b64encode(json.dumps({"challenge": "challenge-bytes"}).encode())
+        return client.post(
+            "/api/passkey/auth/complete",
+            json={
+                "credential_id": "cred-123",
+                "client_data_json": client_data.decode(),
+                "authenticator_data": "auth",
+                "signature": "sig",
+            },
+        )
+
+    def _make_user(self, *, is_active=True, suspended_until=None):
+        return UserStub(
+            id="user-status",
+            email="status@example.com",
+            first_name=None,
+            last_name=None,
+            scopes=["read"],
+            is_active=is_active,
+            suspended_until=suspended_until,
+        )
+
+    def test_active_user_login_succeeds(self):
+        client, mocks = self._build(self._make_user())
+        resp = self._post_complete(client)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["access_token"] == "access-token-for-test"
+        assert body["refresh_token"] == "plaintext-rt-for-test"
+        mocks["storage"].update_last_login.assert_awaited_once()
+        assert not mocks["audit"].log_event.await_count or all(
+            call.kwargs.get("event_type") != "passkey_authentication_failed"
+            for call in mocks["audit"].log_event.await_args_list
+        )
+
+    def test_inactive_user_gets_401_and_no_tokens(self):
+        client, mocks = self._build(self._make_user(is_active=False))
+        resp = self._post_complete(client)
+        assert resp.status_code == 401, resp.text
+        assert "set-cookie" not in resp.headers
+        assert mocks["rt_service"].created == []
+        mocks["storage"].update_last_login.assert_not_awaited()
+        mocks["audit"].log_event.assert_awaited_once()
+        kwargs = mocks["audit"].log_event.call_args.kwargs
+        assert kwargs["user_id"] == "user-status"
+        assert kwargs["metadata"].error == "inactive_user"
+
+    def test_suspended_user_gets_423_with_utc_deadline(self):
+        deadline = datetime(2026, 9, 17, 22, 38, 1, 710394, tzinfo=timezone.utc)
+        client, mocks = self._build(self._make_user(suspended_until=deadline))
+        resp = self._post_complete(client)
+        assert resp.status_code == 423, resp.text
+        detail = resp.json()["detail"]
+        assert detail["error"] == "account_suspended"
+        assert detail["suspended_until"] == deadline.astimezone(timezone.utc).isoformat()
+        assert "set-cookie" not in resp.headers
+        assert mocks["rt_service"].created == []
+        mocks["storage"].update_last_login.assert_not_awaited()
+        mocks["audit"].log_event.assert_awaited_once()
+        kwargs = mocks["audit"].log_event.call_args.kwargs
+        assert kwargs["metadata"].error == "account_suspended"
+
+    def test_expired_suspension_allows_login(self):
+        past = datetime.now(timezone.utc) - timedelta(days=1)
+        client, mocks = self._build(self._make_user(suspended_until=past))
+        resp = self._post_complete(client)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["access_token"]
+        mocks["storage"].update_last_login.assert_awaited_once()
 

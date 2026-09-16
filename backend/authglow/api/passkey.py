@@ -14,6 +14,7 @@ from authglow.core.rate_limit import limiter
 from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import (
     PasskeyAuthenticatedMetadata,
+    PasskeyAuthenticationFailedMetadata,
     PasskeyRegisteredMetadata,
     PasskeyRegistrationFailedMetadata,
 )
@@ -275,6 +276,16 @@ async def begin_authentication(
     return options_dict
 
 
+def get_refresh_token_service() -> RefreshTokenService:
+    """Get refresh token service instance."""
+    return RefreshTokenService()
+
+
+def get_audit_service() -> AuditService:
+    """Get audit service instance."""
+    return AuditService()
+
+
 @router.post("/auth/complete")
 @limiter.limit("30/minute")  # Max 10 passkey verification attempts per minute per IP
 async def complete_authentication(
@@ -284,8 +295,8 @@ async def complete_authentication(
     passkey_service: Annotated[PasskeyService, Depends(get_passkey_service)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
     storage: Annotated[UserStorage, Depends(get_user_storage)],
-    refresh_token_service: Annotated[RefreshTokenService, Depends(lambda: RefreshTokenService())],
-    audit_service: Annotated[AuditService, Depends(lambda: AuditService())],
+    refresh_token_service: Annotated[RefreshTokenService, Depends(get_refresh_token_service)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ):
     """
     Complete passkey authentication ceremony.
@@ -296,6 +307,9 @@ async def complete_authentication(
     settings = get_settings()
     from authglow.api.auth import _set_auth_cookies
 
+    account_rejection: Optional[HTTPException] = None
+    user: Optional[User] = None
+    failure_reason = ""
     try:
         # Extract challenge from client_data_json
         import base64
@@ -321,12 +335,23 @@ async def complete_authentication(
                 detail="User not found",
             )
 
-        # Check if account is suspended
-        if user.suspended_until and utcnow() < user.suspended_until:
-            raise HTTPException(
-                status_code=status.HTTP_423_LOCKED,
-                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+        if not user.is_active:
+            failure_reason = "inactive_user"
+            account_rejection = HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication failed",
             )
+            raise account_rejection
+
+        if user.suspended_until and utcnow() < user.suspended_until:
+            from authglow.api.auth import _suspension_detail
+
+            failure_reason = "account_suspended"
+            account_rejection = HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=_suspension_detail(user.suspended_until),
+            )
+            raise account_rejection
 
         await storage.update_last_login(user.id)
 
@@ -418,9 +443,18 @@ async def complete_authentication(
         # turning the intended 400 into a 500).
         await audit_service.log_event(
             event_type=AuditEventType.PASSKEY_AUTHENTICATION_FAILED,
+            user_id=user.id if user else None,
+            email=user.email if user else None,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
             severity="warning",
-            metadata={"error_class": type(e).__name__, "error": str(e), "success": False},
+            metadata=PasskeyAuthenticationFailedMetadata(
+                error_class=type(e).__name__,
+                error=failure_reason if e is account_rejection else str(e),
+            ),
         )
+        if e is account_rejection:
+            raise
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Passkey authentication verification failed",
