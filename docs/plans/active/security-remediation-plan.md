@@ -4,7 +4,11 @@ status: active
 ids: AUTH-NNN
 ---
 
-# AuthGlow Security Remediation Handoff
+# AuthGlow Security Remediation Plan
+
+Ogni remediation è tracciata con una checkbox `[ ]` nell'elenco delle priorità. Segnare `[x]` solo dopo aver soddisfatto i criteri di accettazione e completato le verifiche previste, aggiungendo un riferimento alle evidenze.
+
+Gli ID delle remediation e gli ID dei test appartengono a due elenchi distinti: mantenere i riferimenti indicati nelle singole sezioni.
 
 Repository: `davideconsonni/authglow`  
 Scope: Backend OAuth2/OIDC, authentication, sessions, MFA/passkey, tokens, admin APIs, webhooks, deployment security  
@@ -17,22 +21,23 @@ Portare AuthGlow da una security posture buona ma non ancora adeguata a un Ident
 Le remediation devono seguire questo ordine:
 
 ### P0
-- AUTH-001: Passkey login per utente disattivato
-- AUTH-002: Replay protection distribuita per client assertion / DPoP
-- AUTH-003: Rate limiting distribuito
+- [x] AUTH-001: Passkey login per utente disattivato
+  <!-- DONE: fix + regression test in test_passkey.py::TestCompleteAuthenticationAccountStatus (attivo, inattivo 401, sospeso 423 con deadline UTC, sospensione scaduta) + frontend formatta la data in ora locale. Call-site revisionati: password/federato/MFA allineati alla stessa risposta 423 strutturata. -->
+- [ ] AUTH-002: Replay protection distribuita per client assertion / DPoP
+- [ ] AUTH-003: Rate limiting distribuito
 
 ### P1
-- AUTH-004: Eliminazione plaintext temporary secrets
-- AUTH-005: Strict OAuth client authentication method
-- AUTH-006: Passkey RP ID / Origin configuration
-- AUTH-007: Webhook SSRF / DNS rebinding
-- AUTH-008: Password-reset secret exposure nell'admin API
+- [ ] AUTH-004: Eliminazione plaintext temporary secrets
+- [ ] AUTH-005: Strict OAuth client authentication method
+- [ ] AUTH-006: Passkey RP ID / Origin configuration
+- [ ] AUTH-007: Webhook SSRF / DNS rebinding
+- [ ] AUTH-008: Password-reset secret exposure nell'admin API
 
 ### P2
-- AUTH-009: Access token esposto nel browser OAuth flow
-- AUTH-010: Setup token handling
-- AUTH-011: Dependency/security CI
-- AUTH-012: Security regression suite completa
+- [ ] AUTH-009: Access token esposto nel browser OAuth flow
+- [ ] AUTH-010: Setup token handling
+- [ ] AUTH-011: Dependency/security CI
+- [ ] AUTH-012: Security regression suite completa
 
 ---
 
@@ -743,43 +748,25 @@ Trasformare l'assessment in una suite permanente.
 
 ## Test minimi
 
-```text
-AUTH-001 inactive user + existing passkey
-
-AUTH-002 refresh token used as API bearer
-
-AUTH-003 ID token used as API bearer
-
-AUTH-004 client A token against client B
-
-AUTH-005 client_secret against private_key_jwt client
-
-AUTH-006 replay client_assertion on instance B
-
-AUTH-007 replay DPoP on instance B
-
-AUTH-008 rate-limit bypass across workers
-
-AUTH-009 concurrent password-reset redemption
-
-AUTH-010 concurrent authorization-code redemption
-
-AUTH-011 concurrent email-code redemption
-
-AUTH-012 malicious Passkey Origin
-
-AUTH-013 webhook DNS rebinding
-
-AUTH-014 webhook redirect to private IP
-
-AUTH-015 inactive user + existing access token
-
-AUTH-016 revoked user + cached user object
-
-AUTH-017 reset-code disclosure through admin API
-
-AUTH-018 setup-token disclosure through logs
-```
+- [x] AUTH-001 inactive user + existing passkey
+  <!-- Coperto da test_passkey.py::TestCompleteAuthenticationAccountStatus -->
+- [ ] AUTH-002 refresh token used as API bearer
+- [ ] AUTH-003 ID token used as API bearer
+- [ ] AUTH-004 client A token against client B
+- [ ] AUTH-005 client_secret against private_key_jwt client
+- [ ] AUTH-006 replay client_assertion on instance B
+- [ ] AUTH-007 replay DPoP on instance B
+- [ ] AUTH-008 rate-limit bypass across workers
+- [ ] AUTH-009 concurrent password-reset redemption
+- [ ] AUTH-010 concurrent authorization-code redemption
+- [ ] AUTH-011 concurrent email-code redemption
+- [ ] AUTH-012 malicious Passkey Origin
+- [ ] AUTH-013 webhook DNS rebinding
+- [ ] AUTH-014 webhook redirect to private IP
+- [ ] AUTH-015 inactive user + existing access token
+- [ ] AUTH-016 revoked user + cached user object
+- [ ] AUTH-017 reset-code disclosure through admin API
+- [ ] AUTH-018 setup-token disclosure through logs
 
 ---
 
@@ -872,15 +859,15 @@ Complete regression suite
 
 Ogni sessione deve produrre:
 
-```text
-1. Root cause
-2. Threat model
-3. Code change
-4. Regression test
-5. Security test negativo
-6. Backward compatibility check
-7. Review degli endpoint/call-site correlati
-```
+- [ ] Root cause
+- [ ] Threat model
+- [ ] Code change
+- [ ] Regression test
+- [ ] Security test negativo
+- [ ] Backward compatibility check
+- [ ] Review degli endpoint/call-site correlati
+
+Usare questa checklist per ogni remediation.
 
 Non considerare una finding chiusa solo perché il singolo punto di codice è stato modificato.
 
@@ -943,17 +930,17 @@ Questi controlli non vanno riscritti durante le remediation salvo che un nuovo f
 
 AuthGlow può essere considerato pronto per una nuova security review quando:
 
-1. tutti i P0 sono chiusi
-2. tutti i P1 sono chiusi
-3. i test AUTH-001..018 sono implementati
-4. replay protection e rate limiting funzionano in multi-instance
-5. nessun temporary bearer secret viene persistito in plaintext
-6. OAuth client authentication è strict
-7. Passkey RP/origin è configurato esplicitamente
-8. SSRF protection è resistente a redirect e DNS rebinding
-9. admin API non espone credential material
-10. security CI può bloccare vulnerability High/Critical
-11. viene eseguito un nuovo review completo sui call-site coinvolti
+- [ ] tutti i P0 sono chiusi
+- [ ] tutti i P1 sono chiusi
+- [ ] i test AUTH-001..018 sono implementati
+- [ ] replay protection e rate limiting funzionano in multi-instance
+- [ ] nessun temporary bearer secret viene persistito in plaintext
+- [ ] OAuth client authentication è strict
+- [ ] Passkey RP/origin è configurato esplicitamente
+- [ ] SSRF protection è resistente a redirect e DNS rebinding
+- [ ] admin API non espone credential material
+- [ ] security CI può bloccare vulnerability High/Critical
+- [ ] viene eseguito un nuovo review completo sui call-site coinvolti
 
 ## Priorità assoluta
 
@@ -987,4 +974,4 @@ AUTH-012
 
 Ogni nuova sessione dovrebbe partire indicando:
 
-> "Security remediation AuthGlow. Implementa AUTH-XXX dal Security Remediation Handoff. Prima analizza il codice attuale e i test esistenti, poi proponi il fix minimo necessario, implementalo, aggiungi regression test e verifica che non ci siano call-site correlati che mantengono la vulnerabilità."
+> "Security remediation AuthGlow. Implementa AUTH-XXX dal Security Remediation Plan. Prima analizza il codice attuale e i test esistenti, poi proponi il fix minimo necessario, implementalo, aggiungi regression test e verifica che non ci siano call-site correlati che mantengono la vulnerabilità."

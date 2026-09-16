@@ -18,12 +18,36 @@ class ApiError extends Error {
   }
 }
 
+function formatSuspensionMessage(value: unknown): string {
+  if (typeof value !== 'string') return 'Account suspended'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Account suspended'
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date).replace(/ /g, '\u00a0')
+  return `Account suspended until ${formatted}`
+}
+
 function extractErrorMessage(data: unknown): string {
   if (!data) return ''
   if (typeof data === 'string') return data
   if (typeof data === 'object' && data !== null) {
     const detail = (data as Record<string, unknown>).detail
-    if (typeof detail === 'string') return detail
+    if (typeof detail === 'string') {
+      const prefix = 'Account suspended until '
+      return detail.startsWith(prefix)
+        ? formatSuspensionMessage(detail.slice(prefix.length))
+        : detail
+    }
+    if (typeof detail === 'object' && detail !== null
+      && 'error' in detail && detail.error === 'account_suspended') {
+      return formatSuspensionMessage('suspended_until' in detail ? detail.suspended_until : undefined)
+    }
     if (Array.isArray(detail)) {
       return detail
         .map((d: Record<string, unknown>) => {

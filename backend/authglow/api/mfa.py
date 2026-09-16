@@ -389,9 +389,11 @@ async def verify_mfa_login(
 
     # Check if account is suspended
     if user.suspended_until and utcnow() < user.suspended_until:
+        from authglow.api.auth import _suspension_detail
+
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
-            detail=f"Account suspended until {user.suspended_until.isoformat()}",
+            detail=_suspension_detail(user.suspended_until),
         )
 
     # Verify TOTP code or backup code
