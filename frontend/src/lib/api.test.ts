@@ -7,6 +7,49 @@ describe('api', () => {
     vi.restoreAllMocks()
   })
 
+  describe('suspension messages', () => {
+    const timestamp = '2026-09-17T22:38:01.710394+00:00'
+
+    it.each([
+      `Account suspended until ${timestamp}`,
+      { error: 'account_suspended', suspended_until: timestamp },
+    ])('formats suspension dates in English and local time without splitting the date', async (detail) => {
+      const data = { detail }
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 423,
+        json: async () => data,
+      })
+      const formatted = new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).format(new Date(timestamp)).replace(/ /g, '\u00a0')
+
+      await expect(api.get('/api/test')).rejects.toMatchObject({
+        message: `Account suspended until ${formatted}`,
+        status: 423,
+        data,
+      })
+      expect(formatted).not.toContain('.710394')
+      expect(formatted).not.toContain('+00:00')
+    })
+
+    it.each([
+      'Account suspended until invalid-date',
+      { error: 'account_suspended', suspended_until: 'invalid-date' },
+      { error: 'account_suspended' },
+    ])('uses a safe fallback for missing or invalid dates', async (detail) => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 423,
+        json: async () => ({ detail }),
+      })
+      await expect(api.get('/api/test')).rejects.toMatchObject({
+        message: 'Account suspended', status: 423,
+      })
+    })
+  })
+
   describe('sends credentials: include', () => {
     it('GET includes credentials: include', async () => {
       const mockFetch = vi.fn().mockResolvedValue({

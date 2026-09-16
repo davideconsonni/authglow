@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Passkey login no longer issues tokens for deactivated accounts (401) and returns a structured suspension deadline (423) that the UI renders in local time; the same suspension payload is now shared by the password, federated, MFA and passkey flows.
+
 ## [0.1.0] - 2026-09-14
 
 First public release of AuthGlow: self-hosted identity with no database to manage (file-based storage).

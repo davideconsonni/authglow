@@ -4,7 +4,7 @@ import base64
 import hashlib
 import inspect
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlencode
 
@@ -81,6 +81,14 @@ UserStorage = UserService
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/oauth2/token", auto_error=False)
 FIRST_PARTY_BROWSER_CLIENT_ID = "password_grant"
+
+
+def _suspension_detail(suspended_until: datetime) -> dict:
+    """Structured 423 payload the frontend renders as a local-time message."""
+    return {
+        "error": "account_suspended",
+        "suspended_until": suspended_until.astimezone(timezone.utc).isoformat(),
+    }
 
 
 def _first_party_oauth_client(settings: Settings) -> OAuth2Client:
@@ -932,7 +940,7 @@ async def authorize_post(
         if user.suspended_until and utcnow() < user.suspended_until:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
-                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+                detail=_suspension_detail(user.suspended_until),
             )
         # A3 / OIDC Core §3.1.2.1: ``prompt=none`` permits NO
         # interaction — including the consent screen. A code may only
@@ -991,7 +999,7 @@ async def authorize_post(
         if user.suspended_until and utcnow() < user.suspended_until:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
-                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+                detail=_suspension_detail(user.suspended_until),
             )
     else:
         if not email or not password:
@@ -1061,7 +1069,7 @@ async def authorize_post(
         if user.suspended_until and utcnow() < user.suspended_until:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
-                detail=f"Account suspended until {user.suspended_until.isoformat()}",
+                detail=_suspension_detail(user.suspended_until),
             )
 
         # Forced credential rotation: an admin-flagged expired password must
