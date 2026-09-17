@@ -21,7 +21,8 @@ Change these only if the repo uses other names:
 ## Human gates (non-negotiable, no exceptions)
 
 - Never run `git commit` (or any command that creates a commit) without the user's explicit OK. Propose the message, wait for approval, then commit.
-- Never run `git push` (branches, `DEPLOY`, or tags). Push is always manual by the user: print the exact command, wait until the user confirms it was pushed, then continue.
+- Work branches (`feat/*`, `fix/*`, `chore/*`, `hotfix/*`) MAY be pushed by the agent (`git push -u origin <branch>`) with no user confirmation needed — pushing a work branch never deploys, it only opens/updates a PR.
+- Never run `git push` to `TRUNK`, `DEPLOY`, or tags. Those pushes are always manual by the user: print the exact command, wait until the user confirms it was pushed, then continue.
 
 ## Communication & language
 
@@ -51,7 +52,7 @@ Change these only if the repo uses other names:
 2. Create the branch from `TRUNK`.
 3. Commit in small steps on the branch. Each commit needs the user's explicit OK first.
 4. Before opening the PR, align with the latest truth: `git fetch origin && git rebase origin/TRUNK`. Fix conflicts on the branch, never on `TRUNK`.
-5. When the branch must go up, do not push it yourself. Print `git push -u origin <branch>` and wait for the user to confirm it was pushed. Then open a PR to `TRUNK`. CI must be green before merge.
+5. When the branch must go up, push it yourself (`git push -u origin <branch>`). Then open a PR to `TRUNK`. CI must be green before merge.
 6. Add one entry under `Unreleased` in the changelog (see below). This collects what the next release will contain. If there is truly nothing to note, say why in the PR.
 7. Merge with rebase, then delete the branch.
 
