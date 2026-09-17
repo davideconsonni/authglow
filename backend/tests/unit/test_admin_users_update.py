@@ -402,6 +402,163 @@ class TestBulkUserOperationBootstrap:
         assert result["failed"] == 1
 
 
+class TestAdminSecurityEvents:
+    """Every admin user mutation must land in the profile Security Events tab."""
+
+    def _patch_recorders(self):
+        from authglow.services.admin_action import AdminActionService
+        from authglow.services.security_event import SecurityEventService
+
+        return (
+            patch.object(AdminActionService, "record_action", new=AsyncMock()),
+            patch.object(SecurityEventService, "record_event", new=AsyncMock()),
+        )
+
+    def test_suspend_records_security_event(self):
+        import asyncio
+        from authglow.api.admin import suspend_user
+        from authglow.models.admin import SuspendRequest
+
+        existing = _make_existing_user()
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_storage.update_user = AsyncMock(return_value=existing)
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = self._patch_recorders()
+        with action_patch as mock_action, event_patch as mock_event:
+            result = asyncio.get_event_loop().run_until_complete(
+                suspend_user(
+                    user_id="user-to-update",
+                    body=SuspendRequest(duration_hours=24),
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        assert "suspended_until" in result
+        mock_action.assert_awaited_once()
+        assert mock_action.call_args.kwargs["action_type"] == "user_suspended"
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "account_suspended_by_admin"
+        assert mock_event.call_args.kwargs["user_id"] == "user-to-update"
+
+    def test_unsuspend_records_security_event(self):
+        import asyncio
+        from datetime import timedelta
+
+        from authglow.api.admin import unsuspend_user
+        from authglow.core.datetime import utcnow
+
+        existing = _make_existing_user()
+        existing.suspended_until = utcnow() + timedelta(hours=1)
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_storage.update_user = AsyncMock(return_value=existing)
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = self._patch_recorders()
+        with action_patch as mock_action, event_patch as mock_event:
+            asyncio.get_event_loop().run_until_complete(
+                unsuspend_user(
+                    user_id="user-to-update",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        assert mock_action.call_args.kwargs["action_type"] == "user_unsuspended"
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "account_unsuspended_by_admin"
+
+    def test_update_non_email_records_security_event(self):
+        import asyncio
+        from authglow.api.admin import update_user
+        from authglow.models.admin import UserUpdate
+
+        existing = _make_existing_user()
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_storage.update_user = AsyncMock(return_value=existing)
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = self._patch_recorders()
+        with action_patch, event_patch as mock_event:
+            asyncio.get_event_loop().run_until_complete(
+                update_user(
+                    user_id="user-to-update",
+                    update_data=UserUpdate(first_name="NewFirst"),
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "user_updated_by_admin"
+
+    def test_reset_failed_attempts_records_security_event(self):
+        import asyncio
+        from authglow.api.admin import reset_failed_attempts
+
+        existing = _make_existing_user()
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=existing)
+        mock_storage.clear_failed_login_attempts = AsyncMock()
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = self._patch_recorders()
+        with action_patch, event_patch as mock_event:
+            asyncio.get_event_loop().run_until_complete(
+                reset_failed_attempts(
+                    request=_make_request(),
+                    user_id="user-to-update",
+                    current_user=_make_admin_user(),
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "failed_attempts_reset_by_admin"
+
+    def test_bulk_deactivate_records_per_user_events(self):
+        import asyncio
+        from authglow.api.admin import bulk_user_operation
+        from authglow.models.admin import BulkUserOperation
+
+        admin = _make_admin_user()
+        target = _make_existing_user()
+        target.id = "target-1"
+        mock_storage = AsyncMock()
+        mock_storage.get_user = AsyncMock(return_value=target)
+        mock_storage.update_user = AsyncMock(return_value=target)
+        mock_audit = AsyncMock()
+
+        operation = BulkUserOperation(user_ids=["target-1"], operation="deactivate")
+
+        action_patch, event_patch = self._patch_recorders()
+        with action_patch as mock_action, event_patch as mock_event:
+            result = asyncio.get_event_loop().run_until_complete(
+                bulk_user_operation(
+                    request=_make_request(),
+                    operation=operation,
+                    current_user=admin,
+                    storage=mock_storage,
+                    audit_service=mock_audit,
+                )
+            )
+
+        assert result["success"] == 1
+        mock_action.assert_awaited_once()
+        assert mock_action.call_args.kwargs["action_type"] == "user_deactivated"
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "user_deactivated_by_admin"
+        assert mock_event.call_args.kwargs["user_id"] == "target-1"
+
+
 class TestUpdateUserAuditLogging:
     def test_update_logs_audit_event(self):
         import asyncio
