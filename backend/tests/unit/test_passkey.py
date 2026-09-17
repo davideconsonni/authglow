@@ -326,3 +326,16 @@ class TestCompleteAuthenticationAccountStatus:
         assert resp.json()["access_token"]
         mocks["storage"].update_last_login.assert_awaited_once()
 
+    def test_deleted_user_gets_generic_400_and_no_tokens(self):
+        # A valid assertion for a since-deleted user must not leak
+        # which half failed: the 404 is intentionally folded into the
+        # generic 400 (same anti-enumeration posture as /auth/begin).
+        client, mocks = self._build(self._make_user())
+        mocks["storage"].get_user = AsyncMock(return_value=None)
+        resp = self._post_complete(client)
+        assert resp.status_code == 400, resp.text
+        assert "set-cookie" not in resp.headers
+        assert mocks["rt_service"].created == []
+        mocks["storage"].update_last_login.assert_not_awaited()
+        mocks["audit"].log_event.assert_awaited_once()
+
