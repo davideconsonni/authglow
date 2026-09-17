@@ -384,15 +384,23 @@ async def update_user(
         details=update_data.model_dump(exclude_none=True),
     )
 
-    if email_changed:
-        from authglow.services.security_event import SecurityEventService
+    from authglow.services.security_event import SecurityEventService
 
+    if email_changed:
         await SecurityEventService().record_event(
             user_id=user_id,
             event_type="email_changed_by_admin",
             email=user.email,
             description="Email changed by admin",
             metadata={"admin_email": current_user.email, "new_email": update_data.email},
+        )
+    else:
+        await SecurityEventService().record_event(
+            user_id=user_id,
+            event_type="user_updated_by_admin",
+            email=user.email,
+            description="User updated by admin",
+            metadata={"admin_email": current_user.email, "fields_changed": changed_fields},
         )
 
     return UserResponse(**user.model_dump())
@@ -479,6 +487,7 @@ async def create_user(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -486,6 +495,13 @@ async def create_user(
         action_type="user_created",
         target_user_id=user.id,
         target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user.id,
+        event_type="user_created_by_admin",
+        email=user.email,
+        description="User created by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return UserResponse(**user.model_dump())
@@ -536,6 +552,7 @@ async def delete_user(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -543,6 +560,13 @@ async def delete_user(
         action_type="user_deleted",
         target_user_id=user_id,
         target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="user_deleted_by_admin",
+        email=user.email,
+        description="User deleted by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "User deleted successfully"}
@@ -1104,6 +1128,7 @@ async def reset_failed_attempts(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -1111,6 +1136,13 @@ async def reset_failed_attempts(
         action_type="failed_attempts_reset",
         target_user_id=user_id,
         target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="failed_attempts_reset_by_admin",
+        email=user.email,
+        description="Failed login attempts reset by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "Failed attempts reset successfully"}
@@ -1133,6 +1165,44 @@ async def bulk_user_operation(
         errors: list[str]
 
     results: _BulkResults = {"success": 0, "failed": 0, "errors": []}
+
+    from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
+
+    _BULK_SECURITY_EVENTS = {
+        "activate": "user_activated_by_admin",
+        "deactivate": "user_deactivated_by_admin",
+        "assign_scope": "scope_assigned_by_admin",
+        "remove_scope": "scope_removed_by_admin",
+        "delete": "user_deleted_by_admin",
+    }
+    _BULK_ADMIN_ACTIONS = {
+        "activate": "user_activated",
+        "deactivate": "user_deactivated",
+        "assign_scope": "scope_assigned",
+        "remove_scope": "scope_removed",
+        "delete": "user_deleted",
+    }
+
+    async def _record_bulk_user_event(target_user, action_details=None):
+        await AdminActionService().record_action(
+            admin_user_id=current_user.id,
+            admin_email=current_user.email,
+            action_type=_BULK_ADMIN_ACTIONS[operation.operation],
+            target_user_id=target_user.id,
+            target_user_email=target_user.email,
+            details=action_details,
+        )
+        await SecurityEventService().record_event(
+            user_id=target_user.id,
+            event_type=_BULK_SECURITY_EVENTS[operation.operation],
+            email=target_user.email,
+            description=f"Bulk {operation.operation} by admin",
+            metadata={
+                "admin_email": current_user.email,
+                **(action_details or {}),
+            },
+        )
 
     for user_id in operation.user_ids:
         try:
@@ -1178,10 +1248,13 @@ async def bulk_user_operation(
                     )
                     continue
                 await storage.delete_user(user_id)
+                await _record_bulk_user_event(user)
                 results["success"] += 1
                 continue
 
             await storage.update_user(user)
+            scope_details = {"scope": operation.scope} if operation.scope else None
+            await _record_bulk_user_event(user, action_details=scope_details)
             results["success"] += 1
 
         except Exception as e:
@@ -1382,6 +1455,7 @@ async def revoke_all_user_sessions(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -1390,6 +1464,13 @@ async def revoke_all_user_sessions(
         target_user_id=user_id,
         target_user_email=target_user.email,
         details={"revoked_count": revoked_count},
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="all_sessions_revoked_by_admin",
+        email=target_user.email,
+        description="All sessions revoked by admin",
+        metadata={"admin_email": current_user.email, "revoked_count": revoked_count},
     )
 
     return {"message": f"Revoked {revoked_count} session(s)", "revoked_count": revoked_count}
@@ -1676,6 +1757,7 @@ async def suspend_user(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -1684,6 +1766,17 @@ async def suspend_user(
         target_user_id=user_id,
         target_user_email=user.email,
         details={
+            "duration_hours": body.duration_hours,
+            "suspended_until": suspended_until.isoformat(),
+        },
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="account_suspended_by_admin",
+        email=user.email,
+        description="Account suspended by admin",
+        metadata={
+            "admin_email": current_user.email,
             "duration_hours": body.duration_hours,
             "suspended_until": suspended_until.isoformat(),
         },
@@ -1729,6 +1822,7 @@ async def unsuspend_user(
     )
 
     from authglow.services.admin_action import AdminActionService
+    from authglow.services.security_event import SecurityEventService
 
     await AdminActionService().record_action(
         admin_user_id=current_user.id,
@@ -1736,6 +1830,13 @@ async def unsuspend_user(
         action_type="user_unsuspended",
         target_user_id=user_id,
         target_user_email=user.email,
+    )
+    await SecurityEventService().record_event(
+        user_id=user_id,
+        event_type="account_unsuspended_by_admin",
+        email=user.email,
+        description="Account suspension removed by admin",
+        metadata={"admin_email": current_user.email},
     )
 
     return {"message": "User unsuspended successfully"}
