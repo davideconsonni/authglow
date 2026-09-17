@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from authglow.api.auth import _extract_basic_auth, get_current_user
-from authglow.api.oauth_errors import INVALID_CLIENT, OAuth2Error
+from authglow.api.oauth_errors import INVALID_CLIENT, INVALID_REQUEST, OAuth2Error
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
 from authglow.core.jwt_singleton import get_jwt_service
@@ -100,7 +100,18 @@ async def revoke_token(
             headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
         )
 
-    if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+    if basic_client_secret and client_secret:
+        raise OAuth2Error(
+            INVALID_REQUEST,
+            "Only one client authentication method per request",
+            status_code=400,
+        )
+    secret_method = (
+        "client_secret_basic" if basic_client_secret else "client_secret_post"
+    )
+    if not await oauth2_service.verify_client(
+        resolved_client_id, resolved_client_secret, auth_method=secret_method
+    ):
         raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
     # Determine token type
@@ -207,7 +218,18 @@ async def introspect_token(
             headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
         )
 
-    if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+    if basic_client_secret and client_secret:
+        raise OAuth2Error(
+            INVALID_REQUEST,
+            "Only one client authentication method per request",
+            status_code=400,
+        )
+    secret_method = (
+        "client_secret_basic" if basic_client_secret else "client_secret_post"
+    )
+    if not await oauth2_service.verify_client(
+        resolved_client_id, resolved_client_secret, auth_method=secret_method
+    ):
         raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
     # Try as refresh token

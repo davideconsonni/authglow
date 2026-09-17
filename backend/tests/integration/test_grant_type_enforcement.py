@@ -25,7 +25,6 @@ def _request_data(grant: str) -> dict:
     data = {
         "grant_type": grant,
         "client_id": "c1",
-        "client_secret": "unused-mock",
         "redirect_uri": "https://example.com/cb",
         "code": "auth-code-1",
         "code_verifier": _VERIFIER,
@@ -49,9 +48,10 @@ def _build_app(allowed: bool):
     from authglow.api.oauth_errors import register_oauth2_error_handler
 
     public_client = MagicMock()
-    public_client.is_confidential = False
+    public_client.is_confidential = True
     public_client.is_active = True
     public_client.dpop_bound = False
+    public_client.token_endpoint_auth_method = "client_secret_basic"
 
     auth_code = MagicMock()
     auth_code.client_id = "c1"
@@ -76,10 +76,17 @@ def _build_app(allowed: bool):
     return app
 
 
+def _basic_headers() -> dict:
+    creds = base64.b64encode(b"c1:unused-mock").decode()
+    return {"Authorization": f"Basic {creds}"}
+
+
 @pytest.mark.parametrize("grant", GRANTS)
 def test_unregistered_grant_rejected_with_unauthorized_client(grant):
     app = _build_app(allowed=False)
-    res = TestClient(app).post("/oauth2/token", data=_request_data(grant))
+    res = TestClient(app).post(
+        "/oauth2/token", data=_request_data(grant), headers=_basic_headers()
+    )
 
     assert res.status_code == 400, res.text
     body = res.json()
@@ -96,7 +103,9 @@ def test_registered_grant_passes_the_guard(grant):
     rt_svc = MagicMock()
     rt_svc.validate_and_rotate = AsyncMock(return_value=(None, "invalid refresh token"))
     with patch("authglow.api.auth.RefreshTokenService", return_value=rt_svc):
-        res = TestClient(app).post("/oauth2/token", data=_request_data(grant))
+        res = TestClient(app).post(
+            "/oauth2/token", data=_request_data(grant), headers=_basic_headers()
+        )
 
     body = res.json()
     assert res.status_code != 400 or body.get("error") != "unauthorized_client", res.text
@@ -113,14 +122,16 @@ def test_refresh_grant_propagates_scope_request():
         # With an explicit scope request.
         data = _request_data("refresh_token")
         data["scope"] = "read"
-        TestClient(app).post("/oauth2/token", data=data)
+        TestClient(app).post("/oauth2/token", data=data, headers=_basic_headers())
         rt_svc.validate_and_rotate.assert_awaited_once()
         kwargs = rt_svc.validate_and_rotate.await_args.kwargs
         assert kwargs["requested_scopes"] == ["read"]
 
         # Without the form field: no narrowing requested.
         rt_svc.validate_and_rotate.reset_mock()
-        TestClient(app).post("/oauth2/token", data=_request_data("refresh_token"))
+        TestClient(app).post(
+            "/oauth2/token", data=_request_data("refresh_token"), headers=_basic_headers()
+        )
         rt_svc.validate_and_rotate.assert_awaited_once()
         kwargs = rt_svc.validate_and_rotate.await_args.kwargs
         assert kwargs["requested_scopes"] is None

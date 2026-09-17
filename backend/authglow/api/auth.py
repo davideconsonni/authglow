@@ -377,19 +377,27 @@ async def _authenticate_client_at_token_endpoint(
     oauth2_service: OAuth2Service,
     *,
     resolved_client_id: Optional[str],
-    resolved_client_secret: Optional[str],
-    client_assertion_type: Optional[str],
-    client_assertion: Optional[str],
+    resolved_client_secret: Optional[str] = None,
+    client_assertion_type: Optional[str] = None,
+    client_assertion: Optional[str] = None,
+    basic_client_secret: Optional[str] = None,
+    form_client_secret: Optional[str] = None,
 ) -> Optional["OAuth2Client"]:
     """Authenticate a client on the token endpoint, dispatching on method.
 
-    T.2: when ``client_assertion_type`` is present we delegate to
+    Strict ``token_endpoint_auth_method`` enforcement: exactly one
+    authentication method per request (RFC 6749 §2.3 — a client
+    MUST NOT use more than one method), and the method must match
+    the registered one.  T.2: when ``client_assertion_type`` is
+    present we delegate to
     :func:`authglow.services.client_jwt_auth.verify_client_assertion`,
     which picks the verifier based on the client's registered
-    ``token_endpoint_auth_method``. Otherwise we fall back to the
-    legacy secret-based path (``oauth2_service.verify_client``).
+    ``token_endpoint_auth_method``. Otherwise the secret-based path
+    (``oauth2_service.verify_client``) applies with the channel
+    (Basic header vs form body) passed through for the
+    basic/post distinction.
 
-    For the legacy path the helper preserves the pre-T.2 error
+    For the secret path the helper preserves the pre-T.2 error
     contract, expressed as RFC 6749 §5.2 bodies: a confidential
     client with a missing secret is rejected with
     ``invalid_client`` (401) and a public client with a bad
@@ -402,7 +410,42 @@ async def _authenticate_client_at_token_endpoint(
     # Lazy import — circular-deps safe.
     from authglow.models.oauth_client import OAuth2Client  # noqa: F401  (type)
 
-    if client_assertion_type or client_assertion:
+    # Derive the channel view when callers still pass the merged
+    # secret (legacy call sites): the channel is unknown then and
+    # only the JWT-vs-secret downgrade is enforced at this layer
+    # (the service re-checks the channel when it knows it).
+    if basic_client_secret is None and form_client_secret is None:
+        secret_via_basic = False
+        secret_via_form = resolved_client_secret is not None
+        secret_method: Optional[str] = None
+    else:
+        secret_via_basic = basic_client_secret is not None
+        secret_via_form = form_client_secret is not None
+        if secret_via_basic and not secret_via_form:
+            secret_method = "client_secret_basic"
+            resolved_client_secret = basic_client_secret
+        elif secret_via_form and not secret_via_basic:
+            secret_method = "client_secret_post"
+            resolved_client_secret = form_client_secret
+        elif secret_via_basic and secret_via_form:
+            raise OAuth2Error(
+                INVALID_REQUEST,
+                "Only one client authentication method per request",
+                status_code=400,
+            )
+        else:
+            secret_method = None
+
+    has_secret = resolved_client_secret is not None
+    has_assertion = bool(client_assertion_type or client_assertion)
+    if has_secret and has_assertion:
+        raise OAuth2Error(
+            INVALID_REQUEST,
+            "Only one client authentication method per request",
+            status_code=400,
+        )
+
+    if has_assertion:
         if not resolved_client_id:
             # JWT-Bearer needs a registered client to find the key.
             raise OAuth2Error(INVALID_REQUEST, "Missing client_id", status_code=400)
@@ -411,6 +454,13 @@ async def _authenticate_client_at_token_endpoint(
             raise OAuth2Error(
                 INVALID_CLIENT,
                 "Client authentication failed (unknown or inactive client).",
+                status_code=401,
+            )
+        if client.token_endpoint_auth_method not in ("client_secret_jwt", "private_key_jwt"):
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication failed (client_assertion not allowed "
+                f"for {client.token_endpoint_auth_method}).",
                 status_code=401,
             )
         from authglow.services.client_jwt_auth import (
@@ -427,34 +477,69 @@ async def _authenticate_client_at_token_endpoint(
         await oauth2_service.client_storage.update_last_used(client.client_id)
         return client
 
-    # Legacy secret-based path. We need to know whether the client is
+    # Secret-based path. We need to know whether the client is
     # confidential before deciding which error to raise — load it
-    # first, then either return the client (legacy verify_client
-    # path) or raise the legacy 401/400 errors. Public clients with
+    # first, then either return the client (verify_client path)
+    # or raise the 401/400 errors. Public clients with
     # ``is_confidential=False`` do not need a secret.
     if not resolved_client_id:
         return None
     client = await oauth2_service.client_storage.get_client(resolved_client_id)
     settings = get_settings()
+    is_fallback = False
     if client is None and resolved_client_id == settings.oauth2_client_id:
         client = _first_party_oauth_client(settings)
+        is_fallback = True
     is_confidential = (
         bool(getattr(client, "is_confidential", True))
         if client
         else resolved_client_id != settings.oauth2_client_id
     )
 
+    if client is not None and not is_fallback:
+        registered = client.token_endpoint_auth_method
+        if registered in ("private_key_jwt", "client_secret_jwt") and has_secret:
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                f"Client authentication failed (client_assertion required for {registered}).",
+                status_code=401,
+            )
+        if registered == "none" and has_secret:
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication failed (public client must not send a secret).",
+                status_code=401,
+            )
+        if (
+            secret_method is not None
+            and registered in ("client_secret_basic", "client_secret_post")
+            and secret_method != registered
+        ):
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                f"Client authentication failed (registered method is {registered}).",
+                status_code=401,
+            )
+
     if is_confidential:
-        if not resolved_client_secret:
+        if not has_secret:
             raise OAuth2Error(
                 INVALID_CLIENT,
                 "Client authentication required for confidential clients",
                 status_code=401,
                 headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
             )
-        if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+        if not await oauth2_service.verify_client(
+            resolved_client_id, resolved_client_secret, auth_method=secret_method
+        ):
             raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
     else:
+        if has_secret:
+            raise OAuth2Error(
+                INVALID_CLIENT,
+                "Client authentication failed (public client must not send a secret).",
+                status_code=401,
+            )
         if not await oauth2_service.verify_client(resolved_client_id):
             raise OAuth2Error(INVALID_CLIENT, "Invalid client_id", status_code=400)
     return client
@@ -1380,6 +1465,8 @@ async def token_endpoint(
             resolved_client_secret=resolved_client_secret,
             client_assertion_type=client_assertion_type,
             client_assertion=client_assertion,
+            basic_client_secret=basic_client_secret,
+            form_client_secret=client_secret,
         )
         if not oauth_client:
             # Determine is_confidential for the public-client branch
@@ -1756,6 +1843,12 @@ async def token_endpoint(
         # The legacy secret path still applies when the assertion is
         # absent.
         if client_assertion:
+            if resolved_client_secret:
+                raise OAuth2Error(
+                    INVALID_REQUEST,
+                    "Only one client authentication method per request",
+                    status_code=400,
+                )
             oauth_client = await _authenticate_client_at_token_endpoint(
                 request,
                 oauth2_service,
@@ -1769,7 +1862,22 @@ async def token_endpoint(
         else:
             if not resolved_client_secret:
                 raise OAuth2Error(INVALID_CLIENT, "Missing client credentials", status_code=400)
-            if not await oauth2_service.verify_client(resolved_client_id, resolved_client_secret):
+            secret_method = (
+                "client_secret_basic"
+                if basic_client_secret and not client_secret
+                else "client_secret_post"
+                if client_secret and not basic_client_secret
+                else None
+            )
+            if basic_client_secret and client_secret:
+                raise OAuth2Error(
+                    INVALID_REQUEST,
+                    "Only one client authentication method per request",
+                    status_code=400,
+                )
+            if not await oauth2_service.verify_client(
+                resolved_client_id, resolved_client_secret, auth_method=secret_method
+            ):
                 raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
         # A4: the client must be registered for the client_credentials grant.
@@ -1878,6 +1986,8 @@ async def token_endpoint(
             resolved_client_secret=resolved_client_secret,
             client_assertion_type=client_assertion_type,
             client_assertion=client_assertion,
+            basic_client_secret=basic_client_secret,
+            form_client_secret=client_secret,
         )
         if not oauth_client:
             raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
@@ -2012,6 +2122,8 @@ async def token_endpoint(
             resolved_client_secret=resolved_device_client_secret,
             client_assertion_type=client_assertion_type,
             client_assertion=client_assertion,
+            basic_client_secret=basic_client_secret,
+            form_client_secret=client_secret,
         )
         if not oauth_client:
             raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)

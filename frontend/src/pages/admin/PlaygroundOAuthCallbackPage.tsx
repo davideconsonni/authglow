@@ -32,14 +32,17 @@ export function PlaygroundOAuthCallbackPage() {
           codeVerifier: string
         }
         const code = parseAuthorizationCallback(window.location.href, transaction.redirectUri, transaction.state)
+        const headers =
+          transaction.clientId && transaction.clientSecret
+            ? { Authorization: `Basic ${btoa(`${transaction.clientId}:${transaction.clientSecret}`)}` }
+            : undefined
         const result = await api.postForm<Record<string, unknown>>('/oauth2/token', {
           grant_type: 'authorization_code',
           code,
           redirect_uri: transaction.redirectUri,
           client_id: transaction.clientId,
-          client_secret: transaction.clientSecret || '',
           code_verifier: transaction.codeVerifier,
-        })
+        }, { headers })
 
         const idToken = typeof result.id_token === 'string' ? result.id_token : ''
         if (transaction.scopes.split(/\s+/).includes('openid') && readJwtClaim<string>(idToken, 'nonce') !== transaction.nonce) {

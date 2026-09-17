@@ -240,7 +240,7 @@ class TestRevokeEndpoint:
 
         assert response.status_code == 200
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
-            "test-client", "test-secret"
+            "test-client", "test-secret", auth_method="client_secret_post"
         )
         _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
 
@@ -263,7 +263,7 @@ class TestRevokeEndpoint:
         body = response.json()
         assert body["error"] == "invalid_client"
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
-            "invalid-client", "invalid-secret"
+            "invalid-client", "invalid-secret", auth_method="client_secret_post"
         )
         _revoke_app._mock_rt_svc.get_refresh_token.assert_not_awaited()
 
@@ -342,7 +342,7 @@ class TestRevokeEndpoint:
 
         assert response.status_code == 200
         _revoke_app._mock_oauth2_svc.verify_client.assert_awaited_once_with(
-            "test-client", "test-secret"
+            "test-client", "test-secret", auth_method="client_secret_basic"
         )
         _revoke_app._mock_rt_svc.get_refresh_token.assert_awaited_once()
         _revoke_app._mock_rt_svc.revoke_token.assert_awaited_once()

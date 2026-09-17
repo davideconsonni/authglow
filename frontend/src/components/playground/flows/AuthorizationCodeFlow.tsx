@@ -100,9 +100,14 @@ export function AuthorizationCodeFlow() {
         code_verifier: codeVerifier || '',
       }
       if (localClientId) formBody.client_id = localClientId
-      if (localClientSecret) formBody.client_secret = localClientSecret
+      // Strict channel: a `client_secret_basic` client authenticates
+      // via the HTTP Basic header, never the form body.
+      const headers =
+        localClientId && localClientSecret
+          ? { Authorization: `Basic ${btoa(`${localClientId}:${localClientSecret}`)}` }
+          : undefined
 
-      const result = await api.postForm('/oauth2/token', formBody)
+      const result = await api.postForm('/oauth2/token', formBody, { headers })
       const r = result as Record<string, unknown>
       const idToken = typeof r.id_token === 'string' ? r.id_token : ''
       if (localScopes.split(/\s+/).includes('openid') && readJwtClaim<string>(idToken, 'nonce') !== localNonce) {

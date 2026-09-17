@@ -45,11 +45,15 @@ export function RevocationFlow() {
       if (localHint) formBody.token_type_hint = localHint
       // RFC 7009 §2.1: the revocation endpoint requires client
       // authentication — reuse the credentials configured in the
-      // Authorization Code flow (playground store).
+      // Authorization Code flow (playground store), sent via the
+      // HTTP Basic header per the strict channel rule.
       if (store.clientId) formBody.client_id = store.clientId
-      if (store.clientSecret) formBody.client_secret = store.clientSecret
+      const headers =
+        store.clientId && store.clientSecret
+          ? { Authorization: `Basic ${btoa(`${store.clientId}:${store.clientSecret}`)}` }
+          : undefined
 
-      await api.postForm('/oauth2/revoke', formBody)
+      await api.postForm('/oauth2/revoke', formBody, { headers })
       setHttpStatus(200)
       setResponse('{} (Token revoked — empty 200 response per RFC 7009)')
       setCompleted(['input', 'confirm'])
