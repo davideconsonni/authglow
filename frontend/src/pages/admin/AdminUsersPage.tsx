@@ -582,6 +582,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
     dispatch({ type: 'REMOVE_SCOPE', value: scope })
   }
 
+  // Every drawer mutation can append Security Events / Admin Log rows
+  // server-side — refresh those tabs together with the detail view so
+  // the new rows appear without a full page reload.
+  const refreshUserData = () => {
+    queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+    queryClient.invalidateQueries({ queryKey: ['user-security-events', userId] })
+    queryClient.invalidateQueries({ queryKey: ['user-admin-actions', userId] })
+  }
+
   const handleSave = async () => {
     setSaving(true); setFormError(null)
     try {
@@ -596,7 +605,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       if (edit.avatar_url !== (user?.avatar_url ?? '')) payload.avatar_url = edit.avatar_url || null
       await api.put(`/api/admin/users/${userId}`, payload)
       notify.success('User updated.')
-      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      refreshUserData()
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       onUserUpdated()
     } catch (e) {
@@ -614,7 +623,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       setSetPasswordForm({ password: '', requireChange: false })
       setSetPasswordError(null)
       notify.success('Password set successfully.')
-      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      refreshUserData()
     } catch (e) {
       setSetPasswordError(e instanceof Error ? e.message : 'Failed to set password')
     } finally {
@@ -644,7 +653,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
         await api.post(`/api/admin/users/${userId}/${confirmAction}`)
       }
       notify.success(getActionSuccessMessage(confirmAction))
-      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      refreshUserData()
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
       onUserUpdated()
@@ -676,7 +685,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       setShowSuspend(false)
       setSuspendError(null)
       notify.success('User suspended.')
-      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      refreshUserData()
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       onUserUpdated()
     } catch (e) {
@@ -709,7 +718,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       setDeletePasskeyId(null)
       notify.success('Passkey removed.')
       queryClient.invalidateQueries({ queryKey: ['user-passkeys', userId] })
-      queryClient.invalidateQueries({ queryKey: ['user-detail', userId] })
+      refreshUserData()
     } catch (e) {
       notify.error(e instanceof Error ? e.message : 'Failed to delete passkey')
     }

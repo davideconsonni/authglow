@@ -721,4 +721,29 @@ describe('AdminUsersPage', () => {
     const selectCheckboxes = screen.getAllByTestId('user-select-checkbox')
     selectCheckboxes.forEach((c) => expect(c).not.toBeDisabled())
   })
+
+  it('suspend refreshes detail, security-events and admin-actions queries', async () => {
+    const { QueryClient } = await import('@tanstack/react-query')
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, 'invalidateQueries')
+    mockQueryData.users = { items: makeUsers(1), total: 1, limit: 15, offset: 0 }
+    mockQueryData.userDetail = { id: 'user-0', email: 'user0@test.com', first_name: 'F', last_name: 'L', email_verified: true, is_active: true, mfa_enabled: false, login_count: 0, created_at: '2025-01-01T00:00:00Z', scopes: [] }
+    mockApi.post.mockResolvedValue({})
+
+    renderPage()
+    fireEvent.click(screen.getAllByTestId('user-table-row')[0])
+    fireEvent.click(screen.getByTestId('suspend-btn'))
+    fireEvent.click(screen.getByTestId('suspend-confirm-btn'))
+
+    await waitFor(() => {
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/api/admin/users/user-0/suspend',
+        expect.objectContaining({ duration_hours: expect.any(Number) }),
+      )
+    })
+    const keys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey)
+    expect(keys).toContainEqual(['user-detail', 'user-0'])
+    expect(keys).toContainEqual(['user-security-events', 'user-0'])
+    expect(keys).toContainEqual(['user-admin-actions', 'user-0'])
+    invalidateSpy.mockRestore()
+  })
 })
