@@ -29,6 +29,12 @@ DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 PASSWORD = "MatrixP@ss123!"
 
 
+def _basic(client_id: str, secret: str) -> dict:
+    """HTTP Basic header for a confidential client (strict channel)."""
+    creds = base64.b64encode(f"{client_id}:{secret}".encode()).decode()
+    return {"Authorization": f"Basic {creds}"}
+
+
 @pytest.fixture
 def matrix_app(test_settings, storage, jwt_service, oauth2_service, mfa_service, session_service):
     """Minimal app (auth + oidc routers) with REAL test-bound services.
@@ -452,10 +458,9 @@ class TestRFC6749AuthorizationCode:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 400, res.text
         assert res.json()["error"] == "invalid_scope"
@@ -479,10 +484,9 @@ class TestRFC6749AuthorizationCode:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": "wrong-verifier",
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 400, res.text
         assert res.json()["error"] == "invalid_grant"
@@ -503,10 +507,9 @@ class TestRFC6749AuthorizationCode:
                 "grant_type": "authorization_code",
                 "code": other_code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": other_verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 400, res.text
         assert res.json()["error"] == "invalid_grant"
@@ -581,10 +584,9 @@ class TestRFC6749AuthorizationCode:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 200, res.text
         issued = [
@@ -597,8 +599,8 @@ class TestRFC6749AuthorizationCode:
             metadata = call.kwargs.get("metadata")
             assert metadata is not None
             assert "client_auth_method" in metadata.model_dump(), metadata
-            # Basic secret in the form body → the exact method, not just presence.
-            assert metadata.model_dump()["client_auth_method"] == "client_secret_post", metadata
+            # Secret via the Basic header → the exact method, not just presence.
+            assert metadata.model_dump()["client_auth_method"] == "client_secret_basic", metadata
 
 
 class TestRFC8628Device:
@@ -837,25 +839,26 @@ class TestRFC7009Revocation:
             user.id, email, ["openid", "read"], audience=bundle["client"].client_id
         )
         headers = {"Authorization": f"Bearer {token}"}
-        creds = {
-            "client_id": bundle["client"].client_id,
-            "client_secret": bundle["secret"],
-        }
+        basic = _basic(bundle["client"].client_id, bundle["secret"])
         assert matrix_app.get("/oauth2/userinfo", headers=headers).status_code == 200
         res = matrix_app.post(
             "/oauth2/revoke",
-            data={"token": token, "token_type_hint": "access_token", **creds},
+            data={"token": token, "token_type_hint": "access_token"},
+            headers=basic,
         )
         assert res.status_code == 200, res.text
         assert res.json() == {}
         assert matrix_app.get("/oauth2/userinfo", headers=headers).status_code == 401
         res = matrix_app.post(
             "/oauth2/introspect",
-            data={"token": token, "token_type_hint": "access_token", **creds},
+            data={"token": token, "token_type_hint": "access_token"},
+            headers=basic,
         )
         assert res.status_code == 200, res.text
         assert res.json()["active"] is False
-        res = matrix_app.post("/oauth2/revoke", data={"token": "no-such-token", **creds})
+        res = matrix_app.post(
+            "/oauth2/revoke", data={"token": "no-such-token"}, headers=basic
+        )
         assert res.status_code == 200, res.text
         assert res.json() == {}
 
@@ -902,9 +905,8 @@ class TestOIDC:
             data={
                 "grant_type": "refresh_token",
                 "refresh_token": rt.token,
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 401, res.text
         assert res.json()["error"] == "invalid_grant"
@@ -956,10 +958,9 @@ class TestOIDC:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 200, res.text
         payload = pyjwt.decode(res.json()["id_token"], options={"verify_signature": False})
@@ -988,10 +989,9 @@ class TestOIDC:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 200, res.text
         payload = pyjwt.decode(res.json()["id_token"], options={"verify_signature": False})
@@ -1057,10 +1057,9 @@ class TestOIDC:
                     "grant_type": "authorization_code",
                     "code": params["code"][0],
                     "redirect_uri": "https://example.com/cb",
-                    "client_id": bundle["client"].client_id,
-                    "client_secret": bundle["secret"],
                     "code_verifier": verifier,
                 },
+                headers=_basic(bundle["client"].client_id, bundle["secret"]),
             )
         assert tok.status_code == 200, tok.text
         payload = pyjwt.decode(tok.json()["id_token"], options={"verify_signature": False})
@@ -1195,10 +1194,9 @@ class TestOIDC:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 200, res.text
         body = res.json()
@@ -1227,10 +1225,9 @@ class TestOIDC:
                 "grant_type": "authorization_code",
                 "code": code.code,
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": verifier,
             },
+            headers=_basic(bundle["client"].client_id, bundle["secret"]),
         )
         assert res.status_code == 200, res.text
         id_token = res.json().get("id_token")

@@ -69,6 +69,15 @@ async def create_oauth_client(
     The client secret is only shown once at creation time.
     Store it securely as it cannot be retrieved later.
     """
+    # Strict method/key consistency (same rule as DCR): a
+    # ``private_key_jwt`` client without ``public_jwk`` could never
+    # authenticate.
+    if client_data.token_endpoint_auth_method == "private_key_jwt" and not client_data.public_jwk:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token_endpoint_auth_method='private_key_jwt' requires 'public_jwk'.",
+        )
+
     # Generate client secret
     plaintext_secret = storage.generate_client_secret()
 
@@ -190,6 +199,15 @@ async def update_oauth_client(
     update_dict = update_data.model_dump(exclude_unset=True)
     for field, value in update_dict.items():
         setattr(client, field, value)
+
+    # Strict method/key consistency on update as well: switching to
+    # ``private_key_jwt`` without a ``public_jwk`` (on the update or
+    # already stored) leaves a client that can never authenticate.
+    if client.token_endpoint_auth_method == "private_key_jwt" and not client.public_jwk:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token_endpoint_auth_method='private_key_jwt' requires 'public_jwk'.",
+        )
 
     await storage.update_client(client)
 

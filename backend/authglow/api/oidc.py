@@ -830,6 +830,15 @@ async def register_oauth_client(
 
     # --- DCR hardening (P.1 + P.2 + P.3) ---
 
+    # Strict method/key consistency: a ``private_key_jwt`` client
+    # without a ``public_jwk`` could never authenticate — reject at
+    # registration instead of failing closed at first token use.
+    if payload.token_endpoint_auth_method == "private_key_jwt" and not payload.public_jwk:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token_endpoint_auth_method='private_key_jwt' requires 'public_jwk'.",
+        )
+
     # P.1: token_endpoint_auth_method=none cannot be used with grants that
     # always require client authentication at the token endpoint.
     # authorization_code + PKCE is fine for public clients.
@@ -1142,6 +1151,12 @@ async def update_oauth_client_registration(
     update_dict = update.model_dump(exclude_unset=True)
     for field, value in update_dict.items():
         setattr(client, field, value)
+
+    if client.token_endpoint_auth_method == "private_key_jwt" and not client.public_jwk:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token_endpoint_auth_method='private_key_jwt' requires 'public_jwk'.",
+        )
 
     await storage.update_client(client)
 

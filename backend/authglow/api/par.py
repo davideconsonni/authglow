@@ -91,6 +91,8 @@ async def pushed_authorization_request(
         resolved_client_secret=resolved_client_secret,
         client_assertion_type=client_assertion_type,
         client_assertion=client_assertion,
+        basic_client_secret=basic_client_secret,
+        form_client_secret=client_secret,
     )
     if not oauth_client:
         raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)

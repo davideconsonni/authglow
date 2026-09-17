@@ -462,7 +462,9 @@ class TestTokenEndpointClientAuth:
             audit_service=audit_mock,
         )
 
-        oauth2_service.verify_client.assert_called_once_with("test-client-id", "test-client-secret")
+        oauth2_service.verify_client.assert_called_once_with(
+            "test-client-id", "test-client-secret", auth_method="client_secret_basic"
+        )
 
 
 class TestInviteUserSetPasswordLink:

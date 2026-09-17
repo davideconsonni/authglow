@@ -100,7 +100,9 @@ async def device_authorize(
                 status_code=401,
                 headers={"WWW-Authenticate": 'Basic realm="OAuth2"'},
             )
-        if not await oauth2_service.verify_client(client_id, client_secret):
+        if not await oauth2_service.verify_client(
+            client_id, client_secret, auth_method="client_secret_post"
+        ):
             raise OAuth2Error(INVALID_CLIENT, "Invalid client credentials", status_code=401)
 
     if DEVICE_GRANT not in set(client.grant_types):
