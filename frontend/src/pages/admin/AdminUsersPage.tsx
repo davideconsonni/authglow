@@ -673,6 +673,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
       notify.success('Session revoked.')
       refetchSessions()
       queryClient.invalidateQueries({ queryKey: ['user-sessions', userId] })
+      queryClient.invalidateQueries({ queryKey: ['user-security-events', userId] })
+      queryClient.invalidateQueries({ queryKey: ['user-admin-actions', userId] })
     } catch (e) {
       notify.error(e instanceof Error ? e.message : 'Failed to revoke session')
     }
