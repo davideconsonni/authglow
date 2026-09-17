@@ -189,13 +189,31 @@ class OAuth2Service:
     # and settings, not to a repository)
     # ------------------------------------------------------------------
 
-    async def verify_client(self, client_id: str, client_secret: Optional[str] = None) -> bool:
+    async def verify_client(
+        self,
+        client_id: str,
+        client_secret: Optional[str] = None,
+        *,
+        auth_method: Optional[str] = None,
+    ) -> bool:
         """
         Verify client credentials using dynamic client storage.
 
         The settings-based fallback client is only available in non-production
         environments.  In production, operators must provision dynamic OAuth2
         clients through the admin API and the fallback is always rejected.
+
+        Strict ``token_endpoint_auth_method`` enforcement: when a secret
+        is presented, it is accepted only through the registered
+        channel — ``client_secret_basic`` via the HTTP Basic header,
+        ``client_secret_post`` via the form body.  Clients registered
+        for JWT-bearer methods (``client_secret_jwt`` /
+        ``private_key_jwt``) or ``none`` never authenticate with a raw
+        secret.  ``auth_method`` tells which channel the secret came
+        from (``"client_secret_basic"`` / ``"client_secret_post"``);
+        ``None`` means the channel is unknown (legacy callers) and
+        only the pre-existing secret check applies for the two
+        secret-based methods.
         """
         # Try dynamic client storage first
         client = await self._get_client_cached(client_id)
@@ -205,6 +223,11 @@ class OAuth2Service:
                 return False
             await self.client_storage.update_last_used(client_id)
             if client_secret:
+                registered = client.token_endpoint_auth_method
+                if registered in ("private_key_jwt", "client_secret_jwt", "none"):
+                    return False
+                if auth_method is not None and registered != auth_method:
+                    return False
                 return await self.client_storage.verify_client_secret(client, client_secret)
             return True
 

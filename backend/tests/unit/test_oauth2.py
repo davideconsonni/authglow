@@ -212,3 +212,131 @@ class TestVerifyClientProductionGate:
             oauth2_service.verify_grant_type("test-client-id", "authorization_code")
         )
         assert result is True
+
+
+class TestVerifyClientStrictMethod:
+    """Strict ``token_endpoint_auth_method`` enforcement in ``verify_client``.
+
+    A secret is accepted only through the registered channel. JWT-bearer
+    clients (``private_key_jwt`` / ``client_secret_jwt``) and public
+    clients (``none``) never authenticate with a raw secret — the
+    bcrypt check must not even run for them.
+    """
+
+    def _service_with_client(self, oauth2_service, method, client_id):
+        import asyncio
+
+        from unittest.mock import AsyncMock
+
+        from authglow.models.oauth_client import OAuth2Client
+
+        client = OAuth2Client(
+            client_id=client_id,
+            client_secret="hashed-placeholder",
+            client_name="Strict Test Client",
+            redirect_uris=["https://app.example.com/callback"],
+            token_endpoint_auth_method=method,
+            is_confidential=(method != "none"),
+        )
+        oauth2_service.client_storage.get_client = AsyncMock(return_value=client)
+        oauth2_service.client_storage.verify_client_secret = AsyncMock(return_value=True)
+        oauth2_service.client_storage.update_last_used = AsyncMock()
+        return client
+
+    def test_private_key_jwt_rejects_secret(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "private_key_jwt", "cid-strict-pkjwt")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-pkjwt", "valid-secret", auth_method="client_secret_basic"
+                )
+            )
+            is False
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_not_awaited()
+
+    def test_client_secret_jwt_rejects_secret(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "client_secret_jwt", "cid-strict-csj")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-csj", "valid-secret", auth_method="client_secret_post"
+                )
+            )
+            is False
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_not_awaited()
+
+    def test_none_rejects_secret(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "none", "cid-strict-none")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-none", "any-secret", auth_method="client_secret_basic"
+                )
+            )
+            is False
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_not_awaited()
+
+    def test_basic_rejects_post_channel(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "client_secret_basic", "cid-strict-basic")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-basic", "valid-secret", auth_method="client_secret_post"
+                )
+            )
+            is False
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_not_awaited()
+
+    def test_post_rejects_basic_channel(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "client_secret_post", "cid-strict-post")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-post", "valid-secret", auth_method="client_secret_basic"
+                )
+            )
+            is False
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_not_awaited()
+
+    def test_basic_accepts_basic_channel(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "client_secret_basic", "cid-strict-basic-ok")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-basic-ok", "valid-secret", auth_method="client_secret_basic"
+                )
+            )
+            is True
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_awaited_once()
+
+    def test_post_accepts_post_channel(self, oauth2_service):
+        import asyncio
+
+        self._service_with_client(oauth2_service, "client_secret_post", "cid-strict-post-ok")
+        assert (
+            asyncio.run(
+                oauth2_service.verify_client(
+                    "cid-strict-post-ok", "valid-secret", auth_method="client_secret_post"
+                )
+            )
+            is True
+        )
+        oauth2_service.client_storage.verify_client_secret.assert_awaited_once()

@@ -28,7 +28,8 @@ Le remediation devono seguire questo ordine:
 
 ### P1
 - [ ] AUTH-004: Eliminazione plaintext temporary secrets
-- [ ] AUTH-005: Strict OAuth client authentication method
+- [x] AUTH-005: Strict OAuth client authentication method
+  <!-- DONE: verify_client + _authenticate_client_at_token_endpoint enforce the exact registered method (basic/post/JWT/none, one method per request); DCR/admin require public_jwk for private_key_jwt. Tests: TestVerifyClientStrictMethod (7) + TestAuthenticateClientStrictMethod (8) + channel fixes across conformance/integration suites. -->
 - [ ] AUTH-006: Passkey RP ID / Origin configuration
 - [ ] AUTH-007: Webhook SSRF / DNS rebinding
 - [ ] AUTH-008: Password-reset secret exposure nell'admin API
@@ -753,7 +754,8 @@ Trasformare l'assessment in una suite permanente.
 - [ ] AUTH-002 refresh token used as API bearer
 - [ ] AUTH-003 ID token used as API bearer
 - [ ] AUTH-004 client A token against client B
-- [ ] AUTH-005 client_secret against private_key_jwt client
+- [x] AUTH-005 client_secret against private_key_jwt client
+  <!-- Coperto da TestVerifyClientStrictMethod + TestAuthenticateClientStrictMethod -->
 - [ ] AUTH-006 replay client_assertion on instance B
 - [ ] AUTH-007 replay DPoP on instance B
 - [ ] AUTH-008 rate-limit bypass across workers

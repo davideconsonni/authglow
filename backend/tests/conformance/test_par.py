@@ -125,6 +125,15 @@ def _make_par_client(test_settings, allowed_scopes, require_par=False) -> dict:
     return {"client": created, "secret": secret}
 
 
+def _basic(bundle) -> dict:
+    import base64
+
+    creds = base64.b64encode(
+        f"{bundle['client'].client_id}:{bundle['secret']}".encode()
+    ).decode()
+    return {"Authorization": f"Basic {creds}"}
+
+
 def _push(par_app, bundle, form_extra=None) -> dict:
     """Push a request; returns the PAR response body."""
     verifier, challenge = _pkce_pair()
@@ -132,7 +141,6 @@ def _push(par_app, bundle, form_extra=None) -> dict:
     nonce = secrets.token_urlsafe(32)
     form = {
         "client_id": bundle["client"].client_id,
-        "client_secret": bundle["secret"],
         "redirect_uri": "https://example.com/cb",
         "scope": "openid read offline_access",
         "state": state,
@@ -141,7 +149,7 @@ def _push(par_app, bundle, form_extra=None) -> dict:
         "nonce": nonce,
     }
     form.update(form_extra or {})
-    res = par_app.post("/oauth2/par", data=form)
+    res = par_app.post("/oauth2/par", data=form, headers=_basic(bundle))
     assert res.status_code == 201, res.text
     body = res.json()
     body["verifier"] = verifier
@@ -238,10 +246,9 @@ class TestPARFlow:
                 "grant_type": "authorization_code",
                 "code": params["code"][0],
                 "redirect_uri": "https://example.com/cb",
-                "client_id": bundle["client"].client_id,
-                "client_secret": bundle["secret"],
                 "code_verifier": pushed["verifier"],
             },
+            headers=_basic(bundle),
         )
         assert tok.status_code == 200, tok.text
         assert tok.json().get("access_token"), tok.text

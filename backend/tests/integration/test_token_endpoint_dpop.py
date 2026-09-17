@@ -26,6 +26,12 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 
 
+def _basic_headers(client_id: str, secret: str) -> dict:
+    """HTTP Basic header for a ``client_secret_basic`` client."""
+    creds = base64.b64encode(f"{client_id}:{secret}".encode()).decode()
+    return {"Authorization": f"Basic {creds}"}
+
+
 def _ec_keypair():
     return ec.generate_private_key(ec.SECP256R1(), default_backend())
 
@@ -207,8 +213,8 @@ class TestDpopBoundAuthorizationCode:
                     "code": "auth-code-1",
                     "redirect_uri": "https://example.com/cb",
                     "client_id": client.client_id,
-                    "client_secret": "any-plaintext",
                 },
+                headers=_basic_headers(client.client_id, "any-plaintext"),
             )
         assert res.status_code == 400, res.text
         body = res.json()
@@ -236,9 +242,8 @@ class TestDpopBoundAuthorizationCode:
                     "code": "auth-code-1",
                     "redirect_uri": "https://example.com/cb",
                     "client_id": client.client_id,
-                    "client_secret": "any-plaintext",
                 },
-                headers={"DPoP": proof},
+                headers={"DPoP": proof, **_basic_headers(client.client_id, "any-plaintext")},
             )
         # The PKCE check still fails (code_challenge is None) so
         # we expect a downstream 400. The important thing is
@@ -272,9 +277,8 @@ class TestDpopBoundAuthorizationCode:
                     "code": "auth-code-1",
                     "redirect_uri": "https://example.com/cb",
                     "client_id": client.client_id,
-                    "client_secret": "any-plaintext",
                 },
-                headers={"DPoP": proof},
+                headers={"DPoP": proof, **_basic_headers(client.client_id, "any-plaintext")},
             )
         assert res.status_code == 401, res.text
         body = res.json()
@@ -306,8 +310,8 @@ class TestNonDpopBoundAuthorizationCode:
                     "code": "auth-code-1",
                     "redirect_uri": "https://example.com/cb",
                     "client_id": client.client_id,
-                    "client_secret": "any-plaintext",
                 },
+                headers=_basic_headers(client.client_id, "any-plaintext"),
             )
         # The DPoP layer did not reject the request — we got past
         # the auth step. We may still see a downstream failure
