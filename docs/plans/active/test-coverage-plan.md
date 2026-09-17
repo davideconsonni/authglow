@@ -30,7 +30,7 @@ Ogni item è tracciato con checkbox `[ ]`. Segnare `[x]` solo con test verdi + l
 
 ## Backend — fascia 50–66% (priorità media)
 
-- [ ] COV-BE-008: `backend/authglow/api/user_profile.py` — 51.0%, 47 scoperte
+- [x] COV-BE-008: `backend/authglow/api/user_profile.py` — 51.0% → 100% (96/96 statement, tutti i branch). Nuovo `tests/unit/test_user_profile_api.py` (20 test: profile±/password±JTI/preferences/reactivate/deactivate+safeword). Vedi Diario.
 - [ ] COV-BE-009: `backend/authglow/api/mfa.py` — 52.1%, 89 scoperte
 - [ ] COV-BE-010: `backend/authglow/services/device_auth.py` — 55.8%, 38 scoperte
 - [ ] COV-BE-011: `backend/authglow/api/oauth_client.py` — 57.0%, 49 scoperte
@@ -98,3 +98,4 @@ Ogni sessione finisce scrivendo qui sotto (sezione Diario) tre righe:
 - 2026-09-17 — COV-BE-005 (branch `fix/coverage-federation-api`): `api/federation.py` 46.1% → 100%. Nuovo `tests/unit/test_federation_api.py` (49 test, handler diretti + Request vera per il limiter + mock ai boundary; `FederationStateToken` patchato nel modulo api perché costruito dentro gli handler). Nota: chiamando handler con `Query()`/`Depends()` default bisogna passare OGNI parametro esplicito (altrimenti restano oggetti Query/Depends). Scoperta: claim senza email → fallback `federated.local` rigettato dall'email-validator (fail-closed 400, NON cambiato, solo pinnato). 110 verdi con le suite federation. Prossimo: COV-BE-006 (`api/phone_verification.py`).
 - 2026-09-17 — COV-BE-006 (branch `fix/coverage-phone-verification`): `api/phone_verification.py` 48.6% → 100%. Nuovo `tests/unit/test_phone_verification_api.py` (5 test, service mockati ai factory). 38 verdi con `test_phone_verification.py`. Prossimo: COV-BE-007 (`api/password_reset.py`).
 - 2026-09-17 — COV-BE-007 (branch `fix/coverage-password-reset-api`): `api/password_reset.py` 49.6% → 100%. Nuovo `tests/unit/test_password_reset_api.py` (23 test: request±/confirm±/admin CRUD±403/404; `change_expired_password` già coperto in `test_expired_password_flow.py`, non duplicato). 97 verdi con le suite reset. Con questo item la fascia "sotto il 50%" backend è chiusa. Prossimo: COV-BE-008 (`api/user_profile.py`).
+- 2026-09-17 — COV-BE-008 (branch `fix/coverage-user-profile`, commit da approvare): `api/user_profile.py` 51.0% → 100%. Nuovo `tests/unit/test_user_profile_api.py` (20 test; safeword veri via `issue_challenge` reale, JTI blacklist con cookie name reale `access_token`). 49 verdi con `test_user_profile.py`. Prossimo: COV-BE-009 (`api/mfa.py`).
