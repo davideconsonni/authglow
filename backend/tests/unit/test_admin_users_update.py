@@ -559,6 +559,79 @@ class TestAdminSecurityEvents:
         assert mock_event.call_args.kwargs["user_id"] == "target-1"
 
 
+class TestRevokeSingleSessionSecurityEvent:
+    def test_revoke_single_session_records_security_event(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        from authglow.api import admin as admin_mod
+
+        rt = SimpleNamespace(user_id="user-0", client_id="cid-1")
+        mock_rt_svc = MagicMock()
+        mock_rt_svc.get_refresh_token_by_id = AsyncMock(return_value=rt)
+        mock_rt_svc.revoke_token_by_id = AsyncMock(return_value=True)
+        target = _make_existing_user()
+        mock_user_storage = MagicMock()
+        mock_user_storage.get_user = AsyncMock(return_value=target)
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = TestAdminSecurityEvents()._patch_recorders()
+        with (
+            patch.object(admin_mod, "RefreshTokenService", return_value=mock_rt_svc),
+            patch.object(admin_mod, "UserStorage", return_value=mock_user_storage),
+            action_patch as mock_action,
+            event_patch as mock_event,
+        ):
+            result = asyncio.get_event_loop().run_until_complete(
+                admin_mod.revoke_refresh_token_admin(
+                    token_id="tok-1",
+                    current_user=_make_admin_user(),
+                    audit_service=mock_audit,
+                )
+            )
+
+        assert result["message"] == "Token revoked successfully"
+        mock_action.assert_awaited_once()
+        assert mock_action.call_args.kwargs["action_type"] == "session_revoked"
+        assert mock_action.call_args.kwargs["target_user_id"] == "user-0"
+        mock_event.assert_awaited_once()
+        assert mock_event.call_args.kwargs["event_type"] == "session_revoked_by_admin"
+        assert mock_event.call_args.kwargs["user_id"] == "user-0"
+
+    def test_revoke_missing_token_records_nothing(self):
+        import asyncio
+        from unittest.mock import MagicMock
+
+        import pytest
+        from fastapi import HTTPException
+
+        from authglow.api import admin as admin_mod
+
+        mock_rt_svc = MagicMock()
+        mock_rt_svc.get_refresh_token_by_id = AsyncMock(return_value=None)
+        mock_audit = AsyncMock()
+
+        action_patch, event_patch = TestAdminSecurityEvents()._patch_recorders()
+        with (
+            patch.object(admin_mod, "RefreshTokenService", return_value=mock_rt_svc),
+            action_patch as mock_action,
+            event_patch as mock_event,
+        ):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.get_event_loop().run_until_complete(
+                    admin_mod.revoke_refresh_token_admin(
+                        token_id="nope",
+                        current_user=_make_admin_user(),
+                        audit_service=mock_audit,
+                    )
+                )
+
+        assert exc.value.status_code == 404
+        mock_action.assert_not_awaited()
+        mock_event.assert_not_awaited()
+
+
 class TestUpdateUserAuditLogging:
     def test_update_logs_audit_event(self):
         import asyncio

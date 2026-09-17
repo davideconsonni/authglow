@@ -1392,6 +1392,30 @@ async def revoke_refresh_token_admin(
             severity="warning",
         )
 
+        from authglow.services.admin_action import AdminActionService
+        from authglow.services.security_event import SecurityEventService
+
+        target_user = await UserStorage().get_user(rt.user_id)
+        await AdminActionService().record_action(
+            admin_user_id=current_user.id,
+            admin_email=current_user.email,
+            action_type="session_revoked",
+            target_user_id=rt.user_id,
+            target_user_email=target_user.email if target_user else None,
+            details={"token_id": token_id, "client_id": rt.client_id},
+        )
+        await SecurityEventService().record_event(
+            user_id=rt.user_id,
+            event_type="session_revoked_by_admin",
+            email=target_user.email if target_user else None,
+            description="Session revoked by admin",
+            metadata={
+                "admin_email": current_user.email,
+                "token_id": token_id,
+                "client_id": rt.client_id,
+            },
+        )
+
     return {"message": "Token revoked successfully"}
 
 
