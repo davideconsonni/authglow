@@ -106,10 +106,11 @@ def _build_code_app(code_scope: str):
 
 
 def _code_request() -> dict:
+    # The mocked client is public: no secret is sent (a public client
+    # presenting one is rejected before the offline_access gate runs).
     return {
         "grant_type": "authorization_code",
         "client_id": "c1",
-        "client_secret": "unused-mock",
         "redirect_uri": "https://example.com/cb",
         "code": "auth-code-1",
         "code_verifier": _VERIFIER,
