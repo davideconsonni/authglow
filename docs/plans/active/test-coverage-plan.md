@@ -20,7 +20,7 @@ Ogni item è tracciato con checkbox `[ ]`. Segnare `[x]` solo con test verdi + l
 
 ## Backend — file sotto il 50% (priorità alta)
 
-- [ ] COV-BE-001: `backend/authglow/api/rbac.py` — 29.8%, 124 linee scoperte su 178
+- [x] COV-BE-001: `backend/authglow/api/rbac.py` — 29.8% → 98% (178/178 statement, 5 partial branch difensivi). Nuovo `tests/unit/test_rbac_api.py` (36 test: tutti gli endpoint + 409/404/403 + anti-lockout admin + audit). Vedi Diario.
 - [ ] COV-BE-002: `backend/authglow/services/passkey.py` — 36.1%, 53 scoperte (verifica WebAuthn, challenge, sign count)
 - [ ] COV-BE-003: `backend/authglow/api/email_verification.py` — 38.6%, 27 scoperte
 - [ ] COV-BE-004: `backend/authglow/api/passkey.py` — 40.7%, 76 scoperte (registration ceremony, begin/endpoints)
@@ -91,3 +91,4 @@ Ogni sessione finisce scrivendo qui sotto (sezione Diario) tre righe:
 
 - 2026-09-17 — COV-000 (locale, no commit): backend 82.45% statements / frontend 37.49% linee (549 passed, 6 skipped). CI verificata: entrambi gli upload configurati (`backend/coverage.xml` flag backend + `frontend/coverage/lcov.info` flag frontend), ma il workflow gira solo su schedule giornaliero + dispatch manuale — Codecov (66.39% al 2026-09-14) è vecchio di 3 giorni e non vede AUTH-001/005/admin-events. Trovate 2 regressioni AUTH-005 in `test_offline_access_gate.py` (client pubblico + secret via POST): sistemate togliendo il secret, 2/2 verdi. Suite backend completa verde a pezzi: unit a-m 859 + unit n-z 728 + repositories/conformance 821 + integration 444 = 2852 passed. Prossimo: COV-BE-001 (`api/rbac.py`).
 - NOTE AMBIENTE (Windows, non riscoprire): (1) `-n auto` va OOM (0x8007000e, worker down + hang) — usare `-n 4` e mai due suite xdist in parallelo; (2) `rtk pytest` non accetta directory come argomento — usare `.venv/Scripts/python.exe -m pytest <path>` diretto; (3) mai `rtk proxy python` (bypassa il venv: `ModuleNotFoundError` ovunque); (4) riferimento CI resta ubuntu (lì `-n auto` funziona).
+- 2026-09-17 — COV-BE-001 (branch `fix/coverage-rbac-api`): `api/rbac.py` 29.8% → 98%. I test esistenti coprivano solo il service: aggiunti 36 test HTTP-level con handler diretti + RBACService/UserStorage patchati (nessun disco toccato). 78 verdi con `test_rbac.py`. Prossimo: COV-BE-002 (`services/passkey.py`).
