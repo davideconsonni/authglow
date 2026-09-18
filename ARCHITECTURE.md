@@ -56,9 +56,9 @@ authglow/
 │       ├── services/          # 46 modules / 51 classes (business logic, cross-entity coordination; auth/ + email/ + phone/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
 │       │   ├── protocols.py   # 31 Protocol contracts (@runtime_checkable)
-  │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
-  │       │   ├── dependencies.py# Config-driven selector: _REGISTRY + register_backend() + get_<entity>_repository() (selected by Settings.repository_backend, default "file")
-  │       │   ├── postgres/      # Placeholder for the Postgres backend (unregistered — fail-fast until implemented)
+│       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
+│       │   ├── dependencies.py# Config-driven selector: _REGISTRY + register_backend() + get_<entity>_repository() (selected by Settings.repository_backend, default "file")
+│       │   ├── postgres/      # Placeholder for the Postgres backend (unregistered — fail-fast until implemented)
 │       │   └── file/          # 26 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
 │       ├── models/            # Pydantic request/response/domain models (25 modules)
 │       ├── core/              # config, crypto, cache, concurrency, permissions, password, pii, datetime, async_io, http_client, jwt_singleton, rate_limit
