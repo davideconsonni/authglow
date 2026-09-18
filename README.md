@@ -63,7 +63,7 @@ The demo runs in demo mode: log in with the demo admin account shown on the page
 - Passkeys (WebAuthn/FIDO2) for passwordless sign-in
 - TOTP authenticator apps, backup codes, trusted devices
 - Phone verification via one-time codes (development passthrough, or Infobip SMS/WhatsApp)
-- "Sign in with …" via any OIDC provider (Google, Microsoft Entra ID, Apple, GitHub, Keycloak, Auth0, Okta, plus Italy's CIE and SPID)
+- "Sign in with …" via any OIDC provider (Google, Microsoft Entra ID, Keycloak, Auth0, Okta, ...)
 
 **OAuth2 / OIDC for your apps**
 
