@@ -69,7 +69,7 @@ authglow/
 │   │   ├── pages/             # Route-level components (auth/, admin/ — incl. admin/snippets/*.txt quick-start templates loaded via ?raw by oauthClientSnippets.ts, rendered by ClientSnippetsList.tsx)
 │   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/
 │   │   ├── stores/            # Zustand: authStore, toastStore, playgroundStore
-│       │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle, useDemoMeta, useDemoInbox
+│   │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle, useDemoMeta, useDemoInbox
 │   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts, jwt.ts, loginStorage.ts
 │   │   └── styles/            # globals.css (Tailwind + design tokens)
 │   └── e2e/                   # Playwright E2E specs
