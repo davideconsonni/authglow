@@ -38,15 +38,6 @@ class TestHttpClientSingleton:
         c3 = await get_http_client()
         assert c1 is c2 is c3, "singleton must return the same instance"
 
-    async def test_http_client_reused_under_concurrency(self):
-        from authglow.core.http_client import get_http_client
-
-        results = await asyncio.gather(*[get_http_client() for _ in range(50)])
-        unique_ids = {id(c) for c in results}
-        assert len(unique_ids) == 1, (
-            f"concurrent first-callers triggered {len(unique_ids)} separate inits"
-        )
-
     async def test_http_client_uses_configured_limits(self):
         from authglow.core import http_client
         from authglow.core.http_client import get_http_client

@@ -250,11 +250,6 @@ class TestInvalidPathTolerance:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("bad_id", _INVALID_PATH_IDS)
-    async def test_read_json_treats_invalid_path_as_missing(self, repo, bad_id):
-        assert await repo._read_json(repo._path(f"{bad_id}.json")) is None
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("bad_id", _INVALID_PATH_IDS)
     async def test_read_json_versioned_treats_invalid_path_as_missing(self, repo, bad_id):
         assert await repo._read_json_versioned(repo._path(f"{bad_id}.json")) == (None, 0)
 

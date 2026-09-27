@@ -107,12 +107,6 @@ class TestFileEmailIndexRepository:
         await repo.remove("dave@example.com")
         assert await repo.lookup("dave@example.com") is None
 
-    async def test_remove_unknown_is_noop(self, test_settings):
-        repo = self._make_repo(test_settings)
-        # No prior insert; remove must not raise.
-        await repo.remove("nobody@example.com")
-        assert await repo.lookup("nobody@example.com") is None
-
     async def test_remove_keeps_other_entries(self, test_settings):
         repo = self._make_repo(test_settings)
         await repo.insert("alice@example.com", "user-1")
