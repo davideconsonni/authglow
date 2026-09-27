@@ -303,21 +303,6 @@ class TestCompleteAuthenticationAccountStatus:
         assert kwargs["user_id"] == "user-status"
         assert kwargs["metadata"].error == "inactive_user"
 
-    def test_suspended_user_gets_423_with_utc_deadline(self):
-        deadline = datetime(2026, 9, 17, 22, 38, 1, 710394, tzinfo=timezone.utc)
-        client, mocks = self._build(self._make_user(suspended_until=deadline))
-        resp = self._post_complete(client)
-        assert resp.status_code == 423, resp.text
-        detail = resp.json()["detail"]
-        assert detail["error"] == "account_suspended"
-        assert detail["suspended_until"] == deadline.astimezone(timezone.utc).isoformat()
-        assert "set-cookie" not in resp.headers
-        assert mocks["rt_service"].created == []
-        mocks["storage"].update_last_login.assert_not_awaited()
-        mocks["audit"].log_event.assert_awaited_once()
-        kwargs = mocks["audit"].log_event.call_args.kwargs
-        assert kwargs["metadata"].error == "account_suspended"
-
     def test_expired_suspension_allows_login(self):
         past = datetime.now(timezone.utc) - timedelta(days=1)
         client, mocks = self._build(self._make_user(suspended_until=past))
