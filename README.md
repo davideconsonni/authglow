@@ -317,7 +317,8 @@ ruff check authglow/ && mypy authglow/
 cd frontend
 npm test         # Vitest unit tests
 npm run lint     # ESLint
-npm run build    # type-check + production bundle
+npm run typecheck # TypeScript type-check (tsc --noEmit)
+npm run build    # production bundle
 npm run test:e2e # Playwright end-to-end tests
 ```
 
