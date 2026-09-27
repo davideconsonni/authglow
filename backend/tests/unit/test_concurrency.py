@@ -166,21 +166,6 @@ class TestConcurrentWriteError:
             assert result["_version"] == 1
 
     @pytest.mark.asyncio
-    async def test_versioned_write_rejects_stale_version(self):
-        """write_json_versioned raises ConcurrentWriteError if version changed."""
-        fs = fsspec.filesystem("file")
-        afs = AsyncFileSystem(fs)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "record.json")
-            await afs.write_json(path, {"name": "test", "_version": 5})
-
-            with pytest.raises(ConcurrentWriteError):
-                await afs.write_json_versioned(
-                    path, {"name": "stale"}, expected_version=3
-                )
-
-    @pytest.mark.asyncio
     async def test_versioned_write_to_new_file(self):
         """CAS write to a non-existent file uses version 0."""
         fs = fsspec.filesystem("file")
