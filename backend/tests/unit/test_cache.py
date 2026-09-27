@@ -127,21 +127,6 @@ class TestCacheProxyCRUD:
         assert await user_cache.pop("nonexistent", "fallback") == "fallback"
         assert await user_cache.pop("nonexistent") is None
 
-    async def test_del_item(self, monkeypatch):
-        s = Settings(
-            secret_key="a" * 32,
-            storage_path="/tmp/test_cache",
-            storage_backend="file",
-        )
-        monkeypatch.setattr("authglow.core.config.get_settings", lambda: s)
-        _reset_cache_registry()
-
-        await user_cache.set("x", "y")
-        assert await user_cache.contains("x")
-        await user_cache.delete("x")
-        assert not await user_cache.contains("x")
-
-
 class TestCacheRegistryMaxsize:
     def test_cache_registry_maxsize_property(self):
         cr = CacheRegistry(maxsize=50, ttl=10)

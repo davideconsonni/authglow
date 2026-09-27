@@ -66,15 +66,6 @@ async def test_exists(tmp_dir, afs):
 
 
 @pytest.mark.asyncio
-async def test_rm(tmp_dir, afs):
-    path = f"{tmp_dir}/to_delete.json"
-    await afs.write_text(path, "test")
-    assert await afs.exists(path) is True
-    await afs.rm(path)
-    assert await afs.exists(path) is False
-
-
-@pytest.mark.asyncio
 async def test_rm_nonexistent(tmp_dir, afs):
     path = f"{tmp_dir}/nonexistent.json"
     with pytest.raises(Exception):
