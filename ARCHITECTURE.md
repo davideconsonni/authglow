@@ -52,25 +52,25 @@ authglow/
 │   ├── Dockerfile             # Backend-only image (pure REST API)
 │   ├── .env.example           # All configurable settings template
 │   └── authglow/
-│       ├── api/               # 21 FastAPI routers (HTTP layer, one per domain)
-│       ├── services/          # 46 modules / 51 classes (business logic, cross-entity coordination; auth/ + email/ + phone/ subpackages)
+│       ├── api/               # 23 FastAPI routers (HTTP layer, one per domain)
+│       ├── services/          # 53 modules / 63 classes (business logic, cross-entity coordination; auth/ + email/ + phone/ subpackages)
 │       ├── repositories/      # Storage abstraction (Protocols → File impls)
-│       │   ├── protocols.py   # 31 Protocol contracts (@runtime_checkable)
+│       │   ├── protocols.py   # 36 Protocol contracts (@runtime_checkable)
 │       │   ├── exceptions.py  # EntityNotFoundError, EntityAlreadyExistsError
 │       │   ├── dependencies.py# Config-driven selector: _REGISTRY + register_backend() + get_<entity>_repository() (selected by Settings.repository_backend, default "file")
 │       │   ├── postgres/      # Placeholder for the Postgres backend (unregistered — fail-fast until implemented)
-│       │   └── file/          # 26 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
-│       ├── models/            # Pydantic request/response/domain models (25 modules)
+│       │   └── file/          # 36 File*Repository impls + BaseFileRepository (JSON on disk via fsspec)
+│       ├── models/            # Pydantic request/response/domain models (28 modules)
 │       ├── core/              # config, crypto, cache, concurrency, permissions, password, pii, datetime, async_io, http_client, jwt_singleton, rate_limit
-│       └── middleware/        # Security headers, HTTPS enforcement, request size, request ID, proxy headers
+│       └── middleware/        # CSRF, security headers, HTTPS enforcement, request size, request ID, proxy headers
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx            # Routing, provider stack, route guards
 │   │   ├── pages/             # Route-level components (auth/, admin/ — incl. admin/snippets/*.txt quick-start templates loaded via ?raw by oauthClientSnippets.ts, rendered by ClientSnippetsList.tsx)
-│   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/
+│   │   ├── components/        # ui/ (shadcn), layout/, shared/, auth/, admin/, oauth/, playground/, profile/, setup/
 │   │   ├── stores/            # Zustand: authStore, toastStore, playgroundStore
 │   │   ├── hooks/             # useAuth, useApi, useTheme, useDocumentTitle, useDemoMeta, useDemoInbox
-│   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts, jwt.ts, loginStorage.ts
+│   │   ├── lib/               # api.ts (HTTP client), constants.ts (ROUTES, API_URL), utils.ts, jwt.ts, loginStorage.ts, clientBranding.ts, oauthCrypto.ts, rateLimit.ts, scopes.ts
 │   │   └── styles/            # globals.css (Tailwind + design tokens)
 │   └── e2e/                   # Playwright E2E specs
 └── images/                    # README screenshots
@@ -298,7 +298,7 @@ The POST response model `APIKeyCreateResponse` extends `APIKeyWithSecret` with t
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------|
 | `backend/main.py`                                   | All middleware registration and router mounts                                             |
 | `backend/authglow/core/config.py`                   | `Settings` class — all env vars read here                                                 |
- | `backend/authglow/repositories/protocols.py`        | All storage contracts (32 Protocols)                                                      |
+ | `backend/authglow/repositories/protocols.py`        | All storage contracts (36 Protocols)                                                      |
  | `backend/authglow/repositories/dependencies.py`     | Factory functions (one per entity)                                                        |
  | `backend/authglow/services/user.py`                 | Canonical service: cross-entity coordination pattern                                      |
  | `backend/authglow/services/claim_policy.py`         | Per-client claim policy: turns declarative rules into namespaced JWT claims (OIDC §5.1.2) |
