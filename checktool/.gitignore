@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Credentials remembered by the bootstrap for a provisioned instance.
+.state.json
+
+# Generated reports
+report.md
