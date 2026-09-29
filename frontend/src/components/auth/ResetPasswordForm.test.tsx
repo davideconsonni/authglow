@@ -30,7 +30,9 @@ describe('ResetPasswordForm', () => {
 
   it('validates the reset code format', async () => {
     renderForm()
-    fireEvent.change(screen.getByPlaceholderText('XXXX-XXXX-XXXX'), { target: { value: 'bad' } })
+    fireEvent.change(screen.getByPlaceholderText('XXXX-XXXX-XXXX'), {
+      target: { value: 'AAAABBBBCCCCDD' },
+    })
     fireEvent.click(screen.getByText('Reset password'))
     await screen.findByText(/Use the format XXXX-XXXX-XXXX/)
     expect(mockApi.post).not.toHaveBeenCalled()
