@@ -106,16 +106,15 @@ class FileDeviceAuthorizationRepository(BaseFileRepository, DeviceAuthorizationR
 
     async def delete_expired(self) -> int:
         """Delete all expired device authorizations. Returns count deleted."""
-        import os as _os
-
         pattern = self._path("*.json")
         files = await self._glob(pattern)
         count = 0
         now = utcnow()
+        # ``*.json`` matches direct children only, so the ``_by_user_code``
+        # index directory never shows up here. Do not filter on a leading
+        # underscore: ``device_code`` is base64-url and may itself start
+        # with one, which would make that authorization undeletable.
         for filepath in files:
-            filename = _os.path.basename(filepath)
-            if filename.startswith("_"):
-                continue
             try:
                 data = await self._read_json(filepath)
             except (ValueError, TypeError):
@@ -135,15 +134,14 @@ class FileDeviceAuthorizationRepository(BaseFileRepository, DeviceAuthorizationR
 
     async def list_all(self, status_filter: Optional[str] = None) -> List[DeviceAuthorization]:
         """Return all device authorizations, optionally filtered by status."""
-        import os as _os
-
         pattern = self._path("*.json")
         files = await self._glob(pattern)
         result: List[DeviceAuthorization] = []
+        # ``*.json`` matches direct children only, so the ``_by_user_code``
+        # index directory never shows up here. Do not filter on a leading
+        # underscore: ``device_code`` is base64-url and may itself start
+        # with one, which would hide that authorization from every listing.
         for filepath in files:
-            filename = _os.path.basename(filepath)
-            if filename.startswith("_"):
-                continue
             try:
                 data = await self._read_json(filepath)
             except (ValueError, TypeError):
