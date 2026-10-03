@@ -1,10 +1,14 @@
 ---
 type: plan
-status: active
+status: done
 ids: COV-NNN
 ---
 
 # AuthGlow Test Coverage Plan
+
+> **Status**: done (2026-10-03). Tutti gli item `COV-*` chiusi su `main`: frontend
+> (pagine, flow playground, auth/profile, lib/store, primitive) e backend repo file +
+> `api/admin.py` (100%). Vedi la sezione Diario per i commit.
 
 Baseline Codecov (commit `2de07f0`, 2026-09-14 — **precedente ai merge AUTH-001/005/admin-events, ribasare alla prima sessione**):
 
