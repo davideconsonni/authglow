@@ -314,3 +314,50 @@ class TestFileAdminActionRepositoryWithPatchedSettings:
         with patch("authglow.repositories.file.base.get_settings", return_value=settings):
             repo = FileAdminActionRepository()
             assert Path(repo._storage_path).exists()
+
+
+# ---------------------------------------------------------------------------
+# delete_for_user (VAPT-082, GDPR Art. 17)
+# ---------------------------------------------------------------------------
+
+
+class TestFileAdminActionDeleteForUser:
+    def _make_repo(self, test_settings) -> FileAdminActionRepository:
+        return FileAdminActionRepository(settings=test_settings)
+
+    async def test_delete_for_user_removes_every_record(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for _ in range(3):
+            await repo.record(
+                admin_user_id="admin-1",
+                admin_email="admin@example.com",
+                action_type="user.suspend",
+                target_user_id="erase-me",
+            )
+        assert await repo.delete_for_user("erase-me") == 3
+        page, total = await repo.list_for_user("erase-me")
+        assert page == []
+        assert total == 0
+
+    async def test_delete_for_user_unknown_returns_zero(self, test_settings):
+        repo = self._make_repo(test_settings)
+        assert await repo.delete_for_user("nobody") == 0
+
+    async def test_delete_for_user_tolerates_dir_removal_failure(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await repo.record(
+            admin_user_id="admin-1",
+            admin_email="admin@example.com",
+            action_type="user.suspend",
+            target_user_id="erase-flaky",
+        )
+        user_dir = repo._user_dir("erase-flaky")
+        original_rm = repo._afs.rm
+
+        async def flaky_rm(path, *args, **kwargs):
+            if path == user_dir:
+                raise RuntimeError("directory removal unsupported")
+            return await original_rm(path, *args, **kwargs)
+
+        with patch.object(repo._afs, "rm", side_effect=flaky_rm):
+            assert await repo.delete_for_user("erase-flaky") == 1

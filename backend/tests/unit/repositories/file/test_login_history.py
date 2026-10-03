@@ -13,6 +13,7 @@ Each test class:
 * validates Protocol conformance via ``isinstance(repo, <Protocol>)``.
 """
 
+import json
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -377,3 +378,66 @@ class TestFileLoginHistoryRepositoryWithPatchedSettings:
         with patch("authglow.repositories.file.base.get_settings", return_value=settings):
             repo = FileLoginHistoryRepository()
             assert Path(repo._storage_path).exists()
+
+
+# ---------------------------------------------------------------------------
+# cleanup_old edge cases + delete_for_user (VAPT-082, GDPR Art. 17)
+# ---------------------------------------------------------------------------
+
+
+class TestLoginHistoryCleanupAndErase:
+    def _make_repo(self, test_settings) -> FileLoginHistoryRepository:
+        return FileLoginHistoryRepository(settings=test_settings)
+
+    async def test_cleanup_old_skips_non_dict_and_bad_timestamps(self, test_settings):
+        repo = self._make_repo(test_settings)
+        user_dir = Path(repo._user_dir("u-edge"))
+        user_dir.mkdir(parents=True, exist_ok=True)
+        (user_dir / "list.json").write_text(json.dumps([1, 2, 3]))
+        (user_dir / "no-ts.json").write_text(json.dumps({"id": "no-ts", "timestamp": 123}))
+        (user_dir / "bad-ts.json").write_text(json.dumps({"id": "bad-ts", "timestamp": "nope"}))
+        cutoff = (utcnow() - timedelta(days=90)).isoformat()
+        assert await repo.cleanup_old("u-edge", cutoff) == 0
+
+    async def test_delete_for_user_removes_everything(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for i in range(3):
+            record = _make_entry(user_id="u-erase")
+            record["id"] = f"e-{i}"
+            await repo.record(
+                user_id=record["user_id"],
+                email=record["email"],
+                success=record["success"],
+                entry_id=record["id"],
+                timestamp=record["timestamp"],
+            )
+        assert await repo.delete_for_user("u-erase") == 3
+        page, total = await repo.list_for_user("u-erase")
+        assert page == []
+        assert total == 0
+
+    async def test_delete_for_user_unknown_returns_zero(self, test_settings):
+        repo = self._make_repo(test_settings)
+        assert await repo.delete_for_user("nobody") == 0
+
+    async def test_delete_for_user_tolerates_dir_removal_failure(self, test_settings):
+        repo = self._make_repo(test_settings)
+        record = _make_entry(user_id="u-flaky")
+        record["id"] = "only"
+        await repo.record(
+            user_id=record["user_id"],
+            email=record["email"],
+            success=record["success"],
+            entry_id=record["id"],
+            timestamp=record["timestamp"],
+        )
+        user_dir = repo._user_dir("u-flaky")
+        original_rm = repo._afs.rm
+
+        async def flaky_rm(path, *args, **kwargs):
+            if path == user_dir:
+                raise RuntimeError("directory removal unsupported")
+            return await original_rm(path, *args, **kwargs)
+
+        with patch.object(repo._afs, "rm", side_effect=flaky_rm):
+            assert await repo.delete_for_user("u-flaky") == 1
