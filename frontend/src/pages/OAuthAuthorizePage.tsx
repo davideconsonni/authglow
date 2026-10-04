@@ -225,21 +225,6 @@ export function OAuthAuthorizePage() {
   const [error, setError] = useState('')
   const { meta } = useDemoMeta()
 
-  // If demo credentials were copied on the previous LoginForm screen,
-  // pre-fill only the email on the OAuth sign-in form (no auto-submit).
-  // The password is intentionally NOT pre-filled: a stale demo password
-  // sitting invisibly in the field caused wrong-credential failures (and
-  // account lockouts) when signing in with a different account.
-  useEffect(() => {
-    if (!meta.demo_mode) return
-    try {
-      const storedEmail = sessionStorage.getItem('authglow_demo_email')
-      if (storedEmail) setEmail((prev) => prev || storedEmail)
-    } catch {
-      // ignore storage errors
-    }
-  }, [meta.demo_mode])
-
   const clientId = searchParams.get('client_id') || ''
   const redirectUri = searchParams.get('redirect_uri') || ''
   const scope = searchParams.get('scope') || 'read'

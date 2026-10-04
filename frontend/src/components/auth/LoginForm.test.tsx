@@ -54,7 +54,7 @@ describe('LoginForm demo mode', () => {
     expect(screen.queryByTestId('demo-credentials')).toBeNull()
   })
 
-  it('shows demo banner and credentials when demo_mode=true', async () => {
+  it('shows the demo banner but no credentials box on the landing screen', async () => {
     apiGetMock.mockResolvedValue({
       demo_mode: true,
       demo_banner_text: 'Demo environment — data resets on restart.',
@@ -66,12 +66,11 @@ describe('LoginForm demo mode', () => {
       expect(screen.getByTestId('demo-mode-banner')).toBeInTheDocument()
     })
     expect(screen.getByText(/data resets on restart/)).toBeInTheDocument()
-    const creds = screen.getByTestId('demo-credentials')
-    expect(creds).toHaveTextContent('admin@example.com')
-    expect(creds).toHaveTextContent('boot-pass')
+    // Credentials are shown only on the OAuth authorize (sign-in) screen.
+    expect(screen.queryByTestId('demo-credentials')).toBeNull()
   })
 
-  it('hides credentials box when meta lacks the password', async () => {
+  it('keeps the credentials box hidden even when meta omits the password', async () => {
     apiGetMock.mockResolvedValue({
       demo_mode: true,
       demo_banner_text: 'Demo.',
