@@ -3,6 +3,6 @@
 httpx==0.28.1
 rich==15.0.0
 questionary==2.1.1
-PyJWT[crypto]==2.13.0
-cryptography==50.0.1
-pyotp==2.9.0
+PyJWT[crypto]==2.15.1
+cryptography==50.0.2
+pyotp==2.10.0

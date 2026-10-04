@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "authglow-checktool"
 version = "0.1.0"
 description = "Black-box console end-to-end verifier for a running AuthGlow instance."
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "httpx",
     "rich",
@@ -26,7 +26,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
@@ -37,7 +37,7 @@ ignore = ["E501"]
 known-first-party = ["checktool"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = false
 check_untyped_defs = true
 warn_return_any = true

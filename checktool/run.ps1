@@ -34,7 +34,7 @@ if (-not (Test-Path $py)) {
         if ($launcher) { $base = $launcher.Source }
     }
     if (-not $base) {
-        Write-Error "Python 3.11+ was not found on PATH. Install Python and retry."
+        Write-Error "Python 3.13+ was not found on PATH. Install Python and retry."
         exit 1
     }
     Write-Host "Creating virtual environment at $venv ..."
