@@ -3,7 +3,7 @@
 Self-hosted login, OAuth 2.0 / OpenID Connect, and user management for your apps. No database to manage — data lives in files.
 
 <p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue.svg">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.13+-blue.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg">
   <a href="https://github.com/davideconsonni/authglow/actions/workflows/test.yml"><img alt="Test Suite" src="https://github.com/davideconsonni/authglow/actions/workflows/test.yml/badge.svg"></a>
   <a href="https://codecov.io/gh/davideconsonni/authglow"><img alt="Coverage" src="https://codecov.io/gh/davideconsonni/authglow/branch/main/graph/badge.svg"></a>
@@ -123,7 +123,7 @@ Add `-e DEMO_MODE=true` to the `docker run` above. A demo admin account is seede
 
 ### Option B — Local development (backend + frontend separately)
 
-Prerequisites: Python 3.11+, Node.js, Git.
+Prerequisites: Python 3.13+, Node.js, Git.
 
 **Backend:**
 
@@ -299,7 +299,7 @@ authglow/
     └── e2e/                Playwright end-to-end tests
 ```
 
-Stack: Python 3.11+ / FastAPI / Pydantic v2 · TypeScript / React 19 / Vite / Tailwind CSS / Zustand / TanStack Query.
+Stack: Python 3.13+ / FastAPI / Pydantic v2 · TypeScript / React 19 / Vite / Tailwind CSS / Zustand / TanStack Query.
 
 Details: [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](AGENTS.md) (contributor guide) · [DESIGN.md](DESIGN.md) (design system)
 

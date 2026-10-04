@@ -77,7 +77,7 @@ When the full backend suite is needed, use `pytest -q --tb=line -n auto`
 (requires `pytest-xdist`). Pass `timeout: 300000` to the Bash tool —
 the timeout parameter belongs to the Bash tool, not pytest.
 
-## Code Style — Backend (Python 3.11)
+## Code Style — Backend (Python 3.13)
 
 ### Formatting
 

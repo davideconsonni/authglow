@@ -30,7 +30,7 @@ if [ ! -x "$py" ]; then
         fi
     done
     if [ -z "$base" ]; then
-        echo "Python 3.11+ was not found on PATH. Install Python and retry." >&2
+        echo "Python 3.13+ was not found on PATH. Install Python and retry." >&2
         exit 1
     fi
     echo "Creating virtual environment at $venv ..."
