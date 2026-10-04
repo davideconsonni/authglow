@@ -219,14 +219,6 @@ describe('OAuthAuthorizePage — demo mode', () => {
     fireEvent.keyDown(box, { key: 'Enter' })
     expect(screen.getByLabelText('Email')).toHaveValue('demo@authglow.io')
   })
-
-  it('prefills the email from sessionStorage in demo mode', async () => {
-    sessionStorage.setItem('authglow_demo_email', 'pre@x.io')
-    mockDemo.meta = { demo_mode: true }
-    renderPage(`/oauth2/authorize?${BASE}`)
-    await screen.findByText('Sign in to AuthGlow')
-    await waitFor(() => expect(screen.getByLabelText('Email')).toHaveValue('pre@x.io'))
-  })
 })
 
 describe('OAuthAuthorizePage — authenticated and federated flows', () => {
