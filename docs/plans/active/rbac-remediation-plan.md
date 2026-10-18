@@ -6,7 +6,7 @@ ids: RBAC-NNN
 
 # RBAC Remediation Plan (review 2026-10-18)
 
-> **Status**: open, not started. Nothing in this file has been implemented.
+> **Status**: Wave 1 completed ✅ | Wave 2 blocked on D1–D3 decisions.
 > **Source**: theme review "RBAC" (`authglow-review` skill) over `models/rbac.py`,
 > `services/rbac.py`, `api/rbac.py`, `core/permissions.py`, `repositories/file/rbac.py`,
 > the admin/oauth/claims/federation/webhooks routers, the frontend admin gate, and
@@ -80,11 +80,16 @@ Cross-cutting rules:
   no longer raises, and a previously poisoned file becomes readable again.
 - **Risk**: low; only the meaning of a date-only input is at stake (D4).
 
-### [ ] RBAC-02 — `ruff format` the RBAC modules
+### [x] RBAC-02 — `ruff format` the RBAC modules ✅ a5d762b
 - **Review finding**: R11.
 - **Files**: `backend/authglow/api/rbac.py`, `backend/authglow/services/rbac.py`
   ("2 files would be reformatted"). Repo-wide there are 31 unformatted files —
   **do not** widen this task; open a separate one if desired.
+- **Changes**:
+  - `api/rbac.py`: wrapped long function signatures with default arguments on
+    new lines (6 places).
+  - `services/rbac.py`: collapsed multi-line signature to single line for
+    the three-parameter `user_has_any_permission` method.
 - **Verify**: `python -m ruff format --check authglow/api/rbac.py authglow/services/rbac.py`
   clean; `ruff check` unchanged (already clean).
 - **Note**: RBAC-09 replaces the `inspect.getsource` tests that this formatting
