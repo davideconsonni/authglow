@@ -170,9 +170,7 @@ class RBACService:
         user_permissions = await self.get_user_permissions(user_id)
         return permission_name in user_permissions
 
-    async def user_has_any_permission(
-        self, user_id: str, permission_names: List[str]
-    ) -> bool:
+    async def user_has_any_permission(self, user_id: str, permission_names: List[str]) -> bool:
         """Check if user has at least one of the given permissions."""
         user_permissions = await self.get_user_permissions(user_id)
         return any(name in user_permissions for name in permission_names)

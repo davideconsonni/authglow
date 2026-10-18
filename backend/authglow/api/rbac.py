@@ -41,7 +41,9 @@ def get_audit_service():
 
 
 @router.post("/permissions", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
-async def create_permission(permission: PermissionCreate, _: str = require_permission("roles.manage")):
+async def create_permission(
+    permission: PermissionCreate, _: str = require_permission("roles.manage")
+):
     """Create a new permission (admin only)."""
     rbac_service = RBACService()
 
@@ -70,7 +72,9 @@ async def create_permission(permission: PermissionCreate, _: str = require_permi
 
 
 @router.get("/permissions", response_model=List[PermissionResponse])
-async def list_permissions(_: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
+async def list_permissions(
+    _: str = require_permission(["roles.read", "roles.manage", "admin.read"]),
+):
     """List all permissions."""
     rbac_service = RBACService()
     permissions = await rbac_service.list_permissions()
@@ -79,7 +83,9 @@ async def list_permissions(_: str = require_permission(["roles.read", "roles.man
 
 
 @router.get("/permissions/{permission_id}", response_model=PermissionResponse)
-async def get_permission(permission_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
+async def get_permission(
+    permission_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])
+):
     """Get permission by ID."""
     rbac_service = RBACService()
     permission = await rbac_service.get_permission(permission_id)
@@ -142,7 +148,9 @@ async def list_roles(_: str = require_permission(["roles.read", "roles.manage", 
 
 
 @router.get("/roles/{role_id}", response_model=RoleWithPermissions)
-async def get_role(role_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])):
+async def get_role(
+    role_id: str, _: str = require_permission(["roles.read", "roles.manage", "admin.read"])
+):
     """Get role by ID with full permission details."""
     rbac_service = RBACService()
     role = await rbac_service.get_role(role_id)
@@ -164,7 +172,9 @@ async def get_role(role_id: str, _: str = require_permission(["roles.read", "rol
 
 
 @router.patch("/roles/{role_id}", response_model=RoleResponse)
-async def update_role(role_id: str, role_update: RoleUpdate, _: str = require_permission("roles.manage")):
+async def update_role(
+    role_id: str, role_update: RoleUpdate, _: str = require_permission("roles.manage")
+):
     """Update a role."""
     rbac_service = RBACService()
     role = await rbac_service.get_role(role_id)
