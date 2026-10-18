@@ -47,6 +47,11 @@ authglow/
 │   ├── flows/                 # Per-flow guides: standard + custom behavior
 │   ├── analysis/saml/         # SAML 2.0 assessment (draft, may become a plan)
 │   └── plans/active|archive/  # Open plans vs completed/superseded (see plans/active/README.md)
+├── .claude/                   # Portable AI tooling (see "AI Tooling"): skills + Claude Code agents
+│   ├── skills/                # Agent Skills — authglow-integration, authglow-review, git-release-flow, stop-services, update-dependencies, work-plan-item
+│   └── agents/                # Claude Code subagents (authglow-review)
+├── .opencode/agents/          # OpenCode agent wrappers (authglow-review)
+├── .github/agents/            # GitHub Copilot custom agents (authglow-review)
 ├── backend/
 │   ├── main.py                # App entry: FastAPI(), middleware stack, router mounts, SPA serving
 │   ├── Dockerfile             # Backend-only image (pure REST API)
@@ -75,6 +80,27 @@ authglow/
 │   └── e2e/                   # Playwright E2E specs
 └── images/                    # README screenshots
 ```
+
+## AI Tooling (portable skills & agents)
+
+AI instructions live in one portable layout shared by Claude Code, OpenCode, and
+GitHub Copilot:
+
+- **Skills** — `.claude/skills/<name>/SKILL.md`. This is the only skill location
+  read natively by Claude Code and, through their Claude-compatible discovery,
+  by OpenCode and GitHub Copilot. Skills follow the Agent Skills open standard
+  (`name` + `description`, plus optional spec fields).
+- **Agents** — no single directory is shared across tools, so each tool has a
+  thin wrapper in its own location, all pointing at the same skill:
+  `.claude/agents/` (Claude Code subagent), `.opencode/agents/` (OpenCode
+  primary agent), `.github/agents/` (Copilot custom agent).
+- **Shared project rules** — `AGENTS.md`, read by OpenCode and Copilot, and by
+  Claude Code when no `CLAUDE.md` is present.
+- **Review flow** — the `authglow-review` skill + `authglow-review` agent. It
+  asks the review scope (uncommitted changes or a specific theme), locates code
+  through the codegraph/serena MCP, then checks standards, docs freshness, tests,
+  OAuth2/OIDC compliance, performance, security, and lint before reporting
+  prioritized findings.
 
 ## Single-Container Deployment
 

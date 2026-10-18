@@ -138,4 +138,4 @@ if __name__ == "__main__":
 
 ## Installation
 
-Place this skill in `.agents/skills/stop-services/` and it will be available as `/stop-services`.
+Place this skill in `.claude/skills/stop-services/` and it will be available as `/stop-services`.

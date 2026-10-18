@@ -221,18 +221,18 @@ Step-by-step guides per flow: [docs/flows/](docs/flows/README.md).
 
 ### Integrating with an AI coding assistant
 
-This repo ships an **integration skill** that teaches an AI agent how to connect your app to AuthGlow correctly: `.agents/skills/authglow-integration/`. It picks the right flow for your app type, uses your framework's maintained OIDC library instead of hand-rolled crypto, and refuses to finish until a security checklist passes.
+This repo ships an **integration skill** that teaches an AI agent how to connect your app to AuthGlow correctly: `.claude/skills/authglow-integration/`. It picks the right flow for your app type, uses your framework's maintained OIDC library instead of hand-rolled crypto, and refuses to finish until a security checklist passes.
 
-- **OpenCode**: the skill is already in place — prompt your session with:
-  ```text
-  Integrate this application with the AuthGlow instance at <issuer>.
-  Inspect the project first, choose the correct OAuth2/OIDC flow,
-  implement it with the framework's maintained library, and complete
-  the security/compliance checklist before reporting success.
-  ```
-- **Claude Code**: copy `.agents/skills/authglow-integration/` to `.claude/skills/authglow-integration/` in your project, then use the same prompt.
+The skill lives in `.claude/skills/`, which is read natively by Claude Code and by OpenCode and GitHub Copilot through their Claude-compatible discovery. Prompt your session with:
 
-It also handles auditing an existing integration, migrating from another provider, and troubleshooting login failures. Details: [.agents/skills/authglow-integration/README.md](.agents/skills/authglow-integration/README.md).
+```text
+Integrate this application with the AuthGlow instance at <issuer>.
+Inspect the project first, choose the correct OAuth2/OIDC flow,
+implement it with the framework's maintained library, and complete
+the security/compliance checklist before reporting success.
+```
+
+It also handles auditing an existing integration, migrating from another provider, and troubleshooting login failures. Details: [.claude/skills/authglow-integration/README.md](.claude/skills/authglow-integration/README.md).
 
 ---
 
