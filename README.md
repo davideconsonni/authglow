@@ -125,6 +125,9 @@ Add `-e DEMO_MODE=true` to the `docker run` above. A demo admin account is seede
 
 Prerequisites: Python 3.13+, Node.js, Git.
 
+Choose **demo mode** to explore immediately with a ready-made admin account
+(no Docker or setup token required), or **normal mode** to create your own admin.
+
 **Backend:**
 
 ```bash
@@ -137,11 +140,16 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env: set SECRET_KEY to a random value of at least 32 characters
+# Choose the startup mode in .env:
+#   DEMO_MODE=true   -> ready-to-use demo admin, credentials on the login page
+#   DEMO_MODE=false  -> normal setup with your own admin (default)
 
 python main.py
 ```
 
-The API listens on `http://localhost:8000` and prints a setup token in the log — keep it for the next step. (Interactive API docs at `/docs` only when `ENABLE_DOCS=true`.)
+The API listens on `http://localhost:8000`. In normal mode, it prints a setup
+token in the log on first boot — keep it for the next step. Demo mode creates
+the admin automatically. (Interactive API docs at `/docs` only when `ENABLE_DOCS=true`.)
 
 **Frontend:**
 
@@ -154,7 +162,19 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173/setup`, submit the setup token, and create the administrator account. The default OAuth2 client in `.env.example` already works with the OAuth Playground, so no extra configuration is needed to try the flows.
+| Mode | Open in your browser | Sign in |
+|---|---|---|
+| Demo (`DEMO_MODE=true`) | `http://localhost:5173/auth/login` | Use the demo admin credentials shown on the page; skip `/setup`. |
+| Normal (`DEMO_MODE=false`) | `http://localhost:5173/setup` | Submit the setup token, create your administrator account, then sign in. |
+
+The default OAuth2 client in `.env.example` already works with the OAuth Playground, so no extra configuration is needed to try the flows.
+
+**Demo safety:** use a separate checkout with no real data and keep it local.
+Demo mode intentionally exposes admin credentials; the demo password changes
+on every backend restart, but local files in `backend/data/` are **not**
+automatically erased. The reset-on-restart banner assumes ephemeral storage.
+For normal use, stop the demo and use a separate checkout with `DEMO_MODE=false`
+and your own admin account.
 
 ---
 
