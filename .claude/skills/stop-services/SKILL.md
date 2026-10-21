@@ -1,3 +1,8 @@
+---
+name: stop-services
+description: Stop local services listening on specified TCP ports on Linux, macOS, and Windows. Use when the user asks to stop services, shut down development servers, or free occupied ports.
+---
+
 # Stop Services Skill
 
 Stop services running on specified ports. Works on Linux, macOS, and Windows.
