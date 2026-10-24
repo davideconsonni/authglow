@@ -55,10 +55,6 @@ charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via uvicorn
-colorama==0.4.6
-    # via
-    #   pytest
-    #   qrcode
 coverage==7.16.2
     # via pytest-cov
 cryptography==50.0.2
@@ -190,7 +186,7 @@ packaging==26.3
     # via
     #   limits
     #   pytest
-pillow==12.3.0
+pillow==13.0.0
     # via qrcode
 pluggy==1.6.0
     # via
@@ -315,6 +311,8 @@ urllib3==2.8.0
     #   requests
 uvicorn==0.54.0
     # via -r requirements.in
+uvloop==0.23.0
+    # via uvicorn
 watchfiles==1.3.0
     # via uvicorn
 webauthn==3.0.1
