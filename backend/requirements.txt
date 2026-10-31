@@ -55,10 +55,6 @@ charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via uvicorn
-colorama==0.4.6
-    # via
-    #   pytest
-    #   qrcode
 coverage==7.16.2
     # via pytest-cov
 cryptography==50.0.2
@@ -212,7 +208,7 @@ protobuf==7.36.2
     #   grpc-google-iam-v1
     #   grpcio-status
     #   proto-plus
-pyasn1==0.6.4
+pyasn1==0.6.5
     # via
     #   pyasn1-modules
     #   webauthn
@@ -315,6 +311,8 @@ urllib3==2.8.0
     #   requests
 uvicorn==0.54.0
     # via -r requirements.in
+uvloop==0.23.0
+    # via uvicorn
 watchfiles==1.3.0
     # via uvicorn
 webauthn==3.0.1
