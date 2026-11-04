@@ -283,8 +283,10 @@ six==1.17.0
     # via python-dateutil
 slowapi==0.1.10
     # via -r requirements.in
-starlette==1.10.0
-    # via fastapi
+starlette==1.7.0
+    # via
+    #   -r requirements.in
+    #   fastapi
 structlog==26.1.0
     # via -r requirements.in
 typing-extensions==4.16.0
