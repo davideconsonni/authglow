@@ -19,7 +19,9 @@
     "test": "vitest run --config vitest.config.ts",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright test --reporter=json"
+    "test:e2e:report": "playwright test --reporter=json",
+    "test:functional": "playwright test --config playwright.functional.config.ts",
+    "test:functional:ui": "playwright test --config playwright.functional.config.ts --ui"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

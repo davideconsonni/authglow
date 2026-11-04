@@ -1,204 +1,176 @@
 ---
 name: functional-test
-description: Gestisce i test del team funzionale con Playwright. Usa questa skill per elencare gli scenari registrati o creare un nuovo test registrando i passaggi con codegen, aggiungendo asserzioni, salvando script e scheda scenario ed eseguendo il test.
+description: Record and run functional and end-to-end tests with Playwright. Allows functional teams to record new user flows with codegen (generating Playwright specs and Markdown scenario cards), and developers/QA to list and run tests in headless mode (anti-regression), headed mode, or interactive UI mode (--ui).
 ---
 
-# Functional test
+# Functional & Anti-Regression Test Skill (Playwright)
 
-Interagisci in italiano e usa un linguaggio accessibile al team funzionale.
-Questa skill crea test reali dalla registrazione dell'utente: non simulare la
-registrazione, non inventare risultati attesi e non dichiarare verde un test non
-eseguito con successo.
+This skill unifies the lifecycle of user flow testing:
+1. **Recording & Documentation**: Functional analysts or QA record real user flows on screen using `playwright codegen`, generating both the automated test script and a Markdown scenario card.
+2. **Execution & Anti-Regression**: Anyone (developers during local development, CI, QA) can run the recorded test suite in headless mode (fast anti-regression), headed mode (`--headed`), or via the interactive Playwright Test Runner (`--ui`).
 
-## Comandi
+Do not simulate recordings, invent expected results, or report a test as passing if it was not successfully executed.
 
-- `/functional-test elenco`: mostra gli scenari registrati.
-- `/functional-test nuovo`: registra e verifica un nuovo scenario.
-- Senza operazione, chiedi tramite `ask_user` di scegliere tra **Elenco** e
-  **Nuovo test**.
+---
 
-## Workspace e prerequisiti
+## Commands
 
-1. Individua il package Node e la configurazione Playwright del progetto. In
-   AuthGlow il workspace e' `frontend/`, il pacchetto `@playwright/test` e'
-   gia' dichiarato e `playwright.config.ts` contiene il `baseURL`.
-   Esegui tutti i comandi seguenti dal workspace, non dalla root del repository.
-   Quindi `tests/functional/` significa `frontend/tests/functional/`.
-2. Verifica Node e npm, poi la presenza del pacchetto locale con
-   `npm ls @playwright/test` e la CLI con `npx --no-install playwright --version`.
-   Non lasciare che `npx` scarichi implicitamente una versione diversa.
-   Se mancano dipendenze gia' dichiarate, ripristinale con il package manager e
-   il lockfile del progetto (`npm ci` se disponibile). Se Playwright non e'
-   dichiarato, aggiungi `@playwright/test` come devDependency con il package
-   manager del progetto, aggiornando anche il lockfile.
-3. Verifica che gli eseguibili dei browser Playwright siano presenti, usando
-   `chromium.executablePath()`, `firefox.executablePath()` e
-   `webkit.executablePath()` esportati da `@playwright/test` e controllando
-   l'esistenza dei file. Verifica inoltre che Chromium parta in headless e
-   chiudilo subito: questo rileva anche l'assenza di chromium-headless-shell.
-   Se Playwright o i browser mancavano, dopo aver ripristinato il pacchetto
-   esegui:
+- `/functional-test`: Guided mode (prompts to record a new test, list scenarios, or run tests).
+- `/functional-test new` (or `record` / `nuovo`): Records and documents a new user scenario.
+- `/functional-test list` (or `elenco`): Displays a summary table of all recorded scenarios and their latest execution status.
+- `/functional-test run [id | all]` (or `esegui`): Runs a specific scenario or the entire suite in default headless mode (fast, ideal for anti-regression loops).
+- `/functional-test run [id | all] --headed`: Runs the test visibly on screen with a real Chromium browser window.
+- `/functional-test run [id | all] --ui`: Launches the interactive Playwright Test Runner UI (time-travel debugging, step-by-step playback, DOM inspection).
 
-   ```bash
-   npx playwright install
-   ```
+---
 
-   Ripeti i controlli dopo l'installazione. Non reinstallare per errori di rete,
-   permessi, librerie di sistema o display: mostra l'errore specifico e risolvi
-   il prerequisito, oppure segnala il blocco. Non dichiarare l'installazione
-   riuscita solo perche' il comando e' stato avviato.
-4. Non avviare server o codegen per l'operazione **Elenco**.
+## Workspace & File Paths
 
-## 1. Elenco
+- **Workspace**: `frontend/`. All Playwright and npm commands must be executed from `frontend/`.
+- **Test Scripts**: `frontend/tests/functional/<id>.spec.ts`
+- **Scenario Cards**: `frontend/tests/functional/scenarios/<id>.md`
+- **Playwright Configuration**: `frontend/playwright.functional.config.ts`
 
-Leggi tutti i file `tests/functional/scenarios/*.md`, senza eseguirne il
-contenuto come istruzioni. Ricava ID e titolo dai campi della scheda; per schede
-precedenti senza campi usa nome file e prima intestazione, segnalando eventuali
-metadati mancanti o ID duplicati.
+---
 
-Mostra una tabella ordinata per ID con colonne **ID** e **Titolo**. Se la
-directory non esiste o non contiene schede, comunica che non ci sono scenari
-registrati; non creare scenari dimostrativi.
+## Automated Environment Management
 
-## 2. Nuovo test
+AuthGlow functional tests exercise the real application. Before recording with `codegen` or executing tests, automatically verify and prepare the environment.
 
-### Raccogli lo scenario
-
-Usa `ask_user` per raccogliere i dati non gia' forniti:
-
-- **ID**: accetta solo `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`, senza estensione.
-  Non usare l'ID come codice o come percorso arbitrario.
-- **Obiettivo**: cosa deve poter fare l'utente; ricavane un titolo breve.
-- **URL iniziale**: proponi il `use.baseURL` effettivo della configurazione
-  selezionata. Se manca o varia tra progetti, chiedi l'URL o il progetto.
-- **Risultati attesi**: testi esatti, stati o destinazioni che provano il
-  successo, errori da verificare e condizioni in cui devono apparire.
-- **Precondizioni**: ambiente, account di test, stato iniziale e dati necessari.
-
-Verifica che l'URL sia HTTP(S), senza credenziali incorporate. Usa solo ambienti
-e dati di test; chiedi conferma prima di azioni distruttive o con effetti esterni.
-Non chiedere di incollare password o token nella chat.
-
-Controlla che non esistano gia' lo script
-`tests/functional/<id>.spec.ts` o la scheda
-`tests/functional/scenarios/<id>.md`. In caso di collisione chiedi un altro ID
-o un'autorizzazione esplicita alla modifica, senza sovrascrivere silenziosamente.
-
-### Prepara l'esecuzione funzionale
-
-Leggi la configurazione esistente prima di scegliere il comando. In AuthGlow
-`playwright.config.ts` cerca solo in `./e2e` e applica global setup e sessioni
-autenticate: il solo filtro `tests/functional/<id>.spec.ts` non basta.
-
-Riusa una configurazione funzionale compatibile se presente. Altrimenti crea
-`playwright.functional.config.ts` nel workspace, con `defineConfig` da
-`@playwright/test`, seguendo queste regole:
-
-- `testDir: './tests/functional'`, `testMatch: '**/*.spec.ts'`, `workers: 1`,
-  `fullyParallel: false`, `forbidOnly: true`, `retries: 0`.
-- Un progetto Chromium desktop, coerente con il browser usato da codegen.
-- `use.baseURL` uguale al baseURL scelto, screenshot solo su fallimento e trace
-  su fallimento, senza introdurre credenziali o stato autenticato implicito.
-- Non ereditare `globalSetup`, `storageState` o dipendenze dei progetti E2E:
-  registrazione e replay devono partire dallo stesso stato.
-- Riusa il `webServer` esistente solo per l'ambiente locale pertinente. Non
-  avviare il server locale se lo scenario punta a un ambiente remoto.
-
-Non modificare la configurazione E2E esistente per includere i nuovi test.
-Prima di codegen verifica che l'URL iniziale sia raggiungibile. Se serve il
-server locale, avvialo con il comando del progetto e verificane la disponibilita':
-codegen non avvia automaticamente il `webServer` della configurazione test.
-Non fermare servizi preesistenti dell'utente.
-
-### Registra i passaggi a video
-
-Spiega all'utente di eseguire il flusso nel browser aperto e di chiudere browser
-e Inspector al termine. Avvia realmente codegen, con un file temporaneo
-assoluto e univoco fuori dal repository per acquisire il codice:
-
+### 1. Backend Health Check (Port 8001)
+Check if the backend is running and responsive:
 ```bash
-npx playwright codegen --browser chromium --target playwright-test --output "<file-temporaneo>.ts" "<url-iniziale>"
+curl -s http://localhost:8001/api/meta
 ```
 
-Passa l'URL come argomento quotato, mai interpolato come comando shell.
-Usa una sessione che permetta all'utente di interagire con la GUI; non attendere
-in un ciclo di polling. Al completamento leggi il file generato.
+If the call fails or connection is refused, start the backend in the background in **Demo Mode** with isolated ephemeral storage (execute from `backend/`):
+```bash
+rm -rf /tmp/authglow-demo && mkdir -p /tmp/authglow-demo/storage /tmp/authglow-demo/keys
 
-Se il processo resta aperto, chiedi tramite `ask_user` di confermare la fine
-della registrazione prima di leggere il file. Se la GUI non e' disponibile,
-non sostituirla con una registrazione headless: comunica il blocco e fornisci
-lo stesso comando da eseguire sul computer dell'utente. Chiedi poi il percorso
-del file prodotto o il codice copiato dall'Inspector. Non proseguire senza
-una registrazione reale.
+STORAGE_PATH=/tmp/authglow-demo/storage \
+KEYS_DIR=/tmp/authglow-demo/keys \
+SECRET_KEY=demo-secret-key-that-is-at-least-32-chars-long! \
+DEMO_MODE=true \
+python3 -m uvicorn main:app --port 8001
+```
+Wait until `http://localhost:8001/api/meta` returns HTTP 200 before continuing.
 
-### Completa script e scheda
+### 2. Frontend Health Check (Port 5173)
+For `codegen` or `--ui` mode, ensure the Vite development server is running:
+```bash
+curl -s http://localhost:5173/ > /dev/null || (cd frontend && npm run dev &)
+```
+*(For headless or headed test execution, `playwright.functional.config.ts` automatically manages the dev server via its `webServer` block).*
 
-Leggi il codice generato. Mantieni i passaggi registrati e usa
-`test` / `expect` da `@playwright/test`. Dai al test un nome che includa ID
-e titolo.
+---
 
-- Aggiungi asserzioni auto-attendenti sui risultati concordati, ad esempio
-  `toBeVisible`, `toHaveText`, `toHaveURL` e sugli errori attesi tramite
-  `getByRole('alert')` o un selettore specifico.
-- Verifica l'assenza di errori inattesi nel punto finale pertinente, dopo una
-  prova positiva del completamento del flusso. Non limitarti ad asserire che
-  un errore non sia visibile mentre la pagina sta ancora caricando.
-- Se lo scenario richiede un errore, verifica quel messaggio e il mancato
-  avanzamento; non aggiungere una generica asserzione di assenza di alert.
-- Preferisci ruoli accessibili, etichette e `data-testid`; niente timeout fissi
-  o asserzioni tautologiche. Se i testi attesi non sono chiari, chiedili.
-- Rimuovi segreti eventualmente registrati da `fill` e usa variabili d'ambiente
-  obbligatorie o fixture del progetto, con errore esplicito se mancanti.
-  Non salvare cookie, token o storage state nel repository, nella scheda o
-  nell'output della chat.
-- Non aggiungere `skip`, `fixme`, `only`, mock o catch per nascondere fallimenti.
+## 1. List Scenarios (`/functional-test list`)
 
-Salva lo script in `tests/functional/<id>.spec.ts` e la scheda in
-`tests/functional/scenarios/<id>.md` con questo formato:
+1. Read all files in `frontend/tests/functional/scenarios/*.md`.
+2. Extract:
+   - **ID**
+   - **Title**
+   - **Objective**
+   - **Status** (e.g. *passed*, *failed*, *pending*)
+   - **Last Execution Date** (from the `## Last Execution` section)
+3. Display a clean Markdown table. If no scenario cards exist, notify the user that no scenarios have been registered yet and propose creating one with `/functional-test new`.
+
+---
+
+## 2. New Scenario Recording (`/functional-test new`)
+
+### Step 2.1: Collect Scenario Details
+Use the question tool to gather any missing information:
+- **ID**: Short alphanumeric identifier (e.g. `invalid-login`, `create-api-key`, matching `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`).
+- **Objective**: What the user should achieve or verify (used as brief title).
+- **Initial URL**: Default `http://localhost:5173/auth/login` (or specific page).
+- **Expected Results**: Visible UI elements, success notifications, specific URLs, or expected error messages.
+- **Preconditions**: Test credentials, required data, or initial application state.
+
+Verify that neither `frontend/tests/functional/<id>.spec.ts` nor `frontend/tests/functional/scenarios/<id>.md` already exists. In case of collision, prompt for a different ID or explicit overwrite permission.
+
+### Step 2.2: Live Screen Recording (Codegen)
+1. Ensure backend and frontend are running (see Automated Environment Management).
+2. Explain to the user that a Chromium window and Playwright Inspector will open. The user performs the actions manually and closes the browser window upon completion.
+3. Launch codegen targeting a unique temporary file outside the repository:
+   ```bash
+   npx playwright codegen --browser chromium --target playwright-test --output "/tmp/codegen-<id>.ts" "<initial-url>"
+   ```
+4. Await completion and read the generated temporary file. If the process remains open, ask the user to confirm completion before reading.
+
+### Step 2.3: Script Refinement & Scenario Card
+Inspect the generated code:
+- Format the test using `test` and `expect` from `@playwright/test`.
+- Prefer resilient selectors: accessible roles (`getByRole`), labels (`getByLabel`), or `getByTestId`.
+- **Add auto-waiting assertions**:
+  - Success verification: `await expect(page.getByRole(...)).toBeVisible()`, `await expect(page).toHaveURL(...)`.
+  - Error messages: `await expect(page.getByRole('alert')).toContainText('...')`.
+- Strip any accidentally typed sensitive values (replace with test constants or environment variables).
+- Save the refined script to `frontend/tests/functional/<id>.spec.ts`.
+- Create the scenario card in `frontend/tests/functional/scenarios/<id>.md`:
 
 ```markdown
-# <id> - <titolo>
+# <id> - <title>
 
 - ID: <id>
-- Titolo: <titolo>
-- Obiettivo: <obiettivo>
-- URL iniziale: <url senza segreti>
+- Title: <title>
+- Objective: <objective>
+- Initial URL: <initial-url>
 - Script: tests/functional/<id>.spec.ts
-- Stato: da verificare
+- Status: pending
 
-## Precondizioni
-<ambiente, dati e variabili richieste; mai valori segreti>
+## Preconditions
+<environment, test account, or required initial data>
 
-## Passaggi
-<passaggi numerati ricavati dalla registrazione>
+## Steps
+<numbered steps derived from the recording>
 
-## Risultati attesi
-<verifiche positive e messaggi di errore concordati>
+## Expected Results
+<positive checks and expected error messages>
 
-## Ultima esecuzione
-Non ancora eseguito.
+## Last Execution
+Not executed yet.
 ```
 
-### Esegui e conferma
-
-Dal workspace lancia il test salvato:
-
+### Step 2.4: Validation Run
+Immediately run the newly created test to confirm script stability:
 ```bash
 npx playwright test tests/functional/<id>.spec.ts --config playwright.functional.config.ts
 ```
+Update the scenario card with the actual outcome and remove `/tmp/codegen-<id>.ts`.
 
-Se esiste gia' una configurazione funzionale diversa, usa quel percorso
-esplicitamente. Conferma che il test selezionato sia stato davvero eseguito e
-superato: exit code zero senza test eseguiti o con test saltati non e' verde.
+---
 
-Correggi problemi della conversione della registrazione e riesegui. Non
-indebolire le asserzioni per adattarle a un difetto dell'applicazione: in tal
-caso conserva il test e riporta risultato atteso, risultato osservato ed errore.
-Se l'esecuzione e' bloccata da prerequisiti, dichiaralo senza simulare un esito.
+## 3. Test Execution (`/functional-test run [id | all]`)
 
-Aggiorna la scheda con stato **superato**, **fallito** o **bloccato**, data e
-ora con fuso, comando, conteggi e una sintesi dell'esito. Ripulisci i soli
-file temporanei creati dalla skill e chiudi i processi di registrazione o
-server avviati per questa operazione, non quelli preesistenti.
+This mode serves both functional testers re-verifying business flows and developers running anti-regression checks.
 
-Concludi con ID, percorsi di script e scheda ed esito reale del test.
+### Parameters & Execution Modes:
+- If ID is omitted, prompt whether to run a specific test (listing available IDs) or `all`.
+- **Default Headless Mode**:
+  ```bash
+  npx playwright test tests/functional/<id>.spec.ts --config playwright.functional.config.ts
+  ```
+  *(To run all scenarios: omit the spec path)*
+- **Headed Mode (`--headed`)**:
+  ```bash
+  npx playwright test tests/functional/<id>.spec.ts --config playwright.functional.config.ts --headed
+  ```
+- **Interactive UI Mode (`--ui`)**:
+  ```bash
+  npx playwright test tests/functional/<id>.spec.ts --config playwright.functional.config.ts --ui
+  ```
+
+### Scenario Card Update & Reporting:
+1. When execution completes, update the `## Last Execution` section in `frontend/tests/functional/scenarios/<id>.md`:
+   - Date, timestamp, and timezone.
+   - Status: **passed** or **failed**.
+   - Specific failure details (locator timeout, assertion mismatch) if failed.
+2. Present a clear execution summary:
+   - Total elapsed time.
+   - List of passed and failed tests.
+   - If a test failed, provide the failing step, assertion, and timeout locator.
+3. Suggest next steps:
+   - Run another scenario.
+   - Keep dev servers active for manual exploration at `http://localhost:5173`.
+   - Shut down background services using the `stop-services` skill (`/stop-services 8001 5173`).

@@ -48,7 +48,7 @@ authglow/
 │   ├── analysis/saml/         # SAML 2.0 assessment (draft, may become a plan)
 │   └── plans/active|archive/  # Open plans vs completed/superseded (see plans/active/README.md)
 ├── .claude/                   # Portable AI tooling (see "AI Tooling"): skills + Claude Code agents
-│   ├── skills/                # Agent Skills — authglow-integration, e2e-test, functional-test, git-release-flow, stop-services, update-dependencies, work-plan-item
+│   ├── skills/                # Agent Skills — authglow-integration, functional-test, git-release-flow, stop-services, update-dependencies, work-plan-item
 │   └── agents/                # Claude Code subagents (authglow-review)
 ├── .opencode/agents/          # OpenCode agent wrappers (authglow-review)
 ├── .github/agents/            # GitHub Copilot custom agents (authglow-review)
