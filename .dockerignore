@@ -10,7 +10,8 @@
 # VCS / tooling / IDE
 .git
 .github
-.agents
+.claude
+.opencode
 .serena
 .codegraph
 .idea

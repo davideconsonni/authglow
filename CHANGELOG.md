@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-05
+
+### Added
+- AuthGlow black-box checktool console CLI (`checktool/`) for end-to-end verification against live instances.
+- Extended test suites and coverage across API endpoints, admin actions, OAuth flows, and repository protocols.
+- API proxy configuration support and verification tests.
+
+### Changed
+- Upgraded backend dependencies (FastAPI 0.162, Starlette 1.10, Pydantic 2.14, Pytest 9.2, Pillow 13.0, etc.) and frontend dependencies (Vite 8.3, Vitest 5.1, Radix UI primitives, React Hook Form 7.91, etc.).
+- Python runtime floor raised to Python 3.13.
+
 ### Fixed
 - Passkey login no longer issues tokens for deactivated accounts (401) and returns a structured suspension deadline (423) that the UI renders in local time; the same suspension payload is now shared by the password, federated, MFA and passkey flows.
 - OAuth2 token endpoint now enforces the exact registered `token_endpoint_auth_method` (client_secret_basic only via HTTP Basic, client_secret_post only via form body, JWT methods only via assertion, `none` without secret; one method per request). Clients using the wrong channel now get `invalid_client` and must switch to the registered method.

@@ -1,3 +1,8 @@
+---
+name: stop-services
+description: Stop local services listening on specified TCP ports on Linux, macOS, and Windows. Use when the user asks to stop services, shut down development servers, or free occupied ports.
+---
+
 # Stop Services Skill
 
 Stop services running on specified ports. Works on Linux, macOS, and Windows.
@@ -138,4 +143,4 @@ if __name__ == "__main__":
 
 ## Installation
 
-Place this skill in `.agents/skills/stop-services/` and it will be available as `/stop-services`.
+Place this skill in `.claude/skills/stop-services/` and it will be available as `/stop-services`.

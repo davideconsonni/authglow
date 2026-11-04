@@ -217,8 +217,8 @@ nul
 ./frontend/.playwright-data
 /data/
 .serena/
-.agents/skills/international-english-writing
-.agents/skills/italian-common-writing
+.claude/skills/international-english-writing
+.claude/skills/italian-common-writing
 
 # Security scans (VAPT)
 /security/reports/

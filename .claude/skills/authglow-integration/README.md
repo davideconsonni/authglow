@@ -4,26 +4,17 @@ This skill helps a coding agent integrate an application with the current
 AuthGlow OAuth2/OIDC contract. It is intentionally standards-first and does
 not replace the OIDC libraries of the host framework.
 
-## OpenCode
+## Where to keep it
 
 Keep this directory at:
-
-```text
-.agents/skills/authglow-integration/
-```
-
-Invoke the skill from an OpenCode session when the host application is open in
-the same workspace.
-
-## Claude Code
-
-Copy the directory contents to the Claude Code project skill location:
 
 ```text
 .claude/skills/authglow-integration/
 ```
 
-Keep `SKILL.md` and the `references/` and `checklists/` directories together.
+That location is read natively by Claude Code, and by OpenCode and GitHub
+Copilot through their Claude-compatible skill discovery. Keep `SKILL.md` and
+the `references/` and `checklists/` directories together.
 
 ## Recommended invocation
 

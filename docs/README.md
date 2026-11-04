@@ -22,6 +22,7 @@ Start here. For code style, naming, and test commands see `AGENTS.md`; for the s
 | `guides/federation/` | `google.md`, `cie.md` — OIDC federation provider guides |
 | `flows/` | Per-flow guides: standard, actors, conformance, endpoints (`flows/README.md` index) |
 | `analysis/saml/` | SAML 2.0 assessment, phases 0–3 (draft analysis, may become a plan) |
+| `workshop/` | Facilitator kit for the agentic-AI workshop day (`workshop/index.html` is the run-of-show guide) |
 | `plans/active/` | Open plans, one file per workstream (`plans/active/README.md` index) |
 | `plans/archive/` | Completed or superseded plans (`plans/archive/README.md` index) |
 

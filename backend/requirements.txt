@@ -2,11 +2,11 @@
 #    uv pip compile requirements.in -o requirements.txt --python-version 3.13
 adlfs==2026.8.0
     # via -r requirements.in
-aiobotocore==3.9.2
+aiobotocore==3.10.0
     # via s3fs
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.3
+aiohttp==3.14.5
     # via
     #   aiobotocore
     #   azure-core
@@ -20,7 +20,7 @@ annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   httpx
     #   starlette
@@ -32,19 +32,19 @@ azure-core==1.41.0
     #   adlfs
     #   azure-identity
     #   azure-storage-blob
-azure-identity==1.26.0
+azure-identity==1.27.0
     # via adlfs
-azure-storage-blob==12.31.0
+azure-storage-blob==12.31.1
     # via adlfs
 bcrypt==5.0.0
     # via -r requirements.in
-botocore==1.43.106
+botocore==1.43.117
     # via aiobotocore
-cachetools==7.2.0
+cachetools==7.2.8
     # via -r requirements.in
-cbor2==6.1.5
+cbor2==6.2.0.post2
     # via webauthn
-certifi==2026.7.22
+certifi==2026.10.23
     # via
     #   httpcore
     #   httpx
@@ -55,11 +55,7 @@ charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via uvicorn
-colorama==0.4.6
-    # via
-    #   pytest
-    #   qrcode
-coverage==7.16.2
+coverage==7.17.2
     # via pytest-cov
 cryptography==50.0.2
     # via
@@ -73,15 +69,15 @@ cryptography==50.0.2
     #   webauthn
 decorator==5.3.1
     # via gcsfs
-deprecated==3.0.0
+deprecated==3.0.1
     # via limits
-dnspython==2.8.0
+dnspython==2.9.2
     # via email-validator
 email-validator==2.3.0
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
-fastapi==0.142.2
+fastapi==0.162.0
     # via -r requirements.in
 frozenlist==1.8.0
     # via
@@ -93,14 +89,14 @@ fsspec==2026.9.0
     #   adlfs
     #   gcsfs
     #   s3fs
-gcsfs==2026.10.0
+gcsfs==2026.10.1
     # via -r requirements.in
-google-api-core==2.40.0
+google-api-core==2.43.2
     # via
     #   google-cloud-core
     #   google-cloud-storage
     #   google-cloud-storage-control
-google-auth==2.59.1
+google-auth==2.62.1
     # via
     #   gcsfs
     #   google-api-core
@@ -112,9 +108,9 @@ google-auth-oauthlib==1.5.0
     # via gcsfs
 google-cloud-core==2.8.0
     # via google-cloud-storage
-google-cloud-storage==3.16.0
+google-cloud-storage==3.17.1
     # via gcsfs
-google-cloud-storage-control==1.16.0
+google-cloud-storage-control==1.17.0
     # via gcsfs
 google-crc32c==1.9.0
     # via
@@ -122,21 +118,21 @@ google-crc32c==1.9.0
     #   google-resumable-media
 google-resumable-media==2.11.0
     # via google-cloud-storage
-googleapis-common-protos==1.75.5
+googleapis-common-protos==1.76.0
     # via
     #   google-api-core
     #   grpc-google-iam-v1
     #   grpcio-status
-grpc-google-iam-v1==0.14.5
+grpc-google-iam-v1==0.14.6
     # via google-cloud-storage-control
-grpcio==1.84.0
+grpcio==1.85.1
     # via
     #   google-api-core
     #   google-cloud-storage-control
     #   googleapis-common-protos
     #   grpc-google-iam-v1
     #   grpcio-status
-grpcio-status==1.84.0
+grpcio-status==1.85.1
     # via google-api-core
 h11==0.16.0
     # via
@@ -144,7 +140,7 @@ h11==0.16.0
     #   uvicorn
 httpcore==1.0.9
     # via httpx
-httptools==0.8.0
+httptools==0.9.0
     # via uvicorn
 httpx==0.28.1
     # via -r requirements.in
@@ -155,7 +151,7 @@ idna==3.20
     #   httpx
     #   requests
     #   yarl
-iniconfig==2.3.0
+iniconfig==2.3.1
     # via pytest
 isodate==0.7.2
     # via azure-storage-blob
@@ -175,14 +171,14 @@ msal==1.39.0
     #   msal-extensions
 msal-extensions==1.3.1
     # via azure-identity
-multidict==6.9.1
+multidict==7.2.1
     # via
     #   aiobotocore
     #   aiohttp
     #   yarl
-oauthlib==4.0.0
+oauthlib==4.0.1
     # via requests-oauthlib
-opentelemetry-api==1.45.0
+opentelemetry-api==1.45.2
     # via
     #   fastapi
     #   google-api-core
@@ -190,9 +186,9 @@ packaging==26.3
     # via
     #   limits
     #   pytest
-pillow==12.3.0
+pillow==13.0.0
     # via qrcode
-pluggy==1.6.0
+pluggy==1.7.0
     # via
     #   pytest
     #   pytest-cov
@@ -212,7 +208,7 @@ protobuf==7.36.2
     #   grpc-google-iam-v1
     #   grpcio-status
     #   proto-plus
-pyasn1==0.6.4
+pyasn1==0.6.5
     # via
     #   pyasn1-modules
     #   webauthn
@@ -220,16 +216,16 @@ pyasn1-modules==0.4.2
     # via
     #   google-auth
     #   webauthn
-pycparser==3.0
+pycparser==3.12
     # via cffi
-pydantic==2.13.5
+pydantic==2.14.2
     # via
     #   -r requirements.in
     #   fastapi
     #   pydantic-settings
-pydantic-core==2.46.5
+pydantic-core==2.50.2
     # via pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.16.2
     # via -r requirements.in
 pygments==2.21.0
     # via pytest
@@ -241,13 +237,13 @@ pyopenssl==26.4.0
     # via webauthn
 pyotp==2.10.0
     # via -r requirements.in
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   -r requirements.in
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-xdist
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1.post1
     # via -r requirements.in
 pytest-cov==7.1.0
     # via -r requirements.in
@@ -263,7 +259,7 @@ python-dotenv==1.2.4
     #   -r requirements.in
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.32
+python-multipart==0.0.33
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
@@ -287,7 +283,7 @@ six==1.17.0
     # via python-dateutil
 slowapi==0.1.10
     # via -r requirements.in
-starlette==1.7.0
+starlette==1.10.0
     # via fastapi
 structlog==26.1.0
     # via -r requirements.in
@@ -303,8 +299,9 @@ typing-extensions==4.16.0
     #   opentelemetry-api
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   fastapi
     #   pydantic
@@ -315,11 +312,13 @@ urllib3==2.8.0
     #   requests
 uvicorn==0.54.0
     # via -r requirements.in
+uvloop==0.23.0
+    # via uvicorn
 watchfiles==1.3.0
     # via uvicorn
 webauthn==3.0.1
     # via -r requirements.in
-websockets==17.2
+websockets==17.4
     # via uvicorn
 wrapt==1.16.0
     # via

@@ -20,7 +20,7 @@ export default defineConfig({
     // `/oauth2/authorize` and `/oauth2/device/verify` are client-side SPA pages
     // (see main.py `_SPA_OAUTH_PAGES`) — they must NOT be proxied to the API.
     proxy: {
-      '/api': 'http://localhost:8001',
+      '^/api(?:/|\\?|$)': 'http://localhost:8001',
       '^/oauth2/(?!authorize|device/verify)': 'http://localhost:8001',
       '/.well-known': 'http://localhost:8001',
       '/health': 'http://localhost:8001',

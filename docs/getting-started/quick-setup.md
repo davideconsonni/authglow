@@ -8,6 +8,13 @@ How to get AuthGlow running — from zero to signed in — in under 5 minutes.
 
 Two terminals. Full experience (API + UI).
 
+Choose your mode before starting the backend:
+
+| Mode | Setting in `backend/.env` | First login |
+|---|---|---|
+| **Demo — try it immediately, no Docker** | `DEMO_MODE=true` | Admin created automatically; credentials shown on the login page. No setup token needed. |
+| **Normal — create your own admin** | `DEMO_MODE=false` (default) | Create the admin using the setup token printed on first boot. |
+
 ### Terminal 1 — Backend
 
 ```bash
@@ -19,12 +26,16 @@ pip install -r requirements.txt
 cp .env.example .env
 # Open .env and set a SECRET_KEY (32+ random chars):
 #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+# For a ready-to-use local demo, also change DEMO_MODE=false to DEMO_MODE=true.
+# Leave DEMO_MODE=false for normal setup.
 
 python main.py
 ```
 
-API live at **http://localhost:8000** (Swagger UI at [`/docs`](http://localhost:8000/docs)).
-Watch the console for a line containing `setup_token_generated` — copy the `token` value.
+API live at **http://localhost:8000** (Swagger UI at [`/docs`](http://localhost:8000/docs)
+only if you set `ENABLE_DOCS=true`).
+In **normal mode**, watch the console for a line containing `setup_token_generated`
+on first boot — copy the `token` value. In **demo mode**, skip this step.
 
 ### Terminal 2 — Frontend
 
@@ -36,7 +47,21 @@ cp .env.example .env
 npm install && npm run dev
 ```
 
-Open **http://localhost:5173/setup**, paste the setup token, create your admin account. Sign in normally from `/auth/login`.
+**Demo mode:** open **http://localhost:5173/auth/login** and use the demo admin
+credentials displayed on the page. Do not go through `/setup`.
+
+**Normal mode:** open **http://localhost:5173/setup**, paste the setup token,
+and create your admin account. Sign in normally from `/auth/login`.
+
+### Local demo safety and persistence
+
+Use a separate checkout with no real data and keep the demo local: admin
+credentials are intentionally public. The demo password rotates on every
+backend restart, but demo mode does **not** erase local files in `backend/data/`.
+The reset-on-restart banner assumes ephemeral storage, not the default local disk.
+
+For normal use, stop the demo and use a separate checkout with `DEMO_MODE=false`
+and create your own admin through `/setup`.
 
 ---
 
