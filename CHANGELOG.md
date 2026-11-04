@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-05
+
+### Fixed
+- Pin Starlette <1.8.0 to resolve a breaking incompatibility between Starlette 1.10 `FileResponse` and `BaseHTTPMiddleware` (slowapi) that caused 502 Bad Gateway / crashes on SPA file routes (`/dashboard`, `/auth`, etc.).
+
 ## [0.2.0] - 2026-11-05
 
 ### Added
