@@ -33,4 +33,4 @@ First public release of AuthGlow: self-hosted identity with no database to manag
 - Admin console: users, OAuth2 clients, sessions, consents, API keys, roles/RBAC, signing keys, audit log; per-client branding and white-labeling.
 - Operations: single container (API+UI on one port), rate limiting, CSRF, security headers, HTTPS enforcement, structured audit log, OAuth Playground, demo mode.
 
-Full details: `docs/reference/features.md`.
+Full details: `docs/product/reference/features.md`.
