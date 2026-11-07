@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Concurrent writes to different records no longer serialize behind a single process-wide lock: CAS (optimistic-concurrency) writes in the file storage layer take a per-record-path lock, so refresh-token rotation, authorization-code redemption, and other record writes on different records proceed in parallel under load.
+
 ## [0.2.1] - 2026-11-05
 
 ### Fixed

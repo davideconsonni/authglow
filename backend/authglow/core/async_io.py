@@ -9,8 +9,9 @@ CAS (Compare-And-Swap) helpers are provided for optimistic-concurrency control:
 ``read_json_versioned`` reads a record together with its ``_version`` field,
 and ``write_json_versioned`` writes only if the version has not changed since
 the read. The check and the write run inside a single critical section
-(one worker-thread operation guarded by a process-wide lock), so no concurrent
-coroutine or thread can interleave between them. Across OS processes the
+(one worker-thread operation guarded by a per-path lock), so no concurrent
+coroutine or thread can interleave between them for the same record, while
+writes to different records proceed in parallel. Across OS processes the
 version re-check remains best-effort: a writer that observed a stale version
 is rejected, but two processes can still pass the check in the same instant
 unless the storage backend offers a native atomic compare-and-swap.
@@ -18,17 +19,17 @@ unless the storage backend offers a native atomic compare-and-swap.
 
 import asyncio
 import json
-import threading
 from typing import Any, List, Tuple
 
-from authglow.core.concurrency import ConcurrentWriteError
+from authglow.core.concurrency import ConcurrentWriteError, thread_named_lock
 
-# Process-wide lock serializing CAS check+write critical sections. A
-# ``threading.Lock`` (not an ``asyncio.Lock``) deliberately: the guarded
-# code runs on a ``asyncio.to_thread`` worker, and a threading lock carries
-# no event-loop affinity, so tests that drive each case on a fresh event
-# loop keep working.
-_cas_write_lock = threading.Lock()
+# Per-path lock serializing CAS check+write critical sections. A
+# ``ThreadNamedLock`` (not an ``asyncio.Lock``) deliberately: the guarded
+# code runs on an ``asyncio.to_thread`` worker, so the lock must carry no
+# event-loop affinity and must stay held until the worker finishes. Keying
+# by record path means rotation for one user no longer queues behind every
+# other user's write.
+_cas_write_locks = thread_named_lock()
 
 
 class AsyncFileSystem:
@@ -88,18 +89,18 @@ class AsyncFileSystem:
 
         The current ``_version`` is read, compared to *expected_version*,
         and the record is written inside one critical section — a single
-        worker-thread operation under the process-wide ``_cas_write_lock``
-        — so no concurrent coroutine or thread can observe the record
-        between the check and the write. On a version mismatch,
-        ``ConcurrentWriteError`` is raised so the caller can retry the
-        read-mutate-write loop.
+        worker-thread operation under the per-path lock for *path* — so no
+        concurrent coroutine or thread can observe the record between the
+        check and the write. Writes to other paths are not serialized. On a
+        version mismatch, ``ConcurrentWriteError`` is raised so the caller
+        can retry the read-mutate-write loop.
 
         On success the stored record's ``_version`` is incremented by 1.
         """
         _default = default if default is not None else str
 
         def _op() -> None:
-            with _cas_write_lock:
+            with _cas_write_locks(path):
                 try:
                     with self._fs.open(path, "r") as f:
                         current = json.load(f)

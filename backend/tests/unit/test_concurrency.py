@@ -4,11 +4,19 @@ import asyncio
 import json
 import os
 import tempfile
+import threading
+import time
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from authglow.core.concurrency import AsyncNamedLock, ConcurrentWriteError, named_lock
+from authglow.core.concurrency import (
+    AsyncNamedLock,
+    ConcurrentWriteError,
+    ThreadNamedLock,
+    named_lock,
+    thread_named_lock,
+)
 from authglow.core.async_io import AsyncFileSystem
 import fsspec
 
@@ -132,6 +140,74 @@ class TestAsyncNamedLock:
 
 
 # ──────────────────────────────────────────────
+# ThreadNamedLock tests
+# ──────────────────────────────────────────────
+
+
+class TestThreadNamedLock:
+    """Tests for the per-key threading lock used by the CAS helpers."""
+
+    def test_singleton(self):
+        assert thread_named_lock() is thread_named_lock()
+
+    def test_same_key_serializes_across_threads(self):
+        lock = ThreadNamedLock()
+        events = []
+        barrier = threading.Barrier(2)
+
+        def worker(value):
+            barrier.wait()
+            with lock("shared"):
+                events.append(f"{value}-start")
+                time.sleep(0.05)
+                events.append(f"{value}-end")
+
+        threads = [threading.Thread(target=worker, args=(value,)) for value in ("A", "B")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        a_start = events.index("A-start")
+        a_end = events.index("A-end")
+        b_start = events.index("B-start")
+        b_end = events.index("B-end")
+        assert a_end < b_start or b_end < a_start
+
+    def test_different_keys_do_not_block(self):
+        lock = ThreadNamedLock()
+        guard = threading.Lock()
+        barrier = threading.Barrier(2)
+        active = 0
+        peak = 0
+
+        def worker(key):
+            nonlocal active, peak
+            barrier.wait()
+            with lock(key):
+                with guard:
+                    active += 1
+                    peak = max(peak, active)
+                time.sleep(0.05)
+                with guard:
+                    active -= 1
+
+        threads = [threading.Thread(target=worker, args=(key,)) for key in ("a", "b")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert peak == 2
+
+    def test_entries_are_evicted_when_idle(self):
+        lock = ThreadNamedLock()
+        with lock("one"):
+            assert "one" in lock._entries
+        assert lock._entries == {}
+
+
+# ──────────────────────────────────────────────
 # ConcurrentWriteError + CAS tests
 # ──────────────────────────────────────────────
 
@@ -192,6 +268,133 @@ class TestConcurrentWriteError:
 
             with pytest.raises(FileNotFoundError):
                 await afs.read_json_versioned(path)
+
+
+# ──────────────────────────────────────────────
+# CAS per-path locking tests
+# ──────────────────────────────────────────────
+
+
+class _SlowFileSystem:
+    """Minimal fsspec-like filesystem that records overlapping writers."""
+
+    def __init__(self, delay: float) -> None:
+        self.delay = delay
+        self.peak_writers = 0
+        self._active_writers = 0
+        self._files: dict[str, str] = {}
+        self._guard = threading.Lock()
+
+    def open(self, path: str, mode: str):
+        if "r" in mode:
+            return _SlowReadHandle(self, path)
+        return _SlowWriteHandle(self, path)
+
+    def read(self, path: str) -> str:
+        with self._guard:
+            if path not in self._files:
+                raise FileNotFoundError(path)
+            return self._files[path]
+
+    def store(self, path: str, content: str) -> None:
+        with self._guard:
+            self._files[path] = content
+
+    def enter_writer(self) -> None:
+        with self._guard:
+            self._active_writers += 1
+            self.peak_writers = max(self.peak_writers, self._active_writers)
+
+    def leave_writer(self) -> None:
+        with self._guard:
+            self._active_writers -= 1
+
+
+class _SlowReadHandle:
+    """Read handle that raises ``FileNotFoundError`` at ``open()`` time."""
+
+    def __init__(self, fs: _SlowFileSystem, path: str) -> None:
+        self._content = fs.read(path)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self) -> str:
+        return self._content
+
+
+class _SlowWriteHandle:
+    """Write handle that holds the writer slot for ``fs.delay`` seconds."""
+
+    def __init__(self, fs: _SlowFileSystem, path: str) -> None:
+        self._fs = fs
+        self._path = path
+        self._chunks: list[str] = []
+
+    def __enter__(self):
+        self._fs.enter_writer()
+        time.sleep(self._fs.delay)
+        return self
+
+    def __exit__(self, *exc):
+        self._fs.leave_writer()
+        if exc[0] is None:
+            self._fs.store(self._path, "".join(self._chunks))
+        return False
+
+    def write(self, chunk: str) -> None:
+        self._chunks.append(chunk)
+
+
+class TestCASPerPathLocking:
+    """The CAS critical section serializes per record path, not process-wide."""
+
+    @pytest.mark.asyncio
+    async def test_writes_to_different_paths_overlap(self):
+        fs = _SlowFileSystem(delay=0.1)
+        afs = AsyncFileSystem(fs)
+
+        await asyncio.gather(
+            afs.write_json_versioned("a.json", {"n": 1}, expected_version=0),
+            afs.write_json_versioned("b.json", {"n": 2}, expected_version=0),
+        )
+
+        assert fs.peak_writers == 2, "different paths must not serialize each other"
+        assert thread_named_lock()._entries == {}, "idle lock entries must be evicted"
+
+    @pytest.mark.asyncio
+    async def test_writes_to_same_path_are_serialized(self):
+        fs = _SlowFileSystem(delay=0.05)
+        afs = AsyncFileSystem(fs)
+
+        results = await asyncio.gather(
+            afs.write_json_versioned("same.json", {"n": 1}, expected_version=0),
+            afs.write_json_versioned("same.json", {"n": 2}, expected_version=0),
+            return_exceptions=True,
+        )
+
+        assert fs.peak_writers == 1, "same-path writes must not overlap"
+        assert sum(isinstance(result, ConcurrentWriteError) for result in results) == 1
+
+    def test_same_path_across_fresh_event_loops(self, tmp_path):
+        """Regression guard: the CAS lock must not bind to one event loop."""
+        afs = AsyncFileSystem(fsspec.filesystem("file"))
+        path = str(tmp_path / "record.json")
+
+        async def contended_write() -> None:
+            results = await asyncio.gather(
+                afs.write_json_versioned(path, {"n": 1}, expected_version=0),
+                afs.write_json_versioned(path, {"n": 2}, expected_version=0),
+                return_exceptions=True,
+            )
+            assert sum(isinstance(result, ConcurrentWriteError) for result in results) == 1
+
+        asyncio.run(contended_write())
+        os.remove(path)
+        asyncio.run(contended_write())
 
 
 # ──────────────────────────────────────────────

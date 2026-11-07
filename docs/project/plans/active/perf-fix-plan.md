@@ -23,12 +23,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
-| CRITICAL | 4 | 0 | 4 |
+| CRITICAL | 4 | 1 | 3 |
 | HIGH | 4 | 0 | 4 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 0 | 1 |
-| **Total** | **11** | **0** | **11** |
+| **Total** | **11** | **1** | **10** |
 
 ---
 
@@ -36,11 +36,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 ### Concorrenza e caching sul percorso caldo (login / refresh)
 
-- [ ] **PERF-001** — Lock CAS globale di processo serializza tutte le scritture ottimistiche
+- [x] **PERF-001** — Lock CAS globale di processo serializza tutte le scritture ottimistiche
   - **Location**: `backend/authglow/core/async_io.py:31` (`_cas_write_lock`); usata da refresh-token rotation e redemption dei codici di autorizzazione (`repositories/file/base.py:27-30`)
   - **Descrizione**: `_cas_write_lock` è un singolo `threading.Lock()` di modulo condiviso da **ogni** `write_json_versioned`, indipendentemente dal path scritto. La rotazione del refresh token dell'utente A attende quella dell'utente B. Aggravante: `cache_refresh_token_ttl` è 60s (`core/config.py:402`), quindi sotto carico sostenuto la maggior parte dei refresh bypassa la cache e finisce su questa lock.
   - **Fix proposto**: sostituire con una lock per-path, riusando `AsyncNamedLock` (`core/concurrency.py`) già presente e già corretto nel resto del codice — non serve una primitiva nuova, solo applicarla qui.
-  - **Decisione**: _da discutere_
+  - **Decisione**: fix ora (2026-11-07). Per-path sì, `AsyncNamedLock` no: è un `asyncio.Lock`, si lega al primo event loop in cui entra in contesa (verificato: al secondo `asyncio.run` solleva `RuntimeError: ... bound to a different event loop`) e verrebbe rilasciato alla cancellazione della coroutine mentre il worker sta ancora scrivendo. La sezione CAS gira in `asyncio.to_thread`, quindi serve una primitiva thread-side.
+  - **Fix**: nuovo `ThreadNamedLock` in `core/concurrency.py` — lock `threading` per chiave, con eviction quando l'ultimo thread holding/waiting esce (nessun dizionario illimitato, a differenza di PERF-009). `write_json_versioned` acquisisce la lock sul `path` dentro il worker: refresh e redemption di record diversi procedono in parallelo. Test in `tests/unit/test_concurrency.py`: overlap su path diversi, serializzazione sullo stesso path, due `asyncio.run()` consecutivi sullo stesso path.
 
 - [ ] **PERF-002** — Repository ricreate a ogni richiesta → cache dell'indice email di fatto inesistente
   - **Location**: `backend/authglow/api/auth.py:482` (`get_user_storage`, nessun `@lru_cache`/singleton); `backend/authglow/repositories/file/email_index.py` (cache in-memory che vive quanto la request)
