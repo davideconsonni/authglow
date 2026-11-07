@@ -259,8 +259,17 @@ class TestTimingLeakProtection:
         )
         assert result is None
 
-    def test_protection_defaults_to_enabled(self, storage):
-        assert storage.settings.timing_leak_protection is True
+    def test_protection_defaults_to_enabled(self, test_settings):
+        # The test fixture opts out of the jitter for speed, so check
+        # the *production* default on the real Settings class. The
+        # module attribute is MagicMock-patched during tests — go
+        # through the concrete instance's class instead.
+        assert type(test_settings).model_fields["timing_leak_protection"].default is True
+
+    def test_timing_leak_protection_off_in_tests(self, storage):
+        # The suite-wide fixture must stay off: the jitter is pure
+        # wall-clock and would slow every login-path test.
+        assert storage.settings.timing_leak_protection is False
 
     def test_no_side_effect_on_consecutive_calls(self, storage):
         import asyncio

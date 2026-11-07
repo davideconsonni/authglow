@@ -84,6 +84,12 @@ def test_settings(tmp_path, test_keys_dir):
         # the default 12 (see ``Settings.bcrypt_rounds``).
         bcrypt_rounds=4,
         jwt_auto_rotate=False,
+        # Timing-leak protection (padding read + 0–50 ms jitter on
+        # every email-index miss) is production behaviour; tests opt
+        # out because the jitter is pure wall-clock with no assertion
+        # on it. The production default staying enabled is guarded by
+        # ``test_protection_defaults_to_enabled`` (class-level check).
+        timing_leak_protection=False,
         # Phone verification: tests must never touch the real
         # provider — the developer's local .env may select
         # infobip_sms/infobip_whatsapp, which would attempt live
