@@ -33,11 +33,9 @@ class TestRunCpuBound:
         assert await run_cpu_bound(compute, 2, 3) == 5
 
     @pytest.mark.asyncio
-    async def test_work_runs_on_dedicated_pool_threads(self):
-        thread = await run_cpu_bound(threading.current_thread)
-        assert thread.name.startswith("authglow-cpu"), (
-            f"expected a dedicated pool thread, ran on {thread.name!r}"
-        )
+    async def test_work_runs_on_dedicated_pool_threads(self, cpu_pool_probe):
+        name = await cpu_pool_probe()
+        assert name.startswith("authglow-cpu"), f"expected a dedicated pool thread, ran on {name!r}"
 
     @pytest.mark.asyncio
     async def test_cpu_jobs_do_not_queue_behind_default_pool(self):
