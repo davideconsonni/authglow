@@ -32,6 +32,7 @@ If a `.codegraph/` index is present, use the `codegraph_explore` tool before gre
 ```bash
 uvicorn main:app --reload            # Dev server
 pytest tests/unit/test_jwt.py        # Run single test file
+python scripts/affected_tests.py --run   # Run only tests affected by changed files
 pytest -q --tb=line -n auto          # Run full suite (parallel via pytest-xdist)
 ruff check authglow/                 # Lint
 ruff format authglow/                # Format
@@ -51,7 +52,7 @@ npx playwright test                  # E2E tests
 
 ## Anti-Regression & Testing Rules
 
-1. **Test Scope**: Run only the test files matching the changed area (e.g., modified `services/jwt.py` → `pytest tests/unit/test_jwt.py`). Run the full suite (`-n auto`) only for `core/` changes or prior to final completion.
+1. **Test Scope**: Run only the test files matching the changed area (e.g., modified `services/jwt.py` → `pytest tests/unit/test_jwt.py`). Automate the mapping with `python scripts/affected_tests.py` from `backend/` (prints the affected test paths; add `--run` to execute them, `--base origin/main` for committed changes). Frontend equivalent: `npx vitest related --run <changed files>`. Run the full suite (`-n auto`) only for `core/` changes or prior to final completion.
 2. **Bash Timeout**: Pass `timeout: 300000` to the Bash/shell tool when executing the full test suite.
 3. **Test Isolation**:
    - Never modify `tests/conftest.py` for isolated feature testing.
