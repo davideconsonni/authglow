@@ -62,7 +62,7 @@ npx playwright test                  # E2E tests
 4. **Pre-Existing Failures**: Separate test failures into (a) files you touched (must fix) and (b) untouched files (report clearly, ask user before investigating).
 5. **Testing Pitfalls** (each cost a debug cycle at least once — follow them):
    - Direct handler tests need a real `starlette.requests.Request` (use the `http_request` fixture in `tests/conftest.py`); a `MagicMock` request raises `parameter 'request' must be an instance of starlette.requests.Request` before the handler body runs.
-   - Async tests must carry `@pytest.mark.asyncio`; sync tests may drive `asyncio.run()`.
+   - pytest-asyncio runs in `auto` mode: plain `async def` tests already execute; add `@pytest.mark.asyncio` only where the file already uses it, for consistency. Sync tests may drive `asyncio.run()`.
    - Assert structure, not wall time: thread names (see the `cpu_pool_probe` fixture), tick counters during a known-duration job, "dispatch completes while a 1-worker pool is occupied". If a timing threshold is unavoidable, use a ≥3× margin.
    - bcrypt runs at `bcrypt_rounds=4` in tests (~1-2 ms): loop-blocking assertions cannot detect a real hash — inject a `time.sleep` job of measurable duration instead.
    - Concurrency API gotchas: `loop.set_default_executor(None)` raises (it requires an executor instance); `ThreadPoolExecutor.max_workers` is private (`_max_workers`); `asyncio.to_thread` binds to the *running loop's* default executor, while `core/executors.run_cpu_bound` uses a process-global pool with no loop affinity.

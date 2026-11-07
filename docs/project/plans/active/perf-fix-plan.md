@@ -24,11 +24,11 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
 | CRITICAL | 4 | 3 | 1 |
-| HIGH | 4 | 0 | 4 |
+| HIGH | 4 | 1 | 3 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 0 | 1 |
-| **Total** | **11** | **3** | **8** |
+| **Total** | **11** | **4** | **7** |
 
 ---
 
@@ -97,12 +97,13 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
   - **Decisione**: _da discutere_
   - **Verifica (2026-11-07)**: **aperto** — il fix PERF-002 ha eliminato il costo di **lettura** (cache di processo), ma la scrittura è rimasta full-file rewrite: `insert`/`remove` rileggono tutto, mutano il dict, riscrivono l'intero JSON. Linee del piano (104-118) corrette con la nuova geometria del file.
 
-- [ ] **PERF-008** — Token blacklist: scansione a glob dell'intera directory + operazioni sincrone nell'event loop
+- [x] **PERF-008** — Token blacklist: scansione a glob dell'intera directory + operazioni sincrone nell'event loop
   - **Location**: `backend/authglow/repositories/file/token_blacklist.py` — `load_all()`/`cleanup_expired()` (glob completo, righe 110/135); `exists()`/`delete()` sincrone (`os.path.isfile`/`os.remove`, righe 150-183) chiamate direttamente nell'event loop
   - **Descrizione**: il costo dello scan cresce con il numero di token mai revocati e non ancora ripuliti, se il cleanup periodico non è schedulato in modo garantito. Le chiamate sync sono accettabili su disco locale veloce ma rischiose se `storage_backend` è di rete/cloud (S3/GCS/ABFS, già supportati).
   - **Fix proposto**: (a) schedulare `cleanup_expired()` con frequenza garantita e non opzionale; (b) valutare se avvolgere `exists()`/`delete()` in `asyncio.to_thread` quando il backend non è `file` locale.
-  - **Decisione**: _da discutere_
+  - **Decisione**: fix (a) ora (2026-11-08); (b) **accettato come rischio** con motivazione: le primitive sync sono comportamento di protocollo documentato (`protocols.py:434-448`), sicure su storage locale (una `stat()` per cache-miss, fenomeno raro dopo il riscaldamento); async-ificarle cambierebbe la firma del contratto e il percorso di verifica JWT su ogni richiesta. Da rivedere con i numeri di PERF-011 o al primo deploy con `storage_backend` di rete.
   - **Verifica (2026-11-07)**: **aperto, aggravato** — confermato che `cleanup_expired()` **non ha alcun chiamante in produzione**: il lifespan chiama solo `startup_hydrate()` (`main.py:99`) e `_sweep()` del service (`services/auth/token_blacklist.py:140-147`) pulisce solo il dict in memoria, mai il disco. Il punto (a) del fix passa da "valutare" a "necessario": senza schedula, i file restano finché la cache non arriva a `MAX_ENTRIES` (10 000). Hot path confermata: `is_revoked` è sync su ogni richiesta autenticata (`services/jwt.py:510`, `api/oauth2_advanced.py:300`) con `exists`/`delete` `os.path` dentro l'event loop — scelta esplicita del protocollo (`repositories/protocols.py:434-448`) accettabile solo per backend file locali.
+  - **Fix**: metodo `TokenBlacklist.cleanup_expired()` (sweep del repository + potatura cache in memoria, idempotente, sicuro su N repliche) + task background `_token_blacklist_sweeper` nel lifespan con nuovo setting `token_blacklist_cleanup_seconds` (default 900, `0` = disabilitato), pattern ricalcato su `_admin_config_refresher` (errore loggato e inghiottito, cancellazione allo shutdown, task esposto su `app.state` per i test). Setting NON esposto all'admin UI (binding all'avvio, l'override sarebbe inerte fino al restart — stessa rationale di `admin_config_refresh_seconds` nella whitelist del test guardiano). I file scaduti restano al più 900s su disco, già inerti in memoria. Test: `tests/unit/repositories/file/test_token_blacklist.py` (cancella scaduti + pota memoria; idempotenza a zero scaduti), `tests/unit/test_main_lifespan.py` (task creato e cancellato allo shutdown; assente con `0`).
 
 ---
 
