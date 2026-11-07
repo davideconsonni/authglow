@@ -17,7 +17,6 @@ stats, revoke, etc.) so concurrent updates from the same process
 are serialised.
 """
 
-import asyncio
 import ipaddress
 import secrets
 from datetime import datetime, timedelta
@@ -29,6 +28,7 @@ from authglow.core.cache import api_key_cache
 from authglow.core.concurrency import named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.executors import run_cpu_bound
 from authglow.models.api_key import APIKey, APIKeyCreate
 from authglow.repositories.protocols import APIKeyRepository
 from authglow.services.password import hash_password, verify_password
@@ -160,7 +160,9 @@ class APIKeyService:
         (unless ``is_admin`` is True). This is the BOPLA guard against
         privilege escalation via API key creation.
         """
-        full_key, prefix, key_hash = self._generate_api_key()
+        # bcrypt inside: dispatch off the event loop, same rationale as the
+        # password service — one create must not stall every other client.
+        full_key, prefix, key_hash = await run_cpu_bound(self._generate_api_key)
 
         expires_at = None
         if not key_data.never_expires and key_data.expires_in_days:
@@ -263,7 +265,7 @@ class APIKeyService:
             if api_key is None:
                 continue
 
-            if await asyncio.to_thread(self._verify_api_key, api_key.key_hash, provided_key):
+            if await run_cpu_bound(self._verify_api_key, api_key.key_hash, provided_key):
                 if not api_key.is_active:
                     return None
 
@@ -325,7 +327,7 @@ class APIKeyService:
             if api_key is None:
                 continue
 
-            if not await asyncio.to_thread(self._verify_api_key, api_key.key_hash, provided_key):
+            if not await run_cpu_bound(self._verify_api_key, api_key.key_hash, provided_key):
                 continue
 
             if not api_key.is_active:
@@ -548,7 +550,7 @@ class APIKeyService:
         if not existing:
             return None
 
-        new_full_key, new_prefix, new_hash = self._generate_api_key()
+        new_full_key, new_prefix, new_hash = await run_cpu_bound(self._generate_api_key)
 
         async with self._lock(f"api_key_rotate:{existing.key_prefix}"):
             # Snapshot the file-system state we will mutate. The

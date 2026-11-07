@@ -1,12 +1,14 @@
 """Password validation and hashing service."""
 
-import asyncio
 import re
+import secrets
+import threading
 from typing import List, Optional
 
 import bcrypt
 
 from authglow.core.config import get_settings
+from authglow.core.executors import run_cpu_bound
 
 _BCRYPT_HASH_PREFIX = "$2"
 _BCRYPT_ROUNDS_MIN = 4
@@ -210,24 +212,24 @@ def verify_and_maybe_rehash(
 
 async def hash_password_async(password: str) -> str:
     """Async wrapper around :func:`hash_password` that offloads the bcrypt work
-    to the default thread pool via :func:`asyncio.to_thread`.
+    to the dedicated CPU-bound pool (:func:`authglow.core.executors.run_cpu_bound`).
 
     Use this in async request handlers to keep the event loop responsive
     during the ~50-300ms bcrypt computation. The sync function is kept
     untouched for CLI scripts and offline jobs.
     """
-    return await asyncio.to_thread(hash_password, password)
+    return await run_cpu_bound(hash_password, password)
 
 
 async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
     """Async wrapper around :func:`verify_password` that offloads the bcrypt
-    work to the default thread pool via :func:`asyncio.to_thread`.
+    work to the dedicated CPU-bound pool (:func:`authglow.core.executors.run_cpu_bound`).
 
     Use this in async request handlers to keep the event loop responsive
     during the ~50-300ms bcrypt computation. The sync function is kept
     untouched for CLI scripts and offline jobs.
     """
-    return await asyncio.to_thread(verify_password, plain_password, hashed_password)
+    return await run_cpu_bound(verify_password, plain_password, hashed_password)
 
 
 async def verify_and_maybe_rehash_async(
@@ -237,6 +239,50 @@ async def verify_and_maybe_rehash_async(
 
     Used by login flows. The re-hash path is two bcrypt operations
     on the event-loop-blocking side; running both in a single
-    ``asyncio.to_thread`` call keeps the loop responsive.
+    CPU-pool dispatch keeps the loop responsive.
     """
-    return await asyncio.to_thread(verify_and_maybe_rehash, plain_password, hashed_password)
+    return await run_cpu_bound(verify_and_maybe_rehash, plain_password, hashed_password)
+
+
+# ---------------------------------------------------------------------------
+# Timing-equalization dummy credential (VAPT-050)
+# ---------------------------------------------------------------------------
+
+_dummy_hash_lock = threading.Lock()
+_dummy_hashes: dict[int, str] = {}
+
+
+def get_dummy_hash() -> str:
+    """Return a bcrypt hash of an unknown random value for the current cost.
+
+    One dummy hash per cost factor, generated lazily and cached for the
+    process: a dummy verification must cost what a real one costs, and
+    boot must not pay a full hash upfront. The value is never revealed,
+    so no password can ever match it.
+    """
+    rounds = get_bcrypt_rounds()
+    cached = _dummy_hashes.get(rounds)
+    if cached is not None:
+        return cached
+    with _dummy_hash_lock:
+        cached = _dummy_hashes.get(rounds)
+        if cached is None:
+            salt = bcrypt.gensalt(rounds=rounds)
+            cached = bcrypt.hashpw(secrets.token_bytes(16), salt).decode("utf-8")
+            _dummy_hashes[rounds] = cached
+        return cached
+
+
+async def verify_dummy_password_async(plain_password: str) -> bool:
+    """Spend one genuine bcrypt comparison on a throwaway hash (VAPT-050).
+
+    Call this on every credential path that would otherwise fail WITHOUT
+    paying bcrypt (unknown email, missing account), so unknown-user and
+    wrong-password responses are indistinguishable by latency. Always
+    returns ``False``; generation and compare both run on the CPU pool.
+    """
+
+    def _check() -> bool:
+        return verify_password(plain_password, get_dummy_hash())
+
+    return await run_cpu_bound(_check)

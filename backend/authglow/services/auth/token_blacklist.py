@@ -124,13 +124,13 @@ class TokenBlacklist:
         if not self._repository.exists(jti):
             return False
 
-        # The on-disk file exists but we do not know the
-        # expires_at without reading it. Trigger an async
-        # re-hydration to populate the cache for next time;
-        # for THIS call we conservatively return ``True`` to
-        # avoid a race where a revocation made by another
-        # instance is missed because of the async I/O cost.
-        # This matches the pre-refactor behaviour.
+        # The on-disk file exists but its ``expires_at`` is unknown
+        # without an async read, and this hot path is sync by
+        # protocol — no re-hydration is scheduled from here. We
+        # conservatively return ``True`` so a revocation made by
+        # another instance is never missed; the entry joins the
+        # cache at the next ``startup_hydrate`` (or via a local
+        # ``revoke``), and until then every check pays one stat().
         return True
 
     # ------------------------------------------------------------------

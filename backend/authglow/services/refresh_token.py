@@ -19,7 +19,6 @@ optimistic-concurrency ``_version`` checks, which surface as
 :class:`ConcurrentWriteError` and are retried inside the lock.
 """
 
-import asyncio
 import hashlib
 import hmac
 import secrets
@@ -30,6 +29,7 @@ from authglow.core.cache import refresh_token_cache
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.executors import run_cpu_bound
 from authglow.models.refresh_token import RefreshToken
 from authglow.repositories.protocols import RefreshTokenRepository
 from authglow.services.audit import AuditService
@@ -123,7 +123,9 @@ class RefreshTokenService:
         """
         if expires_in_days is None:
             expires_in_days = self.settings.refresh_token_expire_days
-        plaintext, token_hash, token_lookup = await asyncio.to_thread(self._generate_token)
+        # bcrypt dominates the generation cost: keep it out of the I/O pool
+        # and off the event loop with the dedicated CPU executor.
+        plaintext, token_hash, token_lookup = await run_cpu_bound(self._generate_token)
 
         refresh_token = RefreshToken(
             token_hash=token_hash,
