@@ -225,6 +225,12 @@ class Settings(BaseSettings):
     # ``0`` disables the probe — cached reads then never refresh from
     # disk in this process (single-replica deployments only).
     storage_index_refresh_seconds: int = 60
+    # Periodic disk sweep for expired JWT-revocation blacklist entries.
+    # Revoked tokens live as one small file each; without a sweeper the
+    # directory only shrinks under in-memory cache pressure, so startup
+    # hydration grows unboundedly with deploy age. ``0`` disables the
+    # background task entirely.
+    token_blacklist_cleanup_seconds: int = 900
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 

@@ -133,6 +133,19 @@ class TokenBlacklist:
         # ``revoke``), and until then every check pays one stat().
         return True
 
+    async def cleanup_expired(self) -> int:
+        """Delete expired entries from disk and prune the in-memory cache.
+
+        Scheduled by the app lifespan every ``token_blacklist_cleanup_seconds``;
+        safe to run on every replica because repository removals are
+        idempotent and the memory prune only drops entries whose expiry
+        already fails the ``is_revoked`` check. Returns the number of
+        files removed from disk by this call.
+        """
+        removed = await self._repository.cleanup_expired()
+        self._sweep()
+        return removed
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

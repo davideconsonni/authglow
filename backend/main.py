@@ -46,7 +46,7 @@ from authglow.middleware.request_body_size import MaxBodySizeMiddleware
 from authglow.middleware.request_id import RequestIDMiddleware
 from authglow.middleware.security_headers import SecurityHeadersMiddleware
 from authglow.models.rbac import ADMIN_ROLE_NAME
-from authglow.services.auth.token_blacklist import token_blacklist
+from authglow.services.auth.token_blacklist import TokenBlacklist, token_blacklist
 
 settings = get_settings()
 
@@ -87,6 +87,25 @@ async def _admin_config_refresher(*services) -> None:
                 )
 
 
+async def _token_blacklist_sweeper(blacklist: TokenBlacklist, interval: int) -> None:
+    """Periodically delete expired revocation entries from disk.
+
+    The in-memory cache already ignores expired entries; this keeps the
+    on-disk directory bounded so startup hydration cost does not grow
+    with deploy age. Every replica runs its own sweeper: removals are
+    idempotent, so a shared volume is safe. Errors are logged and
+    swallowed — a failed sweep must never take the worker down.
+    """
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            removed = await blacklist.cleanup_expired()
+            if removed:
+                logger.info("token_blacklist_cleanup", removed=removed)
+        except Exception:
+            logger.warning("token_blacklist_cleanup_failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Widen the default ``ThreadPoolExecutor`` for this event loop. Must run
@@ -99,6 +118,18 @@ async def lifespan(app: FastAPI):
         ThreadPoolExecutor(max_workers=_DEFAULT_EXECUTOR_WORKERS),
     )
     await token_blacklist().startup_hydrate()
+
+    # Periodic disk sweep for expired blacklist entries; the task is
+    # cancelled on shutdown below. Exposed on ``app.state`` so tests can
+    # assert the wiring without reaching into lifespan locals.
+    blacklist_sweeper_task: asyncio.Task | None = None
+    if settings.token_blacklist_cleanup_seconds > 0:
+        blacklist_sweeper_task = asyncio.create_task(
+            _token_blacklist_sweeper(
+                token_blacklist(), settings.token_blacklist_cleanup_seconds
+            )
+        )
+    app.state.blacklist_sweeper_task = blacklist_sweeper_task
 
     # ------------------------------------------------------------------
     # Admin runtime configuration (rate limits + settings overrides).
@@ -183,6 +214,14 @@ async def lifespan(app: FastAPI):
         await refresher_task
     except asyncio.CancelledError:
         pass
+
+    app.state.blacklist_sweeper_task = None
+    if blacklist_sweeper_task is not None:
+        blacklist_sweeper_task.cancel()
+        try:
+            await blacklist_sweeper_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

@@ -65,3 +65,27 @@ class TestLifespanExecutorPool:
             f"50 concurrent to_thread calls took {elapsed * 1000:.0f}ms, "
             f"expected <500ms (pool={_DEFAULT_EXECUTOR_WORKERS})"
         )
+
+
+class TestLifespanBlacklistSweeper:
+    """The expired-token disk sweep is scheduled by lifespan, never by callers."""
+
+    async def test_sweeper_task_created_and_cancelled_on_shutdown(self) -> None:
+        """With ``token_blacklist_cleanup_seconds > 0`` the sweeper task
+        runs for the whole lifespan and is cancelled at shutdown."""
+        from main import app
+
+        async with app.router.lifespan_context(app):
+            task = app.state.blacklist_sweeper_task
+            assert task is not None, "sweeper must be scheduled when interval > 0"
+            assert not task.done(), "sweeper died immediately — loop bug?"
+        assert task.cancelled(), "sweeper must be cancelled on shutdown"
+
+    async def test_sweeper_not_created_when_interval_zero(self, monkeypatch) -> None:
+        """``0`` disables the background sweep entirely."""
+        import main
+        from main import app
+
+        monkeypatch.setattr(main.settings, "token_blacklist_cleanup_seconds", 0)
+        async with app.router.lifespan_context(app):
+            assert app.state.blacklist_sweeper_task is None
