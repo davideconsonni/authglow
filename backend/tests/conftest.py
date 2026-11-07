@@ -541,3 +541,37 @@ def _ensure_event_loop(request):
     asyncio.set_event_loop(loop)
     yield
     loop.close()
+
+
+@pytest.fixture
+def http_request():
+    """A minimal real Starlette request for direct FastAPI handler tests.
+
+    Handlers validate the ``request`` parameter type at call time, so a
+    plain ``MagicMock`` raises before the body runs; slowapi expects a
+    ``view_rate_limit`` state attribute when the middleware stack is
+    bypassed. See "Testing Pitfalls" in the root ``AGENTS.md``.
+    """
+    from starlette.requests import Request
+
+    request = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+    request.state.view_rate_limit = None
+    return request
+
+
+@pytest.fixture
+def cpu_pool_probe():
+    """Async helper returning the thread name a CPU-pool job ran on.
+
+    Canonical assertion for "this dispatch went to the dedicated
+    ``core.executors`` pool" without touching wall-clock timing.
+    """
+    import threading
+
+    from authglow.core.executors import run_cpu_bound
+
+    async def _probe() -> str:
+        thread = await run_cpu_bound(threading.current_thread)
+        return thread.name
+
+    return _probe

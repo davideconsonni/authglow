@@ -13,7 +13,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import Request
 
 from authglow.services.password import (
     _extract_bcrypt_rounds,
@@ -43,7 +42,7 @@ class TestDummyCredential:
 class TestChangeExpiredPasswordEqualization:
     """``change_expired_password`` must pay bcrypt for unknown emails too."""
 
-    def _call(self, monkeypatch, *, gate: bool, user):
+    def _call(self, monkeypatch, http_request, *, gate: bool, user):
         from authglow.api import password_reset as pr_api
         from authglow.models.password_reset import ExpiredPasswordChange
 
@@ -61,24 +60,23 @@ class TestChangeExpiredPasswordEqualization:
             current_password="wrong-password",
             new_password="brand-new-password",
         )
-        request = Request({"type": "http", "method": "POST", "path": "", "headers": []})
-        request.state.view_rate_limit = None
+        request = http_request
 
         with pytest.raises(Exception) as excinfo:
             _run(pr_api.change_expired_password(request, payload, storage, audit, MagicMock()))
         return excinfo.value, dummy, audit
 
-    def test_unknown_user_pays_dummy_when_protection_on(self, monkeypatch):
-        error, dummy, _audit = self._call(monkeypatch, gate=True, user=None)
+    def test_unknown_user_pays_dummy_when_protection_on(self, monkeypatch, http_request):
+        error, dummy, _audit = self._call(monkeypatch, http_request, gate=True, user=None)
         assert getattr(error, "status_code", None) == 401
         dummy.assert_awaited_once_with("wrong-password")
 
-    def test_unknown_user_skips_dummy_when_protection_off(self, monkeypatch):
-        error, dummy, _audit = self._call(monkeypatch, gate=False, user=None)
+    def test_unknown_user_skips_dummy_when_protection_off(self, monkeypatch, http_request):
+        error, dummy, _audit = self._call(monkeypatch, http_request, gate=False, user=None)
         assert getattr(error, "status_code", None) == 401
         dummy.assert_not_awaited()
 
-    def test_existing_user_verifies_without_dummy(self, monkeypatch):
+    def test_existing_user_verifies_without_dummy(self, monkeypatch, http_request):
         from authglow.api import password_reset as pr_api
 
         user = SimpleNamespace(
@@ -89,7 +87,7 @@ class TestChangeExpiredPasswordEqualization:
         )
         verify = AsyncMock(return_value=False)
         monkeypatch.setattr(pr_api, "verify_password_async", verify)
-        error, dummy, _audit = self._call(monkeypatch, gate=True, user=user)
+        error, dummy, _audit = self._call(monkeypatch, http_request, gate=True, user=user)
         assert getattr(error, "status_code", None) == 401
         # A real verify was paid: no dummy on top, and the audit
         # still records invalid_credentials (unchanged envelope).
