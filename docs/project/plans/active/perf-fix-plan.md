@@ -23,12 +23,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
-| CRITICAL | 4 | 1 | 3 |
+| CRITICAL | 4 | 2 | 2 |
 | HIGH | 4 | 0 | 4 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 0 | 1 |
-| **Total** | **11** | **1** | **10** |
+| **Total** | **11** | **2** | **9** |
 
 ---
 
@@ -43,12 +43,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
   - **Decisione**: fix ora (2026-11-07). Per-path sì, `AsyncNamedLock` no: è un `asyncio.Lock`, si lega al primo event loop in cui entra in contesa (verificato: al secondo `asyncio.run` solleva `RuntimeError: ... bound to a different event loop`) e verrebbe rilasciato alla cancellazione della coroutine mentre il worker sta ancora scrivendo. La sezione CAS gira in `asyncio.to_thread`, quindi serve una primitiva thread-side.
   - **Fix**: nuovo `ThreadNamedLock` in `core/concurrency.py` — lock `threading` per chiave, con eviction quando l'ultimo thread holding/waiting esce (nessun dizionario illimitato, a differenza di PERF-009). `write_json_versioned` acquisisce la lock sul `path` dentro il worker: refresh e redemption di record diversi procedono in parallelo. Test in `tests/unit/test_concurrency.py`: overlap su path diversi, serializzazione sullo stesso path, due `asyncio.run()` consecutivi sullo stesso path.
 
-- [ ] **PERF-002** — Repository ricreate a ogni richiesta → cache dell'indice email di fatto inesistente
+- [x] **PERF-002** — Repository ricreate a ogni richiesta → cache dell'indice email di fatto inesistente
   - **Location**: `backend/authglow/api/auth.py:482` (`get_user_storage`, nessun `@lru_cache`/singleton); `backend/authglow/repositories/file/email_index.py` (cache in-memory che vive quanto la request)
   - **Descrizione**: `Depends(get_user_storage)` istanzia `UserStorage()` (e a cascata `FileEmailIndexRepository()`) a ogni richiesta HTTP. Ogni cache-miss sul layer superiore (`user_cache`, TTL 300s / maxsize 2000, `core/config.py:403-404`) forza una rilettura+parsing dell'**intero** `email_index.json`, costo che cresce con il numero totale di utenti.
   - **Fix proposto**: applicare lo stesso pattern già usato per il keyring JWT — singleton di processo con staleness probe multi-replica (`core/jwt_singleton.py` è il riferimento diretto da copiare).
-  - **Decisione**: _da discutere_
-  - **Dipendenze**: se si adotta Redis per le cache (PERF-005), la staleness probe può appoggiarsi allo stesso backend invece che a un probe custom su file — da valutare insieme.
+  - **Decisione**: fix ora (2026-11-07), con scope allargato a `federated_identity` (stesso pattern di costo, peggio: senza alcuna cache — ogni login federato riparsava l'intero file). Singleton applicato al **repository dell'indice**, non a `UserService`: il costo dominante è il re-parse, e `UserService` è costruito in 11 punti fra router e service layer.
+  - **Fix**: nuova base `CachedRootIndexRepository` (`repositories/file/root_index.py`) — cache in-memory condivisa di processo con staleness probe a intervallo fisso (nuovo setting `storage_index_refresh_seconds`, default 60, `0` = disabilitato), ricalcando `jwt_singleton.py` ma senza `asyncio.Lock` (lezione PERF-001: primitive legate all'event loop); percorso di scrittura (insert/remove/link/unlink) sempre fresh-read-before-write così le scritture di altre repliche non si perdono mai. Registry di processo `repositories/file/index_registry.py` chiave `(entity, storage_backend, storage_path)`; le factory `get_email_index_repository`/`get_federated_identity_repository` deviano all'istanza condivisa sul backend file (zero modifiche ai router, coperte anche le costruzioni dirette). Reset fixture autouse nel conftest. Freschezza cross-replica limitata a 60s (oggi era immediata perché si rileggeva sempre): baratto documentato, identico al keyring JWT. Test in `tests/unit/repositories/file/test_email_index.py` e `test_federated_identity.py`: istanza condivisa via factory, letture servite da cache senza disco, probe che intercetta scritture esterne, `0` disabilita il probe, merge delle scritture concorrenti, errore probe non blocca le letture.
 
 - [ ] **PERF-003** — Thread pool condiviso fra I/O bloccante su file e bcrypt
   - **Location**: `backend/authglow/core/async_io.py` (ogni operazione file passa da `asyncio.to_thread`); `backend/authglow/services/password.py:219,230` (bcrypt async, correttamente offloadato ma sullo stesso pool)

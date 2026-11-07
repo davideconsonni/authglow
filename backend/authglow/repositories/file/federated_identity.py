@@ -18,23 +18,28 @@ already linked to a different user — this matches the
 raise ``ValueError``; the repository uses a domain-level
 exception for backend portability).
 
-The underlying fsspec filesystem and ``AsyncFileSystem`` wrapper
-are managed by :class:`BaseFileRepository`. Cross-process safety
-is delegated to the ``named_lock("federated_identities")`` held
-by ``UserStorage`` (``link`` / ``get_by_external_id`` paths).
+The in-memory index cache lives for the lifetime of the process
+(via ``authglow.repositories.file.index_registry``), not the
+request: before this, every ``lookup`` re-read and re-parsed the
+whole file (the federated login path has no upper cache, so that
+was an O(index) cost per login). ``lookup`` is served from the
+cache and re-validated against the file at most once per
+``settings.storage_index_refresh_seconds`` (staleness probe, see
+:class:`CachedRootIndexRepository`); ``link`` and ``unlink``
+re-read from disk first so entries written by another replica are
+merged, never lost. Cross-process safety is delegated to the
+``named_lock("federated_identities")`` held by ``UserStorage``
+(``link`` / ``get_by_external_id`` paths).
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from authglow.repositories.exceptions import EntityAlreadyExistsError
-from authglow.repositories.file.base import BaseFileRepository
+from authglow.repositories.file.root_index import CachedRootIndexRepository
 from authglow.repositories.protocols import FederatedIdentityRepository
 
-if TYPE_CHECKING:
-    from authglow.core.config import Settings
 
-
-class FileFederatedIdentityRepository(BaseFileRepository, FederatedIdentityRepository):
+class FileFederatedIdentityRepository(CachedRootIndexRepository, FederatedIdentityRepository):
     """File-backed implementation of :class:`FederatedIdentityRepository`.
 
     Stores the index as a single JSON object at
@@ -43,31 +48,13 @@ class FileFederatedIdentityRepository(BaseFileRepository, FederatedIdentityRepos
 
     Layout note: ``BaseFileRepository`` requires a non-empty
     ``_subdir``. The federated identities file lives at the
-    storage **root**, not in a subdirectory, so we pass
-    ``subdir="."`` to the base constructor and override
-    ``_storage_path`` to point back at the root.
+    storage **root**, not in a subdirectory, so
+    :class:`CachedRootIndexRepository` passes ``subdir="."`` to the
+    base constructor and collapses ``_storage_path`` back to the
+    root.
     """
 
     _filename = "federated_identities.json"
-
-    def __init__(self, settings: Optional["Settings"] = None) -> None:
-        super().__init__(settings=settings, subdir=".")
-        # Collapse the "." subdir back to the root so the file
-        # lives at <storage>/federated_identities.json (not
-        # <storage>/./...).
-        self._storage_path = self._storage_root
-
-    # ------------------------------------------------------------------
-    # Path helper
-    # ------------------------------------------------------------------
-
-    def _index_path(self) -> str:
-        """Return the on-disk path for the federated identities file.
-
-        The index lives at the storage root, not in a subdirectory
-        — pre-refactor layout: ``<storage>/federated_identities.json``.
-        """
-        return f"{self._storage_root}/{self._filename}"
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -77,28 +64,18 @@ class FileFederatedIdentityRepository(BaseFileRepository, FederatedIdentityRepos
         """Build the composite key for a federated identity."""
         return f"{provider_id}|{external_id}"
 
-    async def _read_index(self) -> dict:
-        """Read the federated identities file. Returns ``{}`` on
-        missing or corrupt JSON."""
-        data = await self._read_json(self._index_path())
-        if not isinstance(data, dict):
-            return {}
-        return data
-
-    async def _write_index(self, index: dict) -> None:
-        """Write the federated identities file. Atomic-ish (uses
-        ``_write_json_atomic`` for crash safety on local
-        filesystems; cloud backends fall back to plain write)."""
-        await self._write_json_atomic(self._index_path(), index)
-
     # ------------------------------------------------------------------
     # Protocol: lookup
     # ------------------------------------------------------------------
 
     async def lookup(self, provider_id: str, external_id: str) -> Optional[str]:
         """Return the user_id linked to the given (provider,
-        external) pair, or ``None``."""
-        index = await self._read_index()
+        external) pair, or ``None``.
+
+        Reads from the in-memory index (loaded from disk on first
+        access, refreshed by the staleness probe).
+        """
+        index = await self._ensure_index_loaded()
         return index.get(self._make_key(provider_id, external_id))
 
     # ------------------------------------------------------------------
@@ -110,12 +87,16 @@ class FileFederatedIdentityRepository(BaseFileRepository, FederatedIdentityRepos
         mapping. Raises :class:`EntityAlreadyExistsError` if the
         pair is already linked to a different user.
 
+        The duplicate check runs against the current on-disk content
+        (read-modify-write merge), so a link created by another
+        process since our last read is still detected. The shared
+        cache is updated through the same dict (write-through).
         The write is single-shot and lock-free at the repository
         level: cross-process safety is delegated to the
         ``named_lock("federated_identities")`` held by
         ``UserStorage``.
         """
-        index = await self._read_index()
+        index = await self._load_index_fresh()
         key = self._make_key(provider_id, external_id)
         existing = index.get(key)
         if existing is not None and existing != user_id:
@@ -128,7 +109,10 @@ class FileFederatedIdentityRepository(BaseFileRepository, FederatedIdentityRepos
     # ------------------------------------------------------------------
 
     async def unlink(self, provider_id: str, external_id: str) -> None:
-        """Remove the mapping. No-op if absent."""
-        index = await self._read_index()
+        """Remove the mapping. No-op if the pair is absent (the
+        write is still issued, matching the pre-refactor contract).
+        Read-modify-write starts from disk; the shared cache is
+        updated through the same dict."""
+        index = await self._load_index_fresh()
         index.pop(self._make_key(provider_id, external_id), None)
         await self._write_index(index)

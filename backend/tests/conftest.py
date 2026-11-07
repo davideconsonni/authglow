@@ -154,6 +154,22 @@ def _reset_jwt_singleton():
 
 
 @pytest.fixture(autouse=True)
+def _reset_file_index_repositories():
+    """Drop the process-wide root-index repositories (email index,
+    federated identities) around every test.
+
+    Their parsed index caches are shared across requests on purpose
+    in production; between tests the same storage path would leak a
+    cache built against a previous case's on-disk state.
+    """
+    from authglow.repositories.file.index_registry import reset_shared_index_repositories
+
+    reset_shared_index_repositories()
+    yield
+    reset_shared_index_repositories()
+
+
+@pytest.fixture(autouse=True)
 def _reset_http_client():
     """Close the :func:`authglow.core.http_client.get_http_client` cache
     between tests so the singleton is rebound to the current event

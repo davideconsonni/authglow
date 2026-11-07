@@ -162,6 +162,147 @@ class TestFileEmailIndexRepository:
 
 
 # ---------------------------------------------------------------------------
+# Process-wide cache (PERF-002): shared instance + staleness probe
+# ---------------------------------------------------------------------------
+
+
+class TestEmailIndexProcessCache:
+    """The repository is shared process-wide through the dependency
+    factory and its parsed cache is served across requests. Reads hit
+    disk only on first load or when the staleness probe interval
+    has elapsed."""
+
+    def _make_repo(self, test_settings) -> FileEmailIndexRepository:
+        return FileEmailIndexRepository(settings=test_settings)
+
+    def test_factory_returns_shared_instance(self, test_settings):
+        from authglow.repositories.dependencies import get_email_index_repository
+
+        first = get_email_index_repository(settings=test_settings)
+        second = get_email_index_repository(settings=test_settings)
+        assert isinstance(first, FileEmailIndexRepository)
+        assert first is second
+
+    def test_factory_isolates_by_storage_path(self, test_settings, tmp_path):
+        from authglow.repositories.dependencies import get_email_index_repository
+
+        other = test_settings.model_copy(
+            update={"storage_path": str(tmp_path / "other-storage")}
+        )
+        assert (
+            get_email_index_repository(settings=test_settings)
+            is not get_email_index_repository(settings=other)
+        )
+
+    async def test_reads_do_not_touch_disk_within_interval(self, test_settings, monkeypatch):
+        repo = self._make_repo(test_settings)
+        await repo.insert("alice@example.com", "user-1")
+
+        reads = []
+        original = repo._read_index
+
+        async def counting_read():
+            reads.append(1)
+            return await original()
+
+        monkeypatch.setattr(repo, "_read_index", counting_read)
+        assert await repo.lookup("alice@example.com") == "user-1"
+        assert await repo.lookup("nobody@example.com") is None
+        assert len(await repo.all()) == 1
+        assert reads == []  # every read served from the process cache
+
+    async def test_probe_picks_up_foreign_write(self, test_settings):
+        import json
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+
+        repo = self._make_repo(test_settings)
+        await repo.insert("alice@example.com", "user-1")
+
+        # Another replica appends a mapping straight to the shared file.
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data[hash_index_key("bob@example.com")] = "user-2"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        # Invisible while the cache is fresh...
+        assert await repo.lookup("bob@example.com") is None
+
+        # ...the next read after the interval re-loads from disk.
+        repo._last_probe = utcnow() - timedelta(seconds=61)
+        assert await repo.lookup("bob@example.com") == "user-2"
+        assert await repo.lookup("alice@example.com") == "user-1"
+
+    async def test_probe_disabled_by_zero_interval(self, test_settings):
+        import json
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+
+        settings = test_settings.model_copy(update={"storage_index_refresh_seconds": 0})
+        repo = FileEmailIndexRepository(settings=settings)
+        await repo.insert("alice@example.com", "user-1")
+
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data[hash_index_key("bob@example.com")] = "user-2"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        repo._last_probe = utcnow() - timedelta(days=1)
+        assert await repo.lookup("bob@example.com") is None
+        assert await repo.lookup("alice@example.com") == "user-1"
+
+    async def test_probe_failure_keeps_serving_cache(self, test_settings, monkeypatch):
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+
+        repo = self._make_repo(test_settings)
+        await repo.insert("alice@example.com", "user-1")
+
+        async def broken_read():
+            raise OSError("storage unavailable")
+
+        monkeypatch.setattr(repo, "_read_index", broken_read)
+        repo._last_probe = utcnow() - timedelta(seconds=61)
+        # The probe swallows the failure; reads keep being served from
+        # the (possibly stale) cache.
+        assert await repo.lookup("alice@example.com") == "user-1"
+
+    async def test_write_merges_foreign_entries(self, test_settings):
+        """Read-modify-write starts from disk: a signup performed by
+        another replica is merged, never clobbered."""
+        import json
+
+        repo = self._make_repo(test_settings)
+        await repo.insert("alice@example.com", "user-1")
+
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data[hash_index_key("bob@example.com")] = "user-2"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        await repo.insert("carol@example.com", "user-3")
+
+        with open(path, encoding="utf-8") as f:
+            final = json.load(f)
+        assert final == {
+            hash_index_key("alice@example.com"): "user-1",
+            hash_index_key("bob@example.com"): "user-2",
+            hash_index_key("carol@example.com"): "user-3",
+        }
+        # The shared cache reflects the merged state as well.
+        assert await repo.lookup("bob@example.com") == "user-2"
+
+
+# ---------------------------------------------------------------------------
 # Patched-settings construction smoke test
 # ---------------------------------------------------------------------------
 

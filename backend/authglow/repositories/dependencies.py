@@ -9,6 +9,12 @@ A new storage backend only adds a new ``repositories/<backend>/``
 implementation plus one :func:`register_backend` call — zero changes
 to services or API.
 
+Two entities (``email_index``, ``federated_identity``) resolve through
+:func:`_resolve_shared_index` on the file backend: their parsed index
+cache is process-wide, so the factory hands out a shared instance
+instead of re-reading (and re-parsing) the whole index file on every
+request.
+
 ``storage_backend`` (``Settings.storage_backend``) is unrelated: it
 selects the fsspec object store (file/s3/gcs/abfs) underneath the
 ``file`` repository backend.
@@ -445,18 +451,49 @@ def get_security_event_repository(
     return _resolve("security_event", settings)
 
 
+def _resolve_shared_index(entity: str, settings: Any = None) -> Any:
+    """Resolve an entity whose File implementation carries a
+    process-wide index cache.
+
+    The file backend's root indexes (email index, federated
+    identities) keep their parsed data in memory; returning a shared
+    instance lets that cache survive the request instead of being
+    rebuilt — and the whole index re-parsed — per user-cache miss
+    (see ``authglow.repositories.file.index_registry``). Every other
+    backend keeps the plain per-call :func:`_resolve` path: only the
+    File implementations are designed for cache sharing.
+    """
+    if settings is None:
+        from authglow.core.config import get_settings
+
+        settings = get_settings()
+    if _resolve_backend_name(settings) != "file":
+        return _resolve(entity, settings)
+    from authglow.repositories.file.index_registry import get_shared_index_repository
+
+    return get_shared_index_repository(entity, settings, _FILE_BACKEND[entity])
+
+
 def get_email_index_repository(
     settings: "Settings | None" = None,
 ) -> "EmailIndexRepository":
-    """FastAPI factory for the email-index repository."""
-    return _resolve("email_index", settings)
+    """FastAPI factory for the email-index repository.
+
+    Returns the process-shared instance on the file backend so the
+    in-memory index cache survives across requests.
+    """
+    return _resolve_shared_index("email_index", settings)  # type: ignore[no-any-return]
 
 
 def get_federated_identity_repository(
     settings: "Settings | None" = None,
 ) -> "FederatedIdentityRepository":
-    """FastAPI factory for the federated-identity repository."""
-    return _resolve("federated_identity", settings)
+    """FastAPI factory for the federated-identity repository.
+
+    Returns the process-shared instance on the file backend so the
+    in-memory index cache survives across requests.
+    """
+    return _resolve_shared_index("federated_identity", settings)  # type: ignore[no-any-return]
 
 
 def get_user_repository(
