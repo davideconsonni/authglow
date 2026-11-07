@@ -95,6 +95,11 @@ _FIELD_META: Dict[str, Dict[str, Any]] = {
         "label": "JWT keyring refresh interval (seconds, 0 = off)",
         "restart_required": False,
     },
+    "storage_index_refresh_seconds": {
+        "category": "security",
+        "label": "Storage index staleness probe interval (seconds, 0 = off)",
+        "restart_required": False,
+    },
     "timing_leak_protection": {
         "category": "security",
         "label": "Timing leak protection",
