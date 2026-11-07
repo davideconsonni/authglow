@@ -26,17 +26,31 @@ Never trust the plan's claim about the code. Check the current on-disk state wit
 covering them.
 
 Classify the item as `open`, `already-closed`, or `partial`, citing file paths and line numbers. List residual gaps, if
-any.
+any. Note any drift between the plan's cited line numbers and the current code.
 
-Completion: the classification plus gap list is reported to the user.
+Completion: the classification plus gap list is reported to the user — delivered inside the Step 3 report (the Verdict
+and Where-to-verify blocks), not as a separate message.
 
 ## Step 3 — Propose
 
-Report, in this order, keeping it short and technical:
+Report verification + proposal as **one message** with this fixed shape. The reader is a technical colleague who must
+follow the causal chain and still be able to check everything: narrative first, code references gathered at the end,
+never mixed into the prose.
 
-1. **Analysis** — what the finding claims vs. what the code actually does.
-2. **Plan** — the minimal change to close it, with rationale.
-3. **Gaps** — what the minimal change deliberately leaves out.
+1. **Verdict** (title line) — item ID, `open` / `already-closed` / `partial`, plus the essence of the finding in one
+   clause. If already-closed, the report stops here.
+2. **How it works today** — the current mental model in 2–4 plain bullets, causal order. No file paths.
+3. **Why it costs / what's broken** — the mechanism, 2–3 bullets. No file paths.
+4. **What I propose** — the change at the model level, 3–5 bullets. End with *why it lands at the chosen layer* when
+   the plan suggested a different one. No file paths.
+5. **Trade-offs** — max 2 bullets: only decisions the user could reasonably reject, each with a one-line mitigation or
+   in-repo precedent.
+6. **Where to verify** — every `file:line` reference, grouped per claim, compact. The only block carrying paths.
+7. **Out of scope** — one line, names only.
+
+Formatting rules for the report: one idea per bullet; short sentences; hard cap ~25 lines (blocks 1–7, question
+excluded); block titles localized to the user's language. Clarity comes from the structure, never from attitude:
+no sarcasm, no editorializing, no rhetorical questions, no dramatized metaphors.
 
 Then ask exactly one question in plain text — **proceed / add scope / grill-me** — with each option explained
 in one line on first use (proceed = implement the minimal plan as written; add scope = widen the fix to the areas
@@ -106,6 +120,7 @@ Completion: the user's answer is obtained.
 - Code comments are in English, explain the why, and never reference plan IDs — plans can disappear, the code stays.
 - One question per decision; propose options with one marked recommended.
 - Language: write like you speak to a busy colleague — plain, direct, no idioms, no rhetorical flourishes, no
-  colorful metaphors. Match the user's language (Italian user → Italian). Explain any term you cannot avoid the
-  first time you use it (grill-me, rebase, amend, force-push).
+  colorful metaphors. Tone stays neutral and professional: never mock, editorialize, or adopt a persona voice; the
+  reader trusts the analysis, not the theatrics. Match the user's language (Italian user → Italian). Explain any term
+  you cannot avoid the first time you use it (grill-me, rebase, amend, force-push).
 - Never auto-fix a pre-existing failure without being asked.
