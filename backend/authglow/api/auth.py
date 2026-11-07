@@ -68,6 +68,7 @@ from authglow.services.par import PushedAuthorizationService
 from authglow.services.password import (
     PasswordValidator,
     hash_password_async,
+    verify_dummy_password_async,
 )
 from authglow.services.password_reset import PasswordResetService
 from authglow.services.rbac import RBACService
@@ -1095,9 +1096,12 @@ async def authorize_post(
 
         user = await storage.get_user_by_email(email)
         if not user:
-            # VAPT-050 will add a dummy bcrypt here to equalize
-            # timing for non-existent users. For now, the response
-            # shape is unchanged from the original implementation.
+            # VAPT-050: pay a real bcrypt compare before rejecting an
+            # unknown email so its latency matches the wrong-password
+            # path below. Same gate as the read-padding already wired
+            # into UserService.get_user_by_email.
+            if get_settings().timing_leak_protection:
+                await verify_dummy_password_async(password)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         # VAPT-048: check account lockout BEFORE the bcrypt compare
