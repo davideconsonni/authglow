@@ -15,6 +15,7 @@ import qrcode
 from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import get_settings
 from authglow.core.datetime import utcnow
+from authglow.core.executors import run_cpu_bound
 from authglow.models.audit_events import AuditEventType
 from authglow.models.audit_metadata import TrustedDeviceMetadata
 from authglow.models.mfa import BackupCodeAttempt, BackupCodes, TrustedDevice
@@ -204,7 +205,7 @@ class MFAService:
                 return False
 
             for hashed_code in backup_codes.codes:
-                if await asyncio.to_thread(self.verify_backup_code, code, hashed_code):
+                if await run_cpu_bound(self.verify_backup_code, code, hashed_code):
                     await self._attempts_repo.delete(user_id)
                     await self._bc_repo.use_code(user_id, hashed_code)
                     return True

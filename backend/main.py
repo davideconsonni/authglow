@@ -53,12 +53,14 @@ settings = get_settings()
 logger = structlog.get_logger("authglow.audit")
 
 # Default ``ThreadPoolExecutor`` size used by ``asyncio.to_thread`` for
-# off-loading blocking I/O (bcrypt, fsspec, PII decrypt, sync RSA parse).
+# off-loading blocking I/O (fsspec, PII decrypt, sync RSA parse).
 # CPython's default is ``min(32, cpu+4)`` workers; we widen it to
 # ``min(32, cpu*4)`` (Tier 2.1) so that bursts of concurrent
-# ``/oauth2/token`` requests — each doing bcrypt + 5 PII decrypts — do
+# ``/oauth2/token`` requests — each doing 5 PII decrypts — do
 # not queue behind an undersized pool. Capped at 32 to stay within
-# the documented asyncio ``ThreadPoolExecutor`` ceiling.
+# the documented asyncio ``ThreadPoolExecutor`` ceiling. CPU-bound
+# bcrypt work lives on its own pool instead (``authglow.core.executors``),
+# so login bursts cannot occupy these I/O workers.
 _DEFAULT_EXECUTOR_WORKERS = min(32, (os.cpu_count() or 1) * 4)
 
 

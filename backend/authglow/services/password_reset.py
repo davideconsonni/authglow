@@ -47,6 +47,7 @@ from authglow.core.concurrency import ConcurrentWriteError, named_lock
 from authglow.core.config import Settings, get_settings
 from authglow.core.crypto import reset_code_lookup_key
 from authglow.core.datetime import utcnow
+from authglow.core.executors import run_cpu_bound
 from authglow.models.password_reset import PasswordResetToken
 from authglow.repositories.protocols import PasswordResetRepository
 
@@ -168,7 +169,9 @@ class PasswordResetService:
                 - ``reset_code`` is the human-friendly code to render in
                   the email body (VAPT-022 fix). Never embed it in a URL.
         """
-        plaintext_token, token_hash, token_lookup = self._generate_token()
+        # bcrypt.hashpw is ~200-300ms of CPU: dispatch to the CPU pool so a
+        # reset request cannot stall the event loop for every other client.
+        plaintext_token, token_hash, token_lookup = await run_cpu_bound(self._generate_token)
         reset_code = generate_reset_code()
 
         reset_token = PasswordResetToken(
@@ -202,7 +205,11 @@ class PasswordResetService:
         if token is None:
             return None
 
-        if not bcrypt.checkpw(plaintext_token.encode(), token.token_hash.encode()):
+        # Same rationale as ``create_reset_token``: never run bcrypt on the
+        # event loop; the compare is CPU-bound and one call stalls all clients.
+        if not await run_cpu_bound(
+            bcrypt.checkpw, plaintext_token.encode(), token.token_hash.encode()
+        ):
             return None
 
         if token.is_used:
