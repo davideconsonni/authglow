@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-08
+
 ### Fixed
 - Concurrent writes to different records no longer serialize behind a single process-wide lock: CAS (optimistic-concurrency) writes in the file storage layer take a per-record-path lock, so refresh-token rotation, authorization-code redemption, and other record writes on different records proceed in parallel under load.
 - Email-index and federated-identity lookups no longer re-read and re-parse the entire index file on every request cache miss. The file storage layer keeps one process-wide repository per index with a periodic staleness probe (configurable via `STORAGE_INDEX_REFRESH_SECONDS`, default 60, `0` disables), so the login hot path reads the whole index at most once per interval per replica instead of once per miss; write paths still merge against on-disk content, so records created by other replicas are never lost. Cross-replica visibility of new signups/federated links is now bounded by the probe interval (same trade-off already documented for the JWT keyring).
