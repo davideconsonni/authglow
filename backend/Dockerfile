@@ -20,5 +20,12 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 
+# Uvicorn worker processes. Default 1 on purpose: every extra worker is a
+# full Python process with its own caches and rate-limiter counters, so
+# scaling replicas at the orchestrator stays the recommended path. Only
+# raise this once shared cache/limiter backends are configured — see
+# docs/internals/architecture/deployment.md ("Process Scaling").
+ENV UVICORN_WORKERS=1
+
 # Run application
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT}
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers ${UVICORN_WORKERS}

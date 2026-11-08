@@ -35,6 +35,33 @@ Every setting is configurable via environment variables mapped to the Pydantic `
 
 Both Docker images run as an unprivileged user (`USER appuser`) and include a native `HEALTHCHECK` against `/health`.
 
+### Process Scaling
+
+By default every container runs a **single Uvicorn process** (one event loop). The images expose
+`UVICORN_WORKERS` (default `1`), passed to `uvicorn --workers`, so multiple worker processes can run
+inside one container — deliberately opt-in, not a default.
+
+- **Replicas are the recommended path.** Cloud Run, Fly.io, Railway, ECS and friends scale by running
+  more instances of the image; several platforms (Cloud Run first) allocate CPU per instance in a way
+  that makes in-container workers useless. The app is already built for multiple independent
+  processes sharing storage: JSON record writes are atomic and carry an optimistic `_version` for
+  compare-and-swap, and the JWT keyring and root-index caches re-probe the storage layer on a fixed
+  interval, so no in-process coordination is required across replicas or workers.
+- **Before raising `UVICORN_WORKERS`**, account for the state that is per-process and would be
+  multiplied by N:
+  - In-memory caches (`CACHE_BACKEND=memory`) become N private copies with no shared invalidation —
+    set `CACHE_BACKEND=redis` instead.
+  - Rate-limiter counters are per-process, so an effective limit becomes N × the configured one —
+    use a shared storage backend before relying on limits.
+  - Background maintenance tasks (blacklist sweeper, admin-config refresher) run once per process;
+    they are idempotent, but N× the same work.
+- **Storage-level races behave like multi-replica:** the read-modify-write on the refresh-token index
+  files is serialized by an in-process lock plus atomic writes. That is safe between workers on the
+  same host only as much as it is between replicas on a shared volume — increasing workers increases
+  the number of concurrent writers, it does not add cross-process mutual exclusion.
+
+`UVICORN_WORKERS` is read by the images' `CMD`; the application settings do not consume it.
+
 ## Cache Backends
 
 AuthGlow abstracts cache operations in `backend/authglow/core/cache.py` via the `CacheBackend` protocol:

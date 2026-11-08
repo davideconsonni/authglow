@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Docker images read a `UVICORN_WORKERS` environment variable (default `1`) and pass it to `uvicorn --workers`, so running several worker processes inside one container is an explicit opt-in instead of an undocumented limitation. `docs/internals/architecture/deployment.md` gains a "Process Scaling" section: orchestrator replicas remain the recommended path, and the per-process state that multiplies with workers (in-memory caches, rate-limiter counters, background sweeps) is listed with the configuration to set first.
+
 ### Fixed
 - Refresh-token rotation under concurrent load no longer corrupts the encrypted token index files: every index update now runs as a single locked, atomic write per file, so `/oauth2/token` no longer returns HTTP 500 when a reader hits a half-written index and freshly issued refresh tokens are no longer silently lost (`invalid_grant` on valid sessions). A damaged or tampered index payload now degrades to the documented empty-index behavior instead of raising a decryption error.
 
