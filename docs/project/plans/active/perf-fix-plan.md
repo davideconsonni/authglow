@@ -6,9 +6,9 @@ ids: PERF-NNN
 
 # Performance Fix Plan — Alto Carico (2026-09-12)
 
-> **Status**: PERF-001/002 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07 (note **Verifica** per item): nessuna è già chiusa, alcune hanno dettagli datati corretti qui sotto.
-> **Source**: assessment statico su `davideconsonni/authglow` (nessun load test eseguito — vedi PERF-011).
-> **Findings**: 10 item architetturali + 1 item di processo (baseline di load test mancante).
+> **Status**: PERF-001/002/003/008/011 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
+> **Source**: assessment statico su `davideconsonni/authglow` + **baseline load test eseguita 2026-11-08** (`backend/tests/load/`, numeri sotto in PERF-011).
+> **Findings**: 11 item architetturali (10 originali + PERF-012) + 1 item di processo (baseline, ora chiusa).
 
 ## Come usare questo file
 
@@ -23,12 +23,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
-| CRITICAL | 4 | 3 | 1 |
+| CRITICAL | 5 | 3 | 2 |
 | HIGH | 4 | 1 | 3 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
-| PROCESS | 1 | 0 | 1 |
-| **Total** | **11** | **4** | **7** |
+| PROCESS | 1 | 1 | 0 |
+| **Total** | **12** | **5** | **7** |
 
 ---
 
@@ -57,6 +57,14 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
   - **Decisione**: fix ora (2026-11-08), con scope allargato al gap emerso in verifica: prima l'offload mancante (bcrypt che girava direttamente sull'event loop), poi la separazione dei pool.
   - **Verifica (2026-11-07)**: **aperto**, con un punto obsoleto e un gap nuovo. (a) Il pool di default è già stato allargato a `min(32, cpu*4)` nel lifespan (`main.py:62,96-98`, Tier 2.1, con benchmark in `tests/performance/test_threadpool.py` e test in `tests/unit/test_main_lifespan.py`) — il mitigava il sintomo "pool ristretto" ma non separa nulla: bcrypt (password.py, api_key.py:266,328, mfa.py:207, refresh_token.py:126, oauth_client.py:77,186) e I/O file (tutta `AsyncFileSystem`) condividono sempre lo stesso executor. (b) Gap nuovo — bcrypt **direttamente sull'event loop**, fuori da qualunque pool: `services/password_reset.py:171` (`create_reset_token` → `_generate_token` → `bcrypt.hashpw`) e `:205` (`verify_token` → `bcrypt.checkpw`), `services/api_key.py:163` (`create_key`) e `:551` (rotazione) — entrambi chiamano `_generate_api_key()` che fa `hash_password` sincrono. ~200-300ms di loop bloccato per richiesta, peggio della condivisione del pool. Da includere nello scope del fix (offload obbligatorio prima della separazione).
   - **Fix**: nuovo modulo `core/executors.py` — `run_cpu_bound()` su singleton `ThreadPoolExecutor` di processo (1 worker per core, `thread_name_prefix=authglow-cpu`), senza affinità di loop (lezione della CAS lock di PERF-001); lo shutdown è delegato all'interprete (`concurrent.futures` atexit), niente wiring nel lifespan. Offload gap: `password_reset.py` (`create_reset_token`, `verify_token`) e `api_key.py` (`create_key`, rotazione) ora dispatchano; separazione: i wrapper di `services/password.py` e i chiamanti `to_thread` bcrypt di `api_key.py`, `mfa.py`, `refresh_token.py` passano a `run_cpu_bound`, l'I/O file resta sul pool di default allargato (invariato). Bonus correlato (chiuso insieme, vedi VAPT-050 nel plan security): dummy bcrypt su `authorize_post`/`change_expired_password` usa lo stesso pool. Test: `tests/unit/test_executors.py` (10: thread dedicati, non-coda dietro il pool I/O, singleton attraverso due `asyncio.run`, wrapper instradati via CPU pool), suite esistente invariata (3277 unit+integration verdi, 12 performance bcrypt verdi).
+
+### Integrità degli indici refresh-token (emerso dalla baseline PERF-011, 2026-11-08)
+
+- [ ] **PERF-012** — I file indice dei refresh token sono scritti in modo non atomico e non serializzato: 500 e token persi sotto concorrenza
+  - **Location**: `backend/authglow/repositories/file/refresh_token.py:287-322` (helper `add_to_*`/`remove_from_*` = read-modify-write senza lock su `_id_index_path`/`_active_index_path`), `:96-135` (`_save_id_index_dict`/`_save_active_index_list` usano `base.py:358 _write_text` — scrittura semplice, no tmp+`os.replace`); `core/crypto.py:244` (`decrypt_index_value` solleva `cryptography.exceptions.InvalidTag`, che NON è in `(ValueError, TypeError, JSONDecodeError)` intercettato dai `_load_*`, il cui docstring dichiara "empty if missing/corrupt")
+  - **Descrizione**: la rotatione di un refresh token tocca i due indici cifrati con RMW non protetti. Sotto concorrenza accadono due cose, entrambe osservate nei run di baseline: (a) un lettore legge ciphertext a metà scrittura → `InvalidTag` non intercettato → **500 su `/oauth2/token`** (614 traceback in un run 30u; 134 nel run ufficiale 30u; 226 nel 50u); (b) lost update: due `add_to_id_index` concorrenti si sovrascrivono → l'entry del token appena emesso scompare → `get_refresh_token` non risolve un token **legittimo** → 401 `invalid_grant: Invalid refresh token` (25/159 rotazioni nel run 10u, 115/342 nel 30u). (b) è più insidioso di (a): fallisce silenziosamente e invalidate sessioni valide.
+  - **Fix proposto**: (1) scrittura atomica dei due indici (tmp + `os.replace`, come `_write_json_atomic`); (2) `InvalidTag` nei due tuple `except` dei `_load_*` — tolleranza "corrupt→vuoto" che diventa sicura solo dopo (1), altrimenti un read a metà scrittura svuoterebbe l'indice alla prima save; (3) `named_lock` sull'RMW dei due indici (chiave = path) per eliminare le lost update. Test: unit concurrency (N writer su `add_to_active_index`, assert N entries tutte presenti), regression `_load_*` con payload `agk1:` corrotto (→ vuoto, non eccezione), integration rotazione concorrente senza 500 né voci perse.
+  - **Decisione**: _da discutere_ — raccomandazione **fix ora** (CRITICAL: 500 sul percorso caldo di autenticazione + revoca silenziosa di token validi)
 
 ### Deployment
 
@@ -131,12 +139,21 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 ## PROCESS (1)
 
-- [ ] **PERF-011** — Manca una baseline di load test
+- [x] **PERF-011** — Manca una baseline di load test
   - **Location**: n/a — nessuno script locust/k6/wrk nel repo (`backend/scripts/` contiene solo tool di migrazione/diagnostica)
   - **Descrizione**: tutti i finding sopra derivano da code review statica, non da numeri misurati. Senza una baseline (RPS massimo, p50/p95/p99 su login e refresh concorrenti) non è possibile validare l'impatto reale di un fix né stabilire priorità con dati oggettivi.
   - **Fix proposto**: scrivere uno scenario locust/k6 che eserciti login concorrenti + refresh-token concorrenti (i due percorsi dove PERF-001/002/003 si sommano) contro un'istanza di staging, **prima** di iniziare a implementare i fix sopra — dà i numeri "prima" da confrontare con "dopo".
-  - **Decisione**: _da discutere — probabilmente il primo item da chiudere, condiziona tutto il resto_
+  - **Decisione**: fix ora (2026-11-08).
   - **Verifica (2026-11-07)**: **aperto** — nessun locustfile/k6/wrk nel repo; `backend/scripts/` contiene sempre solo migrazione/diagnostica. Esiste però `tests/performance/` (pytest marcati `-m performance`: `test_threadpool.py` Tier 2.1, `test_bcrypt_async.py`, singleton jwt/httpx, cache oauth2) che il suo stesso README esclude come sostituto del load test (`tests/performance/README.md:10-12`); la directory `tests/load/` citata dal README non esiste.
+  - **Fix**: harness locust in `backend/tests/load/` (branch `chore/load-test-baseline`): `run_baseline.py` one-shot (uvicorn usa-e-getta su storage temporaneo, seed admin+utenti via API, limiter disabilitato via config pre-seedata, CSV + `summary.md` con p50/p95/p99), `locustfile.py` (`LoginUser` cerimonia completa authorize→token, `RefreshUser` catena di rotazione per sessione, pesi 1:3, account dedicato per VU — la condivisione causava falsi 401 da theft-detection), `authflow.py` (flow in `requests` puro condiviso tra seed e scenario), `requirements-load.txt` (locust 2.47, fuori dal lockfile app). Baseline — **server = v0.2.2**, worker singolo, file storage, bcrypt 12, laptop dev 24 core, 60s/run:
+
+    | concurrency | login e2e p50/p95 | authorize p50/p95 | refresh p50/p95 | logins/s | refresh/s | 500 | 401 |
+    |---|---|---|---|---|---|---|---|
+    | 10 | 580/930 ms | 250/320 ms | 500/700 ms | 1.14 | 2.71 | 0 | 25 (16%) |
+    | 30 | 920/1500 ms | 310/700 ms | 530/840 ms | 1.71 | 5.74 | 134 | 115 (34%) |
+    | 50 | 2600/3400 ms | * | * | 0.79 | 5.80 | 226 | 283 (82%) |
+
+    *\*50u: percentili fuori tabella perché il 76% delle authorize fallisce (500) e l'82% delle refresh è 401 a risposta rapida — le code distorcono qualsiasi percentile: a 50u il sistema è in collasso, non "lento". Lettura: il throughput login a 1 worker è ~1.7/s già a 30u e il teto NON è bcrypt (che scala sul pool CPU a 24 core: authorize resta ~300ms mediana): è PERF-012 — gli indici refresh-token corrotti generano 500/lost-update che mascherano il throughput reale. Dopo il fix di PERF-012 la baseline va rimisurata (numeri "vera capacità"), poi PERF-004 (`--workers`, già supportato dal driver) e Redis (PERF-005/006) hanno numeri su cui decidere. Riproduzione: `python tests/load/run_baseline.py --users 30 --duration 60s` (README per opzioni/staging).
 
 ---
 

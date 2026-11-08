@@ -223,3 +223,6 @@ nul
 /security/reports/
 /security/backups/
 /security/zap/zap/
+
+# Load-test results (contain seeded credentials + machine-local timings)
+/backend/tests/load/results/

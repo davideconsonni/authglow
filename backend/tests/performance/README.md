@@ -7,7 +7,8 @@ and `tests/integration/` (cross-module flows), this suite:
 
 - contains tests that take seconds to run (bcrypt is ~100-300ms per op by design);
 - is excluded from the default `pytest` run (use `pytest -m performance`);
-- is not a substitute for proper load testing under `tests/load/` — it only
+- is not a substitute for proper load testing under `tests/load/` (driver:
+  `tests/load/run_baseline.py`) — it only
   validates single-operation overhead and concurrency safety of the new
   `asyncio.to_thread` bcrypt path.
 
