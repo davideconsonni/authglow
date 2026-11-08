@@ -88,7 +88,7 @@ The demo runs in demo mode: log in with the demo admin account shown on the page
 - Rate limiting, CSRF protection, security headers, HTTPS enforcement, structured audit log
 - Single-container image (API + UI on one port) or backend-only image
 
-Full endpoint catalog: [FEATURES.md](docs/reference/features.md)
+Full endpoint catalog: [FEATURES.md](docs/product/reference/features.md)
 
 ---
 
@@ -237,7 +237,7 @@ Server-to-server without the OAuth dance: create a scoped **API key** in the adm
 
 Your app can discover everything automatically at `/.well-known/openid-configuration`, with public signing keys at `/.well-known/jwks.json`.
 
-Step-by-step guides per flow: [docs/flows/](docs/flows/README.md).
+Step-by-step guides per flow: [docs/product/flows/](docs/product/flows/README.md).
 
 ### Integrating with an AI coding assistant
 
@@ -346,11 +346,11 @@ npm run test:e2e # Playwright end-to-end tests
 
 ## Documentation
 
-- [Quick setup](docs/getting-started/quick-setup.md) — local and deployed setup walkthrough
-- [OAuth2/OIDC flows](docs/flows/README.md) — per-flow guides
-- [FEATURES.md](docs/reference/features.md) — complete feature and endpoint catalog
-- [CIE integration](docs/guides/federation/cie.md) — Italian Electronic Identity Card
-- [Google OIDC integration](docs/guides/federation/google.md) — Google sign-in
+- [Quick setup](docs/product/getting-started/quick-setup.md) — local and deployed setup walkthrough
+- [OAuth2/OIDC flows](docs/product/flows/README.md) — per-flow guides
+- [FEATURES.md](docs/product/reference/features.md) — complete feature and endpoint catalog
+- [CIE integration](docs/product/guides/federation/cie.md) — Italian Electronic Identity Card
+- [Google OIDC integration](docs/product/guides/federation/google.md) — Google sign-in
 - [SECURITY.md](SECURITY.md) — how to report vulnerabilities
 
 ---

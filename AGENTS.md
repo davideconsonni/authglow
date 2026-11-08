@@ -1,579 +1,88 @@
 # AGENTS.md
 
-Guidelines for AI coding agents working in the AuthGlow repository.
+Essential instructions for AI coding agents working in the AuthGlow repository.
 
 ## Project Overview
 
-AuthGlow is an authentication platform with a Python/FastAPI backend (`backend/`) and a React/TypeScript frontend (`frontend/`).
+AuthGlow is an authentication and OAuth2/OIDC platform with a Python 3.13/FastAPI backend (`backend/`) and a React 19/TypeScript frontend (`frontend/`).
+
+## Progressive Context Router
+
+Before writing code or designing changes, consult the modular documentation on demand:
+
+| Domain | Document to Read |
+|---|---|
+| Architecture & where to add code | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Repositories & storage backends | [`docs/internals/architecture/repository-pattern.md`](docs/internals/architecture/repository-pattern.md) |
+| RBAC permissions & admin gating | [`docs/internals/architecture/rbac-authorization.md`](docs/internals/architecture/rbac-authorization.md) |
+| Custom token claims & resolvers | [`docs/internals/architecture/claim-policy.md`](docs/internals/architecture/claim-policy.md) |
+| Audit logging integration | [`docs/internals/guides/audit-logging.md`](docs/internals/guides/audit-logging.md) |
+| Secret management & GitGuardian | [`docs/internals/security/secret-management.md`](docs/internals/security/secret-management.md) |
+| OAuth2 / OIDC protocol flows | [`docs/product/flows/README.md`](docs/product/flows/README.md) |
+| Visual design & CSS tokens | [`DESIGN.md`](DESIGN.md) |
 
 ## CodeGraph
 
-If a `.codegraph/` index is present, the coding agent may use the `codegraph_explore` tool before grep, find, or reading source files to understand or locate code. It returns relevant symbols, source, call paths, and dependencies in one query. Use regular file and search tools for details that CodeGraph does not cover or for files outside the index.
+If a `.codegraph/` index is present, use the `codegraph_explore` tool before grep, find, or reading source files to understand or locate code. It returns relevant symbols, source, call paths, and dependencies in one query.
 
 ## Build & Dev Commands
 
 ### Backend (from `backend/`)
 
 ```bash
-# Run the dev server
-uvicorn main:app --reload
-
-# Run all tests (parallel via pytest-xdist)
-pytest -q --tb=line -n auto
-
-# Run a single test file
-pytest tests/unit/test_jwt.py
-
-# Run a single test by name
-pytest tests/unit/test_jwt.py::TestJWTTokenCreation::test_create_access_token_roundtrip -v
-
-# Lint (ruff)
-ruff check authglow/
-
-# Format (ruff)
-ruff format authglow/
-
-# Type check (mypy)
-mypy authglow/
+uvicorn main:app --reload            # Dev server
+pytest tests/unit/test_jwt.py        # Run single test file
+python scripts/affected_tests.py --run   # Run only tests affected by changed files
+pytest -q --tb=line -n auto          # Run full suite (parallel via pytest-xdist)
+ruff check authglow/                 # Lint
+ruff format authglow/                # Format
+mypy authglow/                       # Type check
 ```
 
 ### Frontend (from `frontend/`)
 
 ```bash
-# Install dependencies
-npm install
-
-# Dev server
-npm run dev
-
-# Build (type-check + bundle)
-npm run build
-
-# Lint
-npm run lint
-
-# Unit tests (vitest)
-npm test                    # run all
-npm test -- path/to/file    # run single file
-
-# E2E tests (playwright)
-npx playwright test
-npx playwright test e2e/flows/login-dashboard.spec.ts   # single spec
+npm run dev                          # Dev server
+npm run build                        # Build (type-check + bundle)
+npm run lint                         # Lint
+npm test                             # Unit tests (vitest)
+npm test -- path/to/file             # Run single test file
+npx playwright test                  # E2E tests
 ```
 
-## Test anti-regressione
-
-Tests serve as regression protection. After every change:
-
-- **Backend** → run only the test files matching the changed area
-  (e.g. modified `services/jwt.py` → `tests/unit/test_jwt.py`).
-  Full suite (`-n auto`) only for `core/` changes or before committing.
-- **Frontend** → run only the test file(s) for the changed component
-  (`npm test -- path/to/file`).
-- **E2E** → only for cross-cutting flows touched by the change
-  (login, registration, OAuth2, MFA). Uses Playwright.
-
-When the full backend suite is needed, use `pytest -q --tb=line -n auto`
-(requires `pytest-xdist`). Pass `timeout: 300000` to the Bash tool —
-the timeout parameter belongs to the Bash tool, not pytest.
-
-## Code Style — Backend (Python 3.13)
-
-### Formatting
-
-- **Formatter/Linter**: ruff (line length 100, double quotes, 4-space indent).
-- Import sorting enforced via ruff isort (`select = ["I"]`).
-- E501 (line length) is ignored in linting — handled by the formatter.
-
-### Import Ordering
-
-Three groups separated by blank lines, each alphabetically sorted:
-1. Standard library (`import os`, `from datetime import datetime`)
-2. Third-party (`import bcrypt`, `from fastapi import ...`)
-3. First-party (`from authglow.core.config import ...`)
-
-Private modules use leading underscore: `from authglow.core.config import _new_kid`.
-Lazy imports inside functions for circular-dependency avoidance.
-
-### Type Annotations
-
-- Use `typing` module generics: `List[str]`, `Optional[str]`, `Dict[str, Any]`.
-- Built-in generics (`list[str]`, `dict[str, object]`) are acceptable in newer code.
-- Use `Optional[X]` not `X | None` (3.11 compat).
-- Return type annotations required on all functions.
-- `TypedDict` for typed dicts, `NoReturn` for functions that always raise.
-- Pydantic models: full annotations on all fields, `Field(default_factory=...)` for mutable defaults.
-
-### Naming
-
-| Element              | Convention            | Example                       |
-|----------------------|-----------------------|-------------------------------|
-| Functions/methods    | `snake_case`          | `get_current_user`            |
-| Private functions    | `_leading_underscore` | `_derive_key`                 |
-| Classes              | `PascalCase`          | `JWTService`, `UserStorage`   |
-| Pydantic models      | `PascalCase` + suffix | `UserCreate`, `TokenData`     |
-| Constants            | `UPPER_SNAKE_CASE`    | `PREFIX_LENGTH`               |
-| Private constants    | `_UPPER_SNAKE_CASE`   | `_KEY_PREFIX`                 |
-| Dependency injectors | `get_<name>`          | `get_user_storage`            |
-| Test classes         | `Test<Subject>`       | `TestJWTTokenCreation`        |
-| Test methods         | `test_<scenario>`     | `test_expired_token_rejected` |
-
-### Error Handling
-
-- Use `fastapi.HTTPException` with explicit `status_code` and `detail` message.
-- Custom exceptions for domain logic (e.g. `APIKeyLockedException`, `ConcurrentWriteError`).
-- Catch custom exceptions in route handlers and translate to `HTTPException`.
-- Use `status.HTTP_XXX_*` constants for standard codes.
-- Security-critical paths: use `NoReturn` + `handle_failed_login()` pattern to prevent user enumeration.
-
-### Logging
-
-- **structlog** exclusively (no stdlib `logging`).
-- Single logger: `structlog.get_logger("authglow.audit")`.
-- Structured JSON output to stdout.
-- Mask/hash PII before logging based on `audit_email_log_level` setting.
-
-### Pydantic Models
-
-- All models inherit from `pydantic.BaseModel`.
-- Request/response models separate from domain models (`UserCreate` vs `User`).
-- Use `model_dump()` (not `.dict()`), `model_copy(update=...)` (not `.copy()`).
-- `field_validator` for custom field validation, `Field(...)` for constraints.
-- Settings via `pydantic_settings.BaseSettings` with `SettingsConfigDict`.
-
-### FastAPI Patterns
-
-- Each module defines `router = APIRouter()` included in `main.py`.
-- Dependency injection via `Depends(get_<service_factory>)`.
-- Rate limiting: `@limiter.limit("5/minute")` with `request: Request` as first param.
-- Response models declared on decorators: `response_model=UserResponse`.
-- All handlers are `async def`. All service calls use `await`.
-- File I/O wrapped with `asyncio.to_thread()` (see `async_io.py`).
-
-### Testing (pytest)
-
-- `pytest-asyncio` with `asyncio_mode = "auto"` — no per-test `@pytest.mark.asyncio` needed.
-- Fixtures import inside body to avoid circular deps, use `patch("authglow.*.get_settings")`.
-- `autouse` fixture for settings override across all tests.
-- Assertions: plain `assert` (no `self.assertEqual`).
-- `pytest.raises` for exception testing.
-- Test files: `tests/unit/`, `tests/integration/`, `tests/conftest.py`.
-
-**New protocol/conformance tests — isolation precautions:**
-
-- New test packages (e.g. `tests/conformance/`) get their OWN `conftest.py` — never modify root `tests/conftest.py` for a new area.
-- Fixtures must depend on `test_settings` (`tmp_path`-backed) and pass `settings=` explicitly to every service/storage/factory ctor (lru_cache-bypass pattern) — otherwise tests poison each other under `-n auto`.
-- Keep `bcrypt_rounds=4` from `test_settings` — never raise it in fixtures (each `create_client` would cost ~25x).
-- No real-looking secrets: runtime values via `secrets.token_urlsafe()`, RSA keys via `_generate_rsa_keys()` from root conftest.
-- Known-gap tests use `pytest.mark.xfail(strict=True, reason="OA-xxx: <description>")` so a future fix surfaces as XPASS instead of staying silently green.
-- Prefer REAL storage/clients over `MagicMock` for wire-format assertions (mocks are fine only for pure HTTP-shape tests) — otherwise you test the mock, not the protocol.
-- Few requests per test against rate-limited endpoints (slowapi counters are shared per worker — excess calls cause flaky 429s).
-
-**Running tests — token-saving rules:**
-
-- When running the full suite, always use `pytest -q --tb=line -n auto` to minimize output.
-- Run only the test files matching the changed area, not the full suite every time
-  (e.g. modified `services/jwt.py` → `tests/unit/test_jwt.py`).
-- Pass `timeout: 300000` to the Bash tool for the full suite — the timeout
-  parameter belongs to the Bash tool, not pytest.
-- Show only failures and warning summary — never dump full tracebacks unless debugging a specific failure.
-- **Pre-existing test failures**: this repo has known failures (Python 3.13 event loop, CSP mismatch, `setup_page` import). After every test run, separate failures into two buckets: (a) files you modified — fix these immediately; (b) untouched files — report them clearly and **ask the user** whether to investigate. Never auto-fix pre-existing failures without asking.
-
-### Other Conventions
-
-- **UTC everywhere**: use `utcnow()` from `authglow.core.datetime`, never naive datetimes.
-- **Secrets**: `secrets.token_urlsafe()` / `secrets.token_hex()` for crypto randomness.
-- **Concurrency**: `named_lock()` from `authglow.core.concurrency` for atomic file ops.
-- **Caching**: `functools.lru_cache` for pure functions, `cachetools.TTLCache` for TTL caches.
-- **Module docstrings**: every module starts with a triple-quoted description.
-- **Function docstrings**: Google/NumPy-like style on public functions.
-
-## Code Style — Frontend (TypeScript/React)
-
-### Tooling
-
-- **TypeScript** with `strict`-ish flags: `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`.
-- **ESLint** flat config with `typescript-eslint`, `react-hooks`, `react-refresh`.
-- **Vite** for bundling. **Tailwind CSS** for styling. **shadcn/ui** for primitives.
-
-### Import Ordering
-
-1. React/library imports (`react`, `react-router-dom`, `@tanstack/react-query`)
-2. Path-aliased imports (`@/lib/*`, `@/hooks/*`, `@/stores/*`, `@/components/*`)
-3. Relative imports (`./Sibling`, `../helper`) — only for co-located files
-
-- Use `import type` for type-only imports (enforced by `verbatimModuleSyntax`).
-- `@/` alias maps to `./src/*`. Use it for all cross-directory imports.
-- No barrel files / `index.ts` re-exports — import directly by file path.
-
-### TypeScript Patterns
-
-- `interface` for object shapes (props, API responses, store state).
-- `type` for unions, string literal unions, derived types.
-- Props interfaces suffixed with `Props`: `PageHeaderProps`.
-- Generics extensively used in API layer: `api.get<AuthUser>(...)`.
-- Minimize type assertions; prefer type narrowing.
-
-### Naming
-
-| Element                | Convention           | Example                   |
-|------------------------|----------------------|---------------------------|
-| Component files        | `PascalCase.tsx`     | `LoginForm.tsx`           |
-| Non-component files    | `camelCase.ts`       | `authStore.ts`            |
-| UI primitives (shadcn) | `kebab-case.tsx`     | `button.tsx`              |
-| Test files             | `kebab-case.test.ts` | `phase2-auth.test.ts`     |
-| E2E specs              | `kebab-case.spec.ts` | `login-dashboard.spec.ts` |
-| Components             | `PascalCase`         | `StatusBadge`             |
-| Functions/hooks        | `camelCase`          | `useAuth`, `formatDate`   |
-| Event handlers         | `handle` prefix      | `handleDelete`            |
-| Custom hooks           | `use` prefix         | `useAuth`, `useTheme`     |
-| Constants              | `UPPER_SNAKE_CASE`   | `API_URL`, `ROUTES`       |
-| Store hooks            | `use<Name>Store`     | `useAuthStore`            |
-
-### Component Patterns
-
-- **100% functional components**. Named exports only (no default exports except `App.tsx`).
-- Props defined as named `interface` above component, destructured in params.
-- Internal helper components: `function Name()` (not exported), defined in same file.
-- `React.forwardRef` only for shadcn/ui primitives.
-- Code splitting via `React.lazy()` with `.then((m) => ({ default: m.ComponentName }))`.
-
-### State Management
-
-- **Zustand** for client state. Separate `State` and `Actions` interfaces, intersected as `Store`.
-- Convenience hooks (`useAuth`) wrapping store selectors for cleaner component APIs.
-- **TanStack Query** for server state. Custom `useApiQuery` / `useApiMutation` wrappers.
-- Query keys: `string[]` with dynamic segments. Conditional queries via `{ enabled }`.
-
-### CSS/Styling
-
-- **Tailwind utility classes** in JSX `className`. No CSS modules or styled-components.
-- `cn()` utility (clsx + tailwind-merge) for conditional/merged classes.
-- Design tokens via CSS variables: `text-text-primary`, `bg-surface-1`, `border-semantic-error`.
-- shadcn/ui components use `class-variance-authority` (CVA) for variants.
-- Common patterns: `rounded-xl`, `transition-colors`, `hover:scale-[1.02]`.
-
-### Error Handling (Frontend)
-
-- Custom `ApiError` class in `api.ts` with `status` and `data`.
-- 401 responses auto-clear auth and redirect to `/auth/login`.
-- Component errors: `try/catch` in event handlers, error state in `useState<string>`.
-- Error UI: inline alerts with `bg-semantic-error/10 text-semantic-error`.
-- Success feedback: `useState<boolean>` auto-cleared with `setTimeout`.
-
-### Forms
-
-- **react-hook-form** + **zod** validation.
-- Schema defined at module level, type inferred via `z.infer<typeof schema>`.
-- `useForm<T>({ resolver: zodResolver(schema) })`.
-- Validation errors: `errors.fieldName && <p role="alert">{errors.fieldName.message}</p>`.
-
-### Testing
-
-- **Vitest** for unit/integration tests. `import { describe, it, expect } from 'vitest'`.
-- **Playwright** for E2E. Serial execution (`workers: 1`). Projects: chromium + mobile.
-- E2E helpers in `auth.setup.ts`: `injectAuth()`, `clearAuth()`, `loginViaUI()`.
-- Use `data-testid` attributes for stable selectors in E2E tests.
-- `role="alert"` on error messages for accessibility.
-
-### Accessibility
-
-- `aria-label` on icon-only buttons and navigation.
-- `htmlFor` matching input `id` on labels.
-- Semantic HTML: `<nav>`, `<section>`, `<main>`, `<aside>`.
-- `role="alert"` on error messages.
-
-## Architecture Notes
-
-```
-backend/
-  authglow/
-    api/          # FastAPI routers (HTTP layer)
-    core/         # Config, crypto, cache, rate_limit, datetime, password, pii, permissions, concurrency, async_io, http_client, jwt_singleton
-    middleware/   # Security headers, request size, HTTPS enforcement, request ID, proxy headers
-    models/       # Pydantic data models
-    services/     # Business logic (thin facade over repositories)
-    repositories/ # ⭐ NEW: Repository pattern abstraction
-      protocols.py        # 36 Protocol contracts (runtime_checkable)
-      exceptions.py       # EntityNotFoundError, EntityAlreadyExistsError
-      dependencies.py     # FastAPI factory functions (one per entity)
-      file/              # File-based impls (current backend)
-        base.py           # BaseFileRepository (fsspec + AsyncFileSystem)
-        <entity>.py       # 1 per entity (36 entities)
-  tests/
-    unit/
-      repositories/
-        test_protocols.py   # ⭐ 36 parametrized conformance checks
-        test_in_memory.py    # ⭐ 8 in-memory smoke tests
-        file/                # Per-impl File tests
-          test_<entity>.py   # 1 per entity (36 entities)
-      test_<service>.py
-    integration/  # Cross-module tests
-    conftest.py   # Shared fixtures (incl. _override_settings autouse)
-
-frontend/src/
-  lib/            # api.ts, utils.ts, constants.ts, jwt.ts, loginStorage.ts
-  stores/         # Zustand stores (authStore, toastStore, playgroundStore)
-  hooks/          # Custom hooks (useApi, useAuth, useTheme, useDocumentTitle, useDemoMeta)
-  components/
-    ui/           # shadcn/ui primitives
-    layout/       # AppShell, Sidebar, TopBar
-    shared/       # LoadingState, ErrorState, ConfirmDialog, etc.
-  pages/          # Route components
-  styles/         # globals.css with Tailwind + design tokens
-```
-
-### Repository Pattern (post-Fase 21)
-
-The `authglow/repositories/` layer was introduced in **Fase 0**
-and completed in **Fase 21** — the original 21-phase migration
-plan is archived in git history. The current repository layout
-is authoritative.
-
-**Key principles**:
-
-- **Services depend on Protocols, not impls.** Every service
-  constructor takes optional `repository` arguments and falls
-  back to a FastAPI factory via
-  `repositories.dependencies.get_<entity>_repository()`.
-- **Cross-entity atomicity lives in services**, not repos.
-  The `UserService` facade holds the `named_lock` for
-  `create_user` / `update_email` / `delete_user` (which
-  span User + EmailIndex + FederatedIdentity).
-- **Add a new backend (e.g. Postgres) in 3 steps**: (1)
-  `pip install <dep>`, (2)
-  `repositories/<backend>/<entity>.py` with
-  `<Backend><Entity>Repository(<Protocol>)`, (3) update the
-  factory in `repositories/dependencies.py`. **Zero
-  changes** to `services/` or `api/`.
-- **The conformance test
-  `tests/unit/repositories/test_protocols.py`** parametrizes
-  every Protocol × every impl, so adding a new backend
-  means adding 1 line to `_IMPL_TABLE` — the conformance
-  test then validates the new impl automatically.
-- **The in-memory smoke test
-  `tests/unit/repositories/test_in_memory.py`** proves the
-  service↔repo protocol boundary works with any impl that
-  satisfies the Protocol contracts (the `UserService`
-  facade is exercised end-to-end with `InMemoryUserRepository`
-  + `InMemoryEmailIndexRepository` +
-  `InMemoryFederatedIdentityRepository`).
-
-**Repository impl hierarchy**:
-
-```
-BaseFileRepository  (authglow/repositories/file/base.py)
-  ├── shared fsspec + AsyncFileSystem handling
-  ├── atomic write helpers (_write_json_atomic, _read_json, _glob, _delete)
-  ├── path helpers (_path, _ensure_parent)
-  └── lru_cache bypass via settings= kwarg on ctor
-
-File<Entity>Repository(BaseFileRepository, <Entity>Repository)
-  ├── Pydantic round-trip (model_dump / model_validate)
-  ├── backend-specific concerns (PII encryption, HMAC keys, CAS)
-  └── public surface = Protocol methods
-
-FileKeyStoreRepository  (authglow/repositories/file/keystore.py)
-  ├── BaseFileRepository subclass with root_dir=settings.keys_dir
-  ├── _version field in keyring.json for cloud atomicity (_write_json_versioned)
-  └── for_keys_dir() classmethod for lru_cache bypass at startup
-```
-
-**Service implementation hierarchy**:
-
-```
-Service.__init__(repository=None, ...)
-  ├── if repository is None: factory = get_<entity>_repository(settings=self.settings)
-  ├── else: use the injected repository directly
-  └── the factory is the single point that picks the File impl today
-       (tomorrow, a SQL impl could be selected by Settings.backend)
-
-Service.create_user(user) [UserService cross-entity example]
-  ├── async with self._lock(f"user:{user.id}"), self._lock("email_index")
-  ├── await self._email_index_repo.lookup(...)  # duplicate check
-  ├── await self._user_repo.create(user)        # single-entity mutation
-  └── await self._email_index_repo.insert(...)  # secondary index
-```
-
-**Lru_cache bypass pattern** (CRITICAL for test isolation):
-
-`BaseFileRepository.__init__` calls
-`authglow.repositories.file.base.get_settings()` (NOT
-`authglow.core.config.get_settings`). The autouse
-`_override_settings` fixture patches
-`authglow.core.config.get_settings` only, so the File
-repos would hit the singleton `lru_cache` and always read
-the FIRST test's `Settings` instance.
-
-**Fix**: every factory in `repositories/dependencies.py`
-accepts `settings: Settings | None = None`, and the
-service passes `self.settings` (the patched, per-function
-value) explicitly. Without this fix, `_storage_path` is
-shared across tests → `TestAccountLockout` etc. fail with
-"User with email <x> already exists" on the 2nd test
-of the class.
-
-For the keyring (Fase 20), the
-`FileKeyStoreRepository.__init__` takes `settings=` for the
-same reason. The `for_keys_dir()` classmethod additionally
-takes a `keys_dir` + `secret_key` for the startup path in
-`core/config.py: get_or_generate_keyring` (which runs BEFORE
-the lru_cache is bypassed).
-
-### Keeping ARCHITECTURE.md current
-
-After structural changes (new router, service, repository, store, page),
-update `ARCHITECTURE.md` to keep the directory maps and reference table accurate.
-
-## Audit Logging Guidelines
-
-### When to Add Audit Logging
-
-Add `AuditService.log_event()` calls to **every** security-relevant endpoint:
-- Authentication (login, logout, MFA, passkey, federated)
-- Token lifecycle (issue, refresh, revoke, introspect)
-- User lifecycle (create, update, delete, email/password change)
-- Admin actions (user management, scope/role changes, token revocation)
-- API key lifecycle (create, revoke, rotate)
-- OAuth2/OIDC protocol events (auth code, consent, device code)
-
-### Integration Pattern
-
-```python
-from authglow.models.audit_events import AuditEventType
-from authglow.models.audit_metadata import TokenIssuedMetadata
-from authglow.services.audit import AuditService
-from fastapi import Depends
-
-@router.post("/my-endpoint")
-async def my_endpoint(
-    ...,
-    audit_service: AuditService = Depends(get_audit_service),
-):
-    await audit_service.log_event(
-        event_type=AuditEventType.ACCESS_TOKEN_ISSUED,
-        user_id=user.id,
-        email=user.email,
-        client_id=client_id,
-        correlation_id=auth_code.code,
-        metadata=TokenIssuedMetadata(
-            token_id=access_token_id,
-            client_id=client_id,
-            grant_type="authorization_code",
-            scopes=scopes,
-            expires_in=1800,
-            dpop_bound=bool(dpop_proof),
-            token_type="access",
-        ),
-    )
-```
-
-### Key Principles
-
-1. **Use enum, not strings** — `AuditEventType` enum ensures consistency
-2. **Typed metadata** — Use Pydantic models from `audit_metadata.py` for validation
-3. **Request correlation** — Pass `correlation_id` for multi-request flows (auth_code → token)
-4. **PII protection** — All metadata goes through automatic masking (hash/mask/none per `audit_email_log_level`)
-5. **Request ID propagation** — `request_id` from middleware automatically included via `structlog.contextvars`
-
-### Required Fields per Event
-
-| Event Category | Required Fields |
-|----------------|-----------------|
-| Auth | `user_id`, `email`, `ip_address`, `user_agent`, `auth_method` |
-| OAuth2 | `client_id`, `correlation_id` (auth_code), `token_id` (jti) |
-| Admin | `target_user_id`, `admin_user_id`, `fields_changed` |
-| Security | `source_ip_prefix`, `risk_score` |
-
-### Testing Audit Events
-
-```python
-# Unit test
-await audit_service.log_event(
-    event_type=AuditEventType.LOGIN_SUCCESS,
-    user_id="u1",
-    email="test@example.com",
-    metadata=LoginSuccessMetadata(auth_method="password", scopes=["read"]),
-)
-assert entry.event_type == "login_success"
-assert entry.metadata["auth_method"] == "password"
-```
-
-### PII Protection
-
-- Default `audit_email_log_level="hash"` (VAPT-080)
-- `none` rejected in production
-- IP truncated to /24 (IPv4) / /48 (IPv6)
-- User-Agent truncated to 256 chars
-
-### Secret Management
-
-AuthGlow is regularly scanned by GitGuardian. The repo's policy is: **no real secret ever touches git history**. This section covers how that's enforced, how to handle test fixtures, and what to do if a real secret is leaked.
-
-### What's already in place
-
-- `.env` is gitignored at the repo root (`.gitignore:138`).
-- RSA signing keys are generated at runtime in `backend/tests/conftest.py:_generate_rsa_keys()` and stored in a session-scoped temp dir — never committed.
-- `.env.example` is the canonical template for new environments and contains placeholder values only.
-- A pre-commit `gitleaks` hook (`.pre-commit-config.yaml`) blocks commits that introduce real secrets.
-- A `.gitguardian.yaml` path-allowlist at the repo root prevents test fixtures from generating false-positive alerts.
-
-### How to generate secrets in dev
-
-```bash
-# Symmetric SECRET_KEY (sessions, encrypted blobs)
-python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))"
-
-# OAuth 2.0 client secret
-python -c "import secrets; print('OAUTH2_CLIENT_SECRET=' + secrets.token_urlsafe(32))"
-
-# Passkey / WebAuthn challenge entropy uses the same helper internally.
-```
-
-Copy the printed line into `backend/.env` (which is gitignored).
-
-### Rotation policy
-
-| Secret                                | When to rotate                                                                                                                    |
-|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `SECRET_KEY`                          | On every major release, or **immediately** on any suspected leak. Invalidates all sessions and encrypted blobs.                   |
-| `OAUTH2_CLIENT_SECRET`                | On request from a client, or on suspected leak. Requires re-consent flow.                                                         |
-| JWT signing key                       | Automatic every 90 days via `jwt_auto_rotate=True` (see `authglow/core/config.py`). Manual rotation is exposed via the admin API. Multi-replica coherence: the `JWTService` singleton re-probes `keyring.json` every `jwt_keyring_refresh_seconds` (default 60, `0` off) and rebuilds on foreign rotation/revocation (`core/jwt_singleton.py`). |
-| SMTP / SendGrid / Mailgun credentials | Every 180 days, or on personnel change.                                                                                           |
-
-### What to do if GitGuardian fires a real alert
-
-1. **Revoke the secret immediately** at the issuing provider (rotate, delete, or block the key).
-2. Strip the secret from history:
-   ```bash
-   pip install git-filter-repo
-   git filter-repo --invert-paths --path <file-or-glob>
-   git push --force-with-lease
-   ```
-3. Open a post-mortem issue tagged `security` even for false positives — update `.gitguardian.yaml` or `backend/tests/.gitleaks.toml` so the next scan learns from it.
-4. If a private key was leaked, treat the corresponding public key as compromised: rotate the JWT keyring (`keyring.json`) and force a re-consent for OIDC clients.
-
-### Test fixtures (where the noise comes from)
-
-Most GitGuardian alerts on this repo are **false positives inside `backend/tests/`**: the suite contains strings that match generic-secret heuristics (32-char key material in `test_jwt_key_rotation.py`, the canonical RFC 6238 TOTP seed `JBSWY3DPEHPK3PXP` in `test_mfa.py`, bcrypt-style placeholders in `test_admin_users_phase2.py`, and plaintext test passwords in `test_registration.py`).
-
-When adding new test code:
-
-- **Reuse existing fixtures** from `backend/tests/conftest.py` (`test_user`, `test_admin_user`, `test_settings`, `mfa_service`, etc.) instead of inventing new plaintext passwords or secrets.
-- For one-off values, generate at runtime:
-  ```python
-  import secrets
-  fake_token = secrets.token_urlsafe(16)
-  ```
-- Never copy a real-looking secret into a test. If a test must exercise a *specific* format, derive it from `secrets` rather than hardcoding it.
-- If a new fixture value keeps tripping gitleaks, add a targeted regex to the `[allowlist]` block in `backend/tests/.gitleaks.toml` **with a comment explaining why it's safe**.
-
-### Pre-commit setup for new contributors
-
-```bash
-pip install pre-commit
-pre-commit install
-pre-commit run gitleaks --all-files   # one-time full scan
-```
-
-Once installed, every `git commit` automatically runs gitleaks on staged files. To skip (not recommended): `git commit --no-verify`.
+## Anti-Regression & Testing Rules
+
+1. **Test Scope**: Run only the test files matching the changed area (e.g., modified `services/jwt.py` → `pytest tests/unit/test_jwt.py`). Automate the mapping with `python scripts/affected_tests.py` from `backend/` (prints the affected test paths; add `--run` to execute them, `--base origin/main` for committed changes). Frontend equivalent: `npx vitest related --run <changed files>`. Run the full suite (`-n auto`) only for `core/` changes or prior to final completion.
+2. **Bash Timeout**: Pass `timeout: 300000` to the Bash/shell tool when executing the full test suite.
+3. **Test Isolation**:
+   - Never modify `tests/conftest.py` for isolated feature testing.
+   - Inject `settings=test_settings` explicitly in service/repository constructors to bypass `lru_cache` and prevent state contamination across workers.
+   - Keep `bcrypt_rounds=4` in test settings.
+   - Never hardcode real secrets or generic password hashes: use `secrets.token_urlsafe()` and test fixtures from `conftest.py`.
+4. **Pre-Existing Failures**: Separate test failures into (a) files you touched (must fix) and (b) untouched files (report clearly, ask user before investigating).
+5. **Testing Pitfalls** (each cost a debug cycle at least once — follow them):
+   - Direct handler tests need a real `starlette.requests.Request` (use the `http_request` fixture in `tests/conftest.py`); a `MagicMock` request raises `parameter 'request' must be an instance of starlette.requests.Request` before the handler body runs.
+   - pytest-asyncio runs in `auto` mode: plain `async def` tests already execute; add `@pytest.mark.asyncio` only where the file already uses it, for consistency. Sync tests may drive `asyncio.run()`.
+   - Assert structure, not wall time: thread names (see the `cpu_pool_probe` fixture), tick counters during a known-duration job, "dispatch completes while a 1-worker pool is occupied". If a timing threshold is unavoidable, use a ≥3× margin.
+   - bcrypt runs at `bcrypt_rounds=4` in tests (~1-2 ms): loop-blocking assertions cannot detect a real hash — inject a `time.sleep` job of measurable duration instead.
+   - Concurrency API gotchas: `loop.set_default_executor(None)` raises (it requires an executor instance); `ThreadPoolExecutor.max_workers` is private (`_max_workers`); `asyncio.to_thread` binds to the *running loop's* default executor, while `core/executors.run_cpu_bound` uses a process-global pool with no loop affinity.
+   - `tests/conftest.py` patches `get_settings` in the *service* module namespaces only — API modules keep their own import binding. When a route reads a settings flag, patch the module attribute explicitly (`monkeypatch.setattr(api_module, "settings", ...)`) or gate on `get_settings()` deliberately.
+   - Windows/PowerShell: never pipe pytest output into `Select-String`/`tail` (subprocess buffering causes false tool timeouts); run pytest directly or use a background shell.
+   - `scripts/affected_tests.py --run` inspects the working tree; `--base` is only for committed diffs.
+
+## Core Conventions
+
+### Backend (Python 3.13)
+- **Formatting**: ruff (line length 100, double quotes).
+- **Typing**: Return type annotations required on all functions. Use `Optional[T]` (not `T | None`).
+- **Dates & Times**: Always use `utcnow()` from `authglow.core.datetime` (never naive datetimes).
+- **Logging**: `structlog.get_logger("authglow.audit")` exclusively. Structured JSON, no stdlib `logging`.
+- **Async I/O**: File I/O via `async_io.py:AsyncFileSystem`. CPU operations (bcrypt) via `asyncio.to_thread()`.
+- **Error Handling**: `fastapi.HTTPException` with explicit status codes. Domain exceptions mapped in route handlers.
+
+### Frontend (TypeScript / React)
+- **Typing**: Strict TypeScript, `verbatimModuleSyntax`, `import type` for types.
+- **Components**: Functional components only. Named exports. Props interfaces named `<Component>Props`.
+- **Styling**: Tailwind CSS with design tokens (`DESIGN.md`). Combine classes via `cn()`.
+- **State**: Zustand for client stores, TanStack Query for server state.
+- **Routing**: Import paths aliased via `@/` (maps to `src/*`). No barrel `index.ts` files.

@@ -3,7 +3,7 @@
 > **AuthGlow is NOT FAPI 2.0 certified.** It is Security-BCP-oriented with
 > FAPI opt-ins per client. This page records the decided profile: what is
 > default, what is opt-in, what is out of scope, and why. Every row cites
-> the plan item (`docs/plans/archive/oauth2-oidc-compliance-plan.md`) and
+> the plan item (`docs/project/plans/archive/oauth2-oidc-compliance-plan.md`) and
 > the evidence (test or code) behind it.
 
 ## Decided profile (default vs opt-in)
@@ -31,7 +31,7 @@
 
 1. **DPoP/PAR default off** (OA-503, OA-501): turning either on by default
    today would break the playground, the code snippets, and new integrators
-   without notice. High-risk clients SHOULD opt in (see `docs/flows/dpop.md`).
+   without notice. High-risk clients SHOULD opt in (see `docs/product/flows/dpop.md`).
 2. **mTLS waived** (OA-503): the app runs behind a reverse proxy with no
    client-cert forwarding (`middleware/proxy_headers.py`,
    `https_enforcement.py`). Revisit only with a dedicated TLS-infra project.

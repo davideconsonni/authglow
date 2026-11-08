@@ -84,6 +84,12 @@ def test_settings(tmp_path, test_keys_dir):
         # the default 12 (see ``Settings.bcrypt_rounds``).
         bcrypt_rounds=4,
         jwt_auto_rotate=False,
+        # Timing-leak protection (padding read + 0–50 ms jitter on
+        # every email-index miss) is production behaviour; tests opt
+        # out because the jitter is pure wall-clock with no assertion
+        # on it. The production default staying enabled is guarded by
+        # ``test_protection_defaults_to_enabled`` (class-level check).
+        timing_leak_protection=False,
         # Phone verification: tests must never touch the real
         # provider — the developer's local .env may select
         # infobip_sms/infobip_whatsapp, which would attempt live
@@ -151,6 +157,22 @@ def _reset_jwt_singleton():
 
     yield
     asyncio.run(reset_jwt_singleton())
+
+
+@pytest.fixture(autouse=True)
+def _reset_file_index_repositories():
+    """Drop the process-wide root-index repositories (email index,
+    federated identities) around every test.
+
+    Their parsed index caches are shared across requests on purpose
+    in production; between tests the same storage path would leak a
+    cache built against a previous case's on-disk state.
+    """
+    from authglow.repositories.file.index_registry import reset_shared_index_repositories
+
+    reset_shared_index_repositories()
+    yield
+    reset_shared_index_repositories()
 
 
 @pytest.fixture(autouse=True)
@@ -519,3 +541,37 @@ def _ensure_event_loop(request):
     asyncio.set_event_loop(loop)
     yield
     loop.close()
+
+
+@pytest.fixture
+def http_request():
+    """A minimal real Starlette request for direct FastAPI handler tests.
+
+    Handlers validate the ``request`` parameter type at call time, so a
+    plain ``MagicMock`` raises before the body runs; slowapi expects a
+    ``view_rate_limit`` state attribute when the middleware stack is
+    bypassed. See "Testing Pitfalls" in the root ``AGENTS.md``.
+    """
+    from starlette.requests import Request
+
+    request = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+    request.state.view_rate_limit = None
+    return request
+
+
+@pytest.fixture
+def cpu_pool_probe():
+    """Async helper returning the thread name a CPU-pool job ran on.
+
+    Canonical assertion for "this dispatch went to the dedicated
+    ``core.executors`` pool" without touching wall-clock timing.
+    """
+    import threading
+
+    from authglow.core.executors import run_cpu_bound
+
+    async def _probe() -> str:
+        thread = await run_cpu_bound(threading.current_thread)
+        return thread.name
+
+    return _probe

@@ -1,6 +1,6 @@
 """Password reset API endpoints."""
 
-from typing import List
+from typing import List, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -22,6 +22,7 @@ from authglow.services.email.factory import get_email_service
 from authglow.services.password import (
     PasswordValidator,
     hash_password_async,
+    verify_dummy_password_async,
     verify_password_async,
 )
 from authglow.services.password_reset import PasswordResetService
@@ -237,12 +238,7 @@ async def change_expired_password(
     other password setter, and clears the ``password_expired`` flag via
     ``set_password(require_change=False)``.
     """
-    user = await storage.get_user_by_email(payload.email)
-    if (
-        user is None
-        or not user.is_active
-        or not await verify_password_async(payload.current_password, user.hashed_password)
-    ):
+    async def _reject_invalid_credentials() -> NoReturn:
         await audit_service.log_event(
             event_type="expired_password_change_failed",
             email=payload.email,
@@ -251,6 +247,19 @@ async def change_expired_password(
             ip_address=request.client.host if request.client else None,
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    user = await storage.get_user_by_email(payload.email)
+    if user is None:
+        # VAPT-050: an unknown email must cost the same as a wrong
+        # password on the verify below — spend the dummy bcrypt first,
+        # under the same gate as the read-padding in the storage layer.
+        if settings.timing_leak_protection:
+            await verify_dummy_password_async(payload.current_password)
+        await _reject_invalid_credentials()
+    if not user.is_active or not await verify_password_async(
+        payload.current_password, user.hashed_password
+    ):
+        await _reject_invalid_credentials()
 
     if not user.password_expired:
         raise HTTPException(

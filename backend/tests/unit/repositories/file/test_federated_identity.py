@@ -158,6 +158,115 @@ class TestFileFederatedIdentityRepository:
 
 
 # ---------------------------------------------------------------------------
+# Process-wide cache (PERF-002): shared instance + staleness probe
+# ---------------------------------------------------------------------------
+
+
+class TestFederatedIdentityProcessCache:
+    """The repository is shared process-wide through the dependency
+    factory; ``lookup`` is cache-served with a periodic staleness
+    probe, while the mutation paths merge against on-disk content."""
+
+    def _make_repo(self, test_settings) -> FileFederatedIdentityRepository:
+        return FileFederatedIdentityRepository(settings=test_settings)
+
+    def test_factory_returns_shared_instance(self, test_settings):
+        from authglow.repositories.dependencies import (
+            get_federated_identity_repository,
+        )
+
+        first = get_federated_identity_repository(settings=test_settings)
+        second = get_federated_identity_repository(settings=test_settings)
+        assert isinstance(first, FileFederatedIdentityRepository)
+        assert first is second
+
+    async def test_lookups_do_not_touch_disk_within_interval(self, test_settings, monkeypatch):
+        repo = self._make_repo(test_settings)
+        await repo.link("user-1", "provider-a", "ext-1")
+
+        reads = []
+        original = repo._read_index
+
+        async def counting_read():
+            reads.append(1)
+            return await original()
+
+        monkeypatch.setattr(repo, "_read_index", counting_read)
+        assert await repo.lookup("provider-a", "ext-1") == "user-1"
+        assert await repo.lookup("provider-a", "unknown") is None
+        assert reads == []
+
+    async def test_probe_picks_up_foreign_link(self, test_settings):
+        import json
+        from datetime import timedelta
+
+        from authglow.core.datetime import utcnow
+
+        repo = self._make_repo(test_settings)
+        await repo.link("user-1", "provider-a", "ext-1")
+
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["provider-b|ext-2"] = "user-2"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        assert await repo.lookup("provider-b", "ext-2") is None
+        repo._last_probe = utcnow() - timedelta(seconds=61)
+        assert await repo.lookup("provider-b", "ext-2") == "user-2"
+
+    async def test_link_merges_foreign_entries(self, test_settings):
+        """Read-modify-write starts from disk: a link created by
+        another replica survives a local link."""
+        import json
+
+        repo = self._make_repo(test_settings)
+        await repo.link("user-1", "provider-a", "ext-1")
+
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["provider-b|ext-2"] = "user-2"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        await repo.link("user-3", "provider-c", "ext-3")
+
+        with open(path, encoding="utf-8") as f:
+            final = json.load(f)
+        assert final == {
+            "provider-a|ext-1": "user-1",
+            "provider-b|ext-2": "user-2",
+            "provider-c|ext-3": "user-3",
+        }
+
+    async def test_link_detects_foreign_conflict(self, test_settings):
+        """A pair claimed by another replica on disk — never seen by
+        the local cache — still raises instead of being clobbered."""
+        import json
+
+        repo = self._make_repo(test_settings)
+        await repo.link("user-1", "provider-a", "ext-1")
+
+        path = repo._index_path()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["provider-b|ext-2"] = "user-9"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        with pytest.raises(EntityAlreadyExistsError):
+            await repo.link("user-1", "provider-b", "ext-2")
+
+        # The raise happens before the write: the foreign mapping
+        # stays intact on disk.
+        with open(path, encoding="utf-8") as f:
+            final = json.load(f)
+        assert final["provider-b|ext-2"] == "user-9"
+
+
+# ---------------------------------------------------------------------------
 # Patched-settings construction smoke test
 # ---------------------------------------------------------------------------
 

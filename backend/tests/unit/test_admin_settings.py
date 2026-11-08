@@ -72,6 +72,10 @@ class TestAdminSettingsEndpointStructure:
             # Internal refresher tick for admin runtime config — never
             # exposed in the admin UI (self-referential footgun).
             "admin_config_refresh_seconds",
+            # Blacklist disk-sweep interval: bound once at lifespan start,
+            # a runtime override would only apply on restart — same
+            # rationale as admin_config_refresh_seconds.
+            "token_blacklist_cleanup_seconds",
             # Bound at app creation from the env var, so a runtime override
             # would be a no-op — intentionally not admin-editable.
             "enable_docs",

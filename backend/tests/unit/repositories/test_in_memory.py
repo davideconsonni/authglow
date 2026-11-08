@@ -265,9 +265,9 @@ class TestUserServiceWithInMemoryRepositories:
         # ``_afs`` is only used by get_user_by_email's
         # timing-leak padding; we leave it unset because the
         # in-memory test path never exercises the
-        # ``timing_leak_protection`` branch (the test_settings
-        # default has it enabled, but the noop branch is
-        # only reached when the email index returns None).
+        # ``timing_leak_protection`` branch — the test_settings
+        # default disables it (the production default, enabled, is
+        # guarded by ``test_protection_defaults_to_enabled``).
         return svc
 
     async def test_create_user_cross_entity(

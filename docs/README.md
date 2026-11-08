@@ -1,34 +1,45 @@
-# AuthGlow Docs
+# AuthGlow Documentation
 
-Start here. For code style, naming, and test commands see `AGENTS.md`; for the structural map see `ARCHITECTURE.md`.
+Welcome to the AuthGlow documentation. The documentation is organized into three distinct pillars:
 
-## Coding agents: where to look first
+```
+docs/
+├── product/          # 1. Product & Protocol Documentation
+│   ├── getting-started/   # Zero-to-signed-in setup guides
+│   ├── reference/         # Complete feature and endpoint catalog (features.md, FAPI.md)
+│   ├── flows/             # OAuth2/OIDC protocol flows (PKCE, DPoP, Device Auth, etc.)
+│   └── guides/            # Integrator guides (CIE, Google Federation, SMS/Phone)
+│
+├── project/          # 2. Operations & Project Tracking
+│   ├── plans/             # Engineering roadmaps & work items (active/ and archive/)
+│   ├── vapt/              # Security audit reports and penetration testing results
+│   └── analysis/          # Technical feasibility assessments (e.g. SAML)
+│
+└── internals/        # 3. Engineering & Progressive Context (AI Agents & Core Devs)
+    ├── architecture/      # Deep dives: repository-pattern, rbac, claim-policy, deployment
+    ├── security/          # Secret management policy, test fixture isolation, GitGuardian
+    └── guides/            # Developer implementation guides (audit-logging, custom-resolvers)
+```
 
-| Task | Read |
-|------|------|
-| Implement an OAuth2/OIDC flow | `flows/README.md` + the flow file, then `reference/features.md` |
-| Add a feature or endpoint | `reference/features.md`, then `ARCHITECTURE.md` (where to add what) |
-| Work a security/audit item | `plans/active/README.md` for the tracking plan, then the plan file |
-| Evaluate SAML | `analysis/saml/00-assessment.md` (draft analysis, not an approved plan) |
-| Set up locally | `getting-started/quick-setup.md` |
+---
 
-## Map
+## Where to Look First
 
-| Directory | Content |
-|-----------|---------|
-| `getting-started/` | `quick-setup.md` — zero-to-signed-in (local + deployed) |
-| `reference/` | `features.md` — complete feature catalog, endpoint by endpoint |
-| `guides/` | `audit-logging.md`, `custom-claim-resolvers.md`, `phone-verification.md` |
-| `guides/federation/` | `google.md`, `cie.md` — OIDC federation provider guides |
-| `flows/` | Per-flow guides: standard, actors, conformance, endpoints (`flows/README.md` index) |
-| `analysis/saml/` | SAML 2.0 assessment, phases 0–3 (draft analysis, may become a plan) |
-| `workshop/` | Facilitator kit for the agentic-AI workshop day (`workshop/index.html` is the run-of-show guide) |
-| `plans/active/` | Open plans, one file per workstream (`plans/active/README.md` index) |
-| `plans/archive/` | Completed or superseded plans (`plans/archive/README.md` index) |
+| Role / Intent | Target Area | Recommended Starting Point |
+|---|---|---|
+| **I want to run or integrate with AuthGlow** | `docs/product/` | [`product/getting-started/quick-setup.md`](product/getting-started/quick-setup.md) |
+| **I want to implement or review an OAuth2/OIDC flow** | `docs/product/` | [`product/flows/README.md`](product/flows/README.md) |
+| **I want to check supported standards & features** | `docs/product/` | [`product/reference/features.md`](product/reference/features.md) |
+| **I am an AI agent / Developer extending AuthGlow** | `docs/internals/` | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and [`internals/architecture/`](internals/architecture/) |
+| **I need to write audit logs or custom claims** | `docs/internals/` | [`internals/guides/audit-logging.md`](internals/guides/audit-logging.md) |
+| **I am working on an active task or security finding** | `docs/project/` | [`project/plans/active/README.md`](project/plans/active/README.md) |
+| **I am reviewing security audit findings (VAPT)** | `docs/project/` | [`project/vapt/README.md`](project/vapt/README.md) |
 
-## Naming conventions
+---
 
-- File names are kebab-case English (`vapt-fix-plan.md`, `quick-setup.md`).
-- Plans carry YAML frontmatter (`type: plan`, `status: active|done|superseded`) and stable item IDs (`VAPT-NNN`, `OIDC-NNN`).
-- Analysis files carry `type: analysis`, `status: draft`, `may-become-plan: true`.
-- Root files (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `SECURITY.md`) stay at the repo root.
+## Documentation Conventions
+
+- **File Naming**: Kebab-case English (`quick-setup.md`, `repository-pattern.md`).
+- **Operational Plans**: Located in `docs/project/plans/`, carry YAML frontmatter (`type: plan`, `status: active|done|superseded`) and stable item IDs (`VAPT-NNN`, `OIDC-NNN`).
+- **Architecture & Internals**: Kept modular under `docs/internals/` to support Progressive Context Disclosure for AI coding agents.
+- **Root Files**: High-level summaries stay at the repository root (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `SECURITY.md`).

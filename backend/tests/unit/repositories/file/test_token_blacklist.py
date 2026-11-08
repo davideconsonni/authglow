@@ -307,6 +307,39 @@ class TestServiceSweep:
         assert hmac_index_filename("alive-1") in svc._store
 
 
+class TestServiceCleanupExpired:
+    @pytest.mark.asyncio
+    async def test_cleanup_removes_expired_files_and_prunes_memory(self, repo_p):
+        now = time.time()
+        # Expired entries are written straight through the repository:
+        # ``revoke`` intentionally ignores past expiries.
+        await repo_p.save("alive", now + 60)
+        await repo_p.save("stale", 1.0)
+
+        svc = TokenBlacklist(repository=repo_p)
+        await svc.startup_hydrate()
+        # Hydrate already drops expired from the cache; inject a stale
+        # key so the memory prune is proven too, not just the deletion.
+        svc._store[hmac_index_filename("late-stale")] = 1.0
+
+        removed = await svc.cleanup_expired()
+        assert removed == 1
+        assert os.path.isfile(repo_p._path(repo_p._filename("alive")))
+        assert not os.path.isfile(repo_p._path(repo_p._filename("stale")))
+        assert hmac_index_filename("alive") in svc._store
+        assert hmac_index_filename("late-stale") not in svc._store
+
+    @pytest.mark.asyncio
+    async def test_cleanup_is_idempotent_when_nothing_expired(self, repo_p):
+        now = time.time()
+        await repo_p.save("alive", now + 60)
+        svc = TokenBlacklist(repository=repo_p)
+        await svc.startup_hydrate()
+
+        assert await svc.cleanup_expired() == 0
+        assert os.path.isfile(repo_p._path(repo_p._filename("alive")))
+
+
 # ---------------------------------------------------------------------------
 # Service — singleton
 # ---------------------------------------------------------------------------

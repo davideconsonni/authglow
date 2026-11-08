@@ -218,6 +218,19 @@ class Settings(BaseSettings):
     jwt_key_rotation_days: int = 90
     jwt_auto_rotate: bool = True
     jwt_keyring_refresh_seconds: int = 60
+    # Staleness probe interval for the process-cached storage-root
+    # indexes (email index, federated identities). Same semantics as
+    # jwt_keyring_refresh_seconds: writes made by another replica
+    # become visible to cached reads within this many seconds.
+    # ``0`` disables the probe — cached reads then never refresh from
+    # disk in this process (single-replica deployments only).
+    storage_index_refresh_seconds: int = 60
+    # Periodic disk sweep for expired JWT-revocation blacklist entries.
+    # Revoked tokens live as one small file each; without a sweeper the
+    # directory only shrinks under in-memory cache pressure, so startup
+    # hydration grows unboundedly with deploy age. ``0`` disables the
+    # background task entirely.
+    token_blacklist_cleanup_seconds: int = 900
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
