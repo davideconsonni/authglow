@@ -29,10 +29,15 @@ RUN npm run build
 FROM python:3.13-slim AS runtime
 WORKDIR /app
 
+# UVICORN_WORKERS defaults to 1: each worker is a full Python process with
+# its own caches and rate-limiter counters, so orchestrator replicas remain
+# the recommended scaling path (see docs/internals/architecture/deployment.md,
+# "Process Scaling"). Raise it only with shared cache/limiter backends set.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080 \
+    UVICORN_WORKERS=1 \
     FRONTEND_DIST_DIR=/app/frontend/dist
 
 # System deps for build/ssh wheels are pulled by pip; Python only deps below.
@@ -55,7 +60,8 @@ USER appuser
 EXPOSE 8080
 
 # $PORT comes from the platform (Cloud Run, Railway…) or is set at runtime.
+# $UVICORN_WORKERS opts into multiple worker processes in one container.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
     CMD python -c "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8080')+'/health',timeout=2)"
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers ${UVICORN_WORKERS}"]
