@@ -6,10 +6,12 @@ import os
 import tempfile
 import threading
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import fsspec
 import pytest
 
+from authglow.core.async_io import AsyncFileSystem
 from authglow.core.concurrency import (
     AsyncNamedLock,
     ConcurrentWriteError,
@@ -17,9 +19,6 @@ from authglow.core.concurrency import (
     named_lock,
     thread_named_lock,
 )
-from authglow.core.async_io import AsyncFileSystem
-import fsspec
-
 
 # ──────────────────────────────────────────────
 # AsyncNamedLock tests
@@ -77,6 +76,107 @@ class TestAsyncNamedLock:
         b_end = results.index("B-end")
 
         assert a_end < b_start or b_end < a_start
+
+    @pytest.mark.asyncio
+    async def test_registry_empty_after_release(self):
+        """Idle keys must not accumulate (hot paths mint a fresh key per request)."""
+        lock = AsyncNamedLock()
+        async with lock("some-key"):
+            pass
+        assert lock._entries == {}, "idle lock entries must be evicted"
+
+    @pytest.mark.asyncio
+    async def test_many_keys_do_not_accumulate(self):
+        lock = AsyncNamedLock()
+        for i in range(50):
+            async with lock(f"key-{i}"):
+                pass
+        assert len(lock._entries) == 0
+
+    @pytest.mark.asyncio
+    async def test_waiter_prevents_eviction(self):
+        """A counted waiter keeps the entry alive while the holder releases."""
+        lock = AsyncNamedLock()
+        holder_in = asyncio.Event()
+        waiter_queued = asyncio.Event()
+        unblock_holder = asyncio.Event()
+
+        async def holder():
+            async with lock("shared"):
+                holder_in.set()
+                await unblock_holder.wait()
+
+        async def waiter():
+            # The event fires in the same task step that enters the lock,
+            # so by the time the test wakes, the waiter is counted.
+            waiter_queued.set()
+            async with lock("shared"):
+                pass
+
+        holder_task = asyncio.create_task(holder())
+        await holder_in.wait()
+        waiter_task = asyncio.create_task(waiter())
+        await waiter_queued.wait()
+
+        entry = lock._entries["shared"]
+        assert entry.users == 2, "holder and waiting task must share one entry"
+        assert lock.is_held("shared")
+
+        unblock_holder.set()
+        await asyncio.gather(holder_task, waiter_task)
+        assert lock._entries == {}
+
+    @pytest.mark.asyncio
+    async def test_cancelled_waiter_decrements(self):
+        """Cancelling a waiter must not leak the user count or deadlock the key."""
+        lock = AsyncNamedLock()
+        holder_in = asyncio.Event()
+        unblock_holder = asyncio.Event()
+
+        async def holder():
+            async with lock("shared"):
+                holder_in.set()
+                await unblock_holder.wait()
+
+        async def waiter():
+            async with lock("shared"):
+                pass
+
+        holder_task = asyncio.create_task(holder())
+        await holder_in.wait()
+        waiter_task = asyncio.create_task(waiter())
+        await asyncio.sleep(0)  # one loop turn lets the waiter register on the entry
+
+        entry = lock._entries["shared"]
+        assert entry.users == 2
+        waiter_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter_task
+        assert entry.users == 1, "cancelled waiter must release its count"
+
+        unblock_holder.set()
+        await holder_task
+        assert lock._entries == {}
+
+    def test_survives_fresh_event_loops(self):
+        """A contended section under one ``asyncio.run`` must not poison the next.
+
+        A lock that once had waiters is bound to its loop; without eviction
+        the second run raises ``RuntimeError: bound to a different event
+        loop`` on the same key.
+        """
+        lock = AsyncNamedLock()
+
+        async def hold_once():
+            async with lock("shared"):
+                await asyncio.sleep(0)
+
+        async def contended():
+            await asyncio.gather(hold_once(), hold_once(), hold_once())
+
+        asyncio.run(contended())
+        asyncio.run(contended())
+        assert lock._entries == {}
 
     @pytest.mark.asyncio
     async def test_concurrent_counter_without_lock(self):
@@ -408,9 +508,9 @@ class TestStorageRaceConditions:
     @pytest.mark.asyncio
     async def test_concurrent_create_users_no_email_loss(self, tmp_path, test_settings):
         """Two users created concurrently should both appear in the email index."""
-        from authglow.services.user import UserService as UserStorage
         from authglow.models.user import User
         from authglow.services.password import hash_password
+        from authglow.services.user import UserService as UserStorage
 
         storage_path = str(tmp_path / "data" / "users")
         os.makedirs(storage_path, exist_ok=True)
@@ -441,9 +541,9 @@ class TestStorageRaceConditions:
         self, tmp_path, test_settings
     ):
         """Concurrent failed login increments should all be counted."""
-        from authglow.services.user import UserService as UserStorage
         from authglow.models.user import User
         from authglow.services.password import hash_password
+        from authglow.services.user import UserService as UserStorage
 
         storage_path = str(tmp_path / "data" / "fl")
         os.makedirs(storage_path, exist_ok=True)
@@ -461,7 +561,7 @@ class TestStorageRaceConditions:
         )
         await storage.create_user(user)
 
-        results = await asyncio.gather(
+        await asyncio.gather(
             *[storage.record_failed_login("user-fl-test") for _ in range(3)]
         )
 
