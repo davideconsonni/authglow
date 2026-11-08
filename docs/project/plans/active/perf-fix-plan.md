@@ -6,7 +6,7 @@ ids: PERF-NNN
 
 # Performance Fix Plan — Alto Carico (2026-09-12)
 
-> **Status**: PERF-001/002/003/004/008/011/012 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
+> **Status**: PERF-001/002/003/004/008/009/011/012 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
 > **Source**: assessment statico su `davideconsonni/authglow` + **baseline load test eseguita 2026-11-08** (`backend/tests/load/`, numeri sotto in PERF-011).
 > **Findings**: 11 item architetturali (10 originali + PERF-012) + 1 item di processo (baseline, ora chiusa).
 
@@ -25,10 +25,10 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 |---|---|---|---|
 | CRITICAL | 5 | 5 | 0 |
 | HIGH | 4 | 1 | 3 |
-| MEDIUM | 1 | 0 | 1 |
+| MEDIUM | 1 | 1 | 0 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 1 | 0 |
-| **Total** | **12** | **7** | **5** |
+| **Total** | **12** | **8** | **4** |
 
 ---
 
@@ -119,12 +119,13 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 ## MEDIUM (1)
 
-- [ ] **PERF-009** — `AsyncNamedLock` non fa mai eviction delle chiavi
+- [x] **PERF-009** — `AsyncNamedLock` non fa mai eviction delle chiavi
   - **Location**: `backend/authglow/core/concurrency.py:54-65` (`AsyncNamedLock.__call__` — le entry non vengono mai rimosse)
   - **Descrizione**: il dizionario di lock per-chiave cresce senza mai essere ripulito. Non è un problema acuto a breve termine, ma su un processo long-running ad alto traffico prolungato è un lento leak di memoria (una chiave per ogni utente/token/code mai visto dal processo).
   - **Fix proposto**: eviction opportunistica (es. rimuovere una entry quando la lock non è `locked()` e non ha waiter, con TTL o LRU-bound) — da dimensionare insieme, priorità bassa rispetto al resto.
-  - **Decisione**: _da discutere_
+  - **Decisione**: fix ora (2026-11-08) — schema a contatore di partecipanti (replica di `ThreadNamedLock`), scartato il TTL/LRU ipotizzato dal piano.
   - **Verifica (2026-11-07)**: **aperto** — invariato, nessuna eviction (linee del piano 41-44 → ora 54-65). Nota per il fix: `ThreadNamedLock` (introdotto con PERF-001, `concurrency.py:83-128` fa già eviction con contatore di utenti sotto guard lock, ma lo schema non è replicabile su `asyncio.Lock` (nessun modo pubblico di contare i waiter): lì serve TTL/LRU, come già ipotizzato.
+  - **Fix** (commit `d22aaaa`, PR #77): la nota di verifica era **falsa**: il contatore di `ThreadNamedLock` non conta i waiter della lock (impossibili da ispezionare), registra i **partecipanti** attorno ad acquire/release nel context manager — ed è replicabile su `asyncio.Lock`. `AsyncNamedLock.__call__` diventa: entry `{lock, users}` creata/incrementata sotto guard sincrona prima dell'acquire, decrementata in `finally` dopo release (e anche se il waiter viene cancellato in acquire: `asyncio.Lock.acquire()` garantisce di non trattenere la lock quando solleva `CancelledError`), entry cancellata a zero. Registro proporzionale alle sezioni in volo, non alle chiavi mai viste (peggio del descritto: i path caldi coniano chiavi nuove **per richiesta** — `auth_code:{code}`, `par:{request_id}`, token di reset — non per record). Bonus verificato empiricamente: eliminato il hazard di loop-affinity — una lock già contesa sul loop A solleverebbe `RuntimeError: bound to a different event loop` sul loop B (riprodotto con sonda su 3.13, e l'entry resta inceppata `locked` per sempre); con l'eviction l'entry muore a riposo, quindi il loop successivo ne costruisce una fresca. TTL/LRU scartato: estromettere una lock con waiter attivi **divide silenziosamente l'esclusione mutua** (due lock per la stessa chiave) — trappola di correttezza, e serve tuning. API invariata (`__call__`, `is_held`, `named_lock()`): zero modifiche ai ~20 chiamanti. Test: `tests/unit/test_concurrency.py` (+5: registry vuoto a riposo, 50 chiavi non accumulano, waiter in attesa impedisce l'eviction, waiter cancellato rilascia il conteggio, doppio `asyncio.run` contenduto sulla stessa chiave sopravvive). Suite completa seriale: verdi tranne 10 fallimenti **pre-esistenti e identici su HEAD pulito** (contaminazione rate-limiter dipendente dall'ordine in `test_federation*`/`test_state_param`/`test_rfc9207_iss`) — da lavorare a parte. Correlati: corretti i docstring che promettevano "never evicted… memory is not a concern"; aggiornato il commento di `index_registry.py` che citava il hazard come permanente.
 
 ---
 
