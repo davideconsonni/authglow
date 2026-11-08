@@ -11,9 +11,10 @@ constructors, direct call sites alike).
 
 Only the ``file`` backend is shared. The repositories hold no
 event-loop-bound state (plain dicts and timestamps), so reuse across
-``asyncio.run()`` sessions is safe — unlike ``AsyncNamedLock`` (see
-the PERF-001 decision in the performance plan). Tests reset the
-registry around every case (``tests/conftest.py``).
+``asyncio.run()`` sessions is safe. (``AsyncNamedLock`` guards against
+the same hazard by evicting each entry as soon as no coroutine holds or
+waits on it, so a lock never outlives the loop that contended on it.)
+Tests reset the registry around every case (``tests/conftest.py``).
 """
 
 from typing import Any, Callable, Dict, Tuple

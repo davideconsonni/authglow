@@ -6,6 +6,7 @@
 - Docker images read a `UVICORN_WORKERS` environment variable (default `1`) and pass it to `uvicorn --workers`, so running several worker processes inside one container is an explicit opt-in instead of an undocumented limitation. `docs/internals/architecture/deployment.md` gains a "Process Scaling" section: orchestrator replicas remain the recommended path, and the per-process state that multiplies with workers (in-memory caches, rate-limiter counters, background sweeps) is listed with the configuration to set first.
 
 ### Fixed
+- Per-key asyncio locks guarding concurrent read-modify-write sequences were created once and kept forever, so every new identifier seen by the process (authorization codes, PAR requests, reset tokens, consents — a fresh key per request on the hot paths) permanently grew the process memory. Entries are now removed when the last coroutine holding or waiting on a key leaves. As a side effect, a lock that was contended under one event loop can no longer poison a later loop with `RuntimeError: bound to a different event loop`.
 - Refresh-token rotation under concurrent load no longer corrupts the encrypted token index files: every index update now runs as a single locked, atomic write per file, so `/oauth2/token` no longer returns HTTP 500 when a reader hits a half-written index and freshly issued refresh tokens are no longer silently lost (`invalid_grant` on valid sessions). A damaged or tampered index payload now degrades to the documented empty-index behavior instead of raising a decryption error.
 
 ## [0.2.2] - 2026-11-08

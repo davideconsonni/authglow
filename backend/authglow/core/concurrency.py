@@ -5,7 +5,9 @@ Three layers of defense against race conditions:
 1. **AsyncNamedLock** — Per-key ``asyncio.Lock`` that serializes read-modify-write
    sequences within a single process.  Acquired with ``async with lock(key):``.
    Prevents the most common race: two async coroutines interleaving their
-   read-modify-write on the same resource.
+   read-modify-write on the same resource.  Entries are evicted when the last
+   participant leaves, so the registry stays proportional to the sections in
+   flight and no lock ever outlives the event loop that contended on it.
 
 2. **ThreadNamedLock** — Per-key ``threading.Lock`` for critical sections that
    run on an ``asyncio.to_thread`` worker.  It carries no event-loop affinity
@@ -36,7 +38,7 @@ class ConcurrentWriteError(Exception):
 
 
 class AsyncNamedLock:
-    """A collection of named ``asyncio.Lock`` instances.
+    """A collection of named ``asyncio.Lock`` instances with eviction.
 
     Usage::
 
@@ -46,28 +48,63 @@ class AsyncNamedLock:
             user.field = new_value
             await write(...)
 
-    Locks are created lazily and never evicted.  In practice the total
-    number of distinct keys is small (one per active user / token / code),
-    so memory is not a concern.
+    Locks are created lazily and evicted as soon as the last coroutine
+    holding or waiting on a key leaves, mirroring :class:`ThreadNamedLock`.
+    The registry therefore stays proportional to the critical sections in
+    flight, not to every key ever seen (hot paths mint a fresh key per
+    request: auth codes, PAR requests, reset tokens, consents).  Eviction
+    also removes the loop-affinity hazard: an ``asyncio.Lock`` that was
+    contended under one event loop raises ``RuntimeError`` when a second
+    loop contends on it, so entries must not survive the loop that used
+    them.  Because an entry only exists while participants are counted,
+    the next ``asyncio.run()`` builds a fresh lock bound to its own loop.
     """
 
     def __init__(self) -> None:
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._guard = threading.Lock()
+        self._entries: Dict[str, _AsyncLockEntry] = {}
 
     @asynccontextmanager
     async def __call__(self, key: str):
         """Acquire the lock for *key* for the duration of the context."""
-        lock = self._locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._locks[key] = lock
-        async with lock:
-            yield
+        with self._guard:
+            entry = self._entries.get(key)
+            if entry is None:
+                entry = _AsyncLockEntry()
+                self._entries[key] = entry
+            # Counted while holding ``_guard`` so an entry can never be
+            # evicted between the lookup and the increment: ``users``
+            # reaches 0 only when no coroutine is holding or waiting.
+            # A waiter cancelled while acquiring still decrements in the
+            # ``finally`` below — ``asyncio.Lock.acquire()`` guarantees it
+            # does not hold the lock when it raises ``CancelledError``.
+            entry.users += 1
+        try:
+            await entry.lock.acquire()
+            try:
+                yield
+            finally:
+                entry.lock.release()
+        finally:
+            with self._guard:
+                entry.users -= 1
+                if entry.users == 0:
+                    del self._entries[key]
 
     def is_held(self, key: str) -> bool:
         """Return True if the lock for *key* is currently held."""
-        lock = self._locks.get(key)
-        return lock is not None and lock.locked()
+        entry = self._entries.get(key)
+        return entry is not None and entry.lock.locked()
+
+
+class _AsyncLockEntry:
+    """An ``asyncio.Lock`` plus the count of coroutines holding or waiting on it."""
+
+    __slots__ = ("lock", "users")
+
+    def __init__(self) -> None:
+        self.lock = asyncio.Lock()
+        self.users = 0
 
 
 class _LockEntry:
@@ -91,9 +128,10 @@ class ThreadNamedLock:
     and must stay held until the thread finishes even if the awaiting
     coroutine is cancelled.
 
-    Unlike ``AsyncNamedLock``, entries are evicted as soon as the last
-    thread holding or waiting on a key leaves.  The registry therefore
-    stays proportional to the writes in flight, not to every key ever seen.
+    Entries are evicted as soon as the last thread holding or waiting on a
+    key leaves (same scheme as :class:`AsyncNamedLock`).  The registry
+    therefore stays proportional to the writes in flight, not to every key
+    ever seen.
 
     Usage::
 
