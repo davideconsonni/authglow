@@ -6,7 +6,7 @@ ids: PERF-NNN
 
 # Performance Fix Plan — Alto Carico (2026-09-12)
 
-> **Status**: PERF-001/002/003/008/011/012 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
+> **Status**: PERF-001/002/003/004/008/011/012 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
 > **Source**: assessment statico su `davideconsonni/authglow` + **baseline load test eseguita 2026-11-08** (`backend/tests/load/`, numeri sotto in PERF-011).
 > **Findings**: 11 item architetturali (10 originali + PERF-012) + 1 item di processo (baseline, ora chiusa).
 
@@ -23,16 +23,16 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
-| CRITICAL | 5 | 4 | 1 |
+| CRITICAL | 5 | 5 | 0 |
 | HIGH | 4 | 1 | 3 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 1 | 0 |
-| **Total** | **12** | **6** | **6** |
+| **Total** | **12** | **7** | **5** |
 
 ---
 
-## CRITICAL (4)
+## CRITICAL (5)
 
 ### Concorrenza e caching sul percorso caldo (login / refresh)
 
@@ -69,12 +69,13 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 ### Deployment
 
-- [ ] **PERF-004** — Nessuna configurazione multi-worker di default
+- [x] **PERF-004** — Nessuna configurazione multi-worker di default
   - **Location**: `backend/Dockerfile` (`CMD uvicorn main:app --host 0.0.0.0 --port ${PORT}`, senza `--workers`)
   - **Descrizione**: di default gira un solo processo Python / un solo event loop. Va bene se l'orchestratore a valle gestisce le repliche, ma non è esplicito né documentato — rischio che un deploy "semplice" (es. singolo container PaaS) resti single-process senza che sia una scelta consapevole.
   - **Fix proposto**: aggiungere `--workers N` configurabile via env, oppure documentare esplicitamente nel README la responsabilità di scalare a livello di orchestratore (k8s replicas, ecc.) — scelta da discutere insieme, non è solo tecnica.
-  - **Decisione**: _da discutere_
+  - **Decisione**: fix ora (2026-11-08) — via intermedia tra le due opzioni del piano: knob env opt-in **e** documento di responsabilità. Niente default multi-worker: su Cloud Run (target primario dei Dockerfile) i worker in-container non scalano (CPU allocata per istanza), e moltiplicherebbero lo stato per-processo di PERF-005/006, ancora aperti. Il posto giusto per il documento è `deployment.md` (già referenziato dal README), non il README stesso.
   - **Verifica (2026-11-07)**: **aperto** — `Dockerfile:24` immutato, nessun `--workers`/`UVICORN_WORKERS` nel repo; `docs/internals/architecture/deployment.md` non tratta la scalabilità del processo. Nota: moltiplicare i worker moltiplica anche i problemi dei singleton di processo (PERF-001/002, cache PERF-005, limiter PERF-006) — da decidere insieme a loro.
+  - **Fix** (commit `0be84e7`, PR #76): `ENV UVICORN_WORKERS=1` + `--workers ${UVICORN_WORKERS}` nella CMD di **entrambi** i Dockerfile (il root non era citato dal piano: stesso problema, stesso fix). Default = comportamento odierno invariato, multi-worker come opt-in. Nuova sezione "Process Scaling" in `deployment.md`: repliche come percorso raccomandato, elenco di ciò che diventa per-processo N× prima di alzare il valore (cache `memory` → redis, limiter senza storage condiviso, sweeper idempotenti) e nota esplicita che la RMW degli indici refresh-token resta serializzata solo in-process — fra worker sulla stessa macchina vale esattamente lo stesso caveat di fra repliche su volume condiviso (il numero di writer aumenta, l'esclusione reciproca no). `backend/.env.example`: voce commentata, chiarito che legge la variabile solo la CMD dell'immagine. Verifica: nessun test tocca Dockerfile/`.env.example` (grep: zero riferimenti) e nessun codice Python è stato toccato; espansione della CMD validata con `sh` reale (default 1, override 4); build docker non eseguita (docker assente sulla macchina dev).
 
 ---
 
