@@ -13,6 +13,8 @@ Each test class:
 * validates Protocol conformance via ``isinstance(repo, <Protocol>)``.
 """
 
+import asyncio
+import base64
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -393,6 +395,109 @@ class TestFileRefreshTokenRepository:
         tokens = await repo._collect()
         # garbage.json is not a valid RefreshToken but doesn't break the scan
         assert all(t.token_id != "garbage" for t in tokens)
+
+
+# ---------------------------------------------------------------------------
+# Index concurrency & corruption (lost-update / torn-read regression)
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshTokenIndexConcurrency:
+    """The two encrypted index files are read-modify-written as single
+    locked sections: concurrent issuances must not overwrite each other's
+    entries (lost update → ``get_by_id`` → None → bogus 401) and a
+    tampered envelope must read as the documented empty index instead of
+    raising ``InvalidTag`` up through the token endpoint (→ 500)."""
+
+    def _make_repo(self, test_settings) -> FileRefreshTokenRepository:
+        return FileRefreshTokenRepository(settings=test_settings)
+
+    @staticmethod
+    def _tamper_envelope(raw: str) -> str:
+        """Flip a byte in the ciphertext of an ``agk1:`` envelope so the
+        GCM tag check fails on decrypt."""
+        assert raw.startswith("agk1:")
+        body = base64.b64decode(raw[len("agk1:") :])
+        tampered = body[:-1] + bytes([body[-1] ^ 0x01])
+        return "agk1:" + base64.b64encode(tampered).decode()
+
+    async def test_concurrent_add_to_id_index_keeps_every_entry(self, test_settings):
+        repo = self._make_repo(test_settings)
+        tokens = [
+            _make_token(token_id=f"c-{i}", token_lookup=f"lookup-c-{i}") for i in range(25)
+        ]
+        for token in tokens:
+            await repo.create(token)
+
+        await asyncio.gather(
+            *(repo.add_to_id_index(t.token_id, t.token_lookup) for t in tokens)
+        )
+
+        idx = await repo.load_id_index()
+        assert len(idx) == 25
+        # the exact 401 symptom: every freshly issued token must resolve
+        for token in tokens:
+            assert await repo.get_by_id(token.token_id) is not None
+
+    async def test_concurrent_add_to_active_index_keeps_every_entry(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await asyncio.gather(*(repo.add_to_active_index(f"k-{i}") for i in range(25)))
+        ids = await repo.load_active_index()
+        assert sorted(ids) == sorted(f"k-{i}" for i in range(25))
+
+    async def test_concurrent_mixed_add_and_remove_composes(self, test_settings):
+        repo = self._make_repo(test_settings)
+        for i in range(20):
+            await repo.add_to_active_index(f"old-{i}")
+
+        await asyncio.gather(
+            *(repo.add_to_active_index(f"new-{i}") for i in range(20)),
+            *(repo.remove_from_active_index(f"old-{i}") for i in range(20)),
+        )
+
+        ids = await repo.load_active_index()
+        assert sorted(ids) == sorted(f"new-{i}" for i in range(20))
+
+    async def test_corrupt_id_envelope_reads_empty_and_recovers(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await repo.add_to_id_index("k-1", "lookup-1")
+        path = Path(repo._id_index_path)
+        path.write_text(self._tamper_envelope(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+        # documented "empty if missing/corrupt" — not an InvalidTag 500
+        assert await repo.load_id_index() == {}
+        assert await repo.get_by_id("k-1") is None
+        # the next mutation rebuilds the file cleanly
+        await repo.add_to_id_index("k-2", "lookup-2")
+        assert await repo.load_id_index() == {"k-2": "lookup-2"}
+
+    async def test_corrupt_active_envelope_reads_empty(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await repo.add_to_active_index("k-1")
+        path = Path(repo._active_index_path)
+        path.write_text(self._tamper_envelope(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+        assert await repo.load_active_index() == []
+        assert await repo.list_active() == []
+
+    async def test_index_writes_leave_no_tmp_file(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await repo.add_to_id_index("k-tmp", "lookup-tmp")
+        await repo.add_to_active_index("k-tmp")
+        await repo.remove_from_active_index("k-tmp")
+
+        leftover = [p.name for p in Path(repo._storage_path).iterdir() if p.name.endswith(".tmp")]
+        assert leftover == []
+
+    async def test_remove_absent_entry_does_not_rewrite_index(self, test_settings):
+        repo = self._make_repo(test_settings)
+        await repo.add_to_id_index("k-1", "lookup-1")
+        before = Path(repo._id_index_path).read_text(encoding="utf-8")
+
+        await repo.remove_from_id_index("ghost")
+
+        # the envelope is randomised per write: byte-equality proves no write
+        assert Path(repo._id_index_path).read_text(encoding="utf-8") == before
 
 
 # ---------------------------------------------------------------------------

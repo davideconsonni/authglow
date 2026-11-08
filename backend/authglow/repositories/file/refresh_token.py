@@ -23,13 +23,19 @@ Pydantic ``token`` field is marked ``exclude=True`` in the model.
 
 Concurrency: ``update`` uses optimistic concurrency (``_version``
 field). The service layer is responsible for retrying on
-``ConcurrentWriteError`` inside the in-process ``named_lock``.
+``ConcurrentWriteError`` inside the in-process ``named_lock``. The two
+secondary indexes are read-modify-written as single locked sections
+(per-path thread lock + atomic tmp/rename write in the storage worker),
+so concurrent issuances for different users cannot overwrite each
+other's entries or expose a half-written file to a reader.
 SQL backends would replace the JSON index files with native
 indexes and use row-level locking for ``update``.
 """
 
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
+
+from cryptography.exceptions import InvalidTag
 
 from authglow.core.crypto import decrypt_index_value, encrypt_index_value
 from authglow.core.datetime import utcnow
@@ -71,68 +77,108 @@ class FileRefreshTokenRepository(BaseFileRepository, RefreshTokenRepository):
     # Idempotent guarded writes for the indexes (private helpers)
     # ------------------------------------------------------------------
 
-    async def _load_id_index_dict(self) -> Dict[str, str]:
-        """Return the id_index as a dict (empty if missing/corrupt).
+    @staticmethod
+    def _parse_id_index(raw: Optional[str]) -> Dict[str, str]:
+        """Parse an id_index payload (empty when missing/corrupt).
 
-        VAPT-040: the file content is encrypted with the
-        private-key envelope (``agk1:``). Reads transparently
-        migrate legacy plaintext (pre-VAPT-040) payloads —
-        ``decrypt_index_value`` returns the input unchanged
-        when the prefix is missing. The next write re-encrypts
-        so the legacy data is replaced on first mutation.
+        VAPT-040: the file content is encrypted with the private-key
+        envelope (``agk1:``). Reads transparently migrate legacy
+        plaintext (pre-VAPT-040) payloads — ``decrypt_index_value``
+        returns the input unchanged when the prefix is missing. The
+        next write re-encrypts so the legacy data is replaced on first
+        mutation. ``InvalidTag`` (a tampered or damaged envelope) joins
+        the corrupt set: with atomic index writes the only way to see
+        it is genuinely corrupt content, and the documented tolerance
+        is then "empty", not an exception.
         """
-        raw: Optional[str] = await self._read_text(self._id_index_path)
         if raw is None:
             return {}
         try:
-            plaintext = decrypt_index_value(raw)
-            data = json.loads(plaintext)
-        except (ValueError, TypeError, json.JSONDecodeError):
+            data = json.loads(decrypt_index_value(raw))
+        except (ValueError, TypeError, json.JSONDecodeError, InvalidTag):
             return {}
         if not isinstance(data, dict):
             return {}
         return {str(k): str(v) for k, v in data.items()}
 
-    async def _save_id_index_dict(self, idx: Dict[str, str]) -> None:
-        """Persist the id_index (deletes the file if ``idx`` is empty).
-
-        VAPT-040: encrypted with the private-key envelope so a
-        directory-read attacker cannot enumerate live token IDs.
-        """
+    @staticmethod
+    def _serialize_id_index(idx: Dict[str, str]) -> Optional[str]:
+        """Serialize the id_index (``None`` when empty, so the guarded
+        writer deletes the file instead of persisting an empty index)."""
         if not idx:
-            await self._delete(self._id_index_path)
-            return
-        encrypted = encrypt_index_value(json.dumps(dict(idx)))
-        await self._write_text(self._id_index_path, encrypted)
+            return None
+        return encrypt_index_value(json.dumps(dict(idx)))
 
-    async def _load_active_index_list(self) -> List[str]:
-        """Return the active_index as a list (empty if missing/corrupt).
+    @staticmethod
+    def _parse_active_index(raw: Optional[str]) -> List[str]:
+        """Parse an active_index payload (empty when missing/corrupt).
 
-        VAPT-040: same encryption envelope as the id_index.
+        VAPT-040: same encryption envelope and tolerance as
+        :meth:`_parse_id_index`.
         """
-        raw: Optional[str] = await self._read_text(self._active_index_path)
         if raw is None:
             return []
         try:
-            plaintext = decrypt_index_value(raw)
-            data = json.loads(plaintext)
-        except (ValueError, TypeError, json.JSONDecodeError):
+            data = json.loads(decrypt_index_value(raw))
+        except (ValueError, TypeError, json.JSONDecodeError, InvalidTag):
             return []
         if not isinstance(data, dict):
             return []
         result = data.get("token_ids", [])
         return result if isinstance(result, list) else []
 
-    async def _save_active_index_list(self, token_ids: List[str]) -> None:
-        """Persist the active_index (deletes the file if empty).
-
-        VAPT-040: encrypted with the private-key envelope.
-        """
+    @staticmethod
+    def _serialize_active_index(token_ids: List[str]) -> Optional[str]:
+        """Serialize the active_index (``None`` when empty, so the
+        guarded writer deletes the file)."""
         if not token_ids:
-            await self._delete(self._active_index_path)
-            return
+            return None
         payload = json.dumps({"token_ids": list(token_ids)})
-        await self._write_text(self._active_index_path, encrypt_index_value(payload))
+        return encrypt_index_value(payload)
+
+    async def _load_id_index_dict(self) -> Dict[str, str]:
+        """Return the id_index as a dict (empty if missing/corrupt)."""
+        raw: Optional[str] = await self._read_text(self._id_index_path)
+        return self._parse_id_index(raw)
+
+    async def _load_active_index_list(self) -> List[str]:
+        """Return the active_index as a list (empty if missing/corrupt)."""
+        raw: Optional[str] = await self._read_text(self._active_index_path)
+        return self._parse_active_index(raw)
+
+    async def _rmw_id_index(self, mutate: Callable[[Dict[str, str]], Dict[str, str]]) -> None:
+        """Read-modify-write the id_index as one locked atomic section.
+
+        *mutate* must return the new index **without modifying the one
+        it receives**: returning an equal mapping is detected as a
+        no-op and skips the disk write entirely.
+        """
+
+        def _transform(raw: Optional[str]) -> Optional[str]:
+            idx = self._parse_id_index(raw)
+            new_idx = mutate(idx)
+            if new_idx == idx:
+                return raw
+            return self._serialize_id_index(new_idx)
+
+        await self._update_text(self._id_index_path, _transform)
+
+    async def _rmw_active_index(self, mutate: Callable[[List[str]], List[str]]) -> None:
+        """Read-modify-write the active_index as one locked atomic section.
+
+        Same contract as :meth:`_rmw_id_index`: *mutate* returns a new
+        list and leaves the input untouched, so a no-op mutation does
+        not rewrite the file.
+        """
+
+        def _transform(raw: Optional[str]) -> Optional[str]:
+            ids = self._parse_active_index(raw)
+            new_ids = mutate(ids)
+            if new_ids == ids:
+                return raw
+            return self._serialize_active_index(new_ids)
+
+        await self._update_text(self._active_index_path, _transform)
 
     # ------------------------------------------------------------------
     # Protocol: CRUD
@@ -285,19 +331,30 @@ class FileRefreshTokenRepository(BaseFileRepository, RefreshTokenRepository):
         return await self._load_id_index_dict()
 
     async def add_to_id_index(self, token_id: str, token_lookup: str) -> None:
-        """Register a ``token_id -> token_lookup`` entry (idempotent)."""
-        idx = await self._load_id_index_dict()
-        idx[token_id] = token_lookup
-        await self._save_id_index_dict(idx)
+        """Register a ``token_id -> token_lookup`` entry (idempotent).
+
+        The read-modify-write runs as a single locked section, so two
+        concurrent issuances can no longer overwrite each other's
+        entries (lost update).
+        """
+
+        def _mutate(idx: Dict[str, str]) -> Dict[str, str]:
+            if idx.get(token_id) == token_lookup:
+                return idx
+            return {**idx, token_id: token_lookup}
+
+        await self._rmw_id_index(_mutate)
 
     async def remove_from_id_index(self, token_id: str) -> None:
         """Unregister a ``token_id``. No-op if absent. If the index
         becomes empty the file is deleted."""
-        idx = await self._load_id_index_dict()
-        if token_id not in idx:
-            return
-        del idx[token_id]
-        await self._save_id_index_dict(idx)
+
+        def _mutate(idx: Dict[str, str]) -> Dict[str, str]:
+            if token_id not in idx:
+                return idx
+            return {k: v for k, v in idx.items() if k != token_id}
+
+        await self._rmw_id_index(_mutate)
 
     # ------------------------------------------------------------------
     # Protocol: active_index helpers
@@ -307,19 +364,27 @@ class FileRefreshTokenRepository(BaseFileRepository, RefreshTokenRepository):
         return await self._load_active_index_list()
 
     async def add_to_active_index(self, token_id: str) -> None:
-        """Add a ``token_id`` to the active_index. Idempotent."""
-        existing = await self._load_active_index_list()
-        if token_id not in existing:
-            existing.append(token_id)
-        await self._save_active_index_list(existing)
+        """Add a ``token_id`` to the active_index. Idempotent.
+
+        Locked RMW, same guarantee as :meth:`add_to_id_index`.
+        """
+
+        def _mutate(ids: List[str]) -> List[str]:
+            if token_id in ids:
+                return ids
+            return ids + [token_id]
+
+        await self._rmw_active_index(_mutate)
 
     async def remove_from_active_index(self, token_id: str) -> None:
         """Remove a ``token_id`` from the active_index. No-op if absent."""
-        existing = await self._load_active_index_list()
-        if token_id not in existing:
-            return
-        existing.remove(token_id)
-        await self._save_active_index_list(existing)
+
+        def _mutate(ids: List[str]) -> List[str]:
+            if token_id not in ids:
+                return ids
+            return [t for t in ids if t != token_id]
+
+        await self._rmw_active_index(_mutate)
 
     # ------------------------------------------------------------------
     # Internal collection helper

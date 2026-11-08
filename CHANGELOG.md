@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Refresh-token rotation under concurrent load no longer corrupts the encrypted token index files: every index update now runs as a single locked, atomic write per file, so `/oauth2/token` no longer returns HTTP 500 when a reader hits a half-written index and freshly issued refresh tokens are no longer silently lost (`invalid_grant` on valid sessions). A damaged or tampered index payload now degrades to the documented empty-index behavior instead of raising a decryption error.
+
 ## [0.2.2] - 2026-11-08
 
 ### Fixed

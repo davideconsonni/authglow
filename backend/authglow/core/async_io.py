@@ -19,17 +19,19 @@ unless the storage backend offers a native atomic compare-and-swap.
 
 import asyncio
 import json
-from typing import Any, List, Tuple
+import os
+from typing import Any, Callable, List, Optional, Tuple
 
 from authglow.core.concurrency import ConcurrentWriteError, thread_named_lock
 
-# Per-path lock serializing CAS check+write critical sections. A
-# ``ThreadNamedLock`` (not an ``asyncio.Lock``) deliberately: the guarded
-# code runs on an ``asyncio.to_thread`` worker, so the lock must carry no
-# event-loop affinity and must stay held until the worker finishes. Keying
-# by record path means rotation for one user no longer queues behind every
-# other user's write.
-_cas_write_locks = thread_named_lock()
+# Per-path lock serializing read-modify-write critical sections (the CAS
+# check+write and the plain-text index updates). A ``ThreadNamedLock`` (not
+# an ``asyncio.Lock``) deliberately: the guarded code runs on an
+# ``asyncio.to_thread`` worker, so the lock must carry no event-loop
+# affinity and must stay held until the worker finishes. Keying by record
+# path means rotation for one user no longer queues behind every other
+# user's write.
+_path_write_locks = thread_named_lock()
 
 
 class AsyncFileSystem:
@@ -100,7 +102,7 @@ class AsyncFileSystem:
         _default = default if default is not None else str
 
         def _op() -> None:
-            with _cas_write_locks(path):
+            with _path_write_locks(path):
                 try:
                     with self._fs.open(path, "r") as f:
                         current = json.load(f)
@@ -131,6 +133,60 @@ class AsyncFileSystem:
         def _op():
             with self._fs.open(path, "w") as f:
                 f.write(content)
+
+        await asyncio.to_thread(_op)
+
+    async def update_text(
+        self,
+        path: str,
+        transform: Callable[[Optional[str]], Optional[str]],
+        *,
+        atomic: bool = True,
+    ) -> None:
+        """Read-modify-write a text file as one locked worker operation.
+
+        *transform* receives the current content (``None`` when the file
+        is missing) and returns the replacement content, or ``None`` to
+        delete the file. Returning the input unchanged skips the write
+        entirely, so a no-op mutation never touches the disk.
+
+        The whole read-transform-write runs on a single worker thread
+        under the per-path lock (same primitive as
+        :meth:`write_json_versioned`), so concurrent coroutines cannot
+        interleave their read-modify-write and lose each other's update.
+        With ``atomic=True`` the new content lands via tmp +
+        ``os.replace``, so a concurrent reader can never observe a
+        half-written file; ``atomic=False`` (cloud backends, no rename)
+        falls back to a plain write.
+        """
+
+        def _op() -> None:
+            with _path_write_locks(path):
+                try:
+                    with self._fs.open(path, "r") as f:
+                        current = f.read()
+                except FileNotFoundError:
+                    current = None
+
+                updated = transform(current)
+                if updated is None:
+                    if current is not None:
+                        try:
+                            self._fs.rm(path)
+                        except FileNotFoundError:
+                            pass
+                    return
+                if updated == current:
+                    return
+
+                if atomic:
+                    tmp_path = path + ".tmp"
+                    with self._fs.open(tmp_path, "w") as f:
+                        f.write(updated)
+                    os.replace(tmp_path, path)
+                else:
+                    with self._fs.open(path, "w") as f:
+                        f.write(updated)
 
         await asyncio.to_thread(_op)
 

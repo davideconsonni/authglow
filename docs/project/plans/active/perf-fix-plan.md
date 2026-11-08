@@ -6,7 +6,7 @@ ids: PERF-NNN
 
 # Performance Fix Plan — Alto Carico (2026-09-12)
 
-> **Status**: PERF-001/002/003/008/011 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
+> **Status**: PERF-001/002/003/008/011/012 decisi e implementati; il resto è _da discutere_. Tutte le voci rivalidate contro il codice su disk il 2026-11-07/08 (note **Verifica** per item); la baseline PERF-011 ha fatto emergere un nuovo finding (PERF-012, CRITICAL, in coda alla sezione concurrence).
 > **Source**: assessment statico su `davideconsonni/authglow` + **baseline load test eseguita 2026-11-08** (`backend/tests/load/`, numeri sotto in PERF-011).
 > **Findings**: 11 item architetturali (10 originali + PERF-012) + 1 item di processo (baseline, ora chiusa).
 
@@ -23,12 +23,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 | Severità | Count | Fixed | Remaining |
 |---|---|---|---|
-| CRITICAL | 5 | 3 | 2 |
+| CRITICAL | 5 | 4 | 1 |
 | HIGH | 4 | 1 | 3 |
 | MEDIUM | 1 | 0 | 1 |
 | STRATEGIC | 1 | 0 | 1 |
 | PROCESS | 1 | 1 | 0 |
-| **Total** | **12** | **5** | **7** |
+| **Total** | **12** | **6** | **6** |
 
 ---
 
@@ -60,11 +60,12 @@ Severità = impatto atteso sotto carico sostenuto, non urgenza di sicurezza: **C
 
 ### Integrità degli indici refresh-token (emerso dalla baseline PERF-011, 2026-11-08)
 
-- [ ] **PERF-012** — I file indice dei refresh token sono scritti in modo non atomico e non serializzato: 500 e token persi sotto concorrenza
+- [x] **PERF-012** — I file indice dei refresh token sono scritti in modo non atomico e non serializzato: 500 e token persi sotto concorrenza
   - **Location**: `backend/authglow/repositories/file/refresh_token.py:287-322` (helper `add_to_*`/`remove_from_*` = read-modify-write senza lock su `_id_index_path`/`_active_index_path`), `:96-135` (`_save_id_index_dict`/`_save_active_index_list` usano `base.py:358 _write_text` — scrittura semplice, no tmp+`os.replace`); `core/crypto.py:244` (`decrypt_index_value` solleva `cryptography.exceptions.InvalidTag`, che NON è in `(ValueError, TypeError, JSONDecodeError)` intercettato dai `_load_*`, il cui docstring dichiara "empty if missing/corrupt")
   - **Descrizione**: la rotatione di un refresh token tocca i due indici cifrati con RMW non protetti. Sotto concorrenza accadono due cose, entrambe osservate nei run di baseline: (a) un lettore legge ciphertext a metà scrittura → `InvalidTag` non intercettato → **500 su `/oauth2/token`** (614 traceback in un run 30u; 134 nel run ufficiale 30u; 226 nel 50u); (b) lost update: due `add_to_id_index` concorrenti si sovrascrivono → l'entry del token appena emesso scompare → `get_refresh_token` non risolve un token **legittimo** → 401 `invalid_grant: Invalid refresh token` (25/159 rotazioni nel run 10u, 115/342 nel 30u). (b) è più insidioso di (a): fallisce silenziosamente e invalidate sessioni valide.
   - **Fix proposto**: (1) scrittura atomica dei due indici (tmp + `os.replace`, come `_write_json_atomic`); (2) `InvalidTag` nei due tuple `except` dei `_load_*` — tolleranza "corrupt→vuoto" che diventa sicura solo dopo (1), altrimenti un read a metà scrittura svuoterebbe l'indice alla prima save; (3) `named_lock` sull'RMW dei due indici (chiave = path) per eliminare le lost update. Test: unit concurrency (N writer su `add_to_active_index`, assert N entries tutte presenti), regression `_load_*` con payload `agk1:` corrotto (→ vuoto, non eccezione), integration rotazione concorrente senza 500 né voci perse.
-  - **Decisione**: _da discutere_ — raccomandazione **fix ora** (CRITICAL: 500 sul percorso caldo di autenticazione + revoca silenziosa di token validi)
+  - **Decisione**: fix ora (2026-11-08). CRITICAL: 500 sul percorso caldo di autenticazione + revoca silenziosa di token validi.
+  - **Fix**: nuova primitiva `AsyncFileSystem.update_text(path, transform)` (`core/async_io.py`): il read-modify-write di un testo grezzo gira come **unica sezione** su worker `asyncio.to_thread`, serializzata dalla `ThreadNamedLock` per path (la stessa di PERF-001, ora `_path_write_locks` perché copre anche gli indici) e scritto con tmp+`os.replace` (`BaseFileRepository._update_text`; sui backend cloud fallback a scrittura semplice come `_write_json_atomic`). Contratto del transform: `None` in ingresso = file assente, `None` in uscita = cancella, contenuto invariato = nessuna scrittura. I quattro helper del repository (`add_to_*`/`remove_from_*`) passano da RMW sbilanciati a `_rmw_id_index`/`_rmw_active_index`; i vecchi `_save_*` rimossi. `InvalidTag` aggiunto alla tolleranza dei due parser (`_parse_id_index`/`_parse_active_index`): "corrotto→vuoto" ora è sicuro perché con le scritture atomiche non esiste più lettura a metà. **Attenzione al pattern**: i closure `mutate` devono restituire un oggetto **nuovo** — la mutazione in-place rende banale il confronto `new == old` e salta la scrittura (bug acchiappato dai test durante lo sviluppo). Test: `tests/unit/test_async_io.py` (6: 32 writer concorrenti compongono, `None` cancella, invariato non scrive, nessun `.tmp` residuo, fallback non-atomico), `tests/unit/repositories/file/test_refresh_token.py` (7: writer concorrenti su id/active index con risoluzione `get_by_id` garantita, busta `agk1:` manomessa → vuoto e ricostruzione al primo add, no-op senza riscrittura). Suite completa verde in seriale (3374 con l'interprete corretto). Nota boyscout: l'hang di pytest-xdist con `-n auto` è stato riprodotto anche su HEAD pulito (punto di freeze diverso) → pre-esistente, non correlato.
 
 ### Deployment
 
