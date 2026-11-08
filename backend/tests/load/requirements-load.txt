@@ -1,0 +1,8 @@
+# Load-test-only dependencies (PERF-011) — deliberately kept out of the
+# app lockfile (requirements.in/txt): this env exists on test runners and
+# operator laptops, never in the container image.
+#
+# Install into the backend venv:
+#   uv pip install --python .venv/Scripts/python.exe -r tests/load/requirements-load.txt
+# (or: pip install -r tests/load/requirements-load.txt with the venv active)
+locust==2.47.0
