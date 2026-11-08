@@ -32,7 +32,7 @@ expected to be used by subclasses that need CAS protection
 
 import errno
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import fsspec
 
@@ -368,6 +368,29 @@ class BaseFileRepository:
             return await self._afs.read_text(path)
         except FileNotFoundError:
             return None
+
+    async def _update_text(
+        self, path: str, transform: Callable[[Optional[str]], Optional[str]]
+    ) -> None:
+        """Locked, atomic read-modify-write of a raw-text file.
+
+        The whole read-transform-write runs as one worker operation under
+        a per-path lock (``AsyncFileSystem.update_text``), so concurrent
+        writers cannot interleave and lose each other's update, and on
+        the local backend readers never observe a half-written file
+        (tmp + ``os.replace``). Cloud backends have no rename, so the
+        write falls back to plain mode — the same trade-off as
+        ``_write_json_atomic``; the lock still serialises in-process
+        writers there.
+        """
+        await self._ensure_parent(path)
+        atomic = self._settings.storage_backend == "file"
+        if not atomic:
+            logger.debug(
+                "atomic_write_fallback",
+                extra={"path": path, "backend": self._settings.storage_backend},
+            )
+        await self._afs.update_text(path, transform, atomic=atomic)
 
     # ------------------------------------------------------------------
     # Filesystem helpers
