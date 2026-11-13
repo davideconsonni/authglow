@@ -32,8 +32,8 @@ If a `.codegraph/` index is present, use the `codegraph_explore` tool before gre
 ```bash
 uvicorn main:app --reload            # Dev server
 pytest tests/unit/test_jwt.py        # Run single test file
-python scripts/affected_tests.py --run   # Run only tests affected by changed files
-pytest -q --tb=line -n auto          # Run full suite (parallel via pytest-xdist)
+python3 scripts/affected_tests.py --run  # Run only tests affected by changed files (or ./scripts/affected_tests.py --run)
+pytest                                   # Run full suite (parallel via -n auto configured in pyproject.toml)
 ruff check authglow/                 # Lint
 ruff format authglow/                # Format
 mypy authglow/                       # Type check
@@ -52,7 +52,13 @@ npx playwright test                  # E2E tests
 
 ## Anti-Regression & Testing Rules
 
-1. **Test Scope**: Run only the test files matching the changed area (e.g., modified `services/jwt.py` → `pytest tests/unit/test_jwt.py`). Automate the mapping with `python scripts/affected_tests.py` from `backend/` (prints the affected test paths; add `--run` to execute them, `--base origin/main` for committed changes). Frontend equivalent: `npx vitest related --run <changed files>`. Run the full suite (`-n auto`) only for `core/` changes or prior to final completion.
+1. **Test Scope (Strict Enforcement)**:
+   - **Never run bare `pytest`, `npm test`, or Playwright across the entire repository during task implementation.**
+   - **Plans & Subagents**: When writing or executing implementation plans (e.g., via `writing-plans`, `executing-plans`, `subagent-driven-development`), every task's verification step MUST name the exact targeted test file (e.g., `pytest tests/unit/test_jwt.py`) or use `./scripts/affected_tests.py --run`. Writing generic `pytest` or `npm test` as a task verification command is forbidden.
+   - **Backend mapping**: Run `./scripts/affected_tests.py --run` from `backend/` (or `python3 scripts/affected_tests.py --run`) to test only affected files.
+   - **Frontend mapping**: Run `npx vitest related --run <changed files>` or `npm test -- path/to/file.test.ts`.
+   - **Playwright/E2E**: Never run Playwright E2E suites during regular unit/service/component development unless the task specifically modifies an E2E spec.
+   - **Full Suite**: Run the full suite ONLY for `core/` changes or prior to final PR completion. Pytest is preconfigured with `-n auto` in `pyproject.toml` so it always parallelizes across all available CPU cores.
 2. **Bash Timeout**: Pass `timeout: 300000` to the Bash/shell tool when executing the full test suite.
 3. **Test Isolation**:
    - Never modify `tests/conftest.py` for isolated feature testing.

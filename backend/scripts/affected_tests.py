@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Select only the tests affected by a set of changed files.
 
 Maps changed source modules to their test files using three signals:

@@ -11,6 +11,7 @@ requires-python = ">=3.13"
 include = ["authglow*"]
 
 [tool.pytest.ini_options]
+addopts = "-n auto -q --tb=line -m 'not performance'"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
